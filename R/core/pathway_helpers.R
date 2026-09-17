@@ -52,7 +52,7 @@ run_pathway_enrichment <- function(genes, organism = "human",
 
   if (!requireNamespace("clusterProfiler", quietly = TRUE))
 
-    stop("Package 'clusterProfiler' requis. Installez-le via BiocManager.")
+    stop(errorCondition("Package 'clusterProfiler' requis. Installez-le via BiocManager.", class = "pathway_error"))
 
   
 
@@ -70,7 +70,7 @@ run_pathway_enrichment <- function(genes, organism = "human",
 
     if (!requireNamespace("org.Hs.eg.db", quietly = TRUE))
 
-      stop("Package 'org.Hs.eg.db' requis pour l'analyse humaine.")
+      stop(errorCondition("Package 'org.Hs.eg.db' requis pour l'analyse humaine.", class = "pathway_error"))
 
     library(org.Hs.eg.db)
 
@@ -82,7 +82,7 @@ run_pathway_enrichment <- function(genes, organism = "human",
 
     if (!requireNamespace("org.Mm.eg.db", quietly = TRUE))
 
-      stop("Package 'org.Mm.eg.db' requis pour l'analyse souris.")
+      stop(errorCondition("Package 'org.Mm.eg.db' requis pour l'analyse souris.", class = "pathway_error"))
 
     library(org.Mm.eg.db)
 
@@ -92,7 +92,7 @@ run_pathway_enrichment <- function(genes, organism = "human",
 
   } else {
 
-    stop("Organisme non supporté (choisir 'human' ou 'mouse')")
+    stop(errorCondition("Organisme non supporté (choisir 'human' ou 'mouse')", class = "pathway_error"))
 
   }
 
@@ -106,7 +106,7 @@ run_pathway_enrichment <- function(genes, organism = "human",
 
   if (length(genes_clean) == 0) {
 
-    stop("Aucun gène valide fourni après nettoyage.")
+    stop(errorCondition("Aucun gène valide fourni après nettoyage.", class = "pathway_error"))
 
   }
 
@@ -146,7 +146,7 @@ run_pathway_enrichment <- function(genes, organism = "human",
 
   if (is.null(gene_entrez) || nrow(gene_entrez) == 0) {
 
-    stop("Aucun gène n'a pu être converti en Entrez ID. Vérifiez que les noms de gènes sont des symboles officiels (ex: 'TP53', 'Actb') et correspondent à l'organisme sélectionné.")
+    stop(errorCondition("Aucun gène n'a pu être converti en Entrez ID. Vérifiez que les noms de gènes sont des symboles officiels (ex: 'TP53', 'Actb') et correspondent à l'organisme sélectionné.", class = "pathway_error"))
 
   }
 
@@ -236,7 +236,7 @@ run_pathway_enrichment <- function(genes, organism = "human",
 
     if (!requireNamespace("ReactomePA", quietly = TRUE))
 
-      stop("Package 'ReactomePA' requis pour l'analyse Reactome.")
+      stop(errorCondition("Package 'ReactomePA' requis pour l'analyse Reactome.", class = "pathway_error"))
 
     
 
@@ -264,7 +264,7 @@ run_pathway_enrichment <- function(genes, organism = "human",
 
   } else {
 
-    stop("Base de données non supportée (GOBP/KEGG/Reactome)")
+    stop(errorCondition("Base de données non supportée (GOBP/KEGG/Reactome)", class = "pathway_error"))
 
   }
 
@@ -349,7 +349,7 @@ run_gsea_enrichment <- function(de_results, organism = "human",
 
   if (!requireNamespace("clusterProfiler", quietly = TRUE))
 
-    stop("Package 'clusterProfiler' requis. Installez-le via BiocManager.")
+    stop(errorCondition("Package 'clusterProfiler' requis. Installez-le via BiocManager.", class = "pathway_error"))
 
   library(clusterProfiler)
 
@@ -359,7 +359,7 @@ run_gsea_enrichment <- function(de_results, organism = "human",
 
     if (!requireNamespace("org.Hs.eg.db", quietly = TRUE))
 
-      stop("Package 'org.Hs.eg.db' requis pour l'analyse humaine.")
+      stop(errorCondition("Package 'org.Hs.eg.db' requis pour l'analyse humaine.", class = "pathway_error"))
 
     library(org.Hs.eg.db)
 
@@ -369,7 +369,7 @@ run_gsea_enrichment <- function(de_results, organism = "human",
 
     if (!requireNamespace("org.Mm.eg.db", quietly = TRUE))
 
-      stop("Package 'org.Mm.eg.db' requis pour l'analyse souris.")
+      stop(errorCondition("Package 'org.Mm.eg.db' requis pour l'analyse souris.", class = "pathway_error"))
 
     library(org.Mm.eg.db)
 
@@ -377,7 +377,7 @@ run_gsea_enrichment <- function(de_results, organism = "human",
 
   } else {
 
-    stop("Organisme non supporté (choisir 'human' ou 'mouse')")
+    stop(errorCondition("Organisme non supporté (choisir 'human' ou 'mouse')", class = "pathway_error"))
 
   }
 
@@ -389,7 +389,7 @@ run_gsea_enrichment <- function(de_results, organism = "human",
 
   if (length(missing_cols) > 0) {
 
-    stop("Colonnes manquantes dans les résultats DE pour GSEA : ", paste(missing_cols, collapse = ", "))
+    stop(errorCondition(paste0("Colonnes manquantes dans les résultats DE pour GSEA : ", paste(missing_cols, collapse = ", ")), class = "pathway_error"))
 
   }
 
@@ -401,7 +401,7 @@ run_gsea_enrichment <- function(de_results, organism = "human",
 
   if (nrow(de_clean) < 10) {
 
-    stop("Trop peu de gènes valides (", nrow(de_clean), ") après nettoyage pour GSEA.")
+    stop(errorCondition(paste0("Trop peu de gènes valides (", nrow(de_clean), ") après nettoyage pour GSEA."), class = "pathway_error"))
 
   }
 
@@ -413,7 +413,7 @@ run_gsea_enrichment <- function(de_results, organism = "human",
 
   }, error = function(e) {
 
-    stop("Erreur lors de la conversion des gènes pour GSEA : ", conditionMessage(e))
+    stop(errorCondition(paste0("Erreur lors de la conversion des gènes pour GSEA : ", conditionMessage(e)), class = "pathway_error"))
 
   })
 
@@ -427,7 +427,7 @@ run_gsea_enrichment <- function(de_results, organism = "human",
 
   if (nrow(de_merged) < 10) {
 
-    stop("Aucun gène n'a pu être converti en Entrez ID pour GSEA. Vérifiez l'organisme sélectionné.")
+    stop(errorCondition("Aucun gène n'a pu être converti en Entrez ID pour GSEA. Vérifiez l'organisme sélectionné.", class = "pathway_error"))
 
   }
 
@@ -465,7 +465,7 @@ run_gsea_enrichment <- function(de_results, organism = "human",
 
     if (!requireNamespace("ReactomePA", quietly = TRUE))
 
-      stop("Package 'ReactomePA' requis pour l'analyse Reactome.")
+      stop(errorCondition("Package 'ReactomePA' requis pour l'analyse Reactome.", class = "pathway_error"))
 
     library(ReactomePA)
 
@@ -475,7 +475,7 @@ run_gsea_enrichment <- function(de_results, organism = "human",
 
   } else {
 
-    stop("Base de données non supportée pour GSEA (GOBP/KEGG/Reactome)")
+    stop(errorCondition("Base de données non supportée pour GSEA (GOBP/KEGG/Reactome)", class = "pathway_error"))
 
   }
 

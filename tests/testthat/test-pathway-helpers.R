@@ -159,3 +159,112 @@ test_that("plot_pathway_network builds emap and cnet networks from a real enrich
   p_cnet <- plot_pathway_network(df, db_label = "GOBP", top_n = 10, mode = "cnet")
   expect_s3_class(p_cnet, "ggplot")
 })
+
+# ---------------------------------------------------------------------------
+# C10 — les erreurs de pathway_helpers.R portent la classe `pathway_error`
+# ---------------------------------------------------------------------------
+# Dette de conventions, 6ᵉ incrément. Le fichier compte 22 `stop()` : 4
+# portaient DEJA `call. = FALSE` (forme que C10 exempte — leur unification sur
+# la classe est une decision OUVERTE, cf. docs/STATUS.md) et 18 etaient non
+# classes. Ces 18 passent a `stop(errorCondition(<msg>, class = "pathway_error"))`.
+#
+# ATTENTION — les sites dont le message tient en PLUSIEURS arguments sont
+# enveloppes dans `paste0()` : `errorCondition()` ne concatene pas ses `...`
+# (il en fait des CHAMPS de la condition), il TRONQUE au premier argument.
+# Defaut mesure en §2bn, garde desormais par la regle C16.
+#
+# Deux niveaux de preuve, aucun ne suffisant seul :
+#   1. SOURCE    — le fichier ne contribue plus AUCUN signalement C10. Ce verrou
+#      couvre les 18 sites, y compris les 9 NON joignables (paquets absents).
+#   2. EXECUTION — les 9 sites joignables levent VRAIMENT une condition classee.
+#      Un `class=` pose au mauvais endroit resterait invisible au niveau source :
+#      c'est exactement ce que §2bn a montre.
+source_project_file("tools/check_conventions.R")
+
+#' Un data.frame DE minimal, valide pour les controles en amont de GSEA.
+.pathway_toy_de <- function(n = 20, genes = paste0("GENE", seq_len(n))) {
+  data.frame(
+    gene             = genes,
+    log2FoldChange   = rep(c(1, -1), length.out = n),
+    pvalue           = rep(c(0.001, 0.02), length.out = n),
+    stringsAsFactors = FALSE
+  )
+}
+
+#' Capture l'erreur levee par `expr` ; NULL si `expr` retourne normalement.
+.pathway_error_of <- function(expr) {
+  tryCatch({
+    suppressMessages(suppressWarnings(force(expr)))
+    NULL
+  }, error = function(e) e)
+}
+
+# Les messages sont cites par des fragments ASCII (les accents du source
+# dependraient de l'encodage de lecture) et ceux places TARD dans le message
+# servent aussi de preuve de NON-TRONCATURE.
+
+test_that("C10 : pathway_helpers.R ne contribue plus aucun signalement", {
+  path <- file.path(ts_project_root(), "R/core/pathway_helpers.R")
+  .REPORT$warns <- list()
+  check_c10_error_style(path)
+  expect_length(.REPORT$warns, 0L)
+})
+
+test_that("C10 : les erreurs joignables de pathway_helpers.R portent pathway_error", {
+  skip_if_not_installed("clusterProfiler")
+  skip_if_not_installed("org.Hs.eg.db")
+
+  # 1. organisme non supporte — run_pathway_enrichment()
+  e <- .pathway_error_of(run_pathway_enrichment(genes = "TP53", organism = "rat"))
+  expect_s3_class(e, "pathway_error")
+  expect_match(conditionMessage(e), "Organisme non support", fixed = TRUE)
+
+  # 2. aucun gene valide apres nettoyage
+  e <- .pathway_error_of(run_pathway_enrichment(genes = c("", NA, "   "), organism = "human"))
+  expect_s3_class(e, "pathway_error")
+  expect_match(conditionMessage(e), "valide fourni", fixed = TRUE)
+
+  # 3. aucun gene converti en Entrez ID
+  e <- .pathway_error_of(run_pathway_enrichment(genes = c("ZZZNOTAGENE1", "ZZZNOTAGENE2"),
+                                                organism = "human"))
+  expect_s3_class(e, "pathway_error")
+  expect_match(conditionMessage(e), "Entrez ID", fixed = TRUE)
+
+  # 4. base de donnees non supportee (ORA) — exige une conversion reussie
+  e <- .pathway_error_of(run_pathway_enrichment(genes = c("TP53", "BRCA1", "EGFR"),
+                                                organism = "human", database = "NOPE"))
+  expect_s3_class(e, "pathway_error")
+  expect_match(conditionMessage(e), "Base de donn", fixed = TRUE)
+
+  # 5. organisme non supporte — run_gsea_enrichment()
+  e <- .pathway_error_of(run_gsea_enrichment(de_results = .pathway_toy_de(), organism = "rat"))
+  expect_s3_class(e, "pathway_error")
+  expect_match(conditionMessage(e), "Organisme non support", fixed = TRUE)
+
+  # 6. colonnes manquantes — message MULTI-ARGUMENTS -> paste0()
+  e <- .pathway_error_of(run_gsea_enrichment(de_results = data.frame(x = 1:20), organism = "human"))
+  expect_s3_class(e, "pathway_error")
+  expect_match(conditionMessage(e), "Colonnes manquantes", fixed = TRUE)
+  expect_match(conditionMessage(e), "log2FoldChange", fixed = TRUE)  # non tronque
+
+  # 7. trop peu de genes — message MULTI-ARGUMENTS -> paste0()
+  e <- .pathway_error_of(run_gsea_enrichment(de_results = .pathway_toy_de(3), organism = "human"))
+  expect_s3_class(e, "pathway_error")
+  expect_match(conditionMessage(e), "valides (3)", fixed = TRUE)     # non tronque
+
+  # 8. conversion des genes impossible — message MULTI-ARGUMENTS -> paste0()
+  e <- .pathway_error_of(run_gsea_enrichment(
+    de_results = .pathway_toy_de(20, paste0("ZZZNOTAGENE", 1:20)), organism = "human"))
+  expect_s3_class(e, "pathway_error")
+  expect_match(conditionMessage(e), "conversion des g", fixed = TRUE)
+  expect_match(conditionMessage(e), "valid keys", fixed = TRUE)      # non tronque
+
+  # 9. base de donnees non supportee (GSEA)
+  e <- .pathway_error_of(run_gsea_enrichment(
+    de_results = .pathway_toy_de(20, c("TP53", "BRCA1", "EGFR", "MYC", "KRAS", "PTEN", "RB1",
+                                       "APC", "VHL", "BRAF", "PIK3CA", "AKT1", "MTOR", "CDKN2A",
+                                       "SMAD4", "NOTCH1", "CTNNB1", "JAK2", "STAT3", "TGFBR2")),
+    organism = "human", database = "NOPE"))
+  expect_s3_class(e, "pathway_error")
+  expect_match(conditionMessage(e), "Base de donn", fixed = TRUE)
+})

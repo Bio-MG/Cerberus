@@ -22,6 +22,52 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > du commit `03951cb` cite encore `§2ax` pour 4E-4 : c'est l'état **avant** la
 > renumérotation. Détail : `STATUS.md` §6, item 6.
 
+## [V1.x — dette de conventions, 6ᵉ incrément] — 2026-09-17 — `pathway_helpers.R` classé (`pathway_error`)
+
+**Deuxième fichier converti** du chantier de réduction de la dette C10 (après
+`bulk_helpers.R`, §2bl), et **premier lot choisi par un critère MESURÉ** : sur les
+14 fichiers sans classe, **3 seulement** avaient un test éponyme.
+
+### Modifié
+
+- `R/core/pathway_helpers.R` : les **18** `stop()` non classés passent à
+  `stop(errorCondition(<msg>, class = "pathway_error"))` — 15 littéraux, et
+  **3 messages multi-arguments enveloppés dans `paste0()`** (règle C16 : un
+  `errorCondition()` à plusieurs arguments positionnels est **tronqué**).
+- Les **4** `stop(..., call. = FALSE)` du même fichier sont **laissés en place** :
+  ils sont déjà conformes pour C10, et leur unification sur la classe relève de la
+  décision ouverte `state`/`class` (règle 9 — mesurée, **non exécutée** ici).
+- `tests/testthat/test-pathway-helpers.R` : deux tests, à **deux niveaux** —
+  un verrou **source** (le fichier ne contribue plus aucun signalement C10, ce qui
+  couvre aussi les 9 sites injoignables) et des assertions **d'exécution** sur les
+  **9 sites joignables**.
+
+### Vérifié
+
+- **Test ROUGE d'abord** : **10 échecs** (`simpleError` au lieu de `pathway_error`,
+  plus les 18 signalements C10) — puis **vert** : `failed=0 passed=37`.
+- **Invariant au bon niveau** (§2bn) : les 9 sites joignables rejoués ⇒ messages
+  **identiques 9/9** au caractère près, classes passées de
+  `simpleError|error|condition` à `pathway_error|error|condition`.
+- `parse()` **OK** (porte obligatoire après réécriture programmatique) ;
+  **685** lignes avant/après ; **22** `stop(` inchangés ; `errorCondition(` 0 → 18 ;
+  `call. = FALSE` **4** inchangés ; aucun double emballage.
+- Garde : **C10 152 → 134**, total **0 erreur / 190 → 172 avert.** ; duplication
+  **0/3** et hermeticité **0/0** inchangées.
+
+### Mesuré (joignabilité des sites)
+
+- Les **9** sites atteignables **sans réseau** sont ceux de la **validation
+  d'entrée** : organisme inconnu, aucun gène valide, aucun gène converti, base
+  inconnue (ORA et GSEA), colonnes manquantes, trop peu de gènes, échec de
+  conversion. Les **9** autres sont les gardes « paquet manquant », **injoignables
+  par construction** sur une machine où le paquet est installé.
+- ⚠️ L'en-tête de `test-pathway-helpers.R` affirmait que ces fonctions n'avaient
+  « pas de tranche de logique pure » testable, faute de pile Bioconductor : **faux
+  sur cette machine** (clusterProfiler, org.Hs/Mm.eg.db, ReactomePA, enrichplot,
+  DOSE sont tous présents). Une *justification* périmée est aussi dangereuse qu'un
+  chiffre périmé.
+
 ## [V1.x — garde C16] — 2026-09-17 — `errorCondition()` tronquait : la règle qui l'interdit
 
 **Première règle de ce chantier produite AVANT le défaut** qu'elle prévient — les
