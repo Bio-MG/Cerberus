@@ -76,7 +76,7 @@
 aggregate_pseudobulk_counts <- function(obj, sample_col, split_by = NULL,
                                         min_cells_per_group = 10L) {
   if (!sample_col %in% colnames(obj@meta.data)) {
-    stop(sprintf("Colonne d'echantillon '%s' introuvable dans les metadonnees.", sample_col))
+    stop(errorCondition(sprintf("Colonne d'echantillon '%s' introuvable dans les metadonnees.", sample_col), class = "sc_pseudobulk_error"))
   }
   counts <- tryCatch(
     SeuratObject::LayerData(obj, layer = "counts"),
@@ -89,7 +89,7 @@ aggregate_pseudobulk_counts <- function(obj, sample_col, split_by = NULL,
   sample_vec <- as.character(obj@meta.data[[sample_col]])
   if (!is.null(split_by)) {
     if (!split_by %in% colnames(obj@meta.data)) {
-      stop(sprintf("Colonne de regroupement '%s' introuvable dans les metadonnees.", split_by))
+      stop(errorCondition(sprintf("Colonne de regroupement '%s' introuvable dans les metadonnees.", split_by), class = "sc_pseudobulk_error"))
     }
     split_vec <- as.character(obj@meta.data[[split_by]])
     group_vec <- paste(sample_vec, split_vec, sep = "__")
@@ -103,8 +103,9 @@ aggregate_pseudobulk_counts <- function(obj, sample_col, split_by = NULL,
                         n_cells = as.integer(tab[tab < min_cells_per_group]),
                         stringsAsFactors = FALSE)
   if (length(keep_groups) < 2) {
-    stop("Moins de 2 groupes (echantillon", if (!is.null(split_by)) "/regroupement" else "",
-         ") avec au moins ", min_cells_per_group, " cellules -- pseudobulk impossible.")
+    stop(errorCondition(paste0("Moins de 2 groupes (echantillon", if (!is.null(split_by)) "/regroupement" else "",
+         ") avec au moins ", min_cells_per_group, " cellules -- pseudobulk impossible."),
+         class = "sc_pseudobulk_error"))
   }
 
   keep_cells <- group_vec %in% keep_groups   # NA sample/split values -> FALSE, silently dropped
@@ -151,7 +152,7 @@ aggregate_pseudobulk_counts <- function(obj, sample_col, split_by = NULL,
 #' )
 resolve_pseudobulk_condition <- function(obj, pb_meta, sample_col, condition_col) {
   if (!condition_col %in% colnames(obj@meta.data)) {
-    stop(sprintf("Colonne de condition '%s' introuvable dans les metadonnees.", condition_col))
+    stop(errorCondition(sprintf("Colonne de condition '%s' introuvable dans les metadonnees.", condition_col), class = "sc_pseudobulk_error"))
   }
   meta <- obj@meta.data
   by_sample <- split(as.character(meta[[condition_col]]), as.character(meta[[sample_col]]))
@@ -306,14 +307,15 @@ mod_sc_pseudobulk_server <- function(id, global_data, shared_rv) {
         cond <- resolve_pseudobulk_condition(obj, res$metadata, sample_col = input$sample_col,
                                              condition_col = input$condition_col)
         if (length(cond$inconsistent) > 0) {
-          stop(sprintf(
+          stop(errorCondition(sprintf(
             "La condition '%s' n'est pas constante au sein de l'echantillon(s) suivant(s) : %s -- verifiez vos metadonnees (une CONDITION doit etre une propriete de l'echantillon/animal, pas de la cellule).",
-            input$condition_col, paste(cond$inconsistent, collapse = ", ")))
+            input$condition_col, paste(cond$inconsistent, collapse = ", ")),
+            class = "sc_pseudobulk_error"))
         }
         pb_meta <- cond$metadata
         pb_meta$condition <- factor(pb_meta$condition)
         if (nlevels(pb_meta$condition) < 2) {
-          stop("La colonne condition n'a qu'un seul niveau apres agregation -- impossible de comparer.")
+          stop(errorCondition("La colonne condition n'a qu'un seul niveau apres agregation -- impossible de comparer.", class = "sc_pseudobulk_error"))
         }
 
         pb$counts    <- res$counts

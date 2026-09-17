@@ -22,6 +22,79 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > du commit `03951cb` cite encore `§2ax` pour 4E-4 : c'est l'état **avant** la
 > renumérotation. Détail : `STATUS.md` §6, item 6.
 
+## [V1.x — dette de conventions, 11ᵉ incrément] — 2026-09-17 — `mod_sc_pseudobulk.R` classé (`sc_pseudobulk_error`)
+
+**Le lot de `modules/` le mieux prouvé à ce jour** — et il renverse une
+conclusion tenue depuis §2bs : la classe d'erreur **n'est pas** inobservable
+dans `modules/`, elle l'était dans les fichiers qu'on avait traités.
+
+### Modifié
+
+- `modules/sc/mod_sc_pseudobulk.R` : les **6** `stop()` non classés passent à
+  `stop(errorCondition(<msg>, class = "sc_pseudobulk_error"))`.
+- **1 des 6** a un message en **plusieurs arguments** ⇒ **`paste0()` obligatoire**
+  (C16) : le site **106**, `stop("Moins de 2 groupes (echantillon", …)`. Sans
+  `paste0()`, le message serait **tronqué** à `"Moins de 2 groupes (echantillon"`.
+- `tests/testthat/test-mod-sc-pseudobulk.R` : **créé** — verrou source + **4 sites
+  prouvés à l'exécution** (message **identique** + **classe observée**).
+
+### Classe : `sc_pseudobulk_error`
+
+Qualifiée par le **domaine** (pseudobulk côté SC), dans la famille `sc_*` déjà
+présente : `sc_import_error` (§2bu) · `sc_helpers_error` (§2bq) · `sc_multi_error`.
+
+### 🟢 La CLASSE est observable — première sur le front `modules/`
+
+Depuis §2bs, la règle était : *dans `modules/`, les réactifs **avalent**
+l'erreur, donc la classe n'est pas observable ; on prouve par verrou source +
+témoin de message*. Ce fichier **n'est pas** dans ce cas : il expose deux
+fonctions **top-level PURES** — `aggregate_pseudobulk_counts()` et
+`resolve_pseudobulk_condition()` — dont les **4** `stop()` de validation sont
+joignables **en R pur**, sans `testServer()`. `tryCatch(error = function(e)
+class(e))` y rend donc la **classe**.
+
+⇒ **Le front `modules/` n'est pas uniforme.** Le critère pertinent n'est pas
+« `modules/` vs `R/` » mais **« le fichier expose-t-il des helpers purs ? »**.
+
+### 🔴 2 sites restent inobservables — et pourquoi (mesuré)
+
+**309** et **316** vivent dans `observeEvent(input$run_aggregate)` :
+
+- leur `tryCatch(..., error =)` n'appelle **pas** `add_log` — il écrit dans un
+  `reactiveVal` (`agg_status_rv`) + `showNotification` ;
+- et **`session$getOutput()` ne fonctionne PAS** dans cet environnement : éprouvé
+  sur un module **trivial** (`output$txt <- renderText("bonjour")`), il échoue
+  avec « output$txt hasn't been defined yet ». Ce n'est donc **pas** un défaut du
+  module.
+
+Ces 2 sites sont couverts par le **verrou source seul**.
+
+### ⚠️ Dénombrer n'est toujours pas greper `stop(`
+
+**7** occurrences du token pour **6** sites : la ligne **149** est un **commentaire**
+roxygen qui mentionne `stop()` — le même piège qu'au §2bu.4, dans un fichier
+différent : il se répète, il n'était pas local.
+
+### Vérifié
+
+- **Test ROUGE d'abord** : **5** échecs — 1 verrou source listant exactement les
+  **6** lignes attendues (79, 92, 106, 154, 309, 316) + **4** assertions de classe
+  ⇒ **vert** : `failed=0 passed=11` (était `failed=5 passed=6`).
+- `parse()` **OK** ; **C10 fichier : 0** ; **C16 fichier : 0**.
+- Conversion écrite au niveau des **octets** : **LF** et **saut de ligne final**
+  préservés (diff = **10 insertions / 8 suppressions**, aucun bruit CRLF).
+- Garde : **C10 124 → 118**, total **0 erreur / 162 → 156 avert.**
+
+### Constaté (listé, NON corrigé)
+
+- **18** sites de `modules/` restants : `mod_sc_annotation.R` 4 · `mod_sc.R` 2 ·
+  `mod_spatial_cluster.R` 2 · puis 10 fichiers à 1 site.
+- **100** sites de `R/` restants (`sc_trajectory.R` 21 · `sc_plotting.R` 17 ·
+  `spatial_stats.R` 16 …) : **C9 + C10 simultanément**.
+- 🔴 **0 des 14 fichiers de `modules/` alors restants n'avait de test éponyme**
+  (mesuré au §2bu.6 #4) : le critère est épuisé sur les **deux** fronts.
+
+
 ## [V1.x — dette de conventions, 10ᵉ incrément] — 2026-09-17 — `mod_import_sc.R` classé (`sc_import_error`)
 
 **Le domaine `modules/import/` est bouclé** (bulk → `bulk_import_error`, GEO →
