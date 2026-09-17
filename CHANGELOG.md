@@ -22,6 +22,77 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > du commit `03951cb` cite encore `§2ax` pour 4E-4 : c'est l'état **avant** la
 > renumérotation. Détail : `STATUS.md` §6, item 6.
 
+## [V1.x — dette de conventions, 10ᵉ incrément] — 2026-09-17 — `mod_import_sc.R` classé (`sc_import_error`)
+
+**Le domaine `modules/import/` est bouclé** (bulk → `bulk_import_error`, GEO →
+`geo_import_error`, SC → `sc_import_error`) : les trois portes d'entrée de
+l'application sont désormais **classées**, alors que c'est la couche la plus
+visible pour l'utilisateur.
+
+### Modifié
+
+- `modules/import/mod_import_sc.R` : les **6** `stop()` non classés passent à
+  `stop(errorCondition(<msg>, class = "sc_import_error"))`.
+- **1 des 6** a un message en **plusieurs arguments** ⇒ **`paste0()` obligatoire**
+  (C16) : `stop("Format non supporté : ", ext)` (site 700). Sans `paste0()`, le
+  message serait **tronqué** à `"Format non supporté : "` — exactement le défaut
+  que la règle C16 interdit.
+- `tests/testthat/test-mod-import-sc.R` : **créé** (verrou source + témoin de
+  message d'exécution). ⚠️ `C9` n'oblige à un test éponyme **que dans `R/`** —
+  ici il a été écrit **parce qu'il était le seul moyen de prouver** la
+  conversion, pas par obligation de garde.
+
+### Classe : `sc_import_error`
+
+Qualifiée par la **source** de l'import, comme le dépôt le fait déjà :
+`rdata_import_error` · `communication_import_error` · `bulk_import_error` ·
+`geo_import_error`.
+
+### Preuve à deux niveaux — la répartition est MESURÉE
+
+**5 sites sur 6 sont INJOIGNABLES**, et pour des raisons vérifiées une à une :
+
+- **690** (`.h5ad` sans convertisseur) et **695** (`loomR` requis) : les quatre
+  paquets concernés (`BPCells`, `zellkonverter`, `sceasy`, `loomR`) sont
+  **installés** (mesuré) ⇒ les deux sites ne se déclenchent jamais ;
+- **489** et **531** exigent un upload **tronqué** (intégrité) ;
+- **627** exige un dossier 10x **sans** `matrix.mtx` ni `.h5`.
+
+Le site **700** est donc le **seul** joignable, et il est **avalé** par le
+`tryCatch` réactif du serveur ⇒ la **classe n'est pas observable**, seul le
+**message** l'est, dans les logs. L'assertion porte sur la **valeur de
+l'extension** (`".unsupportedext"`), qui **disparaît** si `paste0()` manque.
+
+⚠️ Le dénombrement n'est **pas** un `grep` de `stop(` : la ligne **650** porte
+déjà `call. = FALSE` (exempte, **laissée telle quelle**) et la ligne **303**
+n'est qu'un **commentaire** qui mentionne `stop()`. Compter les occurrences du
+token aurait donné **8** au lieu de **6**.
+
+### Vérifié
+
+- **Test ROUGE d'abord** : **1** échec listant exactement les **6** lignes
+  attendues (489, 531, 627, 690, 695, 700) ⇒ **vert** : `failed=0 passed=3`
+  (était `failed=1 passed=2`).
+- `parse()` **OK** ; **C10 fichier : 0** ; **C16 fichier : 0**.
+- Conversion écrite au niveau des **octets** : **LF** et **saut de ligne final**
+  préservés (diff = **8 insertions / 7 suppressions**, aucun bruit CRLF).
+- Garde : **C10 130 → 124**, total **0 erreur / 168 → 162 avert.**
+- **Suite complète** (obligatoire — le code applicatif est touché) : **103**
+  fichiers, `failed=0 passed=5965 error=0 skipped=1` — **+3**, sans écart
+  inexpliqué (le seul SKIP reste le smoke GEO **live**). ⚠️ Lancer
+  `tools/run_full_suite.R` : `tools/run_tests.R` **sans argument** n'exécute que
+  **30** fichiers et rend un TOTAL vert trompeur.
+
+### Constaté (listé, NON corrigé)
+
+- **24** sites de `modules/` restants : `mod_sc_pseudobulk.R` 6 ·
+  `mod_sc_annotation.R` 4 · `mod_sc.R` 2 · `mod_spatial_cluster.R` 2 ·
+  `mod_import_spatial.R` 1 · puis 9 fichiers à 1 site.
+- **100** sites de `R/` restants (`sc_trajectory.R` 21 · `sc_plotting.R` 17 ·
+  `spatial_stats.R` 16 …) : le critère « test éponyme » y est **épuisé** ⇒ le
+  prochain lot est **C9 + C10 simultanément**.
+
+
 ## [V1.x — dette de conventions, 9ᵉ incrément] — 2026-09-17 — `mod_geo.R` classé (`geo_import_error`)
 
 **Deuxième fichier de `modules/` converti**, et le **premier qui dispose d'un

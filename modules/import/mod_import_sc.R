@@ -486,7 +486,7 @@ mod_import_sc_server <- function(id, global_data) {
           integrity <- .verify_upload_integrity(files$datapath[i], files$size[i])
           if (!integrity$ok) {
             add_log(paste("  ❌", files$name[i], "—", integrity$msg))
-            stop(integrity$msg)
+            stop(errorCondition(integrity$msg, class = "sc_import_error"))
           }
 
           add_log(paste("  📄", files$name[i]))
@@ -528,7 +528,7 @@ mod_import_sc_server <- function(id, global_data) {
                                                 input$single_file_upload$size)
           if (!integrity$ok) {
             add_log(paste("❌", integrity$msg))
-            stop(integrity$msg)
+            stop(errorCondition(integrity$msg, class = "sc_import_error"))
           }
 
           raw <- load_single_cell_data(input$single_file_upload$datapath, add_log)
@@ -624,9 +624,10 @@ mod_import_sc_server <- function(id, global_data) {
           # Look for a single .rds inside the directory
           rds <- list.files(path, pattern="\\.rds$", ignore.case=TRUE, full.names=TRUE)
           if (length(rds) == 1) { log(paste("  ℹ RDS dans dossier:", basename(rds))); return(readRDS(rds)) }
-          stop(paste0(
+          stop(errorCondition(paste0(
             "Dossier sans fichier matrix.mtx(.gz) ni filtered_feature_bc_matrix.h5.\n",
-            .tr_plain("Si ce dossier contient un .rds ou .h5ad, utilisez l'Option B/C.")))
+            .tr_plain("Si ce dossier contient un .rds ou .h5ad, utilisez l'Option B/C.")),
+            class = "sc_import_error"))
         }
 
         # CellRanger v2 compat: create features.tsv.gz if only genes.tsv present
@@ -687,17 +688,17 @@ mod_import_sc_server <- function(id, global_data) {
                 sceasy::convertFormat(path, from="anndata", to="seurat", outFile=tmp_rds)
                 return(readRDS(tmp_rds)) }, silent=TRUE)
         }
-        stop("Impossible de charger .h5ad. Installez BPCells, zellkonverter ou sceasy.")
+        stop(errorCondition("Impossible de charger .h5ad. Installez BPCells, zellkonverter ou sceasy.", class = "sc_import_error"))
       }
 
       # 5. .loom
       if (ext == "loom") {
-        if (!requireNamespace("loomR", quietly=TRUE)) stop("Package 'loomR' requis.")
+        if (!requireNamespace("loomR", quietly=TRUE)) stop(errorCondition("Package 'loomR' requis.", class = "sc_import_error"))
         lconn <- loomR::connect(path, mode="r"); on.exit(lconn$close())
         return(Seurat::as.Seurat(lconn))
       }
 
-      stop("Format non supporté : ", ext)
+      stop(errorCondition(paste0("Format non supporté : ", ext), class = "sc_import_error"))
     }
 
     # ── prepare_seurat_object — class detection ───────────────────────────
