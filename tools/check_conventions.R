@@ -180,27 +180,42 @@
   # dizaines de milliers d'appels) et normalizePath() est un appel système
   # coûteux sous Windows — à lui seul il représentait ~20 s sur 38 s de
   # contrôles. Le mapping chemin -> relatif ne change pas pendant un run.
-  cached <- .rel_cache[[path]]
+  # La CLÉ doit porter la racine, pas seulement le chemin : sinon un résultat
+  # calculé sous un autre répertoire de travail reste en cache et `.rel()`
+  # continue à rendre un chemin absolu après le changement de répertoire
+  # (même défaut que `.root_dir()` ci-dessous, mesuré le 2026-09-17).
+  b <- .root_dir()
+  key <- paste0(b, "\n", path)
+  cached <- .rel_cache[[key]]
   if (!is.null(cached)) return(cached)
   p <- normalizePath(path, winslash = "/", mustWork = FALSE)
-  b <- .root_dir()
   out <- if (startsWith(p, b)) sub("^/", "", substr(p, nchar(b) + 1L, nchar(p))) else p
-  .rel_cache[[path]] <- out
+  .rel_cache[[key]] <- out
   out
 }
 
 #' Cache chemin absolu -> chemin relatif (voir .rel).
 .rel_cache <- new.env(parent = emptyenv())
 
-#' Racine du projet, calculée une seule fois (normalizePath est coûteux et
-#' était appelé des milliers de fois via .rel()).
+#' Racine du projet, mémoïsée PAR répertoire de travail (normalizePath est
+#' coûteux et était appelé des milliers de fois via .rel()).
+#'
+#' ⚠️ Défaut corrigé le 2026-09-17 : la racine était figée au PREMIER appel.
+#' Rejouée depuis un test (testthat place le répertoire de travail dans
+#' `tests/testthat`), la garde gardait ce préfixe même après un `setwd()` vers
+#' la racine — `.rel()` ne reconnaissait plus le préfixe et rendait des chemins
+#' ABSOLUS au lieu de relatifs. Une garde doit être REJOUABLE : la mémoïsation
+#' est donc indexée par le répertoire de travail courant.
 .root_dir <- local({
-  cached <- NULL
+  cache <- new.env(parent = emptyenv())
   function() {
-    if (is.null(cached)) {
-      cached <<- normalizePath(getwd(), winslash = "/", mustWork = FALSE)
+    wd <- normalizePath(getwd(), winslash = "/", mustWork = FALSE)
+    v <- cache[[wd]]
+    if (is.null(v)) {
+      v <- wd
+      cache[[wd]] <- v
     }
-    cached
+    v
   }
 })
 
@@ -1128,7 +1143,19 @@ run_check <- function(strict = FALSE, use_git = TRUE, list_all = FALSE) {
   check_c7_i18n_keys(all_code)
   check_c8_contract_tests()
   check_c9_r_tests(r_files)
-  check_c10_error_style(r_files)
+  # ⚠️ PORTÉE : `R/` **et** `modules/`, pas `R/` seul. Jusqu'au 2026-09-17 la
+  # règle ne recevait que `r_files` : elle sous-mesurait la dette de 37,5 %
+  # (100 sites mesurés sur 160 réels — 48 invisibles dans `modules/`, 12 dans
+  # `tests/`). L'angle mort couvrait la couche la PLUS VISIBLE de
+  # l'application : `mod_import_bulk.R` (10), `mod_geo.R` (8),
+  # `mod_import_sc.R` (6), `mod_sc_pseudobulk.R` (6). Indice que c'était un
+  # oubli et non une décision : C16 — règle sœur, sur `errorCondition()`, donc
+  # le même sujet — recevait déjà `c(r_files, m_files)`. On aligne C10 sur C16.
+  #
+  # `tests/` reste EXCLU, volontairement : les `stop()` de fixtures ne sont pas
+  # du code de production (12 sites). Décision explicite, énoncée par
+  # `tests/testthat/test-conventions-c10-scope.R`.
+  check_c10_error_style(c(r_files, m_files))
   check_c11_parallel(all_code)
   check_c12_headers(r_files)
   check_c13_choices_named_values(c(r_files, m_files))

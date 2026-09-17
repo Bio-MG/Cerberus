@@ -22,6 +22,70 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > du commit `03951cb` cite encore `§2ax` pour 4E-4 : c'est l'état **avant** la
 > renumérotation. Détail : `STATUS.md` §6, item 6.
 
+## [V1.x — garde C10 : angle mort mesuré] — 2026-09-17 — la garde sous-mesurait **37,5 %** de la dette
+
+**Ce n'est pas un incrément de conversion : c'est une correction de mesure.**
+`run_check()` passait **uniquement `R/`** à `check_c10_error_style()`, alors que
+les règles voisines (C5, C7, C11, C13) — et surtout **C16**, sa règle sœur sur
+`errorCondition()`, donc le **même sujet** — recevaient `R/ + modules/`. La dette
+affichée n'était donc pas la dette réelle.
+
+### Mesuré avant / après
+
+| | Avant | Après |
+|---|---|---|
+| C10 réellement présent | 160 (`R/` 100 · `modules/` 48 · `tests/` 12) | 160 |
+| C10 **mesuré** par la garde | **100** | **148** |
+| Total garde | 0 erreur / **138** avert. | 0 erreur / **186** avert. |
+
+Les 48 sites invisibles n'étaient **pas** marginaux : ils couvrent la couche la
+**plus visible** de l'application — `mod_import_bulk.R` (10), `mod_geo.R` (8),
+`mod_import_sc.R` (6), `mod_sc_pseudobulk.R` (6), `mod_sc_annotation.R` (4) —
+avec des messages que l'utilisateur lit réellement (« Package 'GEOquery'
+requis », « Aucune paire n'a pu être calculée »). Pendant ce temps, les 5ᵉ, 6ᵉ
+et 7ᵉ incréments classaient des **helpers de tracé** au fond de `R/sc/`.
+Mesure de plus : **aucun** fichier de `modules/` ne contenait `errorCondition` —
+la couche était entièrement inconvertie, contrairement à `bulk_helpers.R` qui
+était à moitié fait.
+
+### Modifié
+
+- `tools/check_conventions.R` : `check_c10_error_style(c(r_files, m_files))`
+  aligné sur **C16**. `tests/` reste **exclu**, volontairement : les `stop()` de
+  **fixtures** ne sont pas du code de production (12 sites).
+- `tools/check_conventions.R` : **défaut connexe corrigé** — `.root_dir()`
+  mémoïsait `getwd()` au **premier appel** et `.rel()` mémoïsait par **chemin
+  seul**. Rejouée depuis un test (testthat place le répertoire de travail dans
+  `tests/testthat`), la garde gardait ce préfixe même après un `setwd()` vers la
+  racine, et `.rel()` rendait des chemins **absolus** au lieu de relatifs. Les
+  deux mémoïsations sont désormais indexées par le répertoire courant : une
+  garde doit être **rejouable**.
+- `tests/testthat/test-conventions-c10-scope.R` (nouveau) : trois directions —
+  la règle **signale** un `stop()` nu et **exempte** `errorCondition` /
+  `call. = FALSE` ; la **population** mesurée couvre `R/` **et** `modules/` ;
+  `tests/` est **exclu** (décision énoncée, pas un oubli).
+
+### Vérifié
+
+- **Test ROUGE d'abord**, et un **premier rouge était un faux rouge** : il
+  échouait sur `length(c10) == 0` — la garde, appelée depuis `tests/testthat`,
+  ne trouvait **0 fichier** (chemins relatifs). D'où le correctif `.rel()`
+  ci-dessus ; sans lui, le vert n'aurait rien prouvé.
+- **Test de MUTATION** : portée remise à `R/` seul ⇒ **exactement 1** échec, et
+  c'est la **bonne** assertion (`modules/ absent de la population`), l'assertion
+  sur les chemins relatifs restant verte. Le test détecte donc bien le défaut de
+  portée, pas l'artefact de répertoire.
+- Gardes : conventions **0 erreur / 186 avert.** ; tests de conventions
+  `failed=0 passed=69` ; duplication **0/3** et hermeticité **0/0** inchangées.
+
+### Constaté (listé, NON corrigé — règle 9)
+
+- Les **48** sites de `modules/` sont désormais visibles : chacun devra être
+  classé à son tour. Le réflexe `errorCondition()` multi-arguments y est
+  **déjà interdit** par C16.
+- `app.R` et `global.R` portent **0** site C10 (mesuré) : leur exclusion de la
+  portée est sans effet aujourd'hui, mais non documentée.
+
 ## [V1.x — dette de conventions, 7ᵉ incrément] — 2026-09-17 — `sc_helpers.R` classé (`sc_helpers_error`)
 
 **Troisième fichier converti** (après `bulk_helpers.R` §2bl et
