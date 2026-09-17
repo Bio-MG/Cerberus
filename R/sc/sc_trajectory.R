@@ -45,32 +45,32 @@ calculate_pseudotime <- function(
   root_method <- match.arg(root_method)
 
   if (!requireNamespace("RANN", quietly = TRUE)) {
-    stop("Package 'RANN' is required for graph-based pseudotime.")
+    stop(errorCondition("Package 'RANN' is required for graph-based pseudotime.", class = "sc_trajectory_error"))
   }
   if (!requireNamespace("igraph", quietly = TRUE)) {
-    stop("Package 'igraph' is required for graph-based pseudotime.")
+    stop(errorCondition("Package 'igraph' is required for graph-based pseudotime.", class = "sc_trajectory_error"))
   }
 
   embeddings <- as.matrix(embeddings)
 
   if (!is.numeric(embeddings) || nrow(embeddings) < 3L || ncol(embeddings) < 1L) {
-    stop("embeddings must be a numeric matrix with at least 3 cells.")
+    stop(errorCondition("embeddings must be a numeric matrix with at least 3 cells.", class = "sc_trajectory_error"))
   }
   if (any(!is.finite(embeddings))) {
-    stop("embeddings contain NA, NaN, or infinite values.")
+    stop(errorCondition("embeddings contain NA, NaN, or infinite values.", class = "sc_trajectory_error"))
   }
 
   n_cells <- nrow(embeddings)
   k <- as.integer(k)
   if (length(k) != 1L || is.na(k) || k < 1L) {
-    stop("'k' must be a positive integer.")
+    stop(errorCondition("'k' must be a positive integer.", class = "sc_trajectory_error"))
   }
   k <- min(k, n_cells - 1L)
 
   if (!is.null(root_cells)) {
     root_cells <- unique(as.integer(root_cells))
     if (anyNA(root_cells) || any(root_cells < 1L) || any(root_cells > n_cells)) {
-      stop("Invalid root cell index. Valid indices are between 1 and ", n_cells, ".")
+      stop(errorCondition(paste0("Invalid root cell index. Valid indices are between 1 and ", n_cells, "."), class = "sc_trajectory_error"))
     }
   }
 
@@ -90,7 +90,7 @@ calculate_pseudotime <- function(
   edge_df  <- edge_df[!duplicated(edge_key), , drop = FALSE]
 
   if (nrow(edge_df) < 1L) {
-    stop("Unable to construct a valid kNN graph.")
+    stop(errorCondition("Unable to construct a valid kNN graph.", class = "sc_trajectory_error"))
   }
 
   graph <- igraph::graph_from_data_frame(
@@ -132,7 +132,7 @@ calculate_pseudotime <- function(
 
   finite_pt <- pseudotime[is.finite(pseudotime)]
   if (length(finite_pt) == 0L) {
-    stop("No finite pseudotime values were obtained.")
+    stop(errorCondition("No finite pseudotime values were obtained.", class = "sc_trajectory_error"))
   }
 
   pt_min <- min(finite_pt)
@@ -172,7 +172,7 @@ calculate_slingshot_pseudotime <- function(
     reduction = NA_character_
 ) {
   if (!requireNamespace("slingshot", quietly = TRUE)) {
-    stop("Package 'Slingshot' is required for Slingshot trajectory inference.")
+    stop(errorCondition("Package 'Slingshot' is required for Slingshot trajectory inference.", class = "sc_trajectory_error"))
   }
 
   embeddings <- as.matrix(embeddings)
@@ -180,21 +180,21 @@ calculate_slingshot_pseudotime <- function(
   if (!is.numeric(embeddings) ||
       nrow(embeddings) < 3L ||
       ncol(embeddings) < 2L) {
-    stop("embeddings must be a numeric matrix with at least 3 cells and 2 dimensions.")
+    stop(errorCondition("embeddings must be a numeric matrix with at least 3 cells and 2 dimensions.", class = "sc_trajectory_error"))
   }
 
   if (any(!is.finite(embeddings))) {
-    stop("embeddings contain NA, NaN, or infinite values.")
+    stop(errorCondition("embeddings contain NA, NaN, or infinite values.", class = "sc_trajectory_error"))
   }
 
   cluster_labels <- as.character(cluster_labels)
 
   if (length(cluster_labels) != nrow(embeddings)) {
-    stop("cluster_labels must have one value per cell.")
+    stop(errorCondition("cluster_labels must have one value per cell.", class = "sc_trajectory_error"))
   }
 
   if (anyNA(cluster_labels) || any(!nzchar(cluster_labels))) {
-    stop("cluster_labels contain missing or empty values.")
+    stop(errorCondition("cluster_labels contain missing or empty values.", class = "sc_trajectory_error"))
   }
 
   cluster_labels <- factor(cluster_labels)
@@ -233,7 +233,7 @@ calculate_slingshot_pseudotime <- function(
   curves <- slingshot::slingCurves(sce)
 
   if (nrow(pt_matrix) != nrow(embeddings)) {
-    stop("Slingshot returned an unexpected pseudotime dimension.")
+    stop(errorCondition("Slingshot returned an unexpected pseudotime dimension.", class = "sc_trajectory_error"))
   }
 
   lineage_names <- colnames(pt_matrix)
@@ -298,7 +298,7 @@ plot_trajectory <- function(
   tr <- tr %||% function(x) x
   embeddings <- as.data.frame(embeddings)
   if (ncol(embeddings) < 2L) {
-    stop("At least two display dimensions are required.")
+    stop(errorCondition("At least two display dimensions are required.", class = "sc_trajectory_error"))
   }
   colnames(embeddings)[1:2] <- c("dim1", "dim2")
 
@@ -362,11 +362,11 @@ plot_slingshot_trajectory <- function(
   embeddings <- as.data.frame(embeddings)
 
   if (ncol(embeddings) < 2L) {
-    stop("At least two display dimensions are required.")
+    stop(errorCondition("At least two display dimensions are required.", class = "sc_trajectory_error"))
   }
 
   if (length(pseudotime) != nrow(embeddings)) {
-    stop("pseudotime must have the same length as embeddings rows.")
+    stop(errorCondition("pseudotime must have the same length as embeddings rows.", class = "sc_trajectory_error"))
   }
 
   colnames(embeddings)[1:2] <- c("dim1", "dim2")
@@ -436,7 +436,7 @@ plot_pseudotime_distribution <- function(seurat_obj, palette = "default", manual
 
   if (!"pseudotime" %in% colnames(seurat_obj@meta.data))
 
-    stop(tr("Pseudotemps non calculé — lancez d'abord 'Calculer Trajectoire'."))
+    stop(errorCondition(tr("Pseudotemps non calculé — lancez d'abord 'Calculer Trajectoire'."), class = "sc_trajectory_error"))
 
 
 
@@ -450,7 +450,7 @@ plot_pseudotime_distribution <- function(seurat_obj, palette = "default", manual
 
   df <- df[!is.na(df$pseudotime), ]   # cells outside the root component (disconnected graph)
 
-  if (nrow(df) == 0) stop("Distribution non disponible (pseudotemps NA pour toutes les cellules).")
+  if (nrow(df) == 0) stop(errorCondition("Distribution non disponible (pseudotemps NA pour toutes les cellules).", class = "sc_trajectory_error"))
 
 
 
@@ -482,7 +482,7 @@ plot_genes_vs_pseudotime <- function(seurat_obj, genes, smooth_method = "loess",
 
   if (!"pseudotime" %in% colnames(seurat_obj@meta.data))
 
-    stop(tr("Pseudotemps non calculé — lancez d'abord 'Calculer Trajectoire'."))
+    stop(errorCondition(tr("Pseudotemps non calculé — lancez d'abord 'Calculer Trajectoire'."), class = "sc_trajectory_error"))
 
 
 
@@ -490,7 +490,7 @@ plot_genes_vs_pseudotime <- function(seurat_obj, genes, smooth_method = "loess",
 
   valid_genes <- head(valid_genes, 8)
 
-  if (length(valid_genes) == 0) stop("Aucun gène valide sélectionné")
+  if (length(valid_genes) == 0) stop(errorCondition("Aucun gène valide sélectionné", class = "sc_trajectory_error"))
 
 
 

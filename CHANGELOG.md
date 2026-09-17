@@ -22,6 +22,80 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > du commit `03951cb` cite encore `§2ax` pour 4E-4 : c'est l'état **avant** la
 > renumérotation. Détail : `STATUS.md` §6, item 6.
 
+## [V1.x — dette de conventions, 13ᵉ incrément] — 2026-09-17 — `sc_trajectory.R` classé (`sc_trajectory_error`)
+
+**Le plus gros lot depuis le 7ᵉ** (21 sites) et **le premier qui paie deux fois** :
+le test éponyme exigé par C9 fait baisser **C9 et C10 à la fois**. 🟢 **Bascule
+vers `R/`** décidée par mesure (§2bw.6) : le front `modules/` est épuisé côté
+preuve (14 sites restants, **tous** dans des serveurs réactifs — revérifié ici
+par une méthode **validée** sur un cas dont la vérité terrain est connue).
+
+### Modifié
+
+- `R/sc/sc_trajectory.R` : les **21** `stop()` non classés passent à
+  `stop(errorCondition(<msg>, class = "sc_trajectory_error"))`.
+- **Un seul** des 21 est multi-arguments (ligne **73**, `n_cells`) ⇒ **`paste0()`**
+  obligatoire (C16). Les 20 autres sont déjà à un seul argument ⇒ **pas** de
+  `paste0()` : l'ajouter par réflexe serait du bruit, pas une preuve.
+- La ligne **224** (`stop(..., call. = FALSE)`) est **laissée en place** — déjà
+  conforme ; son unification relève de la décision ouverte `state`/`class`.
+- `tests/testthat/test-sc-trajectory.R` : **créé** — verrou source + **15 sites
+  prouvés à l'exécution** (message **entier** + classe observée).
+
+### 🔴 Le piège que ce lot a mesuré : une assertion-PRÉFIXE est aveugle
+
+`test-sc-helpers.R` exerçait déjà `calculate_pseudotime()` et assérait
+`"Invalid root cell index"`. Or le site **73** est **multi-arguments** : sans
+`paste0()`, `errorCondition()` aurait **tronqué** le message juste après
+« between 1 and » — et l'assertion existante aurait **quand même passé**, parce
+qu'elle ne vise qu'un **préfixe**. ⇒ Le nouveau test assère les messages
+**entiers**, au caractère près (`n_cells` et le point final inclus). C'est sa
+raison d'être — pas une redite de `test-sc-helpers.R`.
+
+### Les 15 sites joignables
+
+Tous sont des **gardes** (`if (…) stop(…)`) dans 6 fonctions **pures** de
+premier niveau — `R/` n'a pas droit au Shiny (C2), donc tout est appelable en
+R pur, **sans** `testServer()` :
+
+| Fonction | Sites |
+|---|---|
+| `calculate_pseudotime` | 57, 60, 66, **73** |
+| `calculate_slingshot_pseudotime` | 183, 187, 193, 197 |
+| `plot_trajectory` | 301 |
+| `plot_slingshot_trajectory` | 365, 369 |
+| `plot_pseudotime_distribution` | 439, 453 |
+| `plot_genes_vs_pseudotime` | 485, 493 |
+
+### 🔴 Les 6 sites non joignables, par ABSENCE DU DÉFAUT (mesuré)
+
+- **48**, **51**, **175** : `RANN`, `igraph` et `slingshot` sont **installés** ⇒
+  les branches « paquet manquant » ne s'exécutent jamais ;
+- **93**, **135**, **236** : exigent un échec **interne** (graphe kNN vide,
+  pseudotemps entièrement non fini, dimension Slingshot inattendue).
+
+### Vérifié
+
+- **Test ROUGE d'abord** : **`FAIL 16 | WARN 4 | PASS 16`** — 1 verrou source
+  listant exactement les **21** lignes + **15** assertions de classe ⇒ **vert** :
+  **`FAIL 0 | WARN 0 | SKIP 0 | PASS 32`**.
+- 🟢 **Les 15 messages étaient déjà identiques AVANT la conversion** :
+  l'invariant de non-régression est établi **avant**, pas constaté après.
+- `parse()` **OK** ; **C10 fichier : 0** ; **C16 fichier : 0** ; diff **21/21**
+  symétrique, **531** lignes (inchangé), **LF** et saut final préservés.
+- Garde : **0 erreur / 130 avert.** — **C10 114 → 93**, **C9 37 → 36**,
+  **C11 = 1** (faux positif connu), **C6 = 0**, **C16 = 0**.
+
+### Constaté (listé, NON corrigé)
+
+- `R/` : **79** sites restants sur **13** fichiers (`sc_plotting.R` 17,
+  `spatial_stats.R` 16, `spatial_reference.R` 12, `spatial_io.R` 11…).
+- `modules/` : **14** sites, **tous** réactifs ⇒ verrou source seul.
+- **Le rapport coût/preuve confirme `R/`** : un lot y rapporte
+  `sites C10 + 1 C9`, contre `sites C10` seulement dans `modules/` — et la
+  classe y reste **observable**.
+
+
 ## [V1.x — dette de conventions, 12ᵉ incrément] — 2026-09-17 — `mod_sc_annotation.R` classé (`sc_annotation_error`)
 
 **Premier lot choisi par le critère de §2bv** (« expose-t-il des helpers purs ? »)
