@@ -245,6 +245,7 @@ mod_sc_pseudobulk_output_ui <- function(id) {
 # -----------------------------------------------------------------------------
 mod_sc_pseudobulk_server <- function(id, global_data, shared_rv) {
   moduleServer(id, function(input, output, session) {
+    ns <- session$ns
     .tr <- function(key) {
       tr <- isolate(global_data$i18n)
       if (is.null(tr)) return(key)

@@ -22,6 +22,48 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > du commit `03951cb` cite encore `§2ax` pour 4E-4 : c'est l'état **avant** la
 > renumérotation. Détail : `STATUS.md` §6, item 6.
 
+## [V1.x — correctif C15] — 2026-09-17 — le serveur pseudobulk appelait `ns()` sans le lier
+
+Découvert par la **re-mesure de la suite complète** exigée par l'incrément de
+dette ci-dessous — **pas** par lui : le défaut est **antérieur** (introduit par
+`4abfc97`, le jalon « mode exploratoire sans réplicat »). Le §2bk.5 #3 disait
+explicitement que la suite complète n'avait **pas** été rejouée ; c'est
+précisément ce trou que la re-mesure a comblé.
+
+### Corrigé
+
+- **`modules/sc/mod_sc_pseudobulk.R`** : `mod_sc_pseudobulk_server` appelle
+  `ns("pb_no_rep_enable" / "pb_no_rep_bcv" / "pb_no_rep_attest")` dans un
+  `renderUI` (le panneau « plan sans réplicat » livré par §2bk) **sans lier**
+  `ns`. Shiny lève alors « could not find function "ns"` **au moment où la
+  branche s'affiche** — donc invisible au démarrage, et invisible aux tests
+  ciblés. Correctif d'**une ligne**, au motif maison (**30** autres modules
+  écrivent `ns <- session$ns`) :
+  ```r
+  moduleServer(id, function(input, output, session) {
+    ns <- session$ns          # <- ajouté
+  ```
+
+### Vérifié
+
+- **Le test qui échouait existait déjà** : `test-release-hardening.R` (règle
+  **C15**, statique) passait de `fail=1 pass=49` à **`fail=0 pass=50`**. Aucun
+  test ajouté — la règle couvrait déjà la classe entière, il manquait le
+  correctif, pas la détection.
+- Re-scan C15 sur `modules/` (66 fichiers, 54 serveurs `moduleServer`) :
+  **1 offenseur → 0**.
+- **Suite complète re-mesurée** : **99 fichiers, `failed=0 passed=5885 error=0
+  skipped=1`** (le seul SKIP = smoke GEO live) — soit **exactement** `5884 + 1`.
+
+### Leçon
+
+**Une suite complète n'est pas un luxe.** Le jalon précédent avait validé sa
+livraison par des **tests ciblés** + les gardes ; le défaut ne vivait ni dans
+les fonctions R testées ni dans `check_conventions.R`, mais dans le **chemin
+Shiny**. Une politique « tests ciblés » laisse ce type de régression invisible
+jusqu'à ce que quelqu'un rejoue la suite — ici, la re-mesure imposée par
+l'incrément de dette.
+
 ## [V1.x — dette de conventions, 5ᵉ incrément] — 2026-09-17 — premier CLASSEMENT de domaine (C10 171 → 152, 209 → 190)
 
 Cinquième incrément, et **le premier qui touche du code applicatif** : les quatre
