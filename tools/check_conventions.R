@@ -439,6 +439,21 @@ check_c5_browser <- function(files) {
 # C12 — en-tête de fichier documentaire
 # C13 — `choices` nommé : la valeur n'est jamais un appel traduit
 # =============================================================================
+#' Compte les occurrences LITTÉRALES de `ch` dans `x`.
+#'
+#' POURQUOI — `gregexpr("\\{", x, fixed = TRUE)` ne cherche PAS `{` mais la
+#' chaîne de DEUX caractères `\{` : le `\\` est un échappement de CHAÎNE R, et
+#' `fixed = TRUE` désactive l'interprétation regex. Mesuré le 2026-09-17 :
+#' `lengths(regmatches("{", gregexpr("\\{", "{", fixed = TRUE)))` vaut **0**,
+#' alors que `gregexpr("{", "{", fixed = TRUE)` en trouve **1**.
+#' Conséquence du défaut : le compteur d'accolades de C6 restait bloqué à 0,
+#' donc `depth == 0L` était TOUJOURS vrai, et la règle « au top-level de R/ »
+#' signalait en réalité `library()` à N'IMPORTE QUELLE profondeur.
+.count_chars <- function(x, ch) {
+  m <- gregexpr(ch, x, fixed = TRUE)
+  sum(lengths(regmatches(x, m)))
+}
+
 check_c6_library_in_r <- function(r_files) {
   for (f in r_files) {
     ann <- .read_code_lines(f)
@@ -452,9 +467,7 @@ check_c6_library_in_r <- function(r_files) {
         .add("WARN", "C6", .rel(f), ann$line_no[i],
              "library()/require() au top-level de R/ — préférer requireNamespace() + :: (un package attaché au source() masque des fonctions de l'app).")
       }
-      opens  <- lengths(regmatches(ln, gregexpr("\\{", ln, fixed = TRUE)))
-      closes <- lengths(regmatches(ln, gregexpr("\\}", ln, fixed = TRUE)))
-      depth <- max(0L, depth + opens - closes)
+      depth <- max(0L, depth + .count_chars(ln, "{") - .count_chars(ln, "}"))
     }
   }
 }
@@ -659,18 +672,53 @@ check_c9_r_tests <- function(r_files) {
   }
 }
 
+#' C10 — `stop()` doit être classé (`errorCondition(class=...)`) ou porter
+#' `call. = FALSE`.
+#'
+#' DÉFAUT MESURÉ le 2026-09-17 : la version précédente jugeait **UNE SEULE
+#' ligne**. Un appel MULTI-LIGNES parfaitement conforme —
+#'     stop("message",
+#'          "suite", call. = FALSE)
+#' — était donc signalé à tort, parce que `call. = FALSE` vit sur la ligne
+#' suivante. Mesure : sur **270** signalements, **49 (18 %)** portaient déjà
+#' `call. = FALSE` ou `errorCondition` DANS l'appel ⇒ faux positifs, et la
+#' dette paraissait plus grosse qu'elle n'est.
+#' On analyse désormais l'APPEL LOGIQUE : de la ligne de `stop(` jusqu'à
+#' l'équilibrage des parenthèses. `ann$code` est déjà débarrassé des chaînes et
+#' des commentaires, donc compter les parenthèses est fiable.
+#' INVARIANTE CONSERVÉE : un appel multi-lignes SANS classement reste signalé
+#' (testé sur un cas négatif injecté) — sinon la garde deviendrait aveugle en
+#' croyant se réparer (cf. CONVENTIONS.md §12.1).
 check_c10_error_style <- function(r_files) {
   for (f in r_files) {
     ann <- .read_code_lines(f)
     if (nrow(ann) == 0) next
-    for (i in seq_len(nrow(ann))) {
-      ln <- ann$code[i]
-      if (!grepl("(^|[^A-Za-z0-9_.])stop\\s*\\(", ln, perl = TRUE)) next
-      if (grepl("errorCondition", ln, fixed = TRUE)) next          # forme maison
-      if (grepl("call\\.\\s*=\\s*FALSE", ln, perl = TRUE)) next     # forme explicite
-      if (grepl("^\\s*stop\\(\\)", ln, perl = TRUE)) next           # stop() nu
-      .add("WARN", "C10", .rel(f), ann$line_no[i],
-           "stop() sans errorCondition(class=<domaine>_error) ni call. = FALSE (dette héritée ; obligatoire pour tout code neuf).")
+    code <- ann$code
+    n <- length(code)
+    i <- 1L
+    while (i <= n) {
+      ln <- code[i]
+      if (!grepl("(^|[^A-Za-z0-9_.])stop\\s*\\(", ln, perl = TRUE)) {
+        i <- i + 1L
+        next
+      }
+      # étendue de l'APPEL : jusqu'à équilibrage des parenthèses
+      depth <- 0L
+      j <- i
+      while (j <= n) {
+        depth <- depth + .count_chars(code[j], "(") - .count_chars(code[j], ")")
+        if (depth <= 0L) break
+        j <- j + 1L
+      }
+      span <- paste(code[i:min(j, n)], collapse = "\n")
+      exempt <- grepl("errorCondition", span, fixed = TRUE) ||      # forme maison
+        grepl("call\\.\\s*=\\s*FALSE", span, perl = TRUE) ||        # forme explicite
+        grepl("^\\s*stop\\(\\)", ln, perl = TRUE)                   # stop() nu
+      if (!exempt) {
+        .add("WARN", "C10", .rel(f), ann$line_no[i],
+             "stop() sans errorCondition(class=<domaine>_error) ni call. = FALSE (dette héritée ; obligatoire pour tout code neuf).")
+      }
+      i <- i + 1L
     }
   }
 }

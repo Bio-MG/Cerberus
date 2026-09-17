@@ -22,6 +22,58 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > du commit `03951cb` cite encore `§2ax` pour 4E-4 : c'est l'état **avant** la
 > renumérotation. Détail : `STATUS.md` §6, item 6.
 
+## [V1.x — dette de conventions, 2ᵉ incrément] — 2026-09-17 — deux règles jugeaient la mauvaise unité (319 → 259)
+
+Suite du chantier de réduction engagé le 2026-09-16. Comme le premier incrément,
+celui-ci ne touche **aucun code applicatif** : il corrige la **garde**, qui
+gonflait la dette mesurée. **319 → 259** avertissements, **0 ajouté**, 60
+retirés, tous justifiés (diff avant/après, l'« avant » issu de `git`).
+
+### Corrigé
+
+- **C6 : le compteur d'accolades ne comptait rien (11 → 0).**
+  `check_c6_library_in_r()` mesurait la profondeur d'imbrication avec
+  `gregexpr("\\{", ln, fixed = TRUE)`. Or `\\{` est en R la chaîne de **deux**
+  caractères `\{`, et `fixed = TRUE` désactive l'interprétation regex : le motif
+  ne trouvait donc **jamais** `{`. Mesuré :
+  `lengths(regmatches("{", gregexpr("\\{", "{", fixed = TRUE)))` = **0**.
+  Le compteur restait bloqué à 0, donc `depth == 0L` était **toujours vrai**, et
+  la règle « pas de `library()` **au top-level** de `R/` » signalait en réalité
+  `library()` à **n'importe quelle** profondeur. Mesure des 11 sites : profondeurs
+  **1 à 4** — **aucun** n'était top-level. La dette C6 affichée était donc
+  **entièrement un artefact de mesure**. Corrigé par `.count_chars()`.
+
+- **C10 : un appel multi-lignes jugé sur sa première ligne (270 → 221).**
+  `check_c10_error_style()` cherchait `call. = FALSE` **sur la ligne** de
+  `stop(`. Un appel conforme mais réparti sur deux lignes —
+  `stop("message",` / `     "suite", call. = FALSE)` — était donc signalé à tort.
+  Sur 270 signalements, **49 (18 %)** portaient déjà `call. = FALSE` ou
+  `errorCondition` **dans** l'appel. La règle analyse désormais l'**appel
+  logique**, jusqu'à l'équilibrage des parenthèses.
+
+### Vérifié
+
+- Diff **avant/après** : `0 ajouté`, `49 C10 + 11 C6` retirés, et les 49
+  correspondent **exactement** aux 49 prédits par un classifieur Python
+  indépendant (concordance entre deux mesures indépendantes).
+- Les deux tests à fixtures ont été **éprouvés contre la garde d'AVANT** (issue
+  de `git show HEAD:`) : C6 rendait `1,3,5,8` et C10 `1,3,5` — ils **échouent**
+  donc sans le correctif. Un test vert qui n'a jamais été vu rouge ne prouve rien.
+- Non-aveuglement conservé : un `library()` **top-level** reste signalé, et un
+  `stop()` multi-lignes **sans** classement reste signalé.
+- `tools/run_tests.R conventions` : **42 pass / 0 fail / 0 error** (3 fichiers,
+  chacun vérifié **présent au bilan**).
+- `check_conventions.R` : **0 erreur / 259 avertissements**.
+
+### Ouvert (règle 9 — listé, non exécuté)
+
+- Les 11 `library()` **imbriqués** ne violent plus la règle *telle qu'elle est
+  écrite*, mais un `library()` exécuté dans une fonction attache le paquet
+  **globalement** au moment de l'appel et peut masquer une fonction maison —
+  c'est la raison d'être de C6. **Faut-il écrire la règle plus large ?** Décision
+  cadrée dans `ROADMAP.md` §6.
+- Reste de la dette : **C10 = 221** · **C9 = 37** · **C11 = 1**.
+
 ## [V1.x — dette de conventions] — 2026-09-16 — la garde mesurait FAUX (324 → 319) + `--list-all`
 
 ### Pourquoi
