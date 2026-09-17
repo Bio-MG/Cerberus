@@ -22,6 +22,68 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > du commit `03951cb` cite encore `§2ax` pour 4E-4 : c'est l'état **avant** la
 > renumérotation. Détail : `STATUS.md` §6, item 6.
 
+## [V1.x — dette de conventions, 7ᵉ incrément] — 2026-09-17 — `sc_helpers.R` classé (`sc_helpers_error`)
+
+**Troisième fichier converti** (après `bulk_helpers.R` §2bl et
+`pathway_helpers.R` §2bp) — et le **plus gros lot** de ce chantier à ce jour :
+**34** sites d'un coup.
+
+### Modifié
+
+- `R/sc/sc_helpers.R` : les **34** `stop()` non classés passent à
+  `stop(errorCondition(<msg>, class = "sc_helpers_error"))`. Le fichier en compte
+  **35** : le 35ᵉ est le **re-levé nu `stop(e)`** (ligne ~1205), forme que C10
+  **exempte** et qui est **laissée telle quelle**.
+- **1** site a un message en **plusieurs arguments** (`stop("Agregation par
+  groupe impossible : ", conditionMessage(e2))`) ⇒ enveloppé dans **`paste0()`**.
+  Il est **injoignable** depuis un test (double `tryCatch` exigeant > 5000
+  cellules **et** deux échecs d'`AverageExpression`) ⇒ couvert par **trois gardes
+  statiques indépendantes** : le verrou source, l'assertion du script de
+  conversion (`+1 paste0(`) et la règle **C16**.
+- `tests/testthat/test-sc-helpers.R` : deux tests à **deux niveaux** — verrou
+  **source** (0 signalement C10 sur le fichier, couvre les **19** sites
+  injoignables) et assertions **d'exécution** sur les **15 sites joignables**.
+
+### Classe : nommée par le FICHIER, pas par un domaine
+
+`sc_helpers.R` est un **fourre-tout hétérogène** (recherche de gènes, remapping
+d'IDs, heatmap, densité 2D, nuage 3D) : **aucun domaine d'analyse unique** ne le
+décrit. `sc_error` serait trop large — il cohabite avec `sc_multi_error`,
+`sccoda_error`, `milo_error` — et prétendrait désigner « l'erreur single-cell »
+générique. §7 demande `class = "<domaine>_error"` ; ici le domaine **est** la
+couche de helpers.
+
+### Vérifié
+
+- **Test ROUGE d'abord** : **15 échecs** (34 signalements C10 sur le fichier, et
+  14 `simpleError` au lieu de `sc_helpers_error` — les `expect_match` sur les
+  messages passaient déjà, seul le **classement** manquait) ⇒ puis **vert** :
+  `failed=0 passed=72`.
+- **Invariant au bon niveau** (§2bn) : les 15 déclencheurs rejoués ⇒ messages
+  **identiques 15/15** au caractère près ; classes `simpleError|error|condition`
+  → `sc_helpers_error|error|condition`.
+- **Conversion par SPLICE ÉQUILIBRÉ PARENTHÈSE**, pas par regex de ligne : 6 sites
+  sont des `stop(sprintf(...))` **étalés sur plusieurs lignes**. Le script est
+  conscient des **chaînes** et des **commentaires** (assertion : **0** `stop(`
+  détecté dans une chaîne ou un commentaire).
+- `parse()` **OK** ; **1564** lignes avant/après ; **35** `stop(` inchangés ;
+  `errorCondition(` 0 → 34 ; `call. = FALSE` **0** ; aucun double emballage ;
+  **C16 sur le fichier : 0**.
+- Garde : **C10 134 → 100**, total **0 erreur / 172 → 138 avert.** ; duplication
+  **0/3** et hermeticité **0/0** inchangées.
+
+### Constaté (hors périmètre — listé, NON corrigé)
+
+- ⚠️ **L'en-tête du fichier est périmé** : il annonce **6 fonctions**
+  (`plot_trajectory`, `plot_slingshot_trajectory`, `plot_pseudotime_distribution`,
+  `plot_genes_vs_pseudotime`, `calculate_pseudotime`,
+  `calculate_slingshot_pseudotime`) qui ont **déménagé dans `sc_trajectory.R`**.
+  C12 ne vérifie que la **présence** d'un en-tête, jamais son **exactitude**.
+- `find_correlated_genes()` appelée avec un gène **valide** sur un objet **non
+  normalisé** échoue avec « no 'dimnames' attribute for array » (mesuré :
+  `.get_norm_matrix()` rend une matrice **0×0** sans dimnames faute de couche
+  `data`). Message peu explicite, **pas** un défaut produit.
+
 ## [V1.x — dette de conventions, 6ᵉ incrément] — 2026-09-17 — `pathway_helpers.R` classé (`pathway_error`)
 
 **Deuxième fichier converti** du chantier de réduction de la dette C10 (après

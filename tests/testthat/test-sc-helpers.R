@@ -137,3 +137,138 @@ test_that("subsample_seurat_for_analysis falls back to a flat subsample when gro
   expect_true(res$was_subsampled)
   expect_equal(ncol(res$object), 15)
 })
+
+# ---------------------------------------------------------------------------
+# C10 — les erreurs de sc_helpers.R portent la classe `sc_helpers_error`
+# ---------------------------------------------------------------------------
+# Dette de conventions, 7e increment. Le fichier compte 35 `stop()` : 34 sont
+# non classes, le 35e est le re-leve nu `stop(e)` (ligne ~1205), forme que C10
+# EXEMPTE explicitement et qui est laissee telle quelle.
+#
+# Classe NOMMEE PAR LE FICHIER, pas par un domaine : ce fichier est un
+# fourre-tout heterogene (recherche de genes, remapping d'IDs, heatmap, densite
+# 2D, 3D) — aucun domaine d'analyse unique ne le decrit. `sc_error` serait trop
+# large (il cohabite avec sc_multi_error / sccoda_error / milo_error) et
+# pretendrait designer "l'erreur single-cell" generique.
+#
+# ATTENTION — un site a un message en PLUSIEURS arguments
+# (`stop("Agregation par groupe impossible : ", conditionMessage(e2))`, ligne
+# ~1362) : il est enveloppe dans `paste0()`. Il est INJOIGNABLE ici (double
+# `tryCatch` exigeant plus de 5000 cellules ET deux echecs d'AverageExpression),
+# donc il n'est PAS couvert a l'execution : il est couvert par le verrou source
+# ci-dessous, par l'assertion du script de conversion (+1 `paste0(`) et par la
+# regle C16 — trois gardes statiques independantes.
+#
+# Deux niveaux de preuve, aucun ne suffisant seul :
+#   1. SOURCE    — le fichier ne contribue plus AUCUN signalement C10 (couvre
+#      les 19 sites injoignables : gardes "paquet manquant", branches internes).
+#   2. EXECUTION — les 15 sites joignables levent VRAIMENT une condition classee.
+source_project_file("tools/check_conventions.R")
+
+#' Capture l'erreur levee par `expr` ; NULL si `expr` retourne normalement.
+.sc_error_of <- function(expr) {
+  tryCatch({
+    suppressMessages(suppressWarnings(force(expr)))
+    NULL
+  }, error = function(e) e)
+}
+
+test_that("C10 : sc_helpers.R ne contribue plus aucun signalement", {
+  path <- file.path(ts_project_root(), "R/sc/sc_helpers.R")
+  .REPORT$warns <- list()
+  check_c10_error_style(path)
+  expect_length(.REPORT$warns, 0L)
+})
+
+test_that("C10 : les erreurs joignables de sc_helpers.R portent sc_helpers_error", {
+  .load_seurat_pkgs()
+  skip_if_not_installed("ggplot2")
+  obj <- .toy_seurat()
+
+  # 1-2. feature absente (les deux emplacements) — la valeur recue est citee
+  e <- .sc_error_of(plot_enhanced_scatter(obj, "nope1", "nope2"))
+  expect_s3_class(e, "sc_helpers_error")
+  expect_match(conditionMessage(e), "nope1", fixed = TRUE)
+
+  e <- .sc_error_of(plot_enhanced_scatter(obj, "gene1", "nope2"))
+  expect_s3_class(e, "sc_helpers_error")
+  expect_match(conditionMessage(e), "nope2", fixed = TRUE)
+
+  # 3. aucun gene valide
+  e <- .sc_error_of(plot_violin_enhanced(obj, features = "nope"))
+  expect_s3_class(e, "sc_helpers_error")
+  expect_match(conditionMessage(e), "valide trouv", fixed = TRUE)
+
+  # 4-5. gene absent, puis trop peu d'echantillons
+  e <- .sc_error_of(plot_multi_sample(obj, "nope"))
+  expect_s3_class(e, "sc_helpers_error")
+  expect_match(conditionMessage(e), "nope", fixed = TRUE)
+
+  e <- .sc_error_of(plot_multi_sample(obj, "gene1"))
+  expect_s3_class(e, "sc_helpers_error")
+  expect_match(conditionMessage(e), "chantillons requis", fixed = TRUE)
+
+  # 6. gene cible absent
+  e <- .sc_error_of(find_correlated_genes(obj, "nope"))
+  expect_s3_class(e, "sc_helpers_error")
+  expect_match(conditionMessage(e), "nope", fixed = TRUE)
+
+  # 6b. moins de 2 genes exploitables pour la matrice de correlation.
+  #     ⚠️ Ne PAS confondre avec `find_correlated_genes()` : appelee avec un gene
+  #     VALIDE sur cet objet de test, elle leve « no 'dimnames' attribute for
+  #     array ». Cause MESUREE : `.get_norm_matrix()` y rend une matrice 0x0 sans
+  #     dimnames, parce que `.toy_seurat()` n'est PAS normalise (pas de couche
+  #     `data`). Ce n'est donc PAS un defaut produit — juste un message peu
+  #     explicite sur un objet non normalise. Hors perimetre, non couvert ici.
+  e <- .sc_error_of(plot_correlation_matrix(obj, features = "nope"))
+  expect_s3_class(e, "sc_helpers_error")
+  expect_match(conditionMessage(e), "Au moins 2 g", fixed = TRUE)
+
+  # 7. from_type invalide
+  e <- .sc_error_of(remap_seurat_ids_to_symbol(obj, from_type = "nope"))
+  expect_s3_class(e, "sc_helpers_error")
+  expect_match(conditionMessage(e), "from_type doit etre", fixed = TRUE)
+
+  # 8. mapping ENSEMBL insuffisant — message construit par sprintf(), donc
+  #    multi-arguments a la SOURCE : on verifie un fragment de la FIN.
+  skip_if_not_installed("org.Hs.eg.db")
+  skip_if_not_installed("AnnotationDbi")
+  mat <- matrix(1, nrow = 5, ncol = 2,
+                dimnames = list(c("ENSG00000141510", "ENSG00000012048", "ENSG00000146648",
+                                  "ENSG00000136997", "ENSG00000157764"), c("c1", "c2")))
+  e <- .sc_error_of(map_ensembl_matrix_to_symbol(mat))
+  expect_s3_class(e, "sc_helpers_error")
+  expect_match(conditionMessage(e), "5/5", fixed = TRUE)          # non tronque
+  expect_match(conditionMessage(e), "organisme 'human'", fixed = TRUE)
+
+  # 9-11. heatmap hierarchique : objet, colonne de groupe, nombre de genes
+  skip_if_not_installed("ComplexHeatmap")
+  e <- .sc_error_of(build_sc_hierarchical_heatmap(NULL, c("gene1", "gene2")))
+  expect_s3_class(e, "sc_helpers_error")
+  expect_match(conditionMessage(e), "Aucun objet Single-Cell", fixed = TRUE)
+
+  e <- .sc_error_of(build_sc_hierarchical_heatmap(obj, c("gene1", "gene2"), group_by = "nope"))
+  expect_s3_class(e, "sc_helpers_error")
+  expect_match(conditionMessage(e), "Colonne de groupe", fixed = TRUE)
+  expect_match(conditionMessage(e), "nope", fixed = TRUE)
+
+  e <- .sc_error_of(build_sc_hierarchical_heatmap(obj, c("gene1"), group_by = "seurat_clusters"))
+  expect_s3_class(e, "sc_helpers_error")
+  expect_match(conditionMessage(e), "Au moins 2 genes valides", fixed = TRUE)
+
+  # 12-13. densite 2D : objet absent, puis feature absente
+  skip_if_not_installed("MASS")
+  e <- .sc_error_of(plot_sc_expression_density_2d(NULL, "gene1"))
+  expect_s3_class(e, "sc_helpers_error")
+  expect_match(conditionMessage(e), "Aucun objet Single-Cell", fixed = TRUE)
+
+  e <- .sc_error_of(plot_sc_expression_density_2d(obj, NULL))
+  expect_s3_class(e, "sc_helpers_error")
+  expect_match(conditionMessage(e), "Aucun gene/feature", fixed = TRUE)
+
+  # 14. reduction 3D : objet absent
+  skip_if_not_installed("plotly")
+  e <- .sc_error_of(plot_sc_reduction_3d(NULL))
+  expect_s3_class(e, "sc_helpers_error")
+  expect_match(conditionMessage(e), "Aucun objet Single-Cell", fixed = TRUE)
+})

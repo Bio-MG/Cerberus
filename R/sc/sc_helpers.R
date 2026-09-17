@@ -48,13 +48,13 @@ plot_enhanced_scatter <- function(seurat_obj, feature1, feature2,
 
   if(!feature1 %in% rownames(seurat_obj) && !feature1 %in% colnames(seurat_obj@meta.data)) {
 
-    stop(paste("Feature non trouvée:", feature1))
+    stop(errorCondition(paste("Feature non trouvée:", feature1), class = "sc_helpers_error"))
 
   }
 
   if(!feature2 %in% rownames(seurat_obj) && !feature2 %in% colnames(seurat_obj@meta.data)) {
 
-    stop(paste("Feature non trouvée:", feature2))
+    stop(errorCondition(paste("Feature non trouvée:", feature2), class = "sc_helpers_error"))
 
   }
 
@@ -201,7 +201,7 @@ plot_violin_enhanced <- function(seurat_obj, features, group.by = "seurat_cluste
 
   if(length(valid_features) == 0) {
 
-    stop("Aucun gène valide trouvé")
+    stop(errorCondition("Aucun gène valide trouvé", class = "sc_helpers_error"))
 
   }
 
@@ -278,7 +278,7 @@ plot_multi_sample <- function(seurat_obj, gene, plot_type = "violin", tr = NULL)
 
   if(!gene %in% rownames(seurat_obj)) {
 
-    stop(paste("Gène non trouvé:", gene))
+    stop(errorCondition(paste("Gène non trouvé:", gene), class = "sc_helpers_error"))
 
   }
 
@@ -288,7 +288,7 @@ plot_multi_sample <- function(seurat_obj, gene, plot_type = "violin", tr = NULL)
 
   if(n_samples < 2) {
 
-    stop("Au moins 2 échantillons requis pour la comparaison")
+    stop(errorCondition("Au moins 2 échantillons requis pour la comparaison", class = "sc_helpers_error"))
 
   }
 
@@ -403,7 +403,7 @@ find_correlated_genes <- function(seurat_obj, target_gene,
 
   if(!target_gene %in% rownames(seurat_obj)) {
 
-    stop(paste("Gène non trouvé:", target_gene))
+    stop(errorCondition(paste("Gène non trouvé:", target_gene), class = "sc_helpers_error"))
 
   }
 
@@ -582,7 +582,7 @@ plot_correlation_matrix <- function(seurat_obj, features, method = "pearson",
 
   if(length(features) < 2) {
 
-    stop("Au moins 2 gènes requis")
+    stop(errorCondition("Au moins 2 gènes requis", class = "sc_helpers_error"))
 
   }
 
@@ -1030,13 +1030,13 @@ subsample_seurat_for_analysis <- function(obj, max_per_group = Inf,
 remap_seurat_ids_to_symbol <- function(obj, from_type = "ensembl", organism = "human",
                                        collapse_method = "sum", strip_version = TRUE) {
   if (!from_type %in% c("ensembl", "entrez")) {
-    stop("from_type doit etre 'ensembl' ou 'entrez' pour Single-Cell.")
+    stop(errorCondition("from_type doit etre 'ensembl' ou 'entrez' pour Single-Cell.", class = "sc_helpers_error"))
   }
   orgdb <- if (organism == "human") {
-    if (!requireNamespace("org.Hs.eg.db", quietly = TRUE)) stop("Package 'org.Hs.eg.db' requis.")
+    if (!requireNamespace("org.Hs.eg.db", quietly = TRUE)) stop(errorCondition("Package 'org.Hs.eg.db' requis.", class = "sc_helpers_error"))
     org.Hs.eg.db::org.Hs.eg.db
   } else {
-    if (!requireNamespace("org.Mm.eg.db", quietly = TRUE)) stop("Package 'org.Mm.eg.db' requis.")
+    if (!requireNamespace("org.Mm.eg.db", quietly = TRUE)) stop(errorCondition("Package 'org.Mm.eg.db' requis.", class = "sc_helpers_error"))
     org.Mm.eg.db::org.Mm.eg.db
   }
   from_key <- switch(from_type, ensembl = "ENSEMBL", entrez = "ENTREZID")
@@ -1064,10 +1064,10 @@ remap_seurat_ids_to_symbol <- function(obj, from_type = "ensembl", organism = "h
         organism, detected_org, paste(head(ids_clean, 3), collapse = ", ")))
       organism <- detected_org
       orgdb <- if (organism == "human") {
-        if (!requireNamespace("org.Hs.eg.db", quietly = TRUE)) stop("Package 'org.Hs.eg.db' requis.")
+        if (!requireNamespace("org.Hs.eg.db", quietly = TRUE)) stop(errorCondition("Package 'org.Hs.eg.db' requis.", class = "sc_helpers_error"))
         org.Hs.eg.db::org.Hs.eg.db
       } else {
-        if (!requireNamespace("org.Mm.eg.db", quietly = TRUE)) stop("Package 'org.Mm.eg.db' requis.")
+        if (!requireNamespace("org.Mm.eg.db", quietly = TRUE)) stop(errorCondition("Package 'org.Mm.eg.db' requis.", class = "sc_helpers_error"))
         org.Mm.eg.db::org.Mm.eg.db
       }
     }
@@ -1079,19 +1079,19 @@ remap_seurat_ids_to_symbol <- function(obj, from_type = "ensembl", organism = "h
   sample_ids <- head(ids_clean[!is.na(ids_clean)], 200)
   pct_match  <- if (length(sample_ids) > 0) mean(grepl(expected_pattern, sample_ids)) else 0
   if (pct_match < 0.05) {
-    stop(sprintf(
+    stop(errorCondition(sprintf(
       paste0("Vos identifiants ne ressemblent pas a des ID '%s' pour l'organisme '%s' ",
              "(%.0f%% correspondent au format attendu %s). Exemples : %s."),
       from_type, organism, pct_match * 100, expected_pattern,
       paste(head(sample_ids, 5), collapse = ", ")
-    ))
+    ), class = "sc_helpers_error"))
   }
   
   map_df <- tryCatch(
     AnnotationDbi::select(orgdb, keys = ids_clean, keytype = from_key, columns = "SYMBOL"),
-    error = function(e) stop(sprintf(
+    error = function(e) stop(errorCondition(sprintf(
       "Echec du mapping d'identifiants (organisme '%s') : %s\nExemples testes : %s.",
-      organism, conditionMessage(e), paste(head(sample_ids, 5), collapse = ", ")))
+      organism, conditionMessage(e), paste(head(sample_ids, 5), collapse = ", ")), class = "sc_helpers_error"))
   )
   map_df <- map_df[!is.na(map_df$SYMBOL), ]
   map_df <- map_df[!duplicated(map_df[[from_key]]), ]
@@ -1101,9 +1101,9 @@ remap_seurat_ids_to_symbol <- function(obj, from_type = "ensembl", organism = "h
   keep       <- !is.na(mapped_symbols)
   n_mapped   <- sum(keep)
   n_unmapped <- sum(!keep)
-  if (n_mapped == 0) stop(sprintf(
+  if (n_mapped == 0) stop(errorCondition(sprintf(
     "Aucun gene n'a pu etre converti en symbole (organisme '%s', %d IDs testes). Exemples : %s.",
-    organism, length(ids_clean), paste(head(sample_ids, 5), collapse = ", ")))
+    organism, length(ids_clean), paste(head(sample_ids, 5), collapse = ", ")), class = "sc_helpers_error"))
   
   mat  <- counts[keep, , drop = FALSE]
   syms <- unname(mapped_symbols[keep])
@@ -1263,9 +1263,9 @@ map_ensembl_matrix_to_symbol <- function(mat, organism = c("human", "mouse")) {
 
   if (!requireNamespace("AnnotationDbi", quietly = TRUE) ||
       !requireNamespace(orgdb_pkg, quietly = TRUE)) {
-    stop(sprintf(
+    stop(errorCondition(sprintf(
       "Package Bioconductor '%s' (+ AnnotationDbi) requis pour la conversion ENSEMBL -> Symbol.",
-      orgdb_pkg))
+      orgdb_pkg), class = "sc_helpers_error"))
   }
 
   orgdb     <- getExportedValue(orgdb_pkg, orgdb_pkg)
@@ -1276,11 +1276,11 @@ map_ensembl_matrix_to_symbol <- function(mat, organism = c("human", "mouse")) {
 
   keep <- !is.na(symbols) & nzchar(symbols)
   if (sum(keep) < 200L) {
-    stop(sprintf(
+    stop(errorCondition(sprintf(
       paste0("Mapping ENSEMBL -> Symbol insuffisant (%d/%d genes mappes, organisme '%s'). ",
              "Exemples d'identifiants testes : %s. V\u00e9rifiez l'organisme."),
       sum(keep), length(clean_ids), organism,
-      paste(head(clean_ids, 5), collapse = ", ")))
+      paste(head(clean_ids, 5), collapse = ", ")), class = "sc_helpers_error"))
   }
 
   mat <- mat[keep, , drop = FALSE]
@@ -1325,17 +1325,17 @@ build_sc_hierarchical_heatmap <- function(seurat_obj, features, group_by = "seur
                                           clustering_method = "complete",
                                           k_row = NULL) {
   if (!requireNamespace("ComplexHeatmap", quietly = TRUE)) {
-    stop("Package 'ComplexHeatmap' requis pour la heatmap hierarchique.")
+    stop(errorCondition("Package 'ComplexHeatmap' requis pour la heatmap hierarchique.", class = "sc_helpers_error"))
   }
-  if (is.null(seurat_obj)) stop("Aucun objet Single-Cell charge.")
+  if (is.null(seurat_obj)) stop(errorCondition("Aucun objet Single-Cell charge.", class = "sc_helpers_error"))
   assay <- assay %||% Seurat::DefaultAssay(seurat_obj)
   if (!group_by %in% colnames(seurat_obj@meta.data)) {
-    stop(sprintf("Colonne de groupe '%s' introuvable dans les metadonnees.", group_by))
+    stop(errorCondition(sprintf("Colonne de groupe '%s' introuvable dans les metadonnees.", group_by), class = "sc_helpers_error"))
   }
 
   valid_features <- intersect(features, rownames(seurat_obj))
   n_dropped <- length(features) - length(valid_features)
-  if (length(valid_features) < 2L) stop("Au moins 2 genes valides sont requis pour la heatmap hierarchique.")
+  if (length(valid_features) < 2L) stop(errorCondition("Au moins 2 genes valides sont requis pour la heatmap hierarchique.", class = "sc_helpers_error"))
   if (n_dropped > 0) warning(sprintf("%d gene(s) demande(s) introuvable(s) -- ignore(s).", n_dropped))
   if (length(valid_features) > max_features) {
     warning(sprintf("Selection reduite a %d genes (sur %d) -- max_features=%d.",
@@ -1359,7 +1359,7 @@ build_sc_hierarchical_heatmap <- function(seurat_obj, features, group_by = "seur
       error = function(e) tryCatch(
         Seurat::AverageExpression(seurat_obj, features = valid_features, assays = assay,
                                   slot = "data", verbose = FALSE)[[assay]],
-        error = function(e2) stop("Agregation par groupe impossible : ", conditionMessage(e2))
+        error = function(e2) stop(errorCondition(paste0("Agregation par groupe impossible : ", conditionMessage(e2)), class = "sc_helpers_error"))
       )
     )
     mat <- as.matrix(avg)
@@ -1435,21 +1435,21 @@ build_sc_hierarchical_heatmap <- function(seurat_obj, features, group_by = "seur
 plot_sc_expression_density_2d <- function(seurat_obj, feature, reduction = "umap",
                                           bandwidth = NULL, max_cells = 50000L,
                                           palette = "default", manual_gradient = NULL) {
-  if (!requireNamespace("MASS", quietly = TRUE)) stop("Package 'MASS' requis pour la densite 2D (MASS::kde2d).")
-  if (is.null(seurat_obj)) stop("Aucun objet Single-Cell charge.")
-  if (is.null(feature) || !nzchar(feature %||% "")) stop("Aucun gene/feature selectionne.")
-  if (!reduction %in% names(seurat_obj@reductions)) stop(sprintf("Reduction '%s' non calculee.", reduction))
+  if (!requireNamespace("MASS", quietly = TRUE)) stop(errorCondition("Package 'MASS' requis pour la densite 2D (MASS::kde2d).", class = "sc_helpers_error"))
+  if (is.null(seurat_obj)) stop(errorCondition("Aucun objet Single-Cell charge.", class = "sc_helpers_error"))
+  if (is.null(feature) || !nzchar(feature %||% "")) stop(errorCondition("Aucun gene/feature selectionne.", class = "sc_helpers_error"))
+  if (!reduction %in% names(seurat_obj@reductions)) stop(errorCondition(sprintf("Reduction '%s' non calculee.", reduction), class = "sc_helpers_error"))
   emb <- Seurat::Embeddings(seurat_obj, reduction = reduction)
-  if (ncol(emb) < 2L) stop(sprintf("La reduction '%s' a moins de 2 dimensions.", reduction))
+  if (ncol(emb) < 2L) stop(errorCondition(sprintf("La reduction '%s' a moins de 2 dimensions.", reduction), class = "sc_helpers_error"))
 
   fetch_var <- if (feature %in% rownames(seurat_obj)) feature
               else if (feature %in% colnames(seurat_obj@meta.data)) feature
-              else stop(sprintf("Feature '%s' introuvable (ni gene ni colonne de metadonnees).", feature))
+              else stop(errorCondition(sprintf("Feature '%s' introuvable (ni gene ni colonne de metadonnees).", feature), class = "sc_helpers_error"))
 
   df <- data.frame(dim1 = emb[, 1], dim2 = emb[, 2],
                    value = as.numeric(Seurat::FetchData(seurat_obj, vars = fetch_var)[, 1]))
   df <- df[stats::complete.cases(df), , drop = FALSE]
-  if (nrow(df) == 0L) stop("Aucune cellule avec une valeur exploitable pour ce feature.")
+  if (nrow(df) == 0L) stop(errorCondition("Aucune cellule avec une valeur exploitable pour ce feature.", class = "sc_helpers_error"))
 
   n_before <- nrow(df)
   if (n_before > max_cells) { set.seed(1L); df <- df[sample.int(n_before, max_cells), , drop = FALSE] }
@@ -1503,16 +1503,16 @@ plot_sc_expression_density_2d <- function(seurat_obj, feature, reduction = "umap
 plot_sc_reduction_3d <- function(seurat_obj, reduction = "umap",
                                  color_by = "seurat_clusters", max_cells = 50000L,
                                  palette = "default", manual_gradient = NULL, manual_colors = NULL) {
-  if (!requireNamespace("plotly", quietly = TRUE)) stop("Le package plotly est requis pour la visualisation 3D.")
-  if (is.null(seurat_obj)) stop("Aucun objet Single-Cell charge.")
-  if (!reduction %in% names(seurat_obj@reductions)) stop(sprintf("Reduction '%s' non calculee.", reduction))
+  if (!requireNamespace("plotly", quietly = TRUE)) stop(errorCondition("Le package plotly est requis pour la visualisation 3D.", class = "sc_helpers_error"))
+  if (is.null(seurat_obj)) stop(errorCondition("Aucun objet Single-Cell charge.", class = "sc_helpers_error"))
+  if (!reduction %in% names(seurat_obj@reductions)) stop(errorCondition(sprintf("Reduction '%s' non calculee.", reduction), class = "sc_helpers_error"))
   emb <- Seurat::Embeddings(seurat_obj, reduction = reduction)
   if (ncol(emb) < 3L) {
-    stop(sprintf(
+    stop(errorCondition(sprintf(
       "La reduction '%s' n'a que %d dimension(s) -- 3 minimum requises. UMAP/t-SNE sont calcules en 2D par defaut ; essayez 'pca'.",
-      reduction, ncol(emb)))
+      reduction, ncol(emb)), class = "sc_helpers_error"))
   }
-  if (!color_by %in% colnames(seurat_obj@meta.data)) stop(sprintf("Colonne '%s' introuvable.", color_by))
+  if (!color_by %in% colnames(seurat_obj@meta.data)) stop(errorCondition(sprintf("Colonne '%s' introuvable.", color_by), class = "sc_helpers_error"))
 
   df <- data.frame(dim1 = emb[, 1], dim2 = emb[, 2], dim3 = emb[, 3],
                    id = colnames(seurat_obj), value = seurat_obj@meta.data[[color_by]])
