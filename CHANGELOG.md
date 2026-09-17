@@ -22,6 +22,53 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > du commit `03951cb` cite encore `§2ax` pour 4E-4 : c'est l'état **avant** la
 > renumérotation. Détail : `STATUS.md` §6, item 6.
 
+## [V1.x — dette de conventions, 17ᵉ incrément] — 2026-09-17 — `io_helpers.R` classé (`io_helpers_error`)
+
+**7 sites sur 7 prouvés à l'exécution (100 %)** — troisième lot intégral.
+C10 **48 → 41**, C9 **33 → 32**, dette **82 → 74** (−8 = 7 + 1).
+
+### Modifié
+
+- `R/core/io_helpers.R` : les **7** `stop()` non classés passent à
+  `stop(errorCondition(<msg>, class = "io_helpers_error"))` — sites **988,
+  1084, 1093, 1128, 1132, 1135, 1142**. **Tous à un seul argument** ⇒ **aucun
+  `paste0()`** à ajouter (1084 est un `stop(paste0(...))` multi-ligne, mais le
+  `paste0()` est **dans** l'appel, pas un second argument).
+- `tests/testthat/test-core-io.R` → **`test-core-io-helpers.R`** (`git mv`) :
+  l'ancien nom ne correspondait à **aucune des 4 formes** que C9 accepte, si
+  bien que la garde signalait `io_helpers.R` « sans test éponyme » **alors que
+  ce fichier le testait déjà (292 lignes, ~24 blocs)**. ⇒ **C9 baisse de 33 à
+  32 sans écrire une seule ligne de test** (mesuré). Deuxième occurrence du
+  geste de §2bz.2.
+- Le fichier est **étendu** : 2 assertions **préfixe seul** montées au message
+  entier + classe (§2bx.3), 5 sites newly covered, garde-fou du mock, verrou
+  source. Rouge **8 échecs** → vert **69 PASS**.
+
+### 🔴 Un en-tête périmé DEUX FOIS, et une justification réfutée par la mesure
+
+L'en-tête du fichier annonçait `test-helpers_io.R — pure-function tests for
+helpers_io.R` : **les deux noms sont faux**. Il déclarait surtout
+`remap_gene_ids_to_symbol()` **hors de portée**, « they need
+`org.Hs.eg.db`/`org.Mm.eg.db` or `hdf5r` and a real 10x-style dataset ».
+
+**Mesuré faux** : ses **4** sites C10 (1128, 1132, 1135, 1142) sont **tous**
+atteignables — 1128 et 1142 sans aucun paquet, 1132 et 1135 par la technique
+d'environnement enfant (§2bz.3). ⚠️ Même défaut qu'au §2bp : **une
+*justification* périmée est aussi dangereuse qu'un chiffre périmé**, et c'est
+la **technique disponible** qui décide de la portée, pas la présence du paquet.
+
+### 🟢 Ce que le lot apporte
+
+- **Troisième lot d'affilée à 100 %** (après §2bz et §2ca) : la technique de
+  mock des gardes de dépendance est devenue le levier principal de preuve.
+- **Le site 1142 vit dans un `switch()`** (`affy_probe = if (organism ==
+  "human") "PROBEID" else stop(...)`) : un `stop()` en position
+  d'**expression**, pas d'instruction — la conversion fonctionne à
+  l'identique, mais un dénombrement naïf pourrait le manquer.
+- ⚠️ **`io_helpers.R` est sourcé par ~40 fichiers de test** : c'est le lot le
+  plus **largement connecté** du chantier ⇒ la suite complète y est plus
+  nécessaire qu'ailleurs (elle a été jouée).
+
 ## [V1.x — dette de conventions, 16ᵉ incrément] — 2026-09-17 — `spatial_reference.R` classé (`spatial_reference_error`)
 
 **12 sites sur 12 prouvés à l'exécution (100 %)** — deuxième lot intégralement

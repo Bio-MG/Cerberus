@@ -1,15 +1,53 @@
 # =============================================================================
-# test-helpers_io.R — pure-function tests for helpers_io.R
+# test-core-io-helpers.R — tests for R/core/io_helpers.R
 # =============================================================================
-# Scope: gene-ID/organism detection, Visium(-HD) directory-mode resolution,
-# GEO series_matrix parsing, Slide-seq file detection, delimited-table
-# auto-sniffing. All of these are pure (filesystem/text in, data out) and
-# need no Bioconductor/Seurat package — only base R + a scratch tempdir().
-# remap_gene_ids_to_symbol() / load_spatial_*() are out of scope: they need
-# org.Hs.eg.db/org.Mm.eg.db or hdf5r and a real 10x-style dataset on disk.
+# ⚠️ RENOMMÉ le 2026-09-17 (17ᵉ incrément de la dette de conventions) depuis
+# `test-core-io.R`. L'ancien nom ne correspondait à AUCUNE des 4 formes que C9
+# accepte (`test-<base>`, `test-<tiret>`, `test-<domaine>-<base>`,
+# `test-<domaine>-<tiret>`) ⇒ la garde signalait `R/core/io_helpers.R` comme
+# « sans test éponyme » alors que ce fichier le testait déjà (292 lignes).
+# ⇒ **Le renommage fait baisser C9 de 33 à 32 SANS écrire une ligne de test**
+# (mesuré). Deuxième occurrence du geste de §2bz.2 : chercher un test HÉRITÉ
+# avant d'en écrire un.
+#
+# 🔴 L'en-tête d'origine était PÉRIMÉ DEUX FOIS :
+#   1. il annonçait `test-helpers_io.R — tests for helpers_io.R` (deux noms
+#      faux) ;
+#   2. il déclarait `remap_gene_ids_to_symbol()` **hors de portée** faute de
+#      `org.Hs.eg.db`/`org.Mm.eg.db`. **Mesuré faux** : ses 4 sites C10
+#      (1128, 1132, 1135, 1142) sont tous atteignables — les deux gardes de
+#      dépendance par la technique d'environnement enfant (§2bz.3), et les
+#      deux autres sans aucun paquet. ⚠️ Même défaut qu'au §2bp : une
+#      *justification* périmée est aussi dangereuse qu'un chiffre périmé, et
+#      c'est la technique disponible qui décide de la portée.
+#
+# Scope réel : détection d'ID/organisme, résolution Visium(-HD), parsing
+# series_matrix GEO, détection Slide-seq, auto-sniffing de tables délimitées.
 # =============================================================================
 
 source_project_file("R/core/io_helpers.R")
+
+# --- 17ᵉ incrément : assertions sur le message ENTIER + la CLASSE -----------
+# ⚠️ Les 7 sites C10 sont à UN SEUL argument ⇒ aucune troncature possible et
+# aucun `paste0()` à ajouter. Les assertions portent donc sur le texte complet
+# ET sur la classe `io_helpers_error`, ce que les assertions d'origine
+# (PRÉFIXE seul) ne faisaient pas (§2bx.3).
+.ioh_err <- function(expr) {
+  tryCatch({ expr; NULL },
+           error = function(e) list(msg = conditionMessage(e), class = class(e)))
+}
+.ioh_expect <- function(e, msg) {
+  expect_identical(e$msg, msg)
+  expect_true("io_helpers_error" %in% e$class)
+}
+# Garde `requireNamespace()` atteignable même si le paquet EST installé.
+.ioh_no_pkg <- function(fun) {
+  e <- new.env(parent = globalenv())
+  e$requireNamespace <- function(package, ...) FALSE
+  f <- get(fun, envir = globalenv())
+  environment(f) <- e
+  f
+}
 
 # ---------------------------------------------------------------------------
 # detect_gene_id_type()
@@ -128,10 +166,10 @@ test_that("infer_metadata_from_names truncates + warns on inconsistent segment c
 })
 
 test_that("infer_metadata_from_names errors if col_names length doesn't match segment count", {
-  expect_error(
-    infer_metadata_from_names(c("A_B_C"), col_names = c("only_one")),
-    "col_names doit avoir"
-  )
+  # ⚠️ Assertion d'origine sur le PRÉFIXE seul ("col_names doit avoir") : elle
+  # ne voit PAS une troncature (§2bx.3). Montée au message ENTIER + classe.
+  .ioh_expect(.ioh_err(infer_metadata_from_names(c("A_B_C"), col_names = c("only_one"))),
+              "col_names doit avoir 3 éléments (segments détectés), reçu 1.")
 })
 
 test_that("preview_metadata_split flags inconsistent segment counts without erroring", {
@@ -164,7 +202,13 @@ test_that("parse_geo_series_matrix errors on a non-GEO file with an actionable m
   tf <- tempfile(fileext = ".txt")
   on.exit(unlink(tf))
   writeLines(c("gene\tsample1\tsample2", "TP53\t10\t20"), tf)
-  expect_error(parse_geo_series_matrix(tf), "series_matrix")
+  # ⚠️ Assertion d'origine sur le seul motif "series_matrix" : montée au message
+  # ENTIER + classe. Site à un seul argument (`stop(paste0(...))`) ⇒ pas de
+  # troncature possible, mais la preuve de CLASSE manquait totalement.
+  .ioh_expect(.ioh_err(parse_geo_series_matrix(tf)),
+              paste0("Pas une ligne '!Sample_geo_accession' trouvee. Ce fichier n'est probablement ",
+                     "pas un series_matrix.txt GEO valide (ou c'est en fait la matrice de counts — ",
+                     "elle s'importe via 'Option B/C', pas ici)."))
 })
 
 test_that("parse_geo_series_matrix de-duplicates repeated characteristic keys", {
@@ -289,4 +333,73 @@ test_that(".detect_slideseq_feature_column returns 1 for a single gene-symbol co
 
 test_that(".detect_slideseq_feature_column errors on a missing file", {
   expect_error(.detect_slideseq_feature_column(tempfile()), "introuvable")
+})
+
+
+# ---------------------------------------------------------------------------
+# Sites C10 non couverts avant le 17ᵉ incrément
+# ---------------------------------------------------------------------------
+test_that("parse_geo_series_matrix : aucun echantillon GSM (1093)", {
+  # ⚠️ Il faut une ligne '!Sample_geo_accession' PRESENTE (sinon c'est 1084 qui
+  # tire) mais SANS valeur exploitable ⇒ sans tabulation.
+  tf <- tempfile(fileext = ".txt"); on.exit(unlink(tf))
+  writeLines(c("!Sample_geo_accession", "!Series_title	x"), tf)
+  .ioh_expect(.ioh_err(parse_geo_series_matrix(tf)),
+              "Aucun echantillon (GSM) trouve dans ce series_matrix.txt.")
+})
+
+test_that("remap_gene_ids_to_symbol : from_type invalide (1128)", {
+  m <- matrix(1:6, nrow = 3, dimnames = list(c("a", "b", "c"), c("s1", "s2")))
+  .ioh_expect(.ioh_err(remap_gene_ids_to_symbol(m, from_type = "bogus")),
+              "from_type doit être 'ensembl', 'entrez' ou 'affy_probe'.")
+})
+
+test_that("remap_gene_ids_to_symbol : org.Hs.eg.db absent (1132)", {
+  m <- matrix(1:6, nrow = 3, dimnames = list(c("a", "b", "c"), c("s1", "s2")))
+  .ioh_expect(.ioh_err(.ioh_no_pkg("remap_gene_ids_to_symbol")(m, "ensembl", organism = "human")),
+              "Package 'org.Hs.eg.db' requis.")
+})
+
+test_that("remap_gene_ids_to_symbol : org.Mm.eg.db absent (1135)", {
+  m <- matrix(1:6, nrow = 3, dimnames = list(c("a", "b", "c"), c("s1", "s2")))
+  .ioh_expect(.ioh_err(.ioh_no_pkg("remap_gene_ids_to_symbol")(m, "ensembl", organism = "mouse")),
+              "Package 'org.Mm.eg.db' requis.")
+})
+
+test_that("remap_gene_ids_to_symbol : Affymetrix non supporte chez la souris (1142)", {
+  # ⚠️ Site DANS un `switch()` : `affy_probe = if (organism == "human") "PROBEID"
+  #    else stop(...)`. Il faut donc souris + affy_probe.
+  m <- matrix(1:6, nrow = 3, dimnames = list(c("a", "b", "c"), c("s1", "s2")))
+  .ioh_expect(.ioh_err(remap_gene_ids_to_symbol(m, "affy_probe", organism = "mouse")),
+              paste0("Mapping de probes Affymetrix non supporté pour la souris dans ce module — ",
+                     "fournissez un fichier d'annotation de plateforme dédié."))
+})
+
+# ---------------------------------------------------------------------------
+# Garde-fou du mock de dépendance (§2bz.3) : il ne doit PAS fuiter
+# ---------------------------------------------------------------------------
+test_that("le mock de dependance ne fuit pas dans globalenv", {
+  m <- matrix(1:6, nrow = 3, dimnames = list(c("a", "b", "c"), c("s1", "s2")))
+  invisible(tryCatch(.ioh_no_pkg("remap_gene_ids_to_symbol")(m, "ensembl"),
+                     error = function(e) NULL))
+  expect_false(exists("requireNamespace", envir = globalenv(), inherits = FALSE))
+  expect_true(requireNamespace("stats", quietly = TRUE))
+})
+
+# ---------------------------------------------------------------------------
+# Verrou source : io_helpers.R ne doit plus contribuer aucun C10
+# ---------------------------------------------------------------------------
+test_that("io_helpers.R ne contribue aucun signalement C10", {
+  e <- new.env(parent = globalenv())
+  sys.source(file.path(ts_project_root(), "tools/check_conventions.R"), envir = e)
+  before <- length(e$.REPORT$warns)
+  e$check_c10_error_style(file.path(ts_project_root(), "R/core/io_helpers.R"))
+  w <- e$.REPORT$warns
+  n <- length(w) - before
+  if (n > 0L) {
+    lignes <- vapply(w[(before + 1L):length(w)], function(x) x$line, integer(1))
+    cat("Sites C10 restants dans io_helpers.R :", paste(sort(lignes), collapse = ", "), "
+")
+  }
+  expect_equal(n, 0L)
 })

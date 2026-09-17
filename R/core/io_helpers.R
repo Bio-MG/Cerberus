@@ -985,7 +985,7 @@ infer_metadata_from_names <- function(sample_names, delimiter = "[_-]", col_name
   if (is.null(col_names)) {
     col_names <- paste0("segment_", seq_len(n_seg))
   } else if (length(col_names) != n_seg) {
-    stop(sprintf("col_names doit avoir %d éléments (segments détectés), reçu %d.", n_seg, length(col_names)))
+    stop(errorCondition(sprintf("col_names doit avoir %d éléments (segments détectés), reçu %d.", n_seg, length(col_names)), class = "io_helpers_error"))
   }
   colnames(mat) <- col_names
   rownames(mat) <- sample_names
@@ -1081,16 +1081,16 @@ parse_geo_series_matrix <- function(filepath) {
   char_lines <- raw_lines[grepl("^!Sample_characteristics_ch[0-9]+", raw_lines)]
 
   if (length(geo_line) == 0) {
-    stop(paste0(
+    stop(errorCondition(paste0(
       "Pas une ligne '!Sample_geo_accession' trouvee. Ce fichier n'est probablement ",
       "pas un series_matrix.txt GEO valide (ou c'est en fait la matrice de counts — ",
       "elle s'importe via 'Option B/C', pas ici)."
-    ))
+    ), class = "io_helpers_error"))
   }
 
   geo_acc <- split_quoted_tsv(geo_line[1])
   n_samples <- length(geo_acc)
-  if (n_samples == 0) stop("Aucun echantillon (GSM) trouve dans ce series_matrix.txt.")
+  if (n_samples == 0) stop(errorCondition("Aucun echantillon (GSM) trouve dans ce series_matrix.txt.", class = "io_helpers_error"))
 
   meta <- data.frame(row.names = geo_acc)
 
@@ -1125,21 +1125,21 @@ parse_geo_series_matrix <- function(filepath) {
 remap_gene_ids_to_symbol <- function(counts_matrix, from_type, organism = "human",
                                      collapse_method = "sum") {
   if (!from_type %in% c("ensembl", "entrez", "affy_probe")) {
-    stop("from_type doit être 'ensembl', 'entrez' ou 'affy_probe'.")
+    stop(errorCondition("from_type doit être 'ensembl', 'entrez' ou 'affy_probe'.", class = "io_helpers_error"))
   }
 
   orgdb <- if (organism == "human") {
-    if (!requireNamespace("org.Hs.eg.db", quietly = TRUE)) stop("Package 'org.Hs.eg.db' requis.")
+    if (!requireNamespace("org.Hs.eg.db", quietly = TRUE)) stop(errorCondition("Package 'org.Hs.eg.db' requis.", class = "io_helpers_error"))
     org.Hs.eg.db::org.Hs.eg.db
   } else {
-    if (!requireNamespace("org.Mm.eg.db", quietly = TRUE)) stop("Package 'org.Mm.eg.db' requis.")
+    if (!requireNamespace("org.Mm.eg.db", quietly = TRUE)) stop(errorCondition("Package 'org.Mm.eg.db' requis.", class = "io_helpers_error"))
     org.Mm.eg.db::org.Mm.eg.db
   }
 
   from_key <- switch(from_type,
                      ensembl    = "ENSEMBL",
                      entrez     = "ENTREZID",
-                     affy_probe = if (organism == "human") "PROBEID" else stop("Mapping de probes Affymetrix non supporté pour la souris dans ce module — fournissez un fichier d'annotation de plateforme dédié.")
+                     affy_probe = if (organism == "human") "PROBEID" else stop(errorCondition("Mapping de probes Affymetrix non supporté pour la souris dans ce module — fournissez un fichier d'annotation de plateforme dédié.", class = "io_helpers_error"))
   )
 
   ids_clean <- rownames(counts_matrix)
