@@ -672,6 +672,74 @@ check_c9_r_tests <- function(r_files) {
   }
 }
 
+#' Noms des constructeurs d'erreur CLASSÉE définis dans le projet.
+#'
+#' POURQUOI — le motif maison est un constructeur local :
+#'     .bulk_multi_stop <- function(msg, state) {
+#'       errorCondition(msg, class = "bulk_multi_error", state = state)
+#'     }
+#' appelé par `stop(.bulk_multi_stop(...))`. Le site est donc BEL ET BIEN
+#' classé, mais le token `errorCondition` n'apparaît PAS dans l'étendue du
+#' `stop()` : une garde qui ne regarde que cette étendue le déclare « non
+#' classé ». C'est le même défaut de classe que C6 et C10 (§12.1, §12.3) — la
+#' garde juge un TOKEN au lieu de RÉSOUDRE l'appel.
+#'
+#' RÈGLE RETENUE (stricte, et MESURÉE) : constructeur = fonction dont le corps
+#' est UNE SEULE expression `errorCondition(...)`. La règle large (« le corps
+#' cite errorCondition ») est trop permissive : elle exempterait
+#' `stop(validateur(x))` où `validateur` lève une erreur classée PARMI d'autres
+#' vérifications, donc où `stop()` peut recevoir une simple chaîne. Mesure du
+#' 2026-09-17 : règle large = 61 noms, règle stricte = 3 noms, et le MÊME
+#' verdict sur les 46 sites concernés — la règle stricte ne perd rien.
+#'
+#' Le SECOND idiome maison — `stop(errorCondition(...))` DANS le helper, p. ex.
+#' `.bulk_gs_error` — n'a pas besoin d'exemption : le site appelant n'écrit
+#' aucun `stop()`, donc C10 ne le voit jamais.
+.collect_classed_error_ctors <- function(r_files) {
+  ctor <- character(0)
+  for (f in r_files) {
+    ann <- .read_code_lines(f)
+    if (nrow(ann) == 0) next
+    code <- ann$code
+    n <- length(code)
+    for (i in seq_len(n)) {
+      m <- regmatches(code[i],
+            regexec("^[ \t]*([.A-Za-z0-9_]+)[ \t]*<-[ \t]*function", code[i]))
+      if (!length(m[[1]])) next
+      depth <- 0L
+      started <- FALSE
+      j <- i
+      body <- character(0)
+      while (j <= n) {
+        depth <- depth + .count_chars(code[j], "{") - .count_chars(code[j], "}")
+        if (.count_chars(code[j], "{") > 0L) started <- TRUE
+        body <- c(body, code[j])
+        if (started && depth <= 0L) break
+        j <- j + 1L
+      }
+      if (!started) next
+      txt <- paste(body, collapse = " ")
+      txt <- sub("^[^{]*\\{", "", txt)     # signature + accolade ouvrante
+      txt <- sub("\\}[ \t]*$", "", txt)    # accolade fermante
+      txt <- gsub("[[:space:]]", "", txt)
+      if (startsWith(txt, "errorCondition(") && endsWith(txt, ")")) {
+        ctor <- c(ctor, m[[1]][[2L]])
+      }
+    }
+  }
+  unique(ctor)
+}
+
+#' L'étendue d'un `stop()` appelle-t-elle un constructeur d'erreur classée ?
+.span_calls_classed_ctor <- function(span, ctors) {
+  if (!length(ctors)) return(FALSE)
+  for (nm in ctors) {
+    pat <- paste0("(^|[^A-Za-z0-9_.])", gsub("\\.", "\\\\.", nm), "[ \t]*\\(")
+    if (grepl(pat, span, perl = TRUE)) return(TRUE)
+  }
+  FALSE
+}
+
 #' C10 — `stop()` doit être classé (`errorCondition(class=...)`) ou porter
 #' `call. = FALSE`.
 #'
@@ -686,10 +754,21 @@ check_c9_r_tests <- function(r_files) {
 #' On analyse désormais l'APPEL LOGIQUE : de la ligne de `stop(` jusqu'à
 #' l'équilibrage des parenthèses. `ann$code` est déjà débarrassé des chaînes et
 #' des commentaires, donc compter les parenthèses est fiable.
-#' INVARIANTE CONSERVÉE : un appel multi-lignes SANS classement reste signalé
-#' (testé sur un cas négatif injecté) — sinon la garde deviendrait aveugle en
-#' croyant se réparer (cf. CONVENTIONS.md §12.1).
+#'
+#' SECOND DÉFAUT MESURÉ le 2026-09-17 : analyser l'étendue du `stop()` ne suffit
+#' pas. Un site routé par un constructeur local classé —
+#' `stop(.bulk_multi_stop(...))` — est CLASSÉ, mais ne contient aucun token
+#' `errorCondition`. 46 des 221 signalements étaient de ce type (18
+#' `.bulk_multi_stop`, 15 `.sc_multi_stop`, 13 `.bulk_multi_compare_stop`), et
+#' les trois fichiers concernés étaient précisément ceux que la mesure
+#' précédente croyait « déjà classés ». La règle résout donc les constructeurs
+#' du projet via `.collect_classed_error_ctors()`.
+#' INVARIANTE CONSERVÉE : un appel multi-lignes SANS classement reste signalé,
+#' ET un `stop()` routé par une fonction qui n'est PAS un constructeur classé
+#' reste signalé (les deux sont testés sur cas négatif injecté) — sinon la
+#' garde deviendrait aveugle en croyant se réparer (cf. CONVENTIONS.md §12.1).
 check_c10_error_style <- function(r_files) {
+  ctors <- .collect_classed_error_ctors(r_files)
   for (f in r_files) {
     ann <- .read_code_lines(f)
     if (nrow(ann) == 0) next
@@ -713,7 +792,8 @@ check_c10_error_style <- function(r_files) {
       span <- paste(code[i:min(j, n)], collapse = "\n")
       exempt <- grepl("errorCondition", span, fixed = TRUE) ||      # forme maison
         grepl("call\\.\\s*=\\s*FALSE", span, perl = TRUE) ||        # forme explicite
-        grepl("^\\s*stop\\(\\)", ln, perl = TRUE)                   # stop() nu
+        grepl("^\\s*stop\\(\\)", ln, perl = TRUE) ||                # stop() nu
+        .span_calls_classed_ctor(span, ctors)                       # constructeur local
       if (!exempt) {
         .add("WARN", "C10", .rel(f), ann$line_no[i],
              "stop() sans errorCondition(class=<domaine>_error) ni call. = FALSE (dette héritée ; obligatoire pour tout code neuf).")

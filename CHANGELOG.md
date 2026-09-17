@@ -22,6 +22,67 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > du commit `03951cb` cite encore `§2ax` pour 4E-4 : c'est l'état **avant** la
 > renumérotation. Détail : `STATUS.md` §6, item 6.
 
+## [V1.x — dette de conventions, 3ᵉ incrément] — 2026-09-17 — la garde ne résolvait pas le constructeur local (259 → 213)
+
+Troisième incrément du chantier engagé le 2026-09-16, et **troisième fois le
+même défaut de classe** : la garde juge un **token** là où la règle parle d'une
+**unité logique**. Aucun code applicatif n'est touché. **259 → 213**
+avertissements, **0 ajouté**, **46 retirés** (diff avant/après, l'« avant »
+issu de `git`).
+
+### Corrigé
+
+- **C10 : `stop()` routé par un constructeur local classé (221 → 175).**
+  Le motif maison route l'erreur par un constructeur local :
+  ```r
+  .bulk_multi_stop <- function(msg, state) {
+    errorCondition(msg, class = "bulk_multi_error", state = state)
+  }
+  # ...
+  stop(.bulk_multi_stop("Label vide.", state = "invalid_label"))
+  ```
+  Le site est **bel et bien classé**, mais le token `errorCondition`
+  n'apparaît **pas** dans l'étendue du `stop()` : la garde le déclarait « non
+  classé ». 46 signalements étaient de ce type — 18 `.bulk_multi_stop`,
+  15 `.sc_multi_stop`, 13 `.bulk_multi_compare_stop` — et ces trois fichiers
+  étaient exactement ceux que la mesure précédente croyait « déjà classés ».
+  `check_c10_error_style()` résout désormais les constructeurs du projet via
+  `.collect_classed_error_ctors()`.
+
+### Ajouté
+
+- `.collect_classed_error_ctors()` : constructeur classé = fonction dont le
+  corps est **UNE SEULE** expression `errorCondition(...)`. Règle **stricte**,
+  et **mesurée** : la règle large (« le corps cite `errorCondition` ») retenait
+  **61** noms contre **3**, pour le **même** verdict sur les 46 sites. Sans
+  cette stricte, `stop(validateur(x))` — où `validateur` lève une erreur
+  classée *parmi* d'autres vérifications — serait exempté à tort.
+- `.span_calls_classed_ctor()` et **5 tests** (dont 3 négatifs) dans
+  `tests/testthat/test-conventions-c6-strings.R` : routé par un constructeur
+  classé ⇒ exempté ; routé par une fonction quelconque ⇒ signalé ; routé par un
+  validateur qui **cite** `errorCondition` sans le retourner ⇒ signalé ;
+  constructeur résolu **d'un fichier à l'autre**.
+
+### Vérifié
+
+| Preuve | Résultat |
+|---|---|
+| Diff avant/après | **0 ajouté**, **46** retirés (18 + 13 + 15) |
+| Fixture négative contre la garde d'**AVANT** (`git show HEAD:`) | ancienne garde : `4,5,7` · nouvelle : `7` |
+| Fichiers du dépôt, ancienne vs nouvelle garde | `bulk_multi.R` 18 → **0** · `sc_multi.R` 15 → **0** · `bulk_multi_compare.R` 13 → **0** |
+| `run_tests.R conventions` | **52 pass / 0 fail / 0 error** (3 fichiers, chacun vérifié présent au bilan) |
+| `check_conventions.R` | **0 erreur / 213 avertissements** |
+
+### Ouvert
+
+- **Réduction par CLASSEMENT** (décision utilisateur du 2026-09-17) : les
+  **175** `stop()` réels restent à convertir en
+  `errorCondition(class = "<domaine>_error")`. **19 fichiers**, dont
+  `sc_helpers.R` (35), `sc_trajectory.R` (21), `bulk_helpers.R` (20),
+  `pathway_helpers.R` (18) — **aucun n'a d'`errorCondition`** : un constructeur
+  de domaine doit y être **défini** avant toute conversion.
+- Inchangés : **C9 = 37**, **C11 = 1**, portée de C6 (`ROADMAP.md` §6).
+
 ## [V1.x — dette de conventions, 2ᵉ incrément] — 2026-09-17 — deux règles jugeaient la mauvaise unité (319 → 259)
 
 Suite du chantier de réduction engagé le 2026-09-16. Comme le premier incrément,
