@@ -355,7 +355,7 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
 #' Fetch GEO supplementary files + series_matrix via GEOquery
 .geo_fetch <- function(accession) {
   if (!requireNamespace("GEOquery", quietly = TRUE))
-    stop("Package 'GEOquery' requis. Installez via BiocManager::install('GEOquery').")
+    stop(errorCondition("Package 'GEOquery' requis. Installez via BiocManager::install('GEOquery').", class = "geo_import_error"))
 
   destdir <- file.path(tempdir(), accession)
   dir.create(destdir, showWarnings = FALSE, recursive = TRUE)
@@ -363,7 +363,7 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
   gse <- tryCatch(
     GEOquery::getGEO(accession, destdir = destdir, GSEMatrix = TRUE,
                      AnnotGPL = FALSE, getGPL = FALSE),
-    error = function(e) stop("Impossible de récupérer ", accession, " : ", conditionMessage(e))
+    error = function(e) stop(errorCondition(paste0("Impossible de récupérer ", accession, " : ", conditionMessage(e)), class = "geo_import_error"))
   )
 
   meta <- tryCatch({
@@ -390,7 +390,7 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
 
   supp_files <- tryCatch(
     GEOquery::getGEOSuppFiles(accession, makeDirectory = FALSE, baseDir = destdir),
-    error = function(e) stop("Impossible de télécharger les supplémentaires : ", conditionMessage(e))
+    error = function(e) stop(errorCondition(paste0("Impossible de télécharger les supplémentaires : ", conditionMessage(e)), class = "geo_import_error"))
   )
 
   # Hardening: GEOquery shifted return formats across versions — paths are
@@ -409,8 +409,7 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
   ]
 
   if (length(candidate_paths) == 0)
-    stop("Aucun fichier tabulaire trouvé dans les supplémentaires de ", accession,
-         ". Utilisez le mode hors-ligne.")
+    stop(errorCondition(paste0("Aucun fichier tabulaire trouvé dans les supplémentaires de ", accession, ". Utilisez le mode hors-ligne."), class = "geo_import_error"))
 
   choices <- setNames(candidate_paths, basename(candidate_paths))
   list(ok = TRUE, suppl_files = candidate_paths, suppl_choices = choices,
@@ -462,10 +461,10 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
       "tab"  = read.delim(path, header = TRUE, sep = "\t", check.names = FALSE, stringsAsFactors = FALSE),
       "xlsx" = {
         if (!requireNamespace("readxl", quietly = TRUE))
-          stop("Package 'readxl' requis pour lire les fichiers .xlsx")
+          stop(errorCondition("Package 'readxl' requis pour lire les fichiers .xlsx", class = "geo_import_error"))
         as.data.frame(readxl::read_excel(path, col_names = TRUE))
       },
-      stop("Extension non supportée : ", ext)
+      stop(errorCondition(paste0("Extension non supportée : ", ext), class = "geo_import_error"))
     )
 
     # Hardening: whitespace-delimited tables (Cuffdiff-style GEO files) read as
@@ -478,7 +477,7 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
     }
 
     if (nrow(df) == 0 || ncol(df) == 0)
-      stop("Fichier illisible ou vide (0 ligne ou 0 colonne après lecture). Vérifiez que ce fichier est bien une matrice de counts.")
+      stop(errorCondition("Fichier illisible ou vide (0 ligne ou 0 colonne après lecture). Vérifiez que ce fichier est bien une matrice de counts.", class = "geo_import_error"))
     if (anyDuplicated(colnames(df)) > 0) colnames(df) <- make.unique(colnames(df), sep = "_")
 
     if (ncol(df) > 1 && !is.numeric(df[[1]])) {
@@ -495,8 +494,8 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
       num_cols2 <- vapply(df, is.numeric, logical(1))
       if (!all(num_cols2)) {
         bad_cols <- utils::head(names(df)[!num_cols2], 5)
-        stop(sprintf("%d colonne(s) non numérique(s) (%s). Ce fichier n'est pas une matrice de counts pure — choisissez un autre fichier ou utilisez le mode hors-ligne.",
-                     sum(!num_cols2), paste(bad_cols, collapse = ", ")))
+        stop(errorCondition(sprintf("%d colonne(s) non numérique(s) (%s). Ce fichier n'est pas une matrice de counts pure — choisissez un autre fichier ou utilisez le mode hors-ligne.",
+                     sum(!num_cols2), paste(bad_cols, collapse = ", ")), class = "geo_import_error"))
       }
     }
 

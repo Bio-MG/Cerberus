@@ -270,5 +270,59 @@ test_that("mod_geo_server rejects malformed accessions without network access", 
   })
 })
 
+# ── Classification des erreurs (C10) — mod_geo.R ──────────────────────────────
+# Inséré AVANT le cleanup : `.geo_tmp` doit encore exister.
+#
+# ⚠️ PREUVE D'EXÉCUTION PARTIELLE, MESURÉE (pas supposée) — deux raisons :
+#   1. `.geo_fetch` (4 sites : 358, 366, 393, 412) est **live-gated** : GEOquery
+#      EST installé (mesuré), donc le site 358 « paquet requis » n'est pas
+#      déclenchable, et 366/393/412 exigent le réseau.
+#   2. `.load_counts_file` **AVALE** l'erreur : `tryCatch(..., error =
+#      function(e) list(ok = FALSE, counts = NULL, msg = conditionMessage(e)))`
+#      (ligne 505) ⇒ la **classe** n'est PAS observable ; seul le **message**
+#      l'est, dans `res$msg`. Le site 465 (readxl absent) n'est pas déclenchable
+#      non plus : readxl EST installé (mesuré).
+#
+# Restent **3 sites joignables** : 468, 481, 498 — tous via `.load_counts_file`,
+# en R pur, hors réseau. Le 498 est déjà couvert par le test ci-dessus
+# (« refuses non-numeric matrices »), qui sert ici de **témoin**.
+#
+# Le site 468 est le plus important : c'est un `stop()` à **PLUSIEURS
+# ARGUMENTS**. Sans `paste0()`, `errorCondition()` le **TRONQUE** à
+# `"Extension non supportée : "` (§2bn/§2bo) — l'assertion sur la VALEUR de
+# l'extension est donc le garde-fou décisif, et elle est en ASCII pur.
+source_project_file("tools/check_conventions.R")
+
+test_that("mod_geo : 0 signalement C10 (verrou source, couvre les 8 sites)", {
+  path <- file.path(ts_project_root(), "modules", "import", "mod_geo.R")
+  .REPORT$warns <- list()
+  check_c10_error_style(path)
+  flagged <- Filter(function(w) identical(w$rule, "C10"), .REPORT$warns)
+  expect_identical(
+    length(flagged), 0L,
+    info = paste(vapply(flagged,
+                        function(w) sprintf("%s:%s", .rel(w$file), w$line),
+                        character(1)), collapse = ", ")
+  )
+})
+
+test_that("mod_geo : messages d'erreur IDENTIQUES a l'execution (sites 468, 481)", {
+  # Site 468 — extension non supportée. Message MULTI-ARGUMENTS :
+  # l'extension doit FIGURER dans le message rendu (sinon = troncature).
+  p_ext <- file.path(.geo_tmp, "counts.unsupportedext")
+  writeLines(c("gene\tS1", "G1\t1"), p_ext)
+  res <- .load_counts_file(p_ext)
+  expect_false(res$ok)
+  expect_match(res$msg, "Extension non support", fixed = TRUE)
+  expect_match(res$msg, "unsupportedext", fixed = TRUE)   # ASCII : anti-troncature
+
+  # Site 481 — fichier lisible mais 0 ligne (en-tête seul).
+  p_empty <- file.path(.geo_tmp, "header_only.csv")
+  writeLines("gene,S1", p_empty)
+  res2 <- .load_counts_file(p_empty)
+  expect_false(res2$ok)
+  expect_match(res2$msg, "0 ligne ou 0 colonne", fixed = TRUE)
+})
+
 # ── cleanup ───────────────────────────────────────────────────────────────────
 unlink(.geo_tmp, recursive = TRUE, force = TRUE)

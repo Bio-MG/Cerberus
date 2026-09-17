@@ -22,6 +22,71 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > du commit `03951cb` cite encore `§2ax` pour 4E-4 : c'est l'état **avant** la
 > renumérotation. Détail : `STATUS.md` §6, item 6.
 
+## [V1.x — dette de conventions, 9ᵉ incrément] — 2026-09-17 — `mod_geo.R` classé (`geo_import_error`)
+
+**Deuxième fichier de `modules/` converti**, et le **premier qui dispose d'un
+test éponyme préexistant** (`test-mod-geo.R`) : la preuve d'exécution n'est donc
+pas à construire, elle est **étendue** (règle 3).
+
+### Modifié
+
+- `modules/import/mod_geo.R` : les **8** `stop()` non classés passent à
+  `stop(errorCondition(<msg>, class = "geo_import_error"))`.
+- **4 des 8** ont un message en **plusieurs arguments** ⇒ **`paste0()` obligatoire**
+  (C16) : `stop("Extension non supportée : ", ext)`, les deux `stop("Impossible
+  de … ", conditionMessage(e))`, et le `stop()` bi-ligne « aucun fichier
+  tabulaire ». Sans `paste0()`, chacun serait **tronqué** à son premier argument.
+- `tests/testthat/test-mod-geo.R` : **2** tests ajoutés (verrou source +
+  invariant de message) — **aucun** fichier de test créé.
+
+### Classe : `geo_import_error`
+
+L'import est qualifié par sa **source**, comme le dépôt le fait déjà :
+`rdata_import_error` · `communication_import_error` · `bulk_import_error`.
+
+### Preuve à deux niveaux — la répartition est MESURÉE
+
+**5 sites sur 8 sont INJOIGNABLES**, et pour des raisons vérifiées une à une :
+
+- les **4** de `.geo_fetch` (358, 366, 393, 412) sont **live-gated** :
+  `GEOquery` **est installé** (mesuré), donc le site 358 « paquet requis » ne se
+  déclenche jamais, et les trois autres exigent le **réseau** ;
+- le site **465** (« readxl requis ») exige `readxl` **absent** — il est installé.
+
+Les **3** sites joignables (468, 481, 498) passent par `.load_counts_file`, en R
+pur et hors réseau — mais cette fonction **AVALE** l'erreur :
+`tryCatch(..., error = function(e) list(ok = FALSE, msg = conditionMessage(e)))`
+⇒ la **classe n'est pas observable**, seul le **message** l'est, dans `res$msg`.
+
+Le site **468** est le décisif : c'est un `stop()` multi-arguments dont le
+message serait tronqué à `"Extension non supportée : "`. L'assertion porte donc
+sur la **valeur de l'extension** (`"unsupportedext"`, en ASCII pur) — elle
+échoue immédiatement si `paste0()` manque. Le site 498 est couvert par un test
+**déjà vert** (« refuses non-numeric matrices »), qui sert ici de **témoin**.
+
+### Vérifié
+
+- **Test ROUGE d'abord** : **1** échec listant exactement les **8** lignes
+  attendues (358, 366, 393, 412, 465, 468, 481, 498) ⇒ **vert** :
+  `failed=0 passed=81` (était `failed=1 passed=80`).
+- `parse()` **OK** ; **C10 fichier : 0** ; **C16 fichier : 0**.
+- **8/8** listes d'arguments **identiques** (espaces normalisés). ⚠️ Le site 412
+  a été **replié sur une ligne** (515 → 514) : une comparaison **octet à octet de
+  la ligne** aurait signalé une fausse différence — on compare les **arguments**,
+  pas les lignes.
+- Conversion écrite au niveau des **octets** : **LF** et **saut de ligne final**
+  préservés (le piège CRLF du lot précédent ne s'est pas reproduit).
+- Garde : **C10 138 → 130**, total **0 erreur / 176 → 168 avert.**
+
+### Constaté (listé, NON corrigé)
+
+- **30** sites de `modules/` restants : `mod_import_sc.R` 6 ·
+  `mod_sc_pseudobulk.R` 6 · `mod_sc_annotation.R` 4 · `mod_sc.R` 2 ·
+  `mod_spatial_cluster.R` 2 · puis 10 fichiers à 1 site.
+- ⚠️ **Le « test éponyme » n'existe que pour une minorité de `modules/`**
+  (ici `test-mod-geo.R`) : `C9` ne couvre que `R/`, donc rien n'oblige à en
+  écrire un. Une **règle sœur** reste une décision à prendre (§2bs.6 #3).
+
 ## [V1.x — dette de conventions, 8ᵉ incrément] — 2026-09-17 — `mod_import_bulk.R` classé (`bulk_import_error`)
 
 **Premier fichier de `modules/` converti** — et il n'aurait pas pu l'être la
