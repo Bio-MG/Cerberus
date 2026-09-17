@@ -22,6 +22,40 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > du commit `03951cb` cite encore `§2ax` pour 4E-4 : c'est l'état **avant** la
 > renumérotation. Détail : `STATUS.md` §6, item 6.
 
+## [V1.x — garde C16] — 2026-09-17 — `errorCondition()` tronquait : la règle qui l'interdit
+
+**Première règle de ce chantier produite AVANT le défaut** qu'elle prévient — les
+cinq incréments précédents corrigeaient la garde **après coup**.
+
+### Ajouté
+
+- **Règle C16** (`tools/check_conventions.R`) : un `errorCondition()` doit avoir
+  **exactement un argument POSITIONNEL**. `stop()` **concatène** ses arguments,
+  `errorCondition(message, ...)` **non** — les suivants deviennent des **champs**
+  de la condition. Un message multi-arguments enveloppé dans `errorCondition()`
+  est donc **tronqué en silence** (détail : `docs/CONVENTIONS.md` §12.6).
+- `tests/testthat/test-conventions-c16-arity.R` : fixture de 7 lignes
+  (**2 signalées**, **5 muettes**), appel multi-lignes, et conformité du dépôt.
+
+### Vérifié
+
+- Fixture : `c(1L, 5L)` — `paste0` / `sprintf` / `paste` et les arguments nommés
+  (`class=`, `state=`, `message=`) ne sont **pas** des faux positifs, et les
+  virgules **imbriquées** ne comptent pas comme un argument de plus.
+- **Test éprouvé par MUTATION** : seuil `n_pos > 1L` remplacé par `> 99L` ⇒ les
+  **2 fixtures échouent**. Le test prouve que le détecteur **détecte**, pas
+  seulement que la fonction existe.
+- **Contre la garde d'AVANT** (`git show HEAD:…`) : les **3 tests échouent**
+  (`could not find function`) — ils dépendent bien de la règle neuve.
+- Dépôt entier (**136** fichiers) : **0 site**. Garde : **0 erreur / 190
+  avertissements** (inchangé ; **+1 ligne** de tableau).
+- `conventions` + `release-hardening` : **0 échec**.
+
+### Ouvert
+
+- **Promouvoir C16 en `ERREUR` ?** — c'est une **décision**, pas une correction :
+  un message tronqué **dégrade** sans casser l'app. Plafond à **0** en attendant.
+
 ## [V1.x — correctif] — 2026-09-17 — `errorCondition()` TRONQUAIT les messages multi-arguments
 
 **Régression introduite par l'incrément « 5ᵉ » ci-dessous**, et **non détectée

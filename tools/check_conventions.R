@@ -1023,6 +1023,90 @@ check_c13_choices_named_values <- function(files) {
   }
 }
 
+#' Découpe les arguments de PREMIER NIVEAU d'un texte d'appel (l'intérieur d'une
+#' paire de parenthèses). Les virgules IMBRIQUÉES — appels internes, crochets —
+#' sont ignorées : `paste0("a", "b"), class = "x"` donne DEUX arguments, pas
+#' trois. Utilisé par C16.
+.split_top_level_args <- function(inner) {
+  ch <- strsplit(inner, "", fixed = TRUE)[[1]]
+  depth <- 0L
+  args  <- character(0)
+  cur   <- character(0)
+  for (c in ch) {
+    if (c == "(" || c == "[") depth <- depth + 1L
+    else if (c == ")" || c == "]") depth <- depth - 1L
+    if (c == "," && depth == 0L) {
+      args <- c(args, paste(cur, collapse = ""))
+      cur  <- character(0)
+    } else {
+      cur <- c(cur, c)
+    }
+  }
+  c(args, paste(cur, collapse = ""))
+}
+
+#' C16 (ajout 2026-09-17) — `errorCondition()` doit n'avoir qu'UN argument
+#' POSITIONNEL : c'est le message.
+#'
+#' RÉGRESSION MESURÉE (commit `c40121f`, corrigé par `ce6691a`). `stop()` CONCATÈNE
+#' ses arguments ; `errorCondition(message, ...)` NON — les suivants deviennent des
+#' CHAMPS de la condition, pas du message :
+#'
+#'     stop("A : ", "B", " fin")                   -> "A : B fin"
+#'     errorCondition("A : ", "B", " fin", class=)  -> "A : "   <-- TRONQUÉ
+#'
+#' Envelopper un `stop()` MULTI-ARGUMENTS dans `errorCondition()` tronque donc le
+#' message EN SILENCE — les tests qui matchent sur le message passent encore, et
+#' l'invariant de conversion « texte source identique » ne voit rien. 3 des 19
+#' sites convertis étaient touchés. Forme correcte : envelopper dans `paste0()`.
+#'
+#' Les arguments NOMMÉS (`class=`, `state=`, `call.=`) ne comptent pas : seule la
+#' pluralité d'arguments POSITIONNELS est le défaut.
+check_c16_errorcondition_arity <- function(files) {
+  for (f in files) {
+    ann <- .read_code_lines(f)
+    if (nrow(ann) == 0L) next
+    code <- ann$code
+    if (!any(grepl("errorCondition", code, fixed = TRUE))) next
+    n <- length(code)
+    for (i in seq_len(n)) {
+      m <- regexpr("errorCondition\\s*\\(", code[i], perl = TRUE)
+      if (m < 0L) next
+      # étendue de l'APPEL : jusqu'à équilibrage des parenthèses
+      depth <- 0L
+      j <- i
+      while (j <= n) {
+        depth <- depth + .count_chars(code[j], "(") - .count_chars(code[j], ")")
+        if (depth <= 0L) break
+        j <- j + 1L
+      }
+      span <- paste(code[i:min(j, n)], collapse = "\n")
+      k <- m + attr(m, "match.length") - 1L          # position de la '('
+      ch <- strsplit(span, "", fixed = TRUE)[[1]]
+      d <- 0L
+      e <- NA_integer_
+      for (q in k:length(ch)) {
+        if (ch[q] == "(") d <- d + 1L
+        else if (ch[q] == ")") {
+          d <- d - 1L
+          if (d == 0L) { e <- q; break }
+        }
+      }
+      if (is.na(e)) next
+      args  <- .split_top_level_args(paste(ch[(k + 1L):(e - 1L)], collapse = ""))
+      named <- grepl("^\\s*[A-Za-z_.][A-Za-z0-9_.]*\\s*=(?!=)", args, perl = TRUE)
+      n_pos <- sum(!named)
+      if (n_pos > 1L) {
+        .add("WARN", "C16", .rel(f), ann$line_no[i],
+             sprintf(paste0("errorCondition() a %d arguments POSITIONNELS : seul ",
+                            "le 1er devient le message (`stop()` concatene, ",
+                            "`errorCondition()` NON) -> envelopper dans paste0()."),
+                     n_pos))
+      }
+    }
+  }
+}
+
 # ---------------------------------------------------------------------------
 # Rapport final
 # ---------------------------------------------------------------------------
@@ -1048,8 +1132,10 @@ run_check <- function(strict = FALSE, use_git = TRUE, list_all = FALSE) {
   check_c11_parallel(all_code)
   check_c12_headers(r_files)
   check_c13_choices_named_values(c(r_files, m_files))
+  check_c16_errorcondition_arity(c(r_files, m_files))
 
-  rules <- c("C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12", "C13")
+  rules <- c("C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11",
+             "C12", "C13", "C16")
 
   cat("\n--------------------------------------------------------------------\n")
   cat(sprintf("%-5s %-8s %s\n", "RÈGLE", "NIVEAU", "DESCRIPTION"))
@@ -1067,10 +1153,11 @@ run_check <- function(strict = FALSE, use_git = TRUE, list_all = FALSE) {
     C10 = "stop() classé (errorCondition) ou call. = FALSE (dette)",
     C11 = "primitives parallèles à vérifier (mirai uniquement)",
     C12 = "en-tête commenté dans chaque fichier de R/ (dette)",
-    C13 = "choices nommé : la valeur n'est jamais un appel traduit"
+    C13 = "choices nommé : la valeur n'est jamais un appel traduit",
+    C16 = "errorCondition() : un SEUL argument positionnel (sinon message tronqué) (dette)"
   )
   lvl <- setNames(rep("ERREUR", length(rules)), rules)
-  lvl[c("C6", "C8", "C9", "C10", "C11", "C12")] <- "AVERT."
+  lvl[c("C6", "C8", "C9", "C10", "C11", "C12", "C16")] <- "AVERT."
   for (r in rules) {
     n <- sum(vapply(.REPORT$errors, function(e) identical(e$rule, r), logical(1))) +
       sum(vapply(.REPORT$warns, function(e) identical(e$rule, r), logical(1)))
