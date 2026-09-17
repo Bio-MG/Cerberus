@@ -450,9 +450,9 @@ run_limma_voom_de <- function(counts_matrix, metadata, condition_col, group_targ
 
   if (length(missing_pkgs) > 0) {
 
-    stop(errorCondition("Package(s) manquant(s) pour limma-voom : ", paste(missing_pkgs, collapse = ", "),
+    stop(errorCondition(paste0("Package(s) manquant(s) pour limma-voom : ", paste(missing_pkgs, collapse = ", "),
 
-         ". Vérifiez .libPaths() — installé mais peut-être dans une autre librairie R.", class = "bulk_de_error"))
+         ". Vérifiez .libPaths() — installé mais peut-être dans une autre librairie R."), class = "bulk_de_error"))
 
   }
 
@@ -552,7 +552,7 @@ run_bulk_de_dispatch <- function(engine, counts_matrix, metadata, condition_col,
 
     limma = run_limma_voom_de(counts_matrix, metadata, condition_col, group_target, group_ref, covariates = covariates, p_adjust_method = p_adjust_method),
 
-    stop(errorCondition("Moteur DE non supporté : ", engine, class = "bulk_de_error"))
+    stop(errorCondition(paste0("Moteur DE non supporté : ", engine), class = "bulk_de_error"))
 
   )
 
@@ -1468,8 +1468,8 @@ plot_upset_contrasts <- function(gene_sets, min_comb_size = 1) {
 plot_venn_contrasts <- function(gene_sets, palette = "default") {
   n <- length(gene_sets)
   if (n < 2 || n > 4) {
-    stop(errorCondition("Le diagramme de Venn n'est lisible que pour 2 à 4 contrastes (vous en avez ",
-        n, ") -- utilisez UpSet au-delà.", class = "bulk_de_error"))
+    stop(errorCondition(paste0("Le diagramme de Venn n'est lisible que pour 2 à 4 contrastes (vous en avez ",
+        n, ") -- utilisez UpSet au-delà."), class = "bulk_de_error"))
   }
   venn_load_error <- tryCatch({
     loadNamespace("VennDiagram")

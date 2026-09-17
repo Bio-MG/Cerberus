@@ -379,3 +379,31 @@ test_that("bulk_helpers : les stop() du moteur DE sont CLASSEES bulk_de_error", 
   expect_error(run_bulk_de_dispatch("moteur_inconnu", d$counts, d$meta, "condition", "B", "A"),
                "non support", class = "bulk_de_error")
 })
+
+# ---------------------------------------------------------------------------
+# P0 — un message a PLUSIEURS arguments ne doit PAS etre TRONQUE
+# ---------------------------------------------------------------------------
+test_that("bulk_helpers : un message multi-arguments n'est pas TRONQUE par errorCondition", {
+  # Regression MESUREE le 2026-09-17 : errorCondition(message, ...) n'AGREGE PAS
+  # ses arguments supplementaires — ils deviennent des champs de la condition,
+  # pas du message :
+  #   stop("A : ", "B", " fin")                   -> "A : B fin"
+  #   errorCondition("A : ", "B", " fin", class=)  -> "A : "   <-- TRONQUE
+  # Les 3 sites de R/bulk/bulk_helpers.R dont le message tient en PLUSIEURS
+  # arguments doivent donc passer par paste0(). Ces assertions etaient ROUGES
+  # avant le correctif : le message s'arretait a la 1re portion.
+  # RegEx ASCII seulement (cf. l'avertissement sur la locale, plus haut).
+  venn <- list(a = "1", b = "2", c = "3", d = "4", e = "5")
+  e1 <- tryCatch(plot_venn_contrasts(venn), error = function(e) e)
+  expect_s3_class(e1, "bulk_de_error")
+  expect_true(grepl("avez 5", conditionMessage(e1), fixed = TRUE))
+  expect_true(grepl("UpSet", conditionMessage(e1), fixed = TRUE))
+
+  d <- .plots6c_counts()
+  e2 <- tryCatch(
+    run_bulk_de_dispatch("moteur_inconnu", d$counts, d$meta, "condition", "B", "A"),
+    error = function(e) e
+  )
+  expect_s3_class(e2, "bulk_de_error")
+  expect_true(grepl("moteur_inconnu", conditionMessage(e2), fixed = TRUE))
+})

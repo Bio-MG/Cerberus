@@ -22,6 +22,57 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > du commit `03951cb` cite encore `§2ax` pour 4E-4 : c'est l'état **avant** la
 > renumérotation. Détail : `STATUS.md` §6, item 6.
 
+## [V1.x — correctif] — 2026-09-17 — `errorCondition()` TRONQUAIT les messages multi-arguments
+
+**Régression introduite par l'incrément « 5ᵉ » ci-dessous**, et **non détectée
+par ses propres preuves** : l'invariant qu'il mesurait comparait le **texte
+source** (préservé), pas le **message à l'exécution**.
+
+### Le défaut (mesuré)
+
+`errorCondition(message, ...)` **n'agrège pas** ses arguments supplémentaires :
+ils deviennent des **champs de la condition**, pas du message.
+
+| expression | `conditionMessage()` |
+|---|---|
+| `stop("A : ", "B", " fin")` | `"A : B fin"` |
+| `errorCondition("A : ", "B", " fin", class = "x")` | **`"A : "`** — tronqué |
+
+`stop()` **concatène** ses arguments ; `errorCondition()` ne garde que le
+**premier**. Envelopper un `stop()` **multi-arguments** dans `errorCondition()`
+**tronque donc le message**. **3 des 19** sites convertis étaient concernés
+(`R/bulk/bulk_helpers.R` : limma-voom, moteur inconnu, diagramme de Venn).
+
+### Corrigé
+
+Les 3 messages sont enveloppés dans `paste0(...)`, ce qui restitue exactement la
+sémantique de `stop()` :
+```r
+# avant — tronqué à l'exécution
+stop(errorCondition("Moteur DE non supporté : ", engine, class = "bulk_de_error"))
+# après
+stop(errorCondition(paste0("Moteur DE non supporté : ", engine), class = "bulk_de_error"))
+```
+
+### Vérifié
+
+- **Rouge d'abord** : un nouveau test (`test-bulk-helpers.R`) assertait le
+  message **à l'exécution** — **3 échecs** avant correctif
+  (`grepl("avez 5", …)`, `grepl("UpSet", …)`, `grepl("moteur_inconnu", …)` tous
+  `FALSE`), **0** après.
+- Re-scan statique : `errorCondition` à **>1 argument positionnel** : **3 → 0**.
+- `test-bulk-helpers.R` : **69 PASS / 0 FAIL** (64 avant, +5 assertions).
+- Gardes **inchangées** : **0 erreur / 190 avert.**, duplication 0/3.
+
+### Leçon
+
+**Un invariant qui compare du TEXTE SOURCE ne prouve rien sur le comportement.**
+La conversion précédente était « identique au caractère près » — et pourtant
+**3 messages avaient changé à l'exécution**. Le seul invariant qui valait était
+le **message runtime**. Corollaire pour la suite du chantier : **tout site dont
+le message tient en plusieurs arguments doit passer par `paste0()`** — et
+`R/core/pathway_helpers.R` (18 sites, non converti) en contient.
+
 ## [V1.x — correctif C15] — 2026-09-17 — le serveur pseudobulk appelait `ns()` sans le lier
 
 Découvert par la **re-mesure de la suite complète** exigée par l'incrément de
