@@ -394,18 +394,18 @@ mod_import_bulk_server <- function(id, global_data) {
                               fileEncoding = "UTF-8-BOM"),
           "xlsx" = {
             if (!requireNamespace("readxl", quietly = TRUE))
-              stop("Package 'readxl' nécessaire pour lire les fichiers .xlsx")
+              stop(errorCondition("Package 'readxl' nécessaire pour lire les fichiers .xlsx", class = "bulk_import_error"))
             tmp <- readxl::read_excel(filepath, col_names = has_header)
             tmp <- as.data.frame(tmp, check.names = FALSE, stringsAsFactors = FALSE)
             if (has_rownames) { rownames(tmp) <- tmp[[1]]; tmp <- tmp[, -1, drop = FALSE] }
             tmp
           },
-          stop("Format de fichier non supporté")
+          stop(errorCondition("Format de fichier non supporté", class = "bulk_import_error"))
         )
         if (!is.null(colnames(df))) colnames(df) <- trimws(sub("^\ufeff", "", colnames(df)))
         if (!is.null(rownames(df))) rownames(df) <- trimws(sub("^\ufeff", "", rownames(df)))
         df
-      }, error = function(e) stop(paste("Erreur de lecture:", e$message)))
+      }, error = function(e) stop(errorCondition(paste("Erreur de lecture:", e$message), class = "bulk_import_error")))
     }
     
     # =========================================================================
@@ -473,7 +473,7 @@ mod_import_bulk_server <- function(id, global_data) {
           add_log(" ↻ Matrice transposée (genes étaient en colonnes)")
         }
         if (nrow(df) == 0 || ncol(df) == 0) {
-          stop("Matrice vide après lecture. Vérifie les options d'en-tête/rownames.")
+          stop(errorCondition("Matrice vide après lecture. Vérifie les options d'en-tête/rownames.", class = "bulk_import_error"))
         } else {
           add_log(paste("✓ Matrice de counts chargée:", nrow(df), "gènes ×", ncol(df), "échantillons"))
         }
@@ -971,13 +971,13 @@ mod_import_bulk_server <- function(id, global_data) {
             count_col <- prev$count_column[i]
             
             if (is.null(parsed[[i]]$df)) {
-              stop(sprintf("Fichier illisible : %s", parsed[[i]]$filename))
+              stop(errorCondition(sprintf("Fichier illisible : %s", parsed[[i]]$filename), class = "bulk_import_error"))
             }
             if (is.na(gene_col) || !nzchar(gene_col)) {
-              stop(sprintf("Gene column non résolue : %s", parsed[[i]]$filename))
+              stop(errorCondition(sprintf("Gene column non résolue : %s", parsed[[i]]$filename), class = "bulk_import_error"))
             }
             if (is.na(count_col) || !nzchar(count_col)) {
-              stop(sprintf("Count column non résolue : %s", parsed[[i]]$filename))
+              stop(errorCondition(sprintf("Count column non résolue : %s", parsed[[i]]$filename), class = "bulk_import_error"))
             }
             
             res <- .prepare_one_sample(
@@ -988,7 +988,7 @@ mod_import_bulk_server <- function(id, global_data) {
               dup_threshold = input$ps_dup_threshold %||% 0.05
             )
             
-            if (!isTRUE(res$ok)) stop(sprintf("%s : %s", parsed[[i]]$filename, res$status))
+            if (!isTRUE(res$ok)) stop(errorCondition(sprintf("%s : %s", parsed[[i]]$filename, res$status), class = "bulk_import_error"))
             
             add_log(paste0(" ✓ ", parsed[[i]]$filename, " (", res$status, ")"))
             sample_tables[[i]] <- res$data
@@ -1001,7 +1001,7 @@ mod_import_bulk_server <- function(id, global_data) {
           has_na     <- anyNA(merged[, count_cols, drop = FALSE])
           
           if (has_na && !isTRUE(input$ps_fill_zero)) {
-            stop("Valeurs manquantes après full join. Cochez la case de confirmation avant d'importer.")
+            stop(errorCondition("Valeurs manquantes après full join. Cochez la case de confirmation avant d'importer.", class = "bulk_import_error"))
           }
           if (has_na) {
             for (cc in count_cols) merged[[cc]][is.na(merged[[cc]])] <- 0L
@@ -1039,7 +1039,7 @@ mod_import_bulk_server <- function(id, global_data) {
           )
           validation <- .validate_design(counts_mat, meta_for_design)
           
-          if (!validation$ok) stop(paste(validation$messages, collapse = " | "))
+          if (!validation$ok) stop(errorCondition(paste(validation$messages, collapse = " | "), class = "bulk_import_error"))
           
           # Align metadata rownames to match existing bulk_obj structure
           aligned_meta <- as.data.frame(validation$metadata, stringsAsFactors = FALSE)

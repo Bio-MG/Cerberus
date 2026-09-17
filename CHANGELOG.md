@@ -22,6 +22,78 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > du commit `03951cb` cite encore `§2ax` pour 4E-4 : c'est l'état **avant** la
 > renumérotation. Détail : `STATUS.md` §6, item 6.
 
+## [V1.x — dette de conventions, 8ᵉ incrément] — 2026-09-17 — `mod_import_bulk.R` classé (`bulk_import_error`)
+
+**Premier fichier de `modules/` converti** — et il n'aurait pas pu l'être la
+veille : ces **10** sites faisaient partie des **48** que la garde ne voyait pas
+(entrée « angle mort mesuré » du même jour). Le chantier touche enfin la couche
+que l'utilisateur voit en premier.
+
+### Modifié
+
+- `modules/import/mod_import_bulk.R` : les **10** `stop()` non classés passent à
+  `stop(errorCondition(<msg>, class = "bulk_import_error"))`. **Aucun** n'a un
+  message en plusieurs arguments ⇒ pas de `paste0()` nécessaire (mesuré : 5
+  littéraux, 3 `sprintf()`, 2 `paste()`).
+- `tests/testthat/test-mod-import-bulk.R` (nouveau).
+
+### Classe : `bulk_import_error`, pas `import_error`
+
+Le dépôt qualifie déjà l'import par son **objet** : `rdata_import_error`,
+`communication_import_error`. Un `import_error` nu cohabiterait avec les deux et
+prétendrait désigner « l'import » en général. Ici le domaine est l'import
+**bulk**, et le nom s'aligne sur la famille `bulk_*` (`bulk_de_error`,
+`bulk_gsva_error`, `bulk_merge_error`) — `R/bulk/bulk_import_engine.R` pourra
+reprendre la même classe.
+
+### Preuve à deux niveaux — et pourquoi la 2ᵉ est PARTIELLE
+
+**Mesuré, pas supposé** : le fichier n'expose que **deux** fonctions top-level
+(l'UI et le serveur) ⇒ les 10 sites vivent dans `mod_import_bulk_server`. Et
+`counts_reactive()` enveloppe toute la lecture dans un
+`tryCatch(..., error = function(e) { add_log(); showNotification(); NULL })` :
+l'erreur est **avalée**. Conséquence : **la classe n'est pas observable à
+l'exécution** — mesuré par un appel direct à
+`shiny::isolate(counts_reactive())` avec un format non supporté, qui ne lève
+rien. Une assertion `expect_error(class = "bulk_import_error")` serait donc un
+mensonge.
+
+Le **message**, lui, est observable via `logs()` — et c'est exactement
+l'invariant de §2bn (`errorCondition()` tronque les arguments multiples, défaut
+invisible dans le source). D'où :
+
+1. **Verrou source** — `check_c10_error_style()` sur le fichier rend **0** :
+   couvre les **10** sites, y compris les 7 injoignables.
+2. **Invariant de message à l'exécution** — les **3** sites joignables (403 et
+   408 dans `smart_read`, 476 dans `counts_reactive`) : le texte loggué doit
+   rester identique. Ces deux assertions étaient **déjà vertes avant** la
+   conversion : ce sont des témoins, pas des cibles.
+
+### Vérifié
+
+- **Test ROUGE d'abord** : **1** échec listant exactement les **10** sites
+  attendus (397, 403, 408, 476, 974, 977, 980, 991, 1004, 1042) ⇒ puis **vert** :
+  `failed=0 passed=3`.
+- `parse()` **OK** ; **C10 fichier : 0** ; **C16 fichier : 0** ; **1123** lignes
+  avant/après.
+- **Messages identiques 10/10, octet à octet** (comparaison sur les octets, pas
+  sur des chaînes R — voir « Constaté »).
+- Garde : **C10 148 → 138**, total **0 erreur / 186 → 176 avert.**
+
+### Constaté (hors périmètre — listé, NON corrigé)
+
+- ⚠️ **Deux faux diagnostics de mon propre instrument**, corrigés par une
+  mesure au bon niveau :
+  1. `writeLines(useBytes = TRUE)` écrit de la **CRLF** et **ajoute un saut de
+     ligne final** sous Windows — l'original était **LF sans saut final**. Le
+     diff montrait 11 lignes changées au lieu de 10. Corrigé : **10
+     insertions / 10 délétions**, le reste octet pour octet.
+  2. Une comparaison « avant/après » faite sur des **chaînes R** hors locale
+     UTF-8 rendait `<U+00E9>` à la place de `é` et signalait **7 fausses
+     différences**. Refaite sur les **octets** : **10/10** identiques.
+- Les **38** autres sites de `modules/` restent à classer (`mod_geo.R` 8,
+  `mod_import_sc.R` 6, `mod_sc_pseudobulk.R` 6, `mod_sc_annotation.R` 4…).
+
 ## [V1.x — garde C10 : angle mort mesuré] — 2026-09-17 — la garde sous-mesurait **37,5 %** de la dette
 
 **Ce n'est pas un incrément de conversion : c'est une correction de mesure.**
