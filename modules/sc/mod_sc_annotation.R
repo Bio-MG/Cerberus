@@ -18,7 +18,7 @@
     blueprint = celldex::BlueprintEncodeData(),
     immgen    = celldex::ImmGenData(),
     dice      = celldex::DatabaseImmuneCellExpressionData(),
-    stop(paste("Unknown reference:", code))
+    stop(errorCondition(paste("Unknown reference:", code), class = "sc_annotation_error"))
   )
 }
 
@@ -88,13 +88,13 @@
         }
       } else {
         # No AnnotationDbi / orgdb → clear actionable error
-        stop(sprintf(
+        stop(errorCondition(sprintf(
           paste0(
             "Aucun chevauchement entre votre objet (ex: %s) et la référence '%s' (attend des Symboles).\n",
             "Solution : installez %s via BiocManager::install('%s') pour la conversion automatique."
           ),
           head(test_ids, 1), refcode, orgdb_pkg, orgdb_pkg
-        ))
+        ), class = "sc_annotation_error"))
       }
     }
 
@@ -105,7 +105,7 @@
   # ── Cluster-aggregate path (large / on-disk) ───────────────────────────────
   warning("Large dataset: using cluster-level aggregation for SingleR")
   if (!"seurat_clusters" %in% colnames(obj@meta.data))
-    stop("Lancez le clustering (Pipeline) avant l'annotation.")
+    stop(errorCondition("Lancez le clustering (Pipeline) avant l'annotation.", class = "sc_annotation_error"))
 
   ref      <- .load_ref(refcode)
   clusters <- unique(obj$seurat_clusters)
@@ -141,7 +141,7 @@
   if (n_common == 0) {
     test_id_type <- tryCatch(detect_gene_id_type(rownames(profile_matrix)), error = function(e) "unknown")
     ref_id_type  <- tryCatch(detect_gene_id_type(ref_ids), error = function(e) "unknown")
-    stop(sprintf(paste0(
+    stop(errorCondition(sprintf(paste0(
       "SingleR (pseudobulk) : 0 gene commun entre le test et la reference '%s'.\n",
       "  Organisme detecte (test) : %s\n",
       "  Type d'ID test (%s)      : %s\n",
@@ -152,7 +152,7 @@
     test_id_type, paste(head(rownames(profile_matrix), 5), collapse = ", "),
     ref_id_type,  paste(head(ref_ids, 5), collapse = ", "),
     paste(head(rownames(profile_matrix), 5), collapse = ", "),
-    paste(head(ref_ids, 5), collapse = ", ")))
+    paste(head(ref_ids, 5), collapse = ", ")), class = "sc_annotation_error"))
   }
 
   pred           <- SingleR::SingleR(test=profile_matrix, ref=ref, labels=ref[[label_col]])

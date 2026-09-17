@@ -22,6 +22,83 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > du commit `03951cb` cite encore `§2ax` pour 4E-4 : c'est l'état **avant** la
 > renumérotation. Détail : `STATUS.md` §6, item 6.
 
+## [V1.x — dette de conventions, 12ᵉ incrément] — 2026-09-17 — `mod_sc_annotation.R` classé (`sc_annotation_error`)
+
+**Premier lot choisi par le critère de §2bv** (« expose-t-il des helpers purs ? »)
+plutôt que par « a-t-il un test éponyme ? ». Et **le dernier lot de `modules/`
+prouvable à l'exécution** : après lui, les 14 sites restants sont **tous** dans
+des serveurs réactifs.
+
+### Modifié
+
+- `modules/sc/mod_sc_annotation.R` : les **4** `stop()` non classés passent à
+  `stop(errorCondition(<msg>, class = "sc_annotation_error"))`.
+- **Aucun** des 4 n'est multi-arguments : les messages passent déjà par
+  `sprintf()` / `paste()` ⇒ **pas de `paste0()` à ajouter** (C16 reste à 0).
+  ⚠️ C'est le **premier lot** du chantier dans ce cas — le réflexe « envelopper
+  dans `paste0()` » ne s'applique qu'aux `stop()` à **plusieurs arguments**.
+- `tests/testthat/test-mod-sc-annotation.R` : **créé** — verrou source + **2 sites
+  prouvés à l'exécution** (message **identique** + **classe observée**).
+
+### Classe : `sc_annotation_error`
+
+Qualifiée par le **domaine** (annotation SingleR), famille `sc_*` :
+`sc_import_error` · `sc_pseudobulk_error` · `sc_helpers_error` · `sc_multi_error`.
+
+### 🎯 Le critère §2bv a fonctionné — et il a prédit la suite
+
+Mesuré au §2bv.6 #4 : `mod_sc_annotation.R` était le **seul** des 13 fichiers
+restants dont **tous** les sites vivent dans des **helpers purs** (`.load_ref`,
+`.run_singler_safe`), les 14 autres étant dans des serveurs réactifs. Le lot a
+donc été pris en premier — et il a livré ce que le critère promettait :
+**2 sites joignables sur 4 sans `testServer()`**.
+
+### Les 2 sites joignables, et le moyen de les atteindre
+
+- **21** : `.load_ref("bogus")` — instantané (`switch` → dernière branche).
+- **108** : le chemin « gros jeu » exige `ncol(obj) > 100000L`. 💡 Une
+  **`dgCMatrix` creuse** de 100 001 colonnes **vides** ne coûte que **~1,1 s** et
+  quelques Mo : le seuil se franchit **sans** construire un gros jeu de données.
+  Le test assère d'ailleurs `.annot_is_big(obj)` comme **garde-fou** — si le
+  seuil changeait, le test le dirait au lieu de prouver autre chose.
+
+### 🔴 Les 2 sites non joignables, par ABSENCE DU DÉFAUT (mesuré)
+
+- **91** est la branche `else` de `requireNamespace("AnnotationDbi") &&
+  requireNamespace(orgdb_pkg)` — or **AnnotationDbi**, **org.Hs.eg.db** et
+  **org.Mm.eg.db** sont **installés** ⇒ elle ne s'exécute jamais ;
+- **144** exige `.load_ref()`, donc un **téléchargement celldex** (ExperimentHub)
+  ⇒ **réseau**. **Non testé volontairement** : un test réseau pendrait (le dépôt
+  « live-gate » déjà le smoke GEO, §2ba).
+
+### ⚠️ Un piège d'écriture, pas de lecture
+
+La conversion du site 91 a **dupliqué une ligne** (`head(test_ids, …)`) parce que
+la ligne de fermeture portait déjà son propre contenu. détecté au `git diff`
+(**7 insertions / 6 suppressions** au lieu de 6/6) ⇒ corrigé ⇒ **6/6**.
+Rappel : quand on remplace une ligne **de fermeture**, vérifier qu'elle
+n'embarque **pas** la précédente.
+
+### Vérifié
+
+- **Test ROUGE d'abord** : **3** échecs — 1 verrou source listant exactement les
+  **4** lignes (21, 91, 108, 144) + **2** assertions de classe ⇒ **vert** :
+  `failed=0 passed=6` (était `failed=3 passed=3`).
+- `parse()` **OK** ; **C10 fichier : 0** ; **C16 fichier : 0**.
+- Conversion au niveau des **octets** : **LF** et **saut de ligne final**
+  préservés (diff final **6 insertions / 6 suppressions**, aucun bruit CRLF).
+- Garde : **C10 118 → 114**, total **0 erreur / 156 → 152 avert.**
+
+### Constaté (listé, NON corrigé)
+
+- **14** sites de `modules/` restants, **tous** dans des serveurs réactifs
+  (`mod_sc.R` 2 · `mod_spatial_cluster.R` 2 · 10 fichiers à 1 site) ⇒
+  **inobservables** (§2bv.3) : le front `modules/` devient **verrou source seul**.
+- **100** sites de `R/` restants ⇒ **C9 + C10 simultanément**. ⚠️ **Le rapport
+  coût/preuve bascule maintenant en faveur de `R/`** : c'est le seul front où
+  l'on peut encore prouver la classe.
+
+
 ## [V1.x — dette de conventions, 11ᵉ incrément] — 2026-09-17 — `mod_sc_pseudobulk.R` classé (`sc_pseudobulk_error`)
 
 **Le lot de `modules/` le mieux prouvé à ce jour** — et il renverse une
