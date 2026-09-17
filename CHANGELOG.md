@@ -22,6 +22,59 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > du commit `03951cb` cite encore `§2ax` pour 4E-4 : c'est l'état **avant** la
 > renumérotation. Détail : `STATUS.md` §6, item 6.
 
+## [V1.x — dette de conventions, 18ᵉ incrément] — 2026-09-17 — `spatial_io.R` classé (`spatial_io_error`)
+
+**7 sites sur 11 prouvés à l'exécution (64 %)** — 🟡 **la série de trois lots
+INTÉGRAUX s'arrête ici** (§2bz 16/16, §2ca 12/12, §2cb 7/7 = 100 %), et la
+raison est **structurelle**, pas un manque d'effort. C10 **41 → 30**, C9
+**32 → 31**, dette **74 → 62** (−12 = 11 sites + 1 C9).
+
+### Modifié
+
+- `R/spatial/spatial_io.R` : les **11** `stop()` non classés passent à
+  `stop(errorCondition(<msg>, class = "spatial_io_error"))` — sites **133, 137,
+  149, 432, 748, 751, 1002, 1043, 1044, 1047, 1052**. **3 multi-arguments**
+  (**149**, **432**, **748**) ⇒ **`paste0()`** obligatoire (C16) ; 149 et 748
+  étaient des appels **multi-lignes**, 432 un `stop("…", class(r)[1L])`.
+- `tests/testthat/test-spatial-io.R` — 🟢 **NOUVEAU, et premier lot du chantier
+  dont le test a dû être ÉCRIT de zéro** : vérifié, **aucun** fichier de test ne
+  porte ce nom **et** aucun ne `source()` `spatial_io.R` — à la différence des
+  **quatre** lots précédents, où un test hérité existait sous un nom périmé
+  (§2bz.2, §2ca, §2cb.2).
+
+### 🔴 Les 4 sites non prouvés, et pourquoi c'est structurel
+
+- **133 / 137 / 149** (`Package 'png'|'jpeg'|'magick' requis`) vivent dans la
+  fermeture `read_histology_file()`, imbriquée dans `extract_histology_image()`.
+  Or celle-ci enveloppe **tout** son corps dans un
+  `tryCatch(..., error = function(e) { warning(...); NULL })` ⇒ l'erreur est
+  **avalée** et convertie en **warning** : **la classe est inobservable de
+  l'extérieur**, même avec un mock **sélectif** (couper `png` seul en laissant
+  `jsonlite` réel, sinon `json_scale_factors` reste `NULL` et la branche n'est
+  jamais atteinte).
+- **1052** exige une **vraie** matrice BPCells sur disque.
+
+⇒ **La joignabilité est une propriété de la FONCTION ENGLOBANTE, pas du site** :
+les 3 sites de `extract_histology_image()` sont **tous** injoignables (3/3),
+ceux des fonctions sans avaleur **tous** joignables (7/7). Ces 4 sites sont
+couverts par le **verrou source**, qui englobe les 11.
+
+### 🟢 Mesures
+
+| Indicateur | Avant | Après |
+|---|---|---|
+| Suite complète | `failed=0 passed=6119 error=0 skipped=1` (108 fichiers) | **`failed=0 passed=6136 error=0 skipped=1`** (**109**) — **+17** = le nouveau fichier (6119 + 17 = 6136 **exactement**) |
+| Test ciblé | — | **ROUGE `failed=8 passed=9`** → **VERT `failed=0 passed=17`** (`skipped=0` ⇒ BPCells **installé**, les 3 sites gardés ont bien tourné) |
+| Garde — total | 0 erreur / **74** avert. | 0 erreur / **62** avert. |
+| C10 · C9 · C11 | 41 · 32 · 1 | **30** · **31** · 1 |
+
+🟢 **Le diff n'était PAS symétrique — et c'était attendu** : 11 insertions /
+15 suppressions, parce que 149 (4 lignes → 1) et 748 (2 → 1) ont été
+**repliées**. Compté : `4 + 2 + 9 = 15` suppressions, `1 + 1 + 9 = 11`
+insertions. ⚠️ **La symétrie du diff n'est qu'un signal, pas une preuve** — seul
+`parse()` (16 expressions) et le delta de déséquilibre par ligne
+(**113 → 109**, soit exactement les 4 lignes repliées) ont conclu.
+
 ## [V1.x — dette de conventions, 17ᵉ incrément] — 2026-09-17 — `io_helpers.R` classé (`io_helpers_error`)
 
 **7 sites sur 7 prouvés à l'exécution (100 %)** — troisième lot intégral.

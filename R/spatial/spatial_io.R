@@ -130,11 +130,11 @@ extract_histology_image <- function(seurat_obj, technology, raw_dir = NULL) {
     tryCatch({
       if (ext %in% c("png", "jpg", "jpeg")) {
         if (!requireNamespace("png", quietly = TRUE) && ext == "png") {
-          stop("Package 'png' requis pour lire les fichiers PNG.")
+          stop(errorCondition("Package 'png' requis pour lire les fichiers PNG.", class = "spatial_io_error"))
         }
         
         if (!requireNamespace("jpeg", quietly = TRUE) && ext %in% c("jpg", "jpeg")) {
-          stop("Package 'jpeg' requis pour lire les fichiers JPEG.")
+          stop(errorCondition("Package 'jpeg' requis pour lire les fichiers JPEG.", class = "spatial_io_error"))
         }
         
         if (ext == "png") {
@@ -146,10 +146,7 @@ extract_histology_image <- function(seurat_obj, technology, raw_dir = NULL) {
       
       if (ext %in% c("tif", "tiff", "jp2", "j2k", "jpf")) {
         if (!requireNamespace("magick", quietly = TRUE)) {
-          stop(
-            "Package 'magick' requis pour lire les images TIFF/JPEG2000/JPF. ",
-            "Installez-le avec install.packages('magick')."
-          )
+          stop(errorCondition(paste0("Package 'magick' requis pour lire les images TIFF/JPEG2000/JPF. ", "Installez-le avec install.packages('magick')."), class = "spatial_io_error"))
         }
         
         img <- magick::image_read(path)
@@ -429,7 +426,7 @@ raster_to_rgba_array <- function(r) {
   } else if (is.array(r) && length(dim(r)) == 3L) {
     arr <- r
   } else {
-    stop("Format raster non reconnu : ", class(r)[1L])
+    stop(errorCondition(paste0("Format raster non reconnu : ", class(r)[1L]), class = "spatial_io_error"))
   }
   
   if (length(dim(arr)) == 2L) {
@@ -745,10 +742,9 @@ convert_to_bpcells_and_fov <- function(seurat_obj, dataset_id,
   technology  <- match.arg(technology)
   norm_method <- match.arg(norm_method)
   if (!requireNamespace("BPCells", quietly = TRUE)) {
-    stop("Package 'BPCells' requis pour l'import spatial (stockage sur disque). ",
-         "Installez via remotes::install_github('bnprks/BPCells/r').")
+    stop(errorCondition(paste0("Package 'BPCells' requis pour l'import spatial (stockage sur disque). ", "Installez via remotes::install_github('bnprks/BPCells/r')."), class = "spatial_io_error"))
   }
-  if (!inherits(seurat_obj, "Seurat")) stop("seurat_obj doit etre un objet Seurat.")
+  if (!inherits(seurat_obj, "Seurat")) stop(errorCondition("seurat_obj doit etre un objet Seurat.", class = "spatial_io_error"))
   
   assay <- assay %||% Seurat::DefaultAssay(seurat_obj)
   dataset_id <- gsub("[^A-Za-z0-9_-]", "_", dataset_id)
@@ -999,7 +995,7 @@ build_sketch <- function(obj, max_cells = 50000, assay = NULL,
 #' @param ribo_pattern Regex for ribosomal genes.
 #' @return data.frame(id, nCount, nFeature, pct_mt, pct_ribo, log_nCount).
 compute_qc_metrics_fast <- function(bpcells_dir, mt_pattern = "^MT-", ribo_pattern = "^RP[SL]") {
-  if (!requireNamespace("BPCells", quietly = TRUE)) stop("Package 'BPCells' requis.")
+  if (!requireNamespace("BPCells", quietly = TRUE)) stop(errorCondition("Package 'BPCells' requis.", class = "spatial_io_error"))
   mat <- BPCells::open_matrix_dir(bpcells_dir)
   
   n_count   <- Matrix::colSums(mat)
@@ -1040,16 +1036,16 @@ compute_qc_metrics_fast <- function(bpcells_dir, mt_pattern = "^MT-", ribo_patte
 #' @param project Character, Seurat project name.
 #' @return A Seurat object (raw counts, single "RNA" assay).
 materialize_seurat_subset <- function(spatial_obj, cell_ids, project = NULL) {
-  if (!requireNamespace("BPCells", quietly = TRUE)) stop("Package 'BPCells' requis.")
-  if (length(cell_ids) == 0) stop("Aucun identifiant fourni pour la ROI.")
+  if (!requireNamespace("BPCells", quietly = TRUE)) stop(errorCondition("Package 'BPCells' requis.", class = "spatial_io_error"))
+  if (length(cell_ids) == 0) stop(errorCondition("Aucun identifiant fourni pour la ROI.", class = "spatial_io_error"))
   bpcells_dir <- spatial_obj$bpcells_dir
   if (is.null(bpcells_dir) || !dir.exists(bpcells_dir)) {
-    stop("bpcells_dir introuvable sur disque pour ce jeu de donnees.")
+    stop(errorCondition("bpcells_dir introuvable sur disque pour ce jeu de donnees.", class = "spatial_io_error"))
   }
   
   mat <- BPCells::open_matrix_dir(bpcells_dir)
   cell_ids <- intersect(cell_ids, colnames(mat))
-  if (length(cell_ids) == 0) stop("Aucun des identifiants de la ROI n'est present dans la matrice BPCells.")
+  if (length(cell_ids) == 0) stop(errorCondition("Aucun des identifiants de la ROI n'est present dans la matrice BPCells.", class = "spatial_io_error"))
   
   mat_sub <- mat[, cell_ids, drop = FALSE]
   counts_dense <- methods::as(mat_sub, "dgCMatrix")
