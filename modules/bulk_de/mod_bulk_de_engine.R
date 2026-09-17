@@ -228,6 +228,24 @@
         tags$ul(lapply(issues, tags$li)))
   })
 
+  # ── Bandeau permanent : résultats obtenus en mode sans réplicat ──────────
+  # Tant qu'un contraste produit avec une dispersion imposée est affiché, le
+  # rappel reste visible — une notification qui disparaît au bout de 18 s ne
+  # suffit pas pour un résultat non inférentiel.
+  output$no_rep_active_banner <- renderUI({
+    # .trl() est redéfini localement (même motif que les autres renderUI du
+    # fichier) : il n'existe pas dans la portée englobante.
+    .trl <- function(key) { tr <- global_data$i18n; if (is.null(tr)) return(key)
+                            tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key) }
+    bp <- shared_rv$de_bypass
+    if (is.null(bp)) return(NULL)
+    div(class = "alert alert-danger", style = "font-size:0.76em;padding:6px 10px;",
+        tags$strong(.trl("Mode exploratoire sans r\u00e9plicat")),
+        tags$div(.trl("R\u00e9sultats obtenus avec une dispersion impos\u00e9e (edgeR, BCV d\u00e9clar\u00e9) : les p-values ne sont PAS inf\u00e9rentielles.")),
+        tags$div(sprintf("BCV = %.2f (dispersion = %.4f) \u2014 %d \u00e9chantillon(s) / %d coefficient(s).",
+                         bp$bcv %||% sqrt(bp$dispersion), bp$dispersion, bp$n, bp$p)))
+  })
+
   # ── "Contraste actif" selector sync — keeps the dropdown in sync with
   #    shared_rv$contrasts regardless of WHO wrote it (run_de / pairwise /
   #    ad-hoc all live in other files now; the auto-pipeline in mod_bulk.R

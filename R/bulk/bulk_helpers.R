@@ -264,14 +264,76 @@ extract_deseq2_contrast <- function(dds, condition_col, group_target, group_ref,
 
 
 
-#' edgeR fallback differential expression (2-group comparison)
+#' Build the edgeR contrast vector for "group_target vs group_ref"
+#'
+#' The design is always `~ grp_keep` (+ optional covariates), so a level is
+#' either a column named `grp_keep<level>` or — when it is the FIRST level —
+#' the intercept, which has no column. Both cases are handled: a level sitting
+#' on the intercept simply contributes 0 to the contrast, and the other one
+#' carries the sign.
+#'
+#' @param design Model matrix (from `stats::model.matrix(~ grp_keep, ...)`).
+#' @param group_target Character, target level.
+#' @param group_ref Character, reference level.
+#' @return Numeric vector of length `ncol(design)`.
+.edger_contrast_vector <- function(design, group_target, group_ref) {
+  nm <- colnames(design)
+  .find_level_col <- function(level) {
+    cand <- c(make.names(paste0("grp_keep", level)), paste0("grp_keep", level))
+    for (c in cand) {
+      hit <- which(nm == c)
+      if (length(hit) == 1L) return(hit)
+    }
+    NA_integer_
+  }
+  i_target <- .find_level_col(group_target)
+  i_ref    <- .find_level_col(group_ref)
+  if (is.na(i_target) && is.na(i_ref)) {
+    stop(errorCondition(
+      sprintf("Contraste edgeR introuvable : '%s' / '%s' absents des colonnes du design (%s).",
+              group_target, group_ref, paste(nm, collapse = ", ")),
+      class = "bulk_de_error", state = "invalid_contrast"))
+  }
+  v <- rep(0, ncol(design))
+  if (!is.na(i_target)) v[i_target] <- v[i_target] + 1
+  if (!is.na(i_ref))    v[i_ref]    <- v[i_ref]    - 1
+  if (all(v == 0)) {
+    stop(errorCondition(
+      sprintf("Contraste edgeR nul : '%s' et '%s' désignent le même niveau.", group_target, group_ref),
+      class = "bulk_de_error", state = "invalid_contrast"))
+  }
+  v
+}
 
+#' edgeR fallback differential expression (2-group comparison)
+#'
+#' @param fixed_dispersion Optional numeric scalar > 0. When supplied, the model
+#'   is fitted with this dispersion IMPOSED instead of estimated
+#'   (`glmFit(dispersion = ...)` + `glmLRT(contrast = ...)`), and ALL levels of
+#'   `condition_col` are kept in the design instead of only the two compared
+#'   groups. This is the "no-replicate exploratory mode": it exists because a
+#'   saturated design (`n <= p`, see `design_saturation()`) has no residual
+#'   degrees of freedom, so `estimateDisp()` returns NA and `glmQLFit()` dies.
+#'   The resulting p-values are conditional on the dispersion the caller chose —
+#'   they are NOT inferential. Measured 2026-09-17 on 4 samples x 4 conditions:
+#'   the same data gives 1197 / 2 / 0 genes at FDR<0.05 for BCV 0.1 / 0.4 / 0.8.
 run_edger_de <- function(counts_matrix, metadata, condition_col, group_target, group_ref,
-                         covariates = character(0), p_adjust_method = "BH") {
+                         covariates = character(0), p_adjust_method = "BH",
+                         fixed_dispersion = NULL) {
 
   p_adjust_method <- match.arg(p_adjust_method, stats::p.adjust.methods)
 
   if (!requireNamespace("edgeR", quietly = TRUE)) stop("Package 'edgeR' requis.")
+
+  impose_disp <- !is.null(fixed_dispersion)
+  if (impose_disp &&
+      (!is.numeric(fixed_dispersion) || length(fixed_dispersion) != 1L ||
+       !is.finite(fixed_dispersion) || fixed_dispersion <= 0)) {
+    stop(errorCondition(
+      sprintf("run_edger_de() : fixed_dispersion doit être un scalaire numérique fini > 0 (reçu : %s).",
+              paste(format(fixed_dispersion), collapse = ", ")),
+      class = "bulk_de_error", state = "invalid_input"))
+  }
 
   common <- intersect(colnames(counts_matrix), rownames(metadata))
 
@@ -281,7 +343,15 @@ run_edger_de <- function(counts_matrix, metadata, condition_col, group_target, g
 
 
 
-  grp  <- factor(metadata[[condition_col]], levels = c(group_ref, group_target))
+  # Mode dispersion imposée : on garde TOUS les niveaux pour que la
+  # normalisation (calcNormFactors) et l'ajustement portent sur tous les
+  # échantillons disponibles ; le contraste voulu est extrait ensuite.
+  # Mode normal : on se limite aux 2 groupes comparés (comportement historique).
+  grp  <- if (impose_disp) {
+    factor(metadata[[condition_col]])
+  } else {
+    factor(metadata[[condition_col]], levels = c(group_ref, group_target))
+  }
 
   covariates <- intersect(covariates, colnames(metadata))
 
@@ -289,7 +359,10 @@ run_edger_de <- function(counts_matrix, metadata, condition_col, group_target, g
 
   for (cov in covariates) keep <- keep & !is.na(metadata[[cov]])
 
-  if (sum(keep) < 4) stop("Trop peu d'échantillons valides pour edgeR (minimum 4 recommandé).")
+  if (sum(keep) < if (impose_disp) 2L else 4L) {
+    stop(sprintf("Trop peu d'échantillons valides pour edgeR (minimum %s).",
+                 if (impose_disp) "2 en mode dispersion imposée" else "4 recommandé"))
+  }
 
 
 
@@ -311,11 +384,26 @@ run_edger_de <- function(counts_matrix, metadata, condition_col, group_target, g
 
   y      <- edgeR::calcNormFactors(y)
 
-  y      <- edgeR::estimateDisp(y, design)
+  # Deux chemins MUTUELLEMENT EXCLUSIFS — ne jamais les mélanger :
+  #   - normal        : dispersion ESTIMEE (estimateDisp) puis test QL.
+  #   - imposée (n=p) : dispersion FOURNIE, pas d'estimation possible, test LRT
+  #     sur un contraste explicite (coef = 2 n'a pas de sens quand le design
+  #     porte tous les niveaux).
+  if (impose_disp) {
 
-  fit    <- edgeR::glmQLFit(y, design)
+    fit    <- edgeR::glmFit(y, design, dispersion = fixed_dispersion)
 
-  qlf    <- edgeR::glmQLFTest(fit, coef = 2)
+    qlf    <- edgeR::glmLRT(fit, contrast = .edger_contrast_vector(design, group_target, group_ref))
+
+  } else {
+
+    y      <- edgeR::estimateDisp(y, design)
+
+    fit    <- edgeR::glmQLFit(y, design)
+
+    qlf    <- edgeR::glmQLFTest(fit, coef = 2)
+
+  }
 
 
 
@@ -437,7 +525,7 @@ run_bulk_de_dispatch <- function(engine, counts_matrix, metadata, condition_col,
 
                                   covariates = character(0), p_adjust_method = "BH",
 
-                                  allow_non_integer = FALSE) {
+                                  allow_non_integer = FALSE, fixed_dispersion = NULL) {
 
   # PLOT-S6c (P0, audit §2an) — les moteurs edgeR et limma faisaient
   # `round(counts)` SANS le moindre avertissement (DGEList(counts = round(...))).
@@ -458,7 +546,9 @@ run_bulk_de_dispatch <- function(engine, counts_matrix, metadata, condition_col,
 
     },
 
-    edger = run_edger_de(counts_matrix, metadata, condition_col, group_target, group_ref, covariates = covariates, p_adjust_method = p_adjust_method),
+    edger = run_edger_de(counts_matrix, metadata, condition_col, group_target, group_ref,
+                         covariates = covariates, p_adjust_method = p_adjust_method,
+                         fixed_dispersion = fixed_dispersion),
 
     limma = run_limma_voom_de(counts_matrix, metadata, condition_col, group_target, group_ref, covariates = covariates, p_adjust_method = p_adjust_method),
 

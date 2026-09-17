@@ -239,6 +239,7 @@ mod_bulk_server <- function(id, global_data) {
                      .tr("Sinon, seuls les 2 groupes les plus repr\u00e9sent\u00e9s sont compar\u00e9s.")),
             selectInput(ns_m("ap_engine"), .tr("Moteur"),
                         c("DESeq2"="deseq2","edgeR"="edger","limma-voom"="limma")),
+            uiOutput(ns_m("ap_no_rep_ui")),
             numericInput(ns_m("ap_lfc"),  .tr("|Log2FC| seuil"), 1,    min=0, step=0.1),
             numericInput(ns_m("ap_padj"), .tr("P-adj seuil"),    0.05, min=0, max=1, step=0.01)
           )
@@ -274,6 +275,37 @@ mod_bulk_server <- function(id, global_data) {
       ))
     })
 
+    # ── Plan sans réplicat (n = p) : même diagnostic que l'onglet DE ────────
+    # Voir mod_bulk_de_run.R::output$no_rep_bypass_ui pour le détail mesuré des
+    # trois moteurs. Le pipeline auto n'avait AUCUNE garde avant (son seul
+    # filtre était `length(tab) < 2`) : il laissait remonter le message brut
+    # de DESeq2 jusqu'à la notification « Erreur pipeline: ».
+    output$ap_no_rep_ui <- renderUI({
+      req(input$ap_condition)
+      meta <- global_data$bulk_obj$metadata
+      if (is.null(meta) || !input$ap_condition %in% colnames(meta)) return(NULL)
+      sat <- design_saturation(meta, input$ap_condition)
+      if (!sat$saturated) return(NULL)
+
+      on <- isTRUE(input$ap_no_rep_enable)
+      tagList(
+        div(class="alert alert-danger", style="font-size:0.76em;padding:6px 10px;",
+            tags$strong(.tr("Plan sans r\u00e9plicat d\u00e9tect\u00e9")),
+            tags$div(.t_fmt(.tr("{n} \u00e9chantillon(s) pour {p} coefficient(s) : aucun degr\u00e9 de libert\u00e9 r\u00e9siduel. Le calcul sera bascul\u00e9 sur edgeR avec une dispersion impos\u00e9e."),
+                            n = sat$n, p = sat$p))),
+        checkboxInput(ns_m("ap_no_rep_enable"),
+                      .tr("Activer le mode exploratoire sans r\u00e9plicat (dispersion impos\u00e9e)"),
+                      value = on),
+        if (on) tagList(
+          numericInput(ns_m("ap_no_rep_bcv"), .tr("BCV impos\u00e9 (dispersion = BCV\u00b2)"),
+                       value = 0.4, min = 0.01, max = 2, step = 0.05),
+          checkboxInput(ns_m("ap_no_rep_attest"),
+                        .tr("J'atteste comprendre que ces p-values reposent sur une dispersion impos\u00e9e et ne sont PAS inf\u00e9rentielles."),
+                        value = isTRUE(input$ap_no_rep_attest))
+        )
+      )
+    })
+
     # Auto-pipeline execution — logic unchanged; all user-facing strings via .tr()/.t_fmt().
     observeEvent(input$ap_confirm, {
       removeModal()
@@ -285,6 +317,23 @@ mod_bulk_server <- function(id, global_data) {
       if (length(tab) < 2) { showNotification(.tr("Au moins 2 groupes requis."), type="error"); return() }
       grp_target <- names(tab)[1]; grp_ref <- names(tab)[2]
 
+      # HARD BLOCK : plan saturé (n = p) — aucun degré de liberté résiduel,
+      # donc aucune dispersion estimable (DESeq2 refuse, edgeR rend NA, limma
+      # échoue). Passage autorisé uniquement en mode exploratoire attesté.
+      sat    <- design_saturation(meta, cond_col)
+      bypass <- FALSE
+      if (sat$saturated) {
+        if (!isTRUE(input$ap_no_rep_enable) || !isTRUE(input$ap_no_rep_attest)) {
+          showNotification(
+            .t_fmt(.tr("\u274c Plan sans r\u00e9plicat : {n} \u00e9chantillon(s) pour {p} coefficient(s) \u2014 aucune dispersion estimable. Activez le mode exploratoire ET cochez l'attestation pour continuer."),
+                   n = sat$n, p = sat$p),
+            type="error", duration=12)
+          return()
+        }
+        bypass <- TRUE
+      }
+      fixed_disp <- if (bypass) (input$ap_no_rep_bcv %||% 0.4)^2 else NULL
+
       p <- shiny::Progress$new(); on.exit(p$close())
       ll <- character(0)
       log <- function(msg) {
@@ -293,6 +342,11 @@ mod_bulk_server <- function(id, global_data) {
       }
 
       tryCatch({
+        if (bypass) {
+          # `log()` n'existe qu'à partir d'ici — ne pas remonter cet appel plus haut.
+          log(.t_fmt(.tr("\u26a0\ufe0f Mode exploratoire sans r\u00e9plicat : dispersion impos\u00e9e (BCV = {b}), p-values NON inf\u00e9rentielles \u2014 \u00e0 ne pas publier comme une DE classique."),
+                     b = sprintf("%.2f", sqrt(fixed_disp))))
+        }
         if (isTRUE(input$ap_map_ids) && is.null(shared_rv$counts_mapped)) {
           detected <- tryCatch(detect_gene_id_type(rownames(counts)), error = function(e) "unknown")
           if (detected %in% c("ensembl", "entrez", "affy_probe")) {
@@ -342,7 +396,7 @@ mod_bulk_server <- function(id, global_data) {
           log(.t_fmt(.tr("Pairwise : {g} groupes \u2192 {p} paires..."),
                      g = length(lvls), p = choose(length(lvls), 2)))
           dds_full <- NULL
-          if (input$ap_engine == "deseq2") {
+          if (!bypass && input$ap_engine == "deseq2") {
             dds_full <- build_dds(filtered, meta, design_str, run_deseq = TRUE)
             shared_rv$dds_full <- dds_full
           }
@@ -354,7 +408,10 @@ mod_bulk_server <- function(id, global_data) {
             p$set(0.4 + 0.2 * i / length(pairs),
                   .t_fmt(.tr("Pairwise {i}/{n}..."), i = i, n = length(pairs)))
             res_i <- tryCatch({
-              r <- if (input$ap_engine == "deseq2") {
+              r <- if (bypass) {
+                run_bulk_de_dispatch("edger", filtered, meta, cond_col, target_i, ref_i,
+                                     fixed_dispersion = fixed_disp)
+              } else if (input$ap_engine == "deseq2") {
                 run_bulk_de_dispatch("deseq2", filtered, meta, cond_col, target_i, ref_i,
                                      dds = dds_full, shrink = TRUE)
               } else {
@@ -376,7 +433,12 @@ mod_bulk_server <- function(id, global_data) {
         } else {
           p$set(0.4, .tr("DE..."))
           log(paste(.tr("DE:"), grp_target, "vs", grp_ref, "/", input$ap_engine))
-          res <- if (input$ap_engine == "deseq2") {
+          res <- if (bypass) {
+            # edgeR avec dispersion imposée : les autres moteurs ne peuvent PAS
+            # fonctionner ici (DESeq2 refuse, limma échoue dans eBayes()).
+            run_bulk_de_dispatch("edger", filtered, meta, cond_col, grp_target, grp_ref,
+                                 fixed_dispersion = fixed_disp)
+          } else if (input$ap_engine == "deseq2") {
             dds_full <- build_dds(filtered, meta, design_str, run_deseq=TRUE)
             shared_rv$dds_full <- dds_full
             run_bulk_de_dispatch("deseq2", filtered, meta, cond_col, grp_target, grp_ref,
@@ -394,6 +456,16 @@ mod_bulk_server <- function(id, global_data) {
                      n = sum(res$padj < input$ap_padj & abs(res$log2FoldChange) > input$ap_lfc, na.rm=TRUE),
                      a = grp_target, b = grp_ref))
         }
+
+        # Traçabilité du contournement — voyage avec le résultat (rapport,
+        # export, provenance) pour qu'il ne puisse pas être lu comme une DE
+        # ordinaire.
+        shared_rv$de_bypass <- if (bypass) {
+          list(engine = "edger", bcv = sqrt(fixed_disp), dispersion = fixed_disp,
+               condition_col = cond_col, n = sat$n, p = sat$p,
+               attested = TRUE, timestamp = Sys.time(),
+               pairwise = isTRUE(pairwise_mode))
+        } else NULL
 
         if (isTRUE(input$ap_multimethod) && pairwise_mode) {
           log(.tr("Multi-m\u00e9thodes ignor\u00e9 en mode pairwise (n\u00e9cessite un contraste unique \u2014 utilisez l'onglet d\u00e9di\u00e9 manuellement)."))

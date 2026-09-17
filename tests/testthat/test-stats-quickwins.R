@@ -17,7 +17,17 @@
 source_project_file("R/core/io_helpers.R")     # %||%
 source_project_file("R/core/validation.R")     # guards canoniques (avant bulk_helpers)
 source_project_file("R/bulk/bulk_helpers.R")
+# PLOT-S6c : build_dds() / run_bulk_de_dispatch() appellent bulk_assert_raw_counts(),
+# defini dans le domaine correction de batch. Sans cette ligne le fichier ne passe
+# qu'au sein de la suite complete (un fichier source plus tot, dans l'ordre
+# alphabetique, deposait la fonction dans l'environnement global) et ECHOUE en
+# cible : mesure le 2026-09-17 (10 erreurs "could not find function").
+source_project_file("R/bulk/batch_correction.R")
 source_project_file("R/bulk/bulk_report_engine.R")
+# Meme classe de bug que ci-dessus : build_de_results_dt() appelle ts_datatable(),
+# defini dans R/plotting/datatable.R. Manquait aussi -> 3 erreurs en cible
+# (mesure 2026-09-17).
+source_project_file("R/plotting/datatable.R")
 # STAT-Q2 : .de_volcano_hover() vit dans le module de visualisation (c'est du
 # formatage de texte de survol plotly, donc de la présentation — pas de la
 # logique de domaine). On source le fichier uniquement pour définir la fonction

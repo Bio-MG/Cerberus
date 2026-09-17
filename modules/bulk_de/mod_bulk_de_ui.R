@@ -27,6 +27,7 @@ mod_bulk_de_ui <- function(id) {
     verbatimTextOutput(ns("design_formula_preview")),
 
     uiOutput(ns("de_readiness_check")),
+    uiOutput(ns("no_rep_active_banner")),
 
     fluidRow(
       column(6, selectInput(ns("group_ref"),    i18n$t("Groupe R\u00e9f\u00e9rence"), choices = NULL)),
@@ -38,6 +39,11 @@ mod_bulk_de_ui <- function(id) {
         checkboxInput(ns("shrink_lfc"), i18n$t("Shrinkage LFC (apeglm) \u2014 DESeq2 uniquement"), value = TRUE),
         tooltip(bsicons::bs_icon("info-circle"),
                 i18n$t("R\u00e9duit les Log2FC artificiellement \u00e9lev\u00e9s sur les g\u00e8nes \u00e0 faible expression (haute variance d'\u00e9chantillonnage). Recommand\u00e9 pour le classement/visualisation ; laissez activ\u00e9 sauf besoin sp\u00e9cifique."))),
+
+    # Plan sans r\u00e9plicat (n = p) : d\u00e9tection + contournement attest\u00e9.
+    # Rendu c\u00f4t\u00e9 serveur (le diagnostic d\u00e9pend de la colonne condition
+    # choisie) — voir mod_bulk_de_run.R::output$no_rep_bypass_ui.
+    uiOutput(ns("no_rep_bypass_ui")),
 
     fluidRow(
       column(6, numericInput(ns("lfc_thresh"),  i18n$t("Seuil |Log2FC|"), value = 1,    min = 0, step = 0.1)),

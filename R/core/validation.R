@@ -40,6 +40,67 @@ check_design_confounding <- function(metadata, condition_col, covariate_col) {
   all(nonzero_per_covariate_level == 1)
 }
 
+#' Measure the residual degrees of freedom of a design (n samples vs p coefficients)
+#'
+#' A design is SATURATED when `n <= p`: the model has no residual degrees of
+#' freedom, so nothing can estimate the dispersion. Measured behaviour of the
+#' three engines (2026-09-17, renv project) — they all fail, but differently:
+#'   - DESeq2: `estimateDispersionsGeneEst()` refuses outright
+#'     ("The design matrix has the same number of samples and coefficients to fit").
+#'   - edgeR: `estimateDisp()` does NOT fail — it warns "No residual df: setting
+#'     dispersion to NA", and `glmQLFit()` then dies with "NA dispersions not allowed".
+#'   - limma-voom: `voom()` warns and `eBayes()` fails with
+#'     "No residual degrees of freedom in linear model fits".
+#' So a single up-front test is needed; waiting for the engine to complain gives
+#' three different, cryptic messages.
+#'
+#' `p` is read off the model matrix, NOT guessed: it is 1 (intercept) plus
+#' `nlevels - 1` per factor term plus 1 per numeric term, which is exactly what
+#' the engines will build.
+#'
+#' @param metadata Sample metadata data.frame.
+#' @param condition_col Character, main condition column.
+#' @param covariates Character vector of additional design columns (may be empty).
+#' @return list(saturated = logical, n = integer effective samples, p = integer coefficients).
+#'   `saturated` is FALSE whenever the design cannot be evaluated at all
+#'   (missing column, < 2 complete cases, unparseable formula) — being unable
+#'   to prove saturation must never block a design that might be fine.
+design_saturation <- function(metadata, condition_col, covariates = character(0)) {
+  out <- list(saturated = FALSE, n = NA_integer_, p = NA_integer_)
+  if (!is.data.frame(metadata)) return(out)
+  if (length(condition_col) != 1L || is.na(condition_col)) return(out)
+  if (!condition_col %in% colnames(metadata)) return(out)
+
+  cols <- unique(c(condition_col, intersect(covariates, colnames(metadata))))
+  d    <- metadata[, cols, drop = FALSE]
+  # Only complete cases reach the model matrix: an NA row is dropped by every
+  # engine, so it lowers n without lowering p.
+  d    <- d[stats::complete.cases(d), , drop = FALSE]
+  if (nrow(d) < 2L) return(out)
+
+  mm <- tryCatch(stats::model.matrix(stats::reformulate(cols), data = d),
+                 error = function(e) NULL)
+  if (is.null(mm) || ncol(mm) < 1L) return(out)
+
+  out$n <- nrow(mm)
+  out$p <- ncol(mm)
+  out$saturated <- out$n <= out$p
+  out
+}
+
+#' Is the design saturated (no residual degrees of freedom)?
+#'
+#' Thin boolean wrapper around `design_saturation()` — see it for the
+#' engine-by-engine failure modes this predicts.
+#'
+#' @param metadata Sample metadata data.frame.
+#' @param condition_col Character, main condition column.
+#' @param covariates Character vector of additional design columns (may be empty).
+#' @return Logical — TRUE when the design cannot estimate a dispersion.
+check_design_saturated <- function(metadata, condition_col, covariates = character(0)) {
+  design_saturation(metadata, condition_col, covariates)$saturated
+}
+
 #' Validate a full design (condition + optional covariates) before fitting
 #'
 #' @param metadata Sample metadata data.frame.
@@ -50,6 +111,17 @@ validate_bulk_design <- function(metadata, condition_col, covariates = character
   problems <- character(0)
 
   if (!condition_col %in% colnames(metadata)) return(problems)
+
+  sat <- design_saturation(metadata, condition_col, covariates)
+  if (sat$saturated) {
+    problems <- c(problems, sprintf(
+      paste0("Plan sans réplicat : %d échantillon(s) pour %d coefficient(s) (~ %s) — aucun degré de liberté ",
+             "résiduel, donc aucune dispersion estimable. DESeq2 refusera, edgeR rendra une dispersion NA, ",
+             "limma échouera dans eBayes(). Ajoutez des réplicats, ou activez le mode exploratoire ",
+             "sans réplicat (dispersion imposée) en connaissance de cause."),
+      sat$n, sat$p, paste(unique(c(condition_col, covariates)), collapse = " + ")
+    ))
+  }
 
   n_na <- sum(is.na(metadata[[condition_col]]))
   if (n_na > 0) {

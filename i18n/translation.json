@@ -10280,6 +10280,62 @@
     {
       "fr": "{n} avertissement(s).",
       "en": "{n} warning(s)."
+    },
+    {
+      "fr": "Plan sans réplicat détecté",
+      "en": "No-replicate design detected"
+    },
+    {
+      "fr": "{n} échantillon(s) pour {p} coefficient(s) : aucun degré de liberté résiduel. DESeq2 refusera, edgeR rendra une dispersion NA, limma échouera dans eBayes().",
+      "en": "{n} sample(s) for {p} coefficient(s): no residual degrees of freedom. DESeq2 will refuse, edgeR will return an NA dispersion, limma will fail in eBayes()."
+    },
+    {
+      "fr": "Mode exploratoire sans réplicat (edgeR, dispersion imposée)",
+      "en": "Exploratory no-replicate mode (edgeR, imposed dispersion)"
+    },
+    {
+      "fr": "BCV imposé (dispersion = BCV²)",
+      "en": "Imposed BCV (dispersion = BCV²)"
+    },
+    {
+      "fr": "Le nombre de gènes significatifs DÉPEND ENTIÈREMENT de ce réglage : mesuré sur 4 échantillons × 4 conditions, 1197 gènes à FDR<0.05 pour BCV 0.1, contre 2 pour BCV 0.4 et 0 pour BCV 0.8 — mêmes données.",
+      "en": "The number of significant genes depends ENTIRELY on this setting: measured on 4 samples x 4 conditions, 1197 genes at FDR<0.05 for BCV 0.1 versus 2 for BCV 0.4 and 0 for BCV 0.8 - same data."
+    },
+    {
+      "fr": "J'atteste comprendre que ces p-values reposent sur une dispersion imposée et ne sont PAS inférentielles.",
+      "en": "I acknowledge that these p-values rest on an imposed dispersion and are NOT inferential."
+    },
+    {
+      "fr": "❌ Plan sans réplicat : {n} échantillon(s) pour {p} coefficient(s) — aucune dispersion estimable. Activez le mode exploratoire ET cochez l'attestation pour continuer.",
+      "en": "❌ No-replicate design: {n} sample(s) for {p} coefficient(s) - no dispersion can be estimated. Enable exploratory mode AND tick the acknowledgement to continue."
+    },
+    {
+      "fr": "Ajustement edgeR (dispersion imposée)...",
+      "en": "Fitting edgeR (imposed dispersion)..."
+    },
+    {
+      "fr": "⚠️ Mode exploratoire sans réplicat : dispersion imposée (BCV = {b}), p-values NON inférentielles — à ne pas publier comme une DE classique.",
+      "en": "⚠️ Exploratory no-replicate mode: imposed dispersion (BCV = {b}), p-values are NOT inferential - not to be published as a standard DE analysis."
+    },
+    {
+      "fr": "Activer le mode exploratoire sans réplicat (dispersion imposée)",
+      "en": "Enable exploratory no-replicate mode (imposed dispersion)"
+    },
+    {
+      "fr": "{n} échantillon(s) pour {p} coefficient(s) : aucun degré de liberté résiduel. Le calcul sera basculé sur edgeR avec une dispersion imposée.",
+      "en": "{n} sample(s) for {p} coefficient(s): no residual degrees of freedom. The run will switch to edgeR with an imposed dispersion."
+    },
+    {
+      "fr": "❌ Plan sans réplicat : {n} échantillon(s) pour {p} coefficient(s). La comparaison multi-méthodes exige une dispersion estimable — elle est impossible ici (utilisez un contraste unique en mode exploratoire).",
+      "en": "❌ No-replicate design: {n} sample(s) for {p} coefficient(s). Multi-method comparison requires an estimable dispersion - impossible here (use a single contrast in exploratory mode)."
+    },
+    {
+      "fr": "Résultats obtenus avec une dispersion imposée (edgeR, BCV déclaré) : les p-values ne sont PAS inférentielles.",
+      "en": "Results obtained with an imposed dispersion (edgeR, declared BCV): p-values are NOT inferential."
+    },
+    {
+      "fr": "Mode exploratoire sans réplicat",
+      "en": "Exploratory no-replicate mode"
     }
   ]
 }

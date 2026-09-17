@@ -609,7 +609,36 @@ new_entries <- list(
   # --- 4E-4 : DA Milo dans le pool applicatif partage ---
   c("Calcul Milo en cours...", "Milo computation running..."),
   c("Pool de calcul indisponible : l'analyse Milo tourne en synchrone \u2014 l'interface restera bloqu\u00e9e pendant le calcul.",
-    "Compute pool unavailable: Milo runs synchronously \u2014 the interface will stay blocked during the computation.")
+    "Compute pool unavailable: Milo runs synchronously \u2014 the interface will stay blocked during the computation."),
+  # --- Mode exploratoire sans replicat (plan sature n = p, dispersion impos\u00e9e) ---
+  c("Plan sans r\u00e9plicat d\u00e9tect\u00e9",
+    "No-replicate design detected"),
+  c("{n} \u00e9chantillon(s) pour {p} coefficient(s) : aucun degr\u00e9 de libert\u00e9 r\u00e9siduel. DESeq2 refusera, edgeR rendra une dispersion NA, limma \u00e9chouera dans eBayes().",
+    "{n} sample(s) for {p} coefficient(s): no residual degrees of freedom. DESeq2 will refuse, edgeR will return an NA dispersion, limma will fail in eBayes()."),
+  c("Mode exploratoire sans r\u00e9plicat (edgeR, dispersion impos\u00e9e)",
+    "Exploratory no-replicate mode (edgeR, imposed dispersion)"),
+  c("BCV impos\u00e9 (dispersion = BCV\u00b2)",
+    "Imposed BCV (dispersion = BCV\u00b2)"),
+  c("Le nombre de g\u00e8nes significatifs D\u00c9PEND ENTI\u00c8REMENT de ce r\u00e9glage : mesur\u00e9 sur 4 \u00e9chantillons \u00d7 4 conditions, 1197 g\u00e8nes \u00e0 FDR<0.05 pour BCV 0.1, contre 2 pour BCV 0.4 et 0 pour BCV 0.8 \u2014 m\u00eames donn\u00e9es.",
+    "The number of significant genes depends ENTIRELY on this setting: measured on 4 samples x 4 conditions, 1197 genes at FDR<0.05 for BCV 0.1 versus 2 for BCV 0.4 and 0 for BCV 0.8 \u2014 same data."),
+  c("J'atteste comprendre que ces p-values reposent sur une dispersion impos\u00e9e et ne sont PAS inf\u00e9rentielles.",
+    "I acknowledge that these p-values rest on an imposed dispersion and are NOT inferential."),
+  c("\u274c Plan sans r\u00e9plicat : {n} \u00e9chantillon(s) pour {p} coefficient(s) \u2014 aucune dispersion estimable. Activez le mode exploratoire ET cochez l'attestation pour continuer.",
+    "\u274c No-replicate design: {n} sample(s) for {p} coefficient(s) \u2014 no dispersion can be estimated. Enable exploratory mode AND tick the acknowledgement to continue."),
+  c("Ajustement edgeR (dispersion impos\u00e9e)...",
+    "Fitting edgeR (imposed dispersion)..."),
+  c("\u26a0\ufe0f Mode exploratoire sans r\u00e9plicat : dispersion impos\u00e9e (BCV = {b}), p-values NON inf\u00e9rentielles \u2014 \u00e0 ne pas publier comme une DE classique.",
+    "\u26a0\ufe0f Exploratory no-replicate mode: imposed dispersion (BCV = {b}), p-values are NOT inferential \u2014 not to be published as a standard DE analysis."),
+  c("Activer le mode exploratoire sans r\u00e9plicat (dispersion impos\u00e9e)",
+    "Enable exploratory no-replicate mode (imposed dispersion)"),
+  c("{n} \u00e9chantillon(s) pour {p} coefficient(s) : aucun degr\u00e9 de libert\u00e9 r\u00e9siduel. Le calcul sera bascul\u00e9 sur edgeR avec une dispersion impos\u00e9e.",
+    "{n} sample(s) for {p} coefficient(s): no residual degrees of freedom. The run will switch to edgeR with an imposed dispersion."),
+  c("\u274c Plan sans r\u00e9plicat : {n} \u00e9chantillon(s) pour {p} coefficient(s). La comparaison multi-m\u00e9thodes exige une dispersion estimable \u2014 elle est impossible ici (utilisez un contraste unique en mode exploratoire).",
+    "\u274c No-replicate design: {n} sample(s) for {p} coefficient(s). Multi-method comparison requires an estimable dispersion \u2014 impossible here (use a single contrast in exploratory mode)."),
+  c("R\u00e9sultats obtenus avec une dispersion impos\u00e9e (edgeR, BCV d\u00e9clar\u00e9) : les p-values ne sont PAS inf\u00e9rentielles.",
+    "Results obtained with an imposed dispersion (edgeR, declared BCV): p-values are NOT inferential."),
+  c("Mode exploratoire sans r\u00e9plicat",
+    "Exploratory no-replicate mode")
 )
 
 fr_existing <- vapply(j$translation, function(x) x$fr %||% "", character(1))

@@ -196,6 +196,7 @@ mod_sc_pseudobulk_ui <- function(id) {
                  choices = setNames(c("deseq2", "edger", "limma"),
                                     c(.tr_plain("DESeq2 (recommandé)"), "edgeR", "limma-voom")),
                  selected = "deseq2"),
+    uiOutput(ns("pb_no_rep_ui")),
     fluidRow(
       column(6, numericInput(ns("lfc_thresh"), i18n$t("Seuil |Log2FC|"), value = 1, step = 0.1)),
       column(6, numericInput(ns("padj_thresh"), i18n$t("Seuil p-adj"), value = 0.05, step = 0.01))
@@ -360,6 +361,36 @@ mod_sc_pseudobulk_server <- function(id, global_data, shared_rv) {
     de_status_rv <- reactiveVal("En attente de l'analyse...")
     output$de_status <- renderText({ de_status_rv() })
 
+    # ── Plan sans réplicat (n = p) : même diagnostic que le Bulk ────────────
+    # Le pseudobulk peut parfaitement produire un pseudo-échantillon par
+    # condition (4 conditions -> 4 pseudo-échantillons) : le design est alors
+    # saturé et aucun moteur ne peut estimer une dispersion. Voir
+    # mod_bulk_de_run.R pour le détail mesuré des trois moteurs.
+    output$pb_no_rep_ui <- renderUI({
+      req(pb$metadata)
+      if (!"condition" %in% colnames(pb$metadata)) return(NULL)
+      sat <- design_saturation(pb$metadata, "condition")
+      if (!sat$saturated) return(NULL)
+
+      on <- isTRUE(input$pb_no_rep_enable)
+      tagList(
+        div(class="alert alert-danger", style="font-size:0.76em;padding:6px 10px;",
+            tags$strong("Plan sans r\u00e9plicat d\u00e9tect\u00e9"),
+            tags$div(sprintf("%d pseudo-\u00e9chantillon(s) pour %d coefficient(s) : aucun degr\u00e9 de libert\u00e9 r\u00e9siduel. Le calcul sera bascul\u00e9 sur edgeR avec une dispersion impos\u00e9e.",
+                             sat$n, sat$p))),
+        checkboxInput(ns("pb_no_rep_enable"),
+                      "Activer le mode exploratoire sans r\u00e9plicat (dispersion impos\u00e9e)",
+                      value = on),
+        if (on) tagList(
+          numericInput(ns("pb_no_rep_bcv"), "BCV impos\u00e9 (dispersion = BCV\u00b2)",
+                       value = 0.4, min = 0.01, max = 2, step = 0.05),
+          checkboxInput(ns("pb_no_rep_attest"),
+                        "J'atteste comprendre que ces p-values reposent sur une dispersion impos\u00e9e et ne sont PAS inf\u00e9rentielles.",
+                        value = isTRUE(input$pb_no_rep_attest))
+        )
+      )
+    })
+
     observeEvent(input$run_de, {
       req(pb$counts, pb$metadata, input$group_target, input$group_ref)
       if (identical(input$group_target, input$group_ref)) {
@@ -379,14 +410,34 @@ mod_sc_pseudobulk_server <- function(id, global_data, shared_rv) {
           showNotification(paste(problems, collapse = " | "), type = "warning", duration = 12)
         }
 
+        # HARD BLOCK : plan saturé (n = p) — aucune dispersion estimable.
+        sat    <- design_saturation(pb$metadata, "condition")
+        bypass <- FALSE
+        if (sat$saturated) {
+          if (!isTRUE(input$pb_no_rep_enable) || !isTRUE(input$pb_no_rep_attest)) {
+            showNotification(sprintf(
+              "Plan sans replicat : %d pseudo-echantillon(s) pour %d coefficient(s) - aucune dispersion estimable. Activez le mode exploratoire ET cochez l'attestation pour continuer.",
+              sat$n, sat$p), type = "error", duration = 12)
+            return()
+          }
+          bypass <- TRUE
+        }
+        fixed_disp <- if (bypass) (input$pb_no_rep_bcv %||% 0.4)^2 else NULL
+
         p$set(0.4, "Ajustement du modele...")
-        dds <- if (identical(input$engine, "deseq2")) {
+        dds <- if (!bypass && identical(input$engine, "deseq2")) {
           build_dds(counts_f, pb$metadata, design_formula = "~ condition", run_deseq = TRUE)
         } else NULL
 
         p$set(0.7, "Extraction du contraste...")
-        res_df <- run_bulk_de_dispatch(input$engine, counts_f, pb$metadata, "condition",
-                                       input$group_target, input$group_ref, dds = dds, shrink = TRUE)
+        res_df <- if (bypass) {
+          run_bulk_de_dispatch("edger", counts_f, pb$metadata, "condition",
+                               input$group_target, input$group_ref,
+                               fixed_dispersion = fixed_disp)
+        } else {
+          run_bulk_de_dispatch(input$engine, counts_f, pb$metadata, "condition",
+                               input$group_target, input$group_ref, dds = dds, shrink = TRUE)
+        }
         res_df <- .normalize_de_cols(res_df, counts_for_basemean = counts_f)
 
         pb$de_result <- res_df
@@ -399,13 +450,24 @@ mod_sc_pseudobulk_server <- function(id, global_data, shared_rv) {
         # reference du panel 4b — aucun changement de comportement du panneau).
         shared_rv$pseudobulk_result <- list(
           type = "sc_pseudobulk_de",
-          engine = input$engine,
+          engine = if (bypass) "edger" else input$engine,
           target = input$group_target,
           reference = input$group_ref,
           n_genes = nrow(res_df),
           n_significant = n_sig,
-          de_table = res_df
+          de_table = res_df,
+          # Contournement scientifique : doit voyager avec le résultat, sinon
+          # le rapport consolidé le présenterait comme une DE ordinaire.
+          no_replicate_bypass = if (bypass) {
+            list(bcv = sqrt(fixed_disp), dispersion = fixed_disp,
+                 n = sat$n, p = sat$p, attested = TRUE, timestamp = Sys.time())
+          } else NULL
         )
+        if (bypass) {
+          de_status_rv(paste(de_status_rv(),
+                             sprintf("-- MODE EXPLORATOIRE : dispersion imposee (BCV = %.2f), p-values NON inferentielles.",
+                                     sqrt(fixed_disp))))
+        }
 
         de_status_rv(sprintf("OK [%s] -- %d/%d genes significatifs (%s vs %s).",
                              toupper(input$engine), n_sig, nrow(res_df),

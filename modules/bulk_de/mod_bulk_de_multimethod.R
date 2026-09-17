@@ -63,6 +63,17 @@
                        type = "error", duration = 10); return()
     }
 
+    # HARD BLOCK : plan saturé (n = p). Le consensus multi-méthodes exige les
+    # trois moteurs, et AUCUN ne peut estimer une dispersion ici. Le mode
+    # exploratoire reste réservé au contraste unique (onglet DE / pipeline auto).
+    sat <- design_saturation(meta, input$condition_col, covariates_in_use)
+    if (sat$saturated) {
+      showNotification(
+        .t_fmt(.tr("\u274c Plan sans r\u00e9plicat : {n} \u00e9chantillon(s) pour {p} coefficient(s). La comparaison multi-m\u00e9thodes exige une dispersion estimable \u2014 elle est impossible ici (utilisez un contraste unique en mode exploratoire)."),
+               n = sat$n, p = sat$p),
+        type = "error", duration = 12); return()
+    }
+
     p <- shiny::Progress$new(); on.exit(p$close())
     p$set(message = .tr("Comparaison multi-méthodes..."), value = 0.15)
 

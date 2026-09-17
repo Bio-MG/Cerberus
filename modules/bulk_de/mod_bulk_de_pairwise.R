@@ -49,9 +49,26 @@
     n_pairs <- length(pairs)
     # STAT-Q1 : méthode de correction choisie dans le panneau Step 2
     padj_method <- input$padj_method %||% TS_PADJ_METHOD_DEFAULT
+
+    # HARD BLOCK + contournement : plan saturé (n = p) — mêmes règles que le
+    # contraste unique (les inputs d'attestation sont dans le même namespace).
+    sat    <- design_saturation(meta, input$condition_col, input$covariates %||% character(0))
+    bypass <- FALSE
+    if (sat$saturated) {
+      if (!isTRUE(input$no_rep_enable) || !isTRUE(input$no_rep_attest)) {
+        showNotification(
+          .t_fmt(.tr("\u274c Plan sans r\u00e9plicat : {n} \u00e9chantillon(s) pour {p} coefficient(s) \u2014 aucune dispersion estimable. Activez le mode exploratoire ET cochez l'attestation pour continuer."),
+                 n = sat$n, p = sat$p),
+          type = "error", duration = 12)
+        return(invisible(NULL))
+      }
+      bypass <- TRUE
+    }
+    fixed_disp <- if (bypass) (input$no_rep_bcv %||% 0.4)^2 else NULL
+
     withProgress(message = .tr("Calcul des contrastes pairwise..."), value = 0, {
       dds_full <- NULL
-      if (input$de_engine == "deseq2") {
+      if (!bypass && input$de_engine == "deseq2") {
         dds_full <- tryCatch(
           build_dds(shared_rv$filtered_counts, meta, design_formula = helpers$design_str(), run_deseq = TRUE),
           error = function(e) {
@@ -70,7 +87,11 @@
         name <- sprintf("%s_vs_%s", target, ref)
 
         res <- tryCatch({
-          r <- if (input$de_engine == "deseq2") {
+          r <- if (bypass) {
+            run_bulk_de_dispatch("edger", shared_rv$filtered_counts, meta, input$condition_col,
+                                 target, ref, fixed_dispersion = fixed_disp,
+                                 p_adjust_method = padj_method)
+          } else if (input$de_engine == "deseq2") {
             run_bulk_de_dispatch("deseq2", shared_rv$filtered_counts, meta, input$condition_col,
                                  target, ref, dds = dds_full, shrink = input$shrink_lfc,
                                  p_adjust_method = padj_method)
@@ -100,6 +121,12 @@
       }
       updateSelectInput(session, "active_contrast_view",
                         choices = names(shared_rv$contrasts), selected = shared_rv$active_contrast)
+
+      shared_rv$de_bypass <- if (bypass) {
+        list(engine = "edger", bcv = sqrt(fixed_disp), dispersion = fixed_disp,
+             condition_col = input$condition_col, n = sat$n, p = sat$p,
+             attested = TRUE, timestamp = Sys.time(), pairwise = TRUE)
+      } else NULL
 
       msg <- .t_fmt(.tr("\u2713 {ok}/{n} contrastes calcul\u00e9s."), ok = ok, n = n_pairs)
       if (length(failed) > 0) msg <- paste(msg, paste(.tr("\u00c9checs:"), paste(failed, collapse = ", ")))

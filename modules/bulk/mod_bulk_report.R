@@ -190,7 +190,11 @@ mod_bulk_report_server <- function(id, global_data, shared_rv) {
           report_notes          = if (is.null(input$report_notes) || nchar(input$report_notes) == 0) "" else input$report_notes,
           i18n_strings          = i18n_strings,          # NEW (Phase 4)
           report_language       = global_data$language,  # NEW (for date/number formatting if needed)
-          interactive           = isTRUE(input$report_interactive) && input$report_format != "pdf"
+          interactive           = isTRUE(input$report_interactive) && input$report_format != "pdf",
+          # Mode exploratoire sans réplicat (dispersion imposée) : doit figurer
+          # dans le rapport, sinon des p-values non inférentielles y seraient
+          # présentées comme une DE ordinaire.
+          no_rep_bypass         = shared_rv$de_bypass
         )
 
         withProgress(message = .tr("G\u00e9n\u00e9ration du rapport..."), value = 0.2, {

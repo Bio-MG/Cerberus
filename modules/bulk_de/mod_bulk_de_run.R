@@ -32,6 +32,44 @@
     shinyjs::toggleState("run_de", condition = !is.null(shared_rv$filtered_counts))
   })
 
+  # ── Plan sans réplicat (n = p) ─────────────────────────────────────────────
+  # Avec autant d'échantillons que de coefficients, il ne reste aucun degré de
+  # liberté pour estimer une dispersion. Mesuré le 2026-09-17 (renv projet) :
+  #   DESeq2  refuse dans estimateDispersionsGeneEst() ;
+  #   edgeR   ne refuse pas — estimateDisp() pose une dispersion NA et
+  #           glmQLFit() échoue ensuite ("NA dispersions not allowed") ;
+  #   limma   passe voom() puis eBayes() échoue ("No residual degrees of
+  #           freedom in linear model fits").
+  # Le seul contournement tenable est une dispersion IMPOSÉE (edgeR), dont
+  # l'utilisateur doit assumer le choix : c'est l'objet de l'attestation.
+  output$no_rep_bypass_ui <- renderUI({
+    req(input$condition_col)
+    meta <- global_data$bulk_obj$metadata
+    if (is.null(meta) || !input$condition_col %in% colnames(meta)) return(NULL)
+    sat <- design_saturation(meta, input$condition_col, input$covariates %||% character(0))
+    if (!sat$saturated) return(NULL)
+
+    on <- isTRUE(input$no_rep_enable)
+    tagList(
+      div(class = "alert alert-danger", style = "font-size:0.76em;padding:6px 10px;",
+          tags$strong(.tr("Plan sans r\u00e9plicat d\u00e9tect\u00e9")),
+          tags$div(.t_fmt(.tr("{n} \u00e9chantillon(s) pour {p} coefficient(s) : aucun degr\u00e9 de libert\u00e9 r\u00e9siduel. DESeq2 refusera, edgeR rendra une dispersion NA, limma \u00e9chouera dans eBayes()."),
+                          n = sat$n, p = sat$p))),
+      checkboxInput(ns("no_rep_enable"),
+                    .tr("Mode exploratoire sans r\u00e9plicat (edgeR, dispersion impos\u00e9e)"),
+                    value = on),
+      if (on) tagList(
+        numericInput(ns("no_rep_bcv"), .tr("BCV impos\u00e9 (dispersion = BCV\u00b2)"),
+                     value = 0.4, min = 0.01, max = 2, step = 0.05),
+        helpText(style = "font-size:0.72em;",
+                 .tr("Le nombre de g\u00e8nes significatifs D\u00c9PEND ENTI\u00c8REMENT de ce r\u00e9glage : mesur\u00e9 sur 4 \u00e9chantillons \u00d7 4 conditions, 1197 g\u00e8nes \u00e0 FDR<0.05 pour BCV 0.1, contre 2 pour BCV 0.4 et 0 pour BCV 0.8 \u2014 m\u00eames donn\u00e9es.")),
+        checkboxInput(ns("no_rep_attest"),
+                      .tr("J'atteste comprendre que ces p-values reposent sur une dispersion impos\u00e9e et ne sont PAS inf\u00e9rentielles."),
+                      value = isTRUE(input$no_rep_attest))
+      )
+    )
+  })
+
   # =========================================================================
   # STEP 2 — Differential Expression (single pair)
   # =========================================================================
@@ -87,6 +125,25 @@
       return()
     }
 
+    # HARD BLOCK : plan saturé (n = p). Sans réplicat il n'existe AUCUN degré de
+    # liberté pour estimer une dispersion — les trois moteurs échouent. Le
+    # passage n'est autorisé qu'en mode exploratoire EXPLICITEMENT attesté :
+    # l'utilisateur fournit alors lui-même la dispersion (BCV) et les p-values
+    # qui en découlent ne sont pas inférentielles.
+    sat    <- design_saturation(meta, input$condition_col, covariates_in_use)
+    bypass <- FALSE
+    if (sat$saturated) {
+      if (!isTRUE(input$no_rep_enable) || !isTRUE(input$no_rep_attest)) {
+        showNotification(
+          .t_fmt(.tr("\u274c Plan sans r\u00e9plicat : {n} \u00e9chantillon(s) pour {p} coefficient(s) \u2014 aucune dispersion estimable. Activez le mode exploratoire ET cochez l'attestation pour continuer."),
+                 n = sat$n, p = sat$p),
+          type = "error", duration = 12)
+        return()
+      }
+      bypass <- TRUE
+    }
+    fixed_disp <- if (bypass) (input$no_rep_bcv %||% 0.4)^2 else NULL
+
     p <- shiny::Progress$new(); on.exit(p$close())
     p$set(message = .tr("Analyse différentielle..."), value = 0.2)
 
@@ -98,7 +155,14 @@
 
       res <- NULL
       dds_full <- NULL
-      if (input$de_engine == "deseq2") {
+      if (bypass) {
+        p$set(0.4, .tr("Ajustement edgeR (dispersion impos\u00e9e)..."))
+        res <- run_bulk_de_dispatch("edger", shared_rv$filtered_counts, meta,
+                                    input$condition_col, input$group_target, input$group_ref,
+                                    covariates = covariates_in_use,
+                                    p_adjust_method = padj_method,
+                                    fixed_dispersion = fixed_disp)
+      } else if (input$de_engine == "deseq2") {
         p$set(0.4, .tr("Ajustement DESeq2..."))
         dds_full <- build_dds(shared_rv$filtered_counts, meta, design_formula = design_str, run_deseq = TRUE)
         shared_rv$dds_full <- dds_full
@@ -115,6 +179,15 @@
       }
 
       res <- .normalize_de_cols(res, counts_for_basemean = shared_rv$filtered_counts)
+
+      # Traçabilité du contournement : l'information voyage AVEC le résultat
+      # pour que le rapport, l'export et la provenance ne puissent jamais le
+      # présenter comme une analyse différentielle ordinaire.
+      shared_rv$de_bypass <- if (bypass) {
+        list(engine = "edger", bcv = sqrt(fixed_disp), dispersion = fixed_disp,
+             condition_col = input$condition_col, n = sat$n, p = sat$p,
+             attested = TRUE, timestamp = Sys.time())
+      } else NULL
 
       contrast_name <- if (nchar(trimws(input$contrast_name)) > 0) {
         trimws(input$contrast_name)
@@ -141,6 +214,13 @@
       showNotification(.t_fmt(.tr("\u2713 Contraste '{c}': {n} g\u00e8nes significatifs"),
                               c = contrast_name, n = n_sig),
                        type = "message", duration = 6)
+
+      if (bypass) {
+        showNotification(
+          .t_fmt(.tr("\u26a0\ufe0f Mode exploratoire sans r\u00e9plicat : dispersion impos\u00e9e (BCV = {b}), p-values NON inf\u00e9rentielles \u2014 \u00e0 ne pas publier comme une DE classique."),
+                 b = sprintf("%.2f", sqrt(fixed_disp))),
+          type = "warning", duration = 18)
+      }
 
     }, error = function(e) {
       showNotification(paste(.tr("Erreur DE:"), e$message), type = "error", duration = 10)

@@ -41,6 +41,7 @@ params:
   i18n_strings: NULL
   report_language: "fr"
   interactive: TRUE
+  no_rep_bypass: NULL
 ---
 
 ```{r setup, include=FALSE}
@@ -96,6 +97,24 @@ render_plot <- function(p, allow_interactive = TRUE) {
 
 ```{r notes_section, eval=nzchar(params$report_notes), results='asis'}
 cat("> ", gsub("\n", "\n> ", params$report_notes), "\n\n", sep = "")
+```
+
+```{r no_rep_bypass_banner, eval=!is.null(params$no_rep_bypass), results='asis'}
+# Plan sature (n = p) : dispersion IMPOSEE, p-values non inferentielles.
+# Sans ce bandeau, le rapport presenterait des p-values comme si elles
+# provenaient des donnees alors qu'elles decoulent du BCV choisi par
+# l'utilisateur (mesure : 1197 / 2 / 0 genes a FDR<0.05 pour BCV 0.1 / 0.4 / 0.8
+# sur les memes 4 echantillons x 4 conditions).
+bp <- params$no_rep_bypass
+cat("> **ATTENTION — MODE EXPLORATOIRE SANS REPLICAT**\n>\n")
+cat("> Plan sature : ", bp$n, " echantillon(s) pour ", bp$p,
+    " coefficient(s). Aucune dispersion n'etait estimable.\n>\n", sep = "")
+cat("> Moteur : edgeR avec dispersion imposee (BCV = ",
+    sprintf("%.2f", bp$bcv %||% sqrt(bp$dispersion)),
+    ", dispersion = ", sprintf("%.4f", bp$dispersion), "), declaree et attestee par l'utilisateur.\n>\n", sep = "")
+cat("> Les p-values et p-adj de ce rapport sont conditionnelles a cette dispersion :\n")
+cat("> elles ne sont PAS inferentielles et ne doivent pas etre publiees comme\n")
+cat("> les resultats d'une analyse differentielle classique.\n\n")
 ```
 
 ```{r resume_header, results='asis'}
