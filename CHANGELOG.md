@@ -22,6 +22,71 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > du commit `03951cb` cite encore `§2ax` pour 4E-4 : c'est l'état **avant** la
 > renumérotation. Détail : `STATUS.md` §6, item 6.
 
+## [V1.x — dette de conventions, 4ᵉ incrément] — 2026-09-17 — la garde signalait les RE-LEVÉS (213 → 209)
+
+Quatrième incrément du chantier, et **quatrième fois le même défaut de classe** :
+la garde juge un **token** là où la règle parle d'une **unité logique**. Aucun
+code applicatif n'est touché. **213 → 209** avertissements, **0 ajouté**,
+**4 retirés** (diff avant/après, l'« avant » issu de `git`).
+
+### Corrigé
+
+- **C10 : `stop(<symbole nu>)` de re-levé (175 → 171).** `stop(e)` dans
+  `error = function(e) { ... }` re-signale une condition **qui existe déjà** :
+  sa classe se juge à son **origine**, pas au site du re-levé. 4 signalements
+  étaient de ce type, et les 4 portaient sur `e`.
+  ```r
+  tryCatch(plot(x), error = function(e) {
+    if (grepl("margins", conditionMessage(e))) return(invisible(NULL))
+    stop(e)                      # re-levé : RIEN à classer ici
+  })
+  ```
+  Règle retenue, **étroite** : le site n'est exempté que si l'argument est un
+  **symbole nu** qui est un **FORMEL d'une fonction englobante**. Un symbole
+  **local** (`msg <- "x"; stop(msg)`) fabrique la valeur *dans* la fonction :
+  il reste signalé.
+
+### Ajouté
+
+- `.flatten_code()`, `.collect_function_defs()`, `.enclosing_formals()`,
+  `.stop_first_arg()`, `.is_bare_symbol()` : le fichier est **aplati** en une
+  chaîne pour suivre les accolades **en positions**. Un compteur ligne par ligne
+  se fait piéger par `}, error = function(e) {` — une **fermeture avant son
+  ouverture** : la profondeur y retombe à zéro et la fonction englobante n'est
+  plus trouvée (défaut **mesuré** sur 2 des 4 sites réels).
+- **5 tests** (8 assertions) dans `test-conventions-c6-strings.R`, dont **2
+  dédiés aux cas VOISINS** qui doivent RESTER signalés (symbole local ; symbole
+  nu **hors** de toute fonction) — exempter est le geste dangereux.
+
+### Vérifié
+
+- **A/B contre la garde d'AVANT** (`git show HEAD:tools/check_conventions.R`) :
+  sur la fixture, l'ancienne signale `5,10,13,17,19,20,21,24`, la nouvelle
+  `10,19,20`. Les sites **retirés** sont exactement les formes de re-levé
+  (gestionnaire anonyme, gestionnaire **nommé**, corps sur **une ligne**,
+  fonction englobante **imbriquée**, ligne `}, error = ...`) ; le symbole
+  **local** et les deux `stop()` de message **restent signalés**.
+- **Diff des ensembles de sites sur tout `R/`** : **0 ajouté**, **4 retirés**
+  (`bulk_helpers.R:694`, `jobs.R:82`, `sc_abundance_milo.R:541`,
+  `sc_helpers.R:1205`), sans résidu.
+- **Les 5 nouveaux tests ÉCHOUENT contre la garde d'AVANT** (mesuré : `53 pass /
+  7 fail`) et **passent** contre la nouvelle (`60 pass / 0 fail`) — aucun autre
+  test ne bouge.
+- **Coût maîtrisé et mesuré** : l'analyse des définitions de fonction n'est
+  déclenchée que si un symbole nu est en jeu **et** que les exemptions bon
+  marché ont échoué ⇒ **20,3–20,6 s → 20,8–21,3 s** (+2,5 %).
+
+### Ouvert
+
+- **C10 = 171** — de la **vraie dette** cette fois, mesurée par **forme
+  d'argument** : **145** littéraux + **26** appels (`sprintf`, `paste0`, `tr`),
+  soit **171** `stop()` de message à **classer par domaine**
+  (`errorCondition(class = "<domaine>_error")`), **pas** par `call. = FALSE`.
+  Les **19** fichiers concernés n'ont, pour la plupart, **aucun**
+  `errorCondition` : un constructeur de domaine doit y être **défini** d'abord.
+- **C11 = 1** (faux positif mesuré, `bulk_gsva.R:185` sous garde Windows) ·
+  **C9 = 37** (tests éponymes) · portée de C6 (`ROADMAP.md` §6).
+
 ## [V1.x — dette de conventions, 3ᵉ incrément] — 2026-09-17 — la garde ne résolvait pas le constructeur local (259 → 213)
 
 Troisième incrément du chantier engagé le 2026-09-16, et **troisième fois le

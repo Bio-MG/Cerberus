@@ -740,6 +740,105 @@ check_c9_r_tests <- function(r_files) {
   FALSE
 }
 
+#' Aplatit le code d'un fichier en UNE chaîne, avec le décalage de chaque ligne.
+#'
+#' POURQUOI APLATIR. Pour décider si un `stop(x)` porte sur un FORMEL de la
+#' fonction englobante, il faut suivre des appariements d'accolades À CHEVAL sur
+#' les lignes. Un compteur ligne par ligne s'y fait piéger par une ligne qui
+#' porte une FERMETURE avant son ouverture — `}, error = function(e) {` : la
+#' profondeur y retombe à zéro, le corps se réduit à cette seule ligne, et la
+#' fonction englobante n'est plus trouvée. Mesuré le 2026-09-17 : ce défaut
+#' faisait répondre « pas de fonction englobante » sur 2 des 4 sites réels. En
+#' aplatissant, on raisonne en POSITIONS et l'appariement devient exact.
+.flatten_code <- function(code) {
+  n <- length(code)
+  if (n == 0L) return(list(flat = "", off = integer(0)))
+  list(
+    flat = paste(code, collapse = "\n"),
+    off  = cumsum(c(1L, nchar(code)[-n] + 1L))
+  )
+}
+
+#' Toutes les définitions de fonction d'un fichier : étendue du CORPS et formels.
+#'
+#' L'étendue du corps est cherchée APRÈS la parenthèse fermante de la signature,
+#' jamais avant : c'est ce qui empêche de compter une accolade appartenant à
+#' l'expression PRÉCÉDENTE (`}, error = function(e) {`).
+.collect_function_defs <- function(code) {
+  fl   <- .flatten_code(code)
+  flat <- fl$flat
+  if (!nzchar(flat)) return(list())
+  chars <- strsplit(flat, "", fixed = TRUE)[[1]]
+  nch   <- length(chars)
+  m     <- gregexpr("function[ \t]*\\(", flat, perl = TRUE)[[1]]
+  if (m[1] == -1L) return(list())
+  lens <- attr(m, "match.length")
+  out  <- list()
+  for (k in seq_along(m)) {
+    op <- m[k] + lens[k] - 1L            # position de la '(' de la signature
+    d <- 0L; q <- op; cp <- NA_integer_
+    while (q <= nch) {
+      if (chars[q] == "(") d <- d + 1L
+      else if (chars[q] == ")") { d <- d - 1L; if (d == 0L) { cp <- q; break } }
+      q <- q + 1L
+    }
+    if (is.na(cp)) next
+    forms <- trimws(strsplit(substr(flat, op + 1L, cp - 1L), ",", fixed = TRUE)[[1]])
+    forms <- trimws(sub("=.*$", "", forms))
+    forms <- forms[nzchar(forms) & forms != "..."]
+    r <- cp + 1L
+    while (r <= nch && (chars[r] == " " || chars[r] == "\t")) r <- r + 1L
+    if (r <= nch && chars[r] == "{") {
+      d2 <- 0L; s2 <- r; e2 <- NA_integer_
+      while (s2 <= nch) {
+        if (chars[s2] == "{") d2 <- d2 + 1L
+        else if (chars[s2] == "}") { d2 <- d2 - 1L; if (d2 == 0L) { e2 <- s2; break } }
+        s2 <- s2 + 1L
+      }
+      if (is.na(e2)) e2 <- nch
+    } else {
+      nl <- regexpr("\n", substr(flat, r, nch), fixed = TRUE)[1]
+      e2 <- if (nl < 0L) nch else r + nl - 2L      # corps sans accolades
+    }
+    out[[length(out) + 1L]] <- list(from = r, to = e2, forms = forms)
+  }
+  out
+}
+
+#' Les formels de TOUTES les fonctions englobant la position `p`.
+#'
+#' On prend toutes les englobantes, pas seulement la plus interne : dans
+#' `function(e) lapply(x, function(y) stop(e))`, le symbole vient toujours de
+#' l'APPELANT, donc sa classe se juge à l'origine de la condition.
+.enclosing_formals <- function(defs, off, p) {
+  if (!length(defs) || !length(off)) return(character(0))
+  forms <- character(0)
+  for (d in defs) if (d$from <= p && p <= d$to) forms <- c(forms, d$forms)
+  unique(forms)
+}
+
+#' Texte du PREMIER argument d'un appel `stop(...)`.
+.stop_first_arg <- function(span) {
+  m <- regexpr("stop[ \t]*\\(", span, perl = TRUE)
+  if (m < 0L) return("")
+  txt <- substr(span, m + attr(m, "match.length"), nchar(span))
+  ch  <- strsplit(txt, "", fixed = TRUE)[[1]]
+  d <- 0L
+  for (q in seq_along(ch)) {
+    if (ch[q] == "(" || ch[q] == "[") d <- d + 1L
+    else if (ch[q] == ")" || ch[q] == "]") {
+      d <- d - 1L
+      if (d < 0L) return(substr(txt, 1L, q - 1L))
+    } else if (ch[q] == "," && d == 0L) {
+      return(substr(txt, 1L, q - 1L))
+    }
+  }
+  txt
+}
+
+#' `x` est-il un symbole nu (ni littéral de chaîne, ni appel) ?
+.is_bare_symbol <- function(x) grepl("^[.A-Za-z][.A-Za-z0-9_]*$", trimws(x))
+
 #' C10 — `stop()` doit être classé (`errorCondition(class=...)`) ou porter
 #' `call. = FALSE`.
 #'
@@ -763,6 +862,19 @@ check_c9_r_tests <- function(r_files) {
 #' les trois fichiers concernés étaient précisément ceux que la mesure
 #' précédente croyait « déjà classés ». La règle résout donc les constructeurs
 #' du projet via `.collect_classed_error_ctors()`.
+#' TROISIÈME DÉFAUT MESURÉ le 2026-09-17 : un `stop()` de RE-LEVÉ n'a pas de
+#' classe à recevoir. `stop(e)` dans `error = function(e) { ... }` re-signale
+#' une condition QUI EXISTE DÉJÀ ; sa classe se juge à son ORIGINE, pas ici.
+#' 4 des 175 signalements étaient de ce type. La règle retenue est étroite et
+#' mesurée : le site est exempté SI ET SEULEMENT SI l'argument est un SYMBOLE NU
+#' qui est un FORMEL d'une fonction englobante. Un symbole LOCAL
+#' (`msg <- "x"; stop(msg)`) fabrique la valeur DANS la fonction : il reste
+#' signalé. Mesure des 175 : 145 littéraux, 26 appels (`sprintf`, `paste0`,
+#' `tr`) — tous de vrais `stop()` de message — et 4 symboles nus, tous des
+#' re-levés portant sur `e`. Après correctif : C10 = 171.
+#' COÛT MAÎTRISÉ : l'analyse des définitions de fonction APLATIT le fichier ;
+#' elle n'est donc déclenchée que si un symbole nu est en jeu ET que les
+#' exemptions bon marché ont échoué (4 fois sur 70 fichiers).
 #' INVARIANTE CONSERVÉE : un appel multi-lignes SANS classement reste signalé,
 #' ET un `stop()` routé par une fonction qui n'est PAS un constructeur classé
 #' reste signalé (les deux sont testés sur cas négatif injecté) — sinon la
@@ -774,6 +886,8 @@ check_c10_error_style <- function(r_files) {
     if (nrow(ann) == 0) next
     code <- ann$code
     n <- length(code)
+    defs <- NULL     # paresseux — voir « COÛT MAÎTRISÉ » ci-dessus
+    fl   <- NULL
     i <- 1L
     while (i <= n) {
       ln <- code[i]
@@ -794,6 +908,19 @@ check_c10_error_style <- function(r_files) {
         grepl("call\\.\\s*=\\s*FALSE", span, perl = TRUE) ||        # forme explicite
         grepl("^\\s*stop\\(\\)", ln, perl = TRUE) ||                # stop() nu
         .span_calls_classed_ctor(span, ctors)                       # constructeur local
+      if (!exempt) {
+        arg1 <- trimws(.stop_first_arg(span))
+        if (.is_bare_symbol(arg1)) {
+          if (is.null(defs)) {
+            fl   <- .flatten_code(code)
+            defs <- .collect_function_defs(code)
+          }
+          mp <- regexpr("stop[ \t]*\\(", ln, perl = TRUE)
+          if (mp > 0L) {
+            exempt <- arg1 %in% .enclosing_formals(defs, fl$off, fl$off[i] + mp - 1L)
+          }
+        }
+      }
       if (!exempt) {
         .add("WARN", "C10", .rel(f), ann$line_no[i],
              "stop() sans errorCondition(class=<domaine>_error) ni call. = FALSE (dette héritée ; obligatoire pour tout code neuf).")

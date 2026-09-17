@@ -42,6 +42,19 @@
 # (18 `.bulk_multi_stop`, 15 `.sc_multi_stop`, 13 `.bulk_multi_compare_stop`).
 # Après correctif : C10 = 175.
 #
+# DÉFAUT 5 (mesuré le 2026-09-17) : un `stop()` de RE-LEVÉ n'a pas de classe à
+# recevoir. `stop(e)` dans `error = function(e) { ... }` re-signale une
+# condition QUI EXISTE DÉJÀ ; sa classe se juge à son ORIGINE, pas ici. 4 des
+# 175 signalements étaient de ce type — et les 4 portaient sur `e`. La règle
+# retenue est étroite : l'argument doit être un SYMBOLE NU qui est un FORMEL
+# d'une fonction englobante. Un symbole LOCAL (`msg <- "x"; stop(msg)`)
+# fabrique la valeur DANS la fonction : il reste signalé. Le détecteur de
+# fonction englobante APLATIT le fichier, car un compteur ligne par ligne se
+# fait piéger par `}, error = function(e) {` — une FERMETURE avant son
+# ouverture : la profondeur y retombe à zéro, le corps se réduit à cette seule
+# ligne, et la fonction englobante n'est plus trouvée. Après correctif :
+# C10 = 171.
+#
 # Ce fichier vérifie les DEUX directions :
 #   A. ce qui n'est PAS une violation n'est PAS signalé (faux positifs) ;
 #   B. ce qui EST une violation reste TOUJOURS signalé — le garde ne doit pas
@@ -386,4 +399,119 @@ test_that("C10 : un constructeur classe est resolu D'UN FICHIER A L'AUTRE", {
                          function(w) as.integer(w$line),
                          integer(1), USE.NAMES = FALSE))
   expect_identical(flagged, 2L)
+})
+
+# =============================================================================
+# DÉFAUT 5 (mesuré le 2026-09-17) : un `stop()` de RE-LEVÉ n'a pas de classe à
+# recevoir — la condition existe déjà, et sa classe se juge à son ORIGINE.
+#     tryCatch(plot(x), error = function(e) {
+#       if (grepl("margins", conditionMessage(e))) return(invisible(NULL))
+#       stop(e)                     # <-- re-levé : RIEN à classer ici
+#     })
+# 4 des 175 signalements étaient de ce type. La règle est ÉTROITE : il faut un
+# SYMBOLE NU qui soit un FORMEL d'une fonction englobante. Les cas VOISINS
+# doivent rester signalés — c'est tout l'enjeu, puisque exempter est le geste
+# dangereux :
+#   A. formel d'une fonction englobante → EXEMPTÉ (c'est le correctif) ;
+#   B. symbole LOCAL (`msg <- "x"`)     → TOUJOURS SIGNALÉ ;
+#   C. symbole nu HORS de toute fonction → TOUJOURS SIGNALÉ ;
+#   D. littéral ou appel (`sprintf`)    → TOUJOURS SIGNALÉ.
+# Après correctif : C10 = 171.
+# =============================================================================
+
+test_that("C10 : un stop() de RE-LEVE (formel englobant) est exempte", {
+  lines <- c(
+    ".fx_render <- function(x) {",                                               #  1
+    "  tryCatch(plot(x), error = function(e) {",                                 #  2
+    "    if (grepl(\"margins\", conditionMessage(e))) return(invisible(NULL))",  #  3
+    "    stop(e)",                                                               #  4 EXEMPTE
+    "  })",                                                                      #  5
+    "}",                                                                         #  6
+    ".fx_local <- function(y) {",                                                #  7
+    "  msg <- \"symbole local\"",                                                #  8
+    "  stop(msg)",                                                               #  9 SIGNALE
+    "}",                                                                         # 10
+    "stop(\"litteral\")",                                                        # 11 SIGNALE
+    ".fx_inline <- function(e) { stop(e) }"                                      # 12 EXEMPTE
+  )
+  path <- .c6_write_fixture(lines)
+  on.exit(unlink(dirname(path), recursive = TRUE), add = TRUE)
+
+  flagged <- .c10_flagged_lines(path)
+  expect_identical(flagged, c(9L, 11L),
+                   info = paste0("attendu 9 et 11 ; obtenu : ",
+                                 paste(flagged, collapse = ",")))
+})
+
+test_that("C10 : un stop() de symbole nu HORS fonction reste signale", {
+  # C. Sans fonction englobante il n'y a AUCUN formel : le symbole est une
+  # variable du script, donc la garde doit signaler. Sans ce cas, « symbole nu »
+  # suffirait à exempter — et n'importe quel `stop(msg)` passerait.
+  lines <- c(
+    "e <- \"pas une condition\"",   # 1
+    "stop(e)"                       # 2 SIGNALE
+  )
+  path <- .c6_write_fixture(lines)
+  on.exit(unlink(dirname(path), recursive = TRUE), add = TRUE)
+
+  expect_identical(.c10_flagged_lines(path), 2L)
+})
+
+test_that("C10 : la fermeture de l'expression PRECEDENTE ne masque pas la fonction englobante", {
+  # Le piège EXACT du détecteur : la ligne `}, error = function(e) {` porte une
+  # FERMETURE avant son ouverture. Un compteur de profondeur ligne par ligne y
+  # retombe à zéro et croit que le corps finit là — d'où « pas de fonction
+  # englobante », donc un faux positif. L'aplatissement supprime le problème :
+  # c'est ce test qui l'épingle.
+  lines <- c(
+    ".fx <- function(x) {",          # 1
+    "  tryCatch(x, finally = {",     # 2
+    "    y <- 1",                    # 3
+    "  }, error = function(e) {",    # 4 <-- fermeture AVANT ouverture
+    "    stop(e)",                   # 5 EXEMPTE
+    "  })",                          # 6
+    "}"                              # 7
+  )
+  path <- .c6_write_fixture(lines)
+  on.exit(unlink(dirname(path), recursive = TRUE), add = TRUE)
+
+  expect_identical(.c10_flagged_lines(path), integer(0))
+})
+
+test_that("C10 : un formel est reconnu dans une fonction NOMMEE et sur signature multi-lignes", {
+  # Le site réel `R/core/jobs.R:82` est dans `.handle_error <- function(e)`,
+  # PAS dans un gestionnaire anonyme : une règle qui ne regarderait que
+  # `error = function(e)` le manquerait.
+  lines <- c(
+    ".fx_handle <- function(e) {",                 # 1
+    "  if (is.null(e)) return(invisible(NULL))",   # 2
+    "  stop(e)",                                   # 3 EXEMPTE
+    "}",                                           # 4
+    ".fx_multi <- function(",                      # 5
+    "  e",                                         # 6
+    ") {",                                         # 7
+    "  stop(e)",                                   # 8 EXEMPTE
+    "}"                                            # 9
+  )
+  path <- .c6_write_fixture(lines)
+  on.exit(unlink(dirname(path), recursive = TRUE), add = TRUE)
+
+  expect_identical(.c10_flagged_lines(path), integer(0))
+})
+
+test_that("C10 : les re-leves REELS du depot ne sont plus signales", {
+  # `jobs.R` et `sc_abundance_milo.R` n'avaient QU'UN signalement chacun, et
+  # c'était ce re-levé : ils doivent être muets. Sur les deux gros fichiers on
+  # vérifie la LIGNE, car ils gardent de la vraie dette par ailleurs.
+  expect_identical(.c10_flagged_lines(.c6_repo("R/core/jobs.R")), integer(0),
+                   info = "R/core/jobs.R devrait etre muet (son seul site etait stop(e))")
+  expect_identical(.c10_flagged_lines(.c6_repo("R/sc/sc_abundance_milo.R")), integer(0),
+                   info = "R/sc/sc_abundance_milo.R devrait etre muet")
+  for (spec in list(list("R/bulk/bulk_helpers.R", 694L),
+                    list("R/sc/sc_helpers.R", 1205L))) {
+    flagged <- .c10_flagged_lines(.c6_repo(spec[[1]]))
+    expect_false(spec[[2]] %in% flagged,
+                 info = sprintf("%s:%d est un re-leve et ne doit plus etre signale",
+                                spec[[1]], spec[[2]]))
+  }
 })
