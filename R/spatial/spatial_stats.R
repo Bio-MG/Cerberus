@@ -46,17 +46,17 @@
 spatial_neighborhood_enrichment <- function(coords, group_labels, k_neighbors = 30,
                                             n_perm = 200, log_file = NULL) {
   .log <- function(msg, step, total) if (!is.null(log_file)) write_mirai_log(log_file, msg, step, total)
-  if (!requireNamespace("RANN", quietly = TRUE)) stop("Package 'RANN' requis (install.packages('RANN')).")
+  if (!requireNamespace("RANN", quietly = TRUE)) stop(errorCondition("Package 'RANN' requis (install.packages('RANN')).", class = "spatial_stats_error"))
   
   .log("Alignement coordonnees / labels...", 1, 4)
   group_labels <- group_labels[!is.na(group_labels) & nzchar(as.character(group_labels))]
   common_ids <- intersect(coords$id, names(group_labels))
-  if (length(common_ids) < 10) stop("Moins de 10 elements communs entre coordonnees et regroupement.")
+  if (length(common_ids) < 10) stop(errorCondition("Moins de 10 elements communs entre coordonnees et regroupement.", class = "spatial_stats_error"))
   cd  <- coords[match(common_ids, coords$id), c("id", "x", "y")]
   cd  <- cd[stats::complete.cases(cd[, c("x", "y")]), , drop = FALSE]
   grp <- as.character(group_labels[cd$id])
   lv  <- sort(unique(grp)); L <- length(lv)
-  if (L < 2) stop("Le regroupement choisi n'a qu'une seule categorie.")
+  if (L < 2) stop(errorCondition("Le regroupement choisi n'a qu'une seule categorie.", class = "spatial_stats_error"))
   
   n <- nrow(cd)
   k_eff <- max(2, min(k_neighbors, n - 1))
@@ -107,15 +107,15 @@ spatial_neighborhood_enrichment <- function(coords, group_labels, k_neighbors = 
 #' @param k_neighbors Integer, spatial k-NN size (self is added automatically).
 #' @return data.frame(id, value, gi_star, p_value, hotspot).
 compute_getis_ord_hotspots <- function(coords, values, k_neighbors = 30) {
-  if (!requireNamespace("RANN", quietly = TRUE)) stop("Package 'RANN' requis (install.packages('RANN')).")
+  if (!requireNamespace("RANN", quietly = TRUE)) stop(errorCondition("Package 'RANN' requis (install.packages('RANN')).", class = "spatial_stats_error"))
   common_ids <- intersect(coords$id, names(values))
-  if (length(common_ids) < 10) stop("Moins de 10 elements communs entre coordonnees et valeurs.")
+  if (length(common_ids) < 10) stop(errorCondition("Moins de 10 elements communs entre coordonnees et valeurs.", class = "spatial_stats_error"))
   cd <- coords[match(common_ids, coords$id), c("id", "x", "y")]
   x  <- as.numeric(values[cd$id])
   keep <- stats::complete.cases(cd[, c("x", "y")]) & is.finite(x)
   cd <- cd[keep, , drop = FALSE]; x <- x[keep]
   n <- nrow(cd)
-  if (n < 10) stop("Moins de 10 elements valides (coordonnees + valeur finie).")
+  if (n < 10) stop(errorCondition("Moins de 10 elements valides (coordonnees + valeur finie).", class = "spatial_stats_error"))
   
   k_eff <- max(1, min(k_neighbors, n - 1))
   nn <- RANN::nn2(as.matrix(cd[, c("x", "y")]), k = k_eff + 1)  # col 1 = self (distance 0)
@@ -123,7 +123,7 @@ compute_getis_ord_hotspots <- function(coords, values, k_neighbors = 30) {
   Wsum <- k_eff + 1
   weighted_sum <- rowSums(x_nbr)
   Xbar <- mean(x); S <- sqrt(mean(x^2) - Xbar^2)
-  if (!is.finite(S) || S == 0) stop("Variance nulle pour cette metrique -- Getis-Ord non calculable.")
+  if (!is.finite(S) || S == 0) stop(errorCondition("Variance nulle pour cette metrique -- Getis-Ord non calculable.", class = "spatial_stats_error"))
   
   numerator <- weighted_sum - Xbar * Wsum
   denom <- S * sqrt((n * Wsum - Wsum^2) / (n - 1))
@@ -157,11 +157,11 @@ compute_getis_ord_hotspots <- function(coords, values, k_neighbors = 30) {
 #'   proportions=data.frame(dataset,cluster,proportion,n)).
 compute_composition_differential <- function(embeddings) {
   if (!all(c("dataset", "cluster") %in% colnames(embeddings))) {
-    stop("embeddings doit contenir les colonnes 'dataset' et 'cluster'.")
+    stop(errorCondition("embeddings doit contenir les colonnes 'dataset' et 'cluster'.", class = "spatial_stats_error"))
   }
   df <- embeddings[!is.na(embeddings$dataset) & !is.na(embeddings$cluster), ]
   if (length(unique(as.character(df$dataset))) < 2) {
-    stop("Au moins 2 echantillons requis pour un test de composition differentielle.")
+    stop(errorCondition("Au moins 2 echantillons requis pour un test de composition differentielle.", class = "spatial_stats_error"))
   }
   
   tab <- table(dataset = df$dataset, cluster = df$cluster)
@@ -221,14 +221,14 @@ ripley_k_random_labeling <- function(coords, group_labels, target_level,
   .log("Alignement coordonnees / labels...", 1, 4)
   group_labels <- group_labels[!is.na(group_labels) & nzchar(as.character(group_labels))]
   common_ids <- intersect(coords$id, names(group_labels))
-  if (length(common_ids) < 20) stop("Moins de 20 elements communs entre coordonnees et regroupement.")
+  if (length(common_ids) < 20) stop(errorCondition("Moins de 20 elements communs entre coordonnees et regroupement.", class = "spatial_stats_error"))
   cd  <- coords[match(common_ids, coords$id), c("id", "x", "y")]
   cd  <- cd[stats::complete.cases(cd[, c("x", "y")]), , drop = FALSE]
   grp <- as.character(group_labels[cd$id])
-  if (!target_level %in% grp) stop(sprintf("Niveau cible '%s' introuvable.", target_level))
+  if (!target_level %in% grp) stop(errorCondition(sprintf("Niveau cible '%s' introuvable.", target_level), class = "spatial_stats_error"))
   
   is_target <- grp == target_level
-  if (sum(is_target) < 10) stop("Moins de 10 elements dans le groupe cible -- test non fiable.")
+  if (sum(is_target) < 10) stop(errorCondition("Moins de 10 elements dans le groupe cible -- test non fiable.", class = "spatial_stats_error"))
   
   subsampled <- FALSE
   if (length(is_target) > max_total || sum(is_target) > max_target) {
@@ -244,7 +244,7 @@ ripley_k_random_labeling <- function(coords, group_labels, target_level,
   n_total <- nrow(cd); n_target <- sum(is_target)
   coords_mat <- as.matrix(cd[, c("x", "y")])
   scale_ref <- min(diff(range(cd$x)), diff(range(cd$y)))
-  if (!is.finite(scale_ref) || scale_ref <= 0) stop("Etendue spatiale nulle -- test impossible.")
+  if (!is.finite(scale_ref) || scale_ref <= 0) stop(errorCondition("Etendue spatiale nulle -- test impossible.", class = "spatial_stats_error"))
   r_values <- seq(scale_ref * 0.02, scale_ref * 0.3, length.out = 8)
   
   compute_k <- function(is_t) {
@@ -302,11 +302,11 @@ ripley_k_random_labeling <- function(coords, group_labels, target_level,
 spatial_lr_score <- function(coords, expr_mat, lr_pairs, k_neighbors = 30,
                              n_perm = 100, log_file = NULL) {
   .log <- function(msg, step, total) if (!is.null(log_file)) write_mirai_log(log_file, msg, step, total)
-  if (!requireNamespace("RANN", quietly = TRUE)) stop("Package 'RANN' requis.")
+  if (!requireNamespace("RANN", quietly = TRUE)) stop(errorCondition("Package 'RANN' requis.", class = "spatial_stats_error"))
   
   .log("Alignement coordonnees / expression...", 1, 5)
   common_ids <- intersect(coords$id, colnames(expr_mat))
-  if (length(common_ids) < 10) stop("Moins de 10 elements communs entre coordonnees et matrice d'expression.")
+  if (length(common_ids) < 10) stop(errorCondition("Moins de 10 elements communs entre coordonnees et matrice d'expression.", class = "spatial_stats_error"))
   cd <- coords[match(common_ids, coords$id), c("id", "x", "y")]
   cd <- cd[stats::complete.cases(cd[, c("x", "y")]), , drop = FALSE]
   expr_mat <- expr_mat[, cd$id, drop = FALSE]
@@ -317,7 +317,7 @@ spatial_lr_score <- function(coords, expr_mat, lr_pairs, k_neighbors = 30,
   skipped <- data.frame(ligand = lr_pairs$ligand[!ok], receptor = lr_pairs$receptor[!ok],
                         reason = "gene absent de la matrice", stringsAsFactors = FALSE)
   lr_pairs <- lr_pairs[ok, , drop = FALSE]
-  if (nrow(lr_pairs) == 0) stop("Aucune paire ligand-recepteur exploitable (genes absents).")
+  if (nrow(lr_pairs) == 0) stop(errorCondition("Aucune paire ligand-recepteur exploitable (genes absents).", class = "spatial_stats_error"))
   
   k_eff <- max(2, min(k_neighbors, n - 1))
   .log(sprintf("Graphe spatial (k=%d, RANN)...", k_eff), 2, 5)

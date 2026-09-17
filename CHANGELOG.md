@@ -22,6 +22,61 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > du commit `03951cb` cite encore `§2ax` pour 4E-4 : c'est l'état **avant** la
 > renumérotation. Détail : `STATUS.md` §6, item 6.
 
+## [V1.x — dette de conventions, 15ᵉ incrément] — 2026-09-17 — `spatial_stats.R` classé (`spatial_stats_error`)
+
+**16 sites sur 16 prouvés à l'exécution (100 %)** — le seul lot **intégralement**
+prouvé du chantier. C10 **76 → 60**, C9 **35 → 34**, dette **112 → 95** (−17).
+
+### Modifié
+
+- `R/spatial/spatial_stats.R` : les **16** `stop()` non classés passent à
+  `stop(errorCondition(<msg>, class = "spatial_stats_error"))`.
+- **Aucun `paste0()`** : les 16 sites sont à un seul argument — à la différence
+  de `sc_trajectory.R` (1 site) et `sc_plotting.R` (5 sites). `paste0()` n'est
+  nécessaire **que** pour les messages multi-arguments (C16).
+- `tests/testthat/test-utils_spatial_stats.R` → **`test-spatial-stats.R`**
+  (`git mv`) : l'ancien nom était un **pointeur périmé** (le fichier testé
+  s'appelait `R/utils_spatial_stats.R` avant son déplacement). C9 ne le voyait
+  donc **pas** et signalait `R/spatial/spatial_stats.R` comme « sans test
+  éponyme » **alors qu'il portait déjà 15 tests**. ⇒ Le renommage fait baisser
+  C9 **sans écrire une seule ligne de test**.
+- Le fichier est **étendu**, pas dupliqué (règle 3) : 8 assertions préfixe-seul
+  montées au **message entier + classe**, verrou source ajouté, 4 tests ajoutés.
+  Rouge mesuré **17 échecs** (16 classes + verrou `n = 16`) → vert **54 PASS**.
+
+### 🟢 La nouveauté : rendre prouvables les gardes d'absence de dépendance
+
+Les 3 sites **49**, **110**, **305** sont des gardes `requireNamespace("RANN")`.
+RANN **est** installé ⇒ ces sites étaient **inatteignables** (13/16 seulement).
+Deux techniques mesurées :
+
+- ❌ `testthat::with_mocked_bindings(..., .env = globalenv())` **échoue** ici :
+  « No packages loaded with pkgload » — il exige un `.env` adossé à un paquet,
+  ce que `globalenv()` n'est pas.
+- ✅ **Environnement enfant** : copier la fonction dans `new.env(parent =
+  globalenv())` où vit le mock, puis `environment(f) <- e`. La copie voit
+  d'abord `e` (le mock), puis `globalenv`, puis `base` ⇒ **`globalenv` n'est
+  jamais modifié** et le harness testthat n'est pas menacé. Un **garde-fou** de
+  la technique (le mock ne doit pas fuiter) est ajouté au test.
+
+Le motif `requireNamespace() + stop()` court sur **14 lignes / 5 fichiers** de
+`R/` — dont `spatial_io.R` (11 sites) et `io_helpers.R` (7) encore en dette :
+la technique se paie donc sur la suite du chantier.
+
+### ⚠️ Deux pièges mesurés dans cette passe
+
+1. **Parenthèse manquante** : transformer `stop(X)` en
+   `stop(errorCondition(X, class = …))` exige d'insérer la classe **ET** une
+   fermeture — sinon `errorCondition(` absorbe la `)` finale et `stop(` reste
+   ouvert. Ni le comptage de tokens (`stop(` 16, `errorCondition(` 16) ni
+   `git diff --stat` (**16/16 symétrique**) ne voient le bug : **seul
+   `parse()`** le voit. Le fichier a dû être restauré puis reconverti.
+2. **Fins de ligne** : le dépôt est **mixte** (pas de `.gitattributes`,
+   `core.autocrlf=true`) — un `git checkout --` a rebascoulé ce fichier de LF
+   vers **CRLF** alors que son voisin `spatial_io.R` est en LF. Git normalise
+   en LF à l'index, on ré-écrit donc en LF : sinon un outil qui ne normalise
+   pas voit un diff portant sur **369 lignes** au lieu de **16**.
+
 ## [V1.x — dette de conventions, 14ᵉ incrément] — 2026-09-17 — `sc_plotting.R` classé (`sc_plotting_error`)
 
 **16 sites sur 17 prouvés à l'exécution (94 %)** — le meilleur ratio du chantier,
