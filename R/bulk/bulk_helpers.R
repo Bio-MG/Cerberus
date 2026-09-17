@@ -54,7 +54,7 @@ filter_bulk_counts <- function(counts_matrix, min_count = 10,
 
   out <- counts_matrix[keep_total & keep_n, , drop = FALSE]
 
-  if (nrow(out) == 0) stop("Aucun gène ne passe le filtre — seuils trop stricts.")
+  if (nrow(out) == 0) stop(errorCondition("Aucun gène ne passe le filtre — seuils trop stricts.", class = "bulk_de_error"))
 
   out
 
@@ -82,7 +82,7 @@ build_dds <- function(counts_matrix, metadata, design_formula = "~ condition",
 
   if (!requireNamespace("DESeq2", quietly = TRUE)) {
 
-    stop("Le package 'DESeq2' est requis pour cette analyse.")
+    stop(errorCondition("Le package 'DESeq2' est requis pour cette analyse.", class = "bulk_de_error"))
 
   }
 
@@ -90,7 +90,7 @@ build_dds <- function(counts_matrix, metadata, design_formula = "~ condition",
 
   if (length(common) < 2) {
 
-    stop("Moins de 2 échantillons communs entre la matrice de counts et les métadonnées.")
+    stop(errorCondition("Moins de 2 échantillons communs entre la matrice de counts et les métadonnées.", class = "bulk_de_error"))
 
   }
 
@@ -122,7 +122,7 @@ build_dds <- function(counts_matrix, metadata, design_formula = "~ condition",
 
   if (any(counts_matrix < 0, na.rm = TRUE)) {
 
-    stop("La matrice de counts contient des valeurs négatives — DESeq2 requiert des counts bruts.")
+    stop(errorCondition("La matrice de counts contient des valeurs négatives — DESeq2 requiert des counts bruts.", class = "bulk_de_error"))
 
   }
 
@@ -323,7 +323,7 @@ run_edger_de <- function(counts_matrix, metadata, condition_col, group_target, g
 
   p_adjust_method <- match.arg(p_adjust_method, stats::p.adjust.methods)
 
-  if (!requireNamespace("edgeR", quietly = TRUE)) stop("Package 'edgeR' requis.")
+  if (!requireNamespace("edgeR", quietly = TRUE)) stop(errorCondition("Package 'edgeR' requis.", class = "bulk_de_error"))
 
   impose_disp <- !is.null(fixed_dispersion)
   if (impose_disp &&
@@ -360,8 +360,8 @@ run_edger_de <- function(counts_matrix, metadata, condition_col, group_target, g
   for (cov in covariates) keep <- keep & !is.na(metadata[[cov]])
 
   if (sum(keep) < if (impose_disp) 2L else 4L) {
-    stop(sprintf("Trop peu d'échantillons valides pour edgeR (minimum %s).",
-                 if (impose_disp) "2 en mode dispersion imposée" else "4 recommandé"))
+    stop(errorCondition(sprintf("Trop peu d'échantillons valides pour edgeR (minimum %s).",
+                 if (impose_disp) "2 en mode dispersion imposée" else "4 recommandé"), class = "bulk_de_error"))
   }
 
 
@@ -450,9 +450,9 @@ run_limma_voom_de <- function(counts_matrix, metadata, condition_col, group_targ
 
   if (length(missing_pkgs) > 0) {
 
-    stop("Package(s) manquant(s) pour limma-voom : ", paste(missing_pkgs, collapse = ", "),
+    stop(errorCondition("Package(s) manquant(s) pour limma-voom : ", paste(missing_pkgs, collapse = ", "),
 
-         ". Vérifiez .libPaths() — installé mais peut-être dans une autre librairie R.")
+         ". Vérifiez .libPaths() — installé mais peut-être dans une autre librairie R.", class = "bulk_de_error"))
 
   }
 
@@ -472,7 +472,7 @@ run_limma_voom_de <- function(counts_matrix, metadata, condition_col, group_targ
 
   for (cov in covariates) keep <- keep & !is.na(metadata[[cov]])
 
-  if (sum(keep) < 4) stop("Trop peu d'échantillons valides pour limma-voom (minimum 4 recommandé).")
+  if (sum(keep) < 4) stop(errorCondition("Trop peu d'échantillons valides pour limma-voom (minimum 4 recommandé).", class = "bulk_de_error"))
 
 
 
@@ -539,7 +539,7 @@ run_bulk_de_dispatch <- function(engine, counts_matrix, metadata, condition_col,
 
     deseq2 = {
 
-      if (is.null(dds)) stop("DESeqDataSet manquant pour le moteur DESeq2.")
+      if (is.null(dds)) stop(errorCondition("DESeqDataSet manquant pour le moteur DESeq2.", class = "bulk_de_error"))
 
       extract_deseq2_contrast(dds, condition_col, group_target, group_ref, shrink = shrink,
                               p_adjust_method = p_adjust_method)
@@ -552,7 +552,7 @@ run_bulk_de_dispatch <- function(engine, counts_matrix, metadata, condition_col,
 
     limma = run_limma_voom_de(counts_matrix, metadata, condition_col, group_target, group_ref, covariates = covariates, p_adjust_method = p_adjust_method),
 
-    stop("Moteur DE non supporté : ", engine)
+    stop(errorCondition("Moteur DE non supporté : ", engine, class = "bulk_de_error"))
 
   )
 
@@ -666,11 +666,11 @@ getAllDE <- function(counts_matrix, metadata, condition_col, group_target, group
 #'   mean_log2FC, consistent_sign, plus per-method log2FC_<m>/padj_<m>/rank_<m>.
 rankConsensus <- function(de_list, lfc_thresh = 1, padj_thresh = 0.05) {
   de_list <- de_list[!vapply(de_list, is.null, logical(1))]
-  if (length(de_list) < 2) stop("Au moins 2 méthodes requises pour un consensus de rang.")
+  if (length(de_list) < 2) stop(errorCondition("Au moins 2 méthodes requises pour un consensus de rang.", class = "bulk_de_error"))
 
   common_genes <- Reduce(intersect, lapply(de_list, function(d) d$gene[!is.na(d$padj)]))
   if (length(common_genes) == 0) {
-    stop("Aucun gène commun (avec p-adj valide) entre les méthodes sélectionnées.")
+    stop(errorCondition("Aucun gène commun (avec p-adj valide) entre les méthodes sélectionnées.", class = "bulk_de_error"))
   }
 
   per_method <- lapply(names(de_list), function(m) {
@@ -1024,7 +1024,7 @@ plot_heatmap_bulk <- function(vst_matrix, genes, metadata, annotation_col = NULL
 
   genes <- intersect(genes, rownames(vst_matrix))
 
-  if (length(genes) < 2) stop("Au moins 2 gènes requis pour la heatmap.")
+  if (length(genes) < 2) stop(errorCondition("Au moins 2 gènes requis pour la heatmap.", class = "bulk_de_error"))
 
   mat <- vst_matrix[genes, , drop = FALSE]
 
@@ -1138,7 +1138,7 @@ plot_sample_correlation_heatmap <- function(vst_matrix, metadata = NULL,
 
   tr <- tr %||% function(x) x
 
-  if (ncol(vst_matrix) < 2) stop("Au moins 2 échantillons requis pour la corrélation.")
+  if (ncol(vst_matrix) < 2) stop(errorCondition("Au moins 2 échantillons requis pour la corrélation.", class = "bulk_de_error"))
 
   cor_mat <- cor(vst_matrix, method = method, use = "pairwise.complete.obs")
 
@@ -1443,7 +1443,7 @@ build_contrast_gene_sets <- function(contrasts, lfc_thresh = 1, padj_thresh = 0.
 #' @return A drawn ComplexHeatmap object (call inside renderPlot, no extra draw() needed by caller besides this).
 plot_upset_contrasts <- function(gene_sets, min_comb_size = 1) {
   if (length(unlist(gene_sets)) == 0) {
-    stop("Aucun gène significatif dans les contrastes sélectionnés avec ces seuils.")
+    stop(errorCondition("Aucun gène significatif dans les contrastes sélectionnés avec ces seuils.", class = "bulk_de_error"))
   }
   # Tighter margins lower the minimum device size plot.new()-based layout
   # needs before throwing "figure margins too large" (verified: default
@@ -1468,25 +1468,25 @@ plot_upset_contrasts <- function(gene_sets, min_comb_size = 1) {
 plot_venn_contrasts <- function(gene_sets, palette = "default") {
   n <- length(gene_sets)
   if (n < 2 || n > 4) {
-    stop("Le diagramme de Venn n'est lisible que pour 2 à 4 contrastes (vous en avez ",
-        n, ") -- utilisez UpSet au-delà.")
+    stop(errorCondition("Le diagramme de Venn n'est lisible que pour 2 à 4 contrastes (vous en avez ",
+        n, ") -- utilisez UpSet au-delà.", class = "bulk_de_error"))
   }
   venn_load_error <- tryCatch({
     loadNamespace("VennDiagram")
     NULL
   }, error = function(e) conditionMessage(e))
   if (!is.null(venn_load_error)) {
-    stop(sprintf(
+    stop(errorCondition(sprintf(
       paste0("Impossible de charger le package 'VennDiagram' : %s\n",
             "(VennDiagram dépend de 'futile.logger' — si VennDiagram est bien installe mais ",
             "cette erreur persiste, c'est probablement futile.logger/futile.options/lambda.r ",
             "qui manque, pas VennDiagram lui-même. Vérifiez aussi que .libPaths() dans cette ",
             "session R correspond bien à là où vous avez installé les packages.)"),
       venn_load_error
-    ))
+    ), class = "bulk_de_error"))
   }
   if (length(unlist(gene_sets)) == 0) {
-    stop("Aucun gène significatif dans les contrastes sélectionnés avec ces seuils.")
+    stop(errorCondition("Aucun gène significatif dans les contrastes sélectionnés avec ces seuils.", class = "bulk_de_error"))
   }
   # Same margin safety as plot_upset_contrasts() — NOTE: VennDiagram has no
   # "margin" parameter on venn.diagram()/draw.*.venn() (checked against the
@@ -1589,7 +1589,7 @@ plot_updown_barchart <- function(summary_df, tr = NULL, palette = "default", man
                                  theme_choice = TS_THEME_DEFAULT, base_size = 12) {
   tr <- tr %||% function(x) x
   if (is.null(summary_df) || nrow(summary_df) == 0) {
-    stop("Aucun contraste calculé.")
+    stop(errorCondition("Aucun contraste calculé.", class = "bulk_de_error"))
   }
   long_df <- data.frame(
     Contraste = rep(summary_df$Contraste, 2),

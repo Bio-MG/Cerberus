@@ -350,3 +350,32 @@ test_that("run_bulk_de_dispatch (edgeR/limma) refuse aussi les counts non entier
   expect_true(is.data.frame(
     run_bulk_de_dispatch("edger", d$counts, d$meta, "condition", "B", "A")))
 })
+
+# ---------------------------------------------------------------------------
+# C10 — les erreurs du moteur DE portent la classe bulk_de_error
+# ---------------------------------------------------------------------------
+test_that("bulk_helpers : les stop() du moteur DE sont CLASSEES bulk_de_error", {
+  # P0 : ces assertions DOIVENT echouer AVANT la conversion — un `stop()` nu
+  # leve un simpleError, pas une condition classee. Sans ce rouge prealable,
+  # elles ne prouveraient rien (CONVENTIONS.md §7 : forme attendue).
+  # Elles bornent la conversion des 19 sites de `R/bulk/bulk_helpers.R` : les
+  # 3 sites DEJA convertis portaient `bulk_de_error`, les 19 autres non.
+  # RegEx ASCII seulement (cf. l'avertissement sur la locale, plus haut).
+  m <- matrix(0, nrow = 3, ncol = 2, dimnames = list(c("g1", "g2", "g3"), c("s1", "s2")))
+  expect_error(filter_bulk_counts(m, min_count = 10), "ne passe le filtre",
+               class = "bulk_de_error")
+
+  vst1 <- matrix(c(1, 2), nrow = 1, dimnames = list("g1", c("s1", "s2")))
+  expect_error(plot_heatmap_bulk(vst1, genes = "g1", metadata = data.frame()),
+               "Au moins 2 g", class = "bulk_de_error")
+
+  one_col <- matrix(1, nrow = 2, dimnames = list(c("g1", "g2"), "s1"))
+  expect_error(plot_sample_correlation_heatmap(one_col),
+               "Au moins 2", class = "bulk_de_error")
+
+  d <- .plots6c_counts()
+  expect_error(run_bulk_de_dispatch("deseq2", d$counts, d$meta, "condition", "B", "A"),
+               "DESeqDataSet manquant", class = "bulk_de_error")
+  expect_error(run_bulk_de_dispatch("moteur_inconnu", d$counts, d$meta, "condition", "B", "A"),
+               "non support", class = "bulk_de_error")
+})

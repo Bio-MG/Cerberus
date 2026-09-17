@@ -22,6 +22,76 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > du commit `03951cb` cite encore `§2ax` pour 4E-4 : c'est l'état **avant** la
 > renumérotation. Détail : `STATUS.md` §6, item 6.
 
+## [V1.x — dette de conventions, 5ᵉ incrément] — 2026-09-17 — premier CLASSEMENT de domaine (C10 171 → 152, 209 → 190)
+
+Cinquième incrément, et **le premier qui touche du code applicatif** : les quatre
+précédents corrigeaient la **garde** ; celui-ci réduit la **vraie dette**, comme
+décidé le 2026-09-17 (`errorCondition(class = "<domaine>_error")`, **pas**
+`call. = FALSE`). **209 → 190** avertissements, **19 sites convertis**.
+
+### Corrigé
+
+- **C10 : les 19 `stop()` de `R/bulk/bulk_helpers.R` sont classés
+  `bulk_de_error`** (171 → 152). La classe **existait déjà** dans le fichier
+  (3 sites convertis antérieurement) : le fichier était donc **à moitié
+  converti**, pas vierge.
+  ```r
+  # avant
+  stop("Aucun gène ne passe le filtre — seuils trop stricts.")
+  # après (forme attendue de CONVENTIONS.md §7)
+  stop(errorCondition("Aucun gène ne passe le filtre — seuils trop stricts.",
+                      class = "bulk_de_error"))
+  ```
+  Les **messages sont inchangés au caractère près** — le diff ne fait
+  qu'**insérer** — donc les tests existants, qui matchent sur le message,
+  restent valides. Mesuré sur l'artefact : **24 `stop()` avant, 24 après**, et
+  les **24 messages identiques** une fois le wrapper `errorCondition(…)`
+  neutralisé **des deux côtés**. (Piège : un comparateur qui ne prend que le
+  **premier argument** signale de fausses différences sur les `stop()` à
+  **plusieurs arguments** — `stop("A : ", paste(x, …))` — dont le message
+  entier est correctement placé dans le wrapper.)
+
+### Ajouté
+
+- **5 assertions de classe** dans `tests/testthat/test-bulk-helpers.R`
+  (`filter_bulk_counts`, `plot_heatmap_bulk`,
+  `plot_sample_correlation_heatmap`, `run_bulk_de_dispatch` ×2).
+
+### Vérifié
+
+- **Rouge d'abord (P0)** : les 5 assertions **échouent** AVANT la conversion —
+  `Expected class: bulk_de_error` / `Actual class: simpleError/error/condition`.
+  Après : `test-bulk-helpers.R` **64 PASS / 0 FAIL** (59 PASS / 5 FAIL avant).
+- **Aucune ligne ajoutée ni retirée** (1648 → 1648), diff **23 lignes / 23**.
+- **Porte de sortie : le candidat doit PARSER avant écriture.** Ce n'est pas
+  cosmétique — un premier essai a produit `stop(errorCondition(x, class = "y")`,
+  un fichier **qui ne parse plus**, alors que la **garde restait verte à 190** :
+  elle lit du **texte**, pas un AST. Le contrôle de parse a été ajouté au script,
+  et le fichier restauré depuis une copie avant toute réécriture.
+- **Suite complète re-mesurée** — le fichier modifié est du **code applicatif**,
+  contrairement aux 4 incréments précédents. Résultat : **99 fichiers,
+  `failed=1 passed=5884 error=0 skipped=1`** — et **le seul échec n'est PAS
+  imputable à cet incrément** : c'est la régression **C15** du serveur
+  pseudobulk, corrigée par l'entrée ci-dessus. Établir cela *était* le but de la
+  re-mesure.
+- ⚠️ **Une croyance corrigée par la mesure.** Le relevé précédent affirmait
+  « aucun des 17 fichiers n'a d'`errorCondition` » : **FAUX pour 3 d'entre eux**
+  (`bulk_batch_qc.R`, `bulk_helpers.R`, `sc_velocity.R` portaient déjà une classe
+  d'erreur). Le fichier retenu est celui qui offrait le meilleur rapport : classe
+  **déjà définie** *et* 19 sites à convertir.
+
+### Ouvert
+
+- **C10 = 152** — 16 fichiers restants, dont `sc_helpers.R` (34),
+  `sc_trajectory.R` (21), `pathway_helpers.R` (18), `sc_plotting.R` (17),
+  `spatial_stats.R` (16).
+- ⚠️ **`state` : convention NON documentée, et incohérence locale.**
+  `CONVENTIONS.md` §7 prescrit `class` **seul** ; or 10 fichiers portent un champ
+  `state` **et** exportent un accesseur `*_error_state(e)`. `bulk_helpers.R`
+  garde 3 sites historiques avec `state` **sans** accesseur ⇒ à trancher :
+  documenter `state` (+ accesseur) dans §7, ou aligner ces 3 sites.
+- **C11 = 1** (faux positif) · **C9 = 37** · portée de C6.
+
 ## [V1.x — dette de conventions, 4ᵉ incrément] — 2026-09-17 — la garde signalait les RE-LEVÉS (213 → 209)
 
 Quatrième incrément du chantier, et **quatrième fois le même défaut de classe** :
