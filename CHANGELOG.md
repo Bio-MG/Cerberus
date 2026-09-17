@@ -22,6 +22,50 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > du commit `03951cb` cite encore `§2ax` pour 4E-4 : c'est l'état **avant** la
 > renumérotation. Détail : `STATUS.md` §6, item 6.
 
+## [V1.x — dette de conventions, 16ᵉ incrément] — 2026-09-17 — `spatial_reference.R` classé (`spatial_reference_error`)
+
+**12 sites sur 12 prouvés à l'exécution (100 %)** — deuxième lot intégralement
+prouvé. C10 **60 → 48**, C9 **34 → 33**, dette **95 → 82** (−13 = 12 + 1).
+
+### Modifié
+
+- `R/spatial/spatial_reference.R` : les **12** `stop()` non classés passent à
+  `stop(errorCondition(<msg>, class = "spatial_reference_error"))` — sites
+  **36, 48, 75, 87, 93, 106, 110, 132, 188, 190, 200, 223**.
+- **3** sites sont multi-arguments (**36**, **87**, **106**) ⇒ **`paste0()`** ;
+  les 9 autres sont à un seul argument. ⚠️ **87** et **106** le sont **sur deux
+  lignes** (deux littéraux accolés) ⇒ le compte de parenthèses doit être fait
+  sur l'**appel**, pas sur la ligne.
+- Le site **60** (`stop(paste0(...), call. = FALSE)`, multi-ligne) est **laissé
+  en place** : déjà conforme, comme les 4 de `pathway_helpers.R` (§2bp).
+- `tests/testthat/test-spatial-reference.R` : **créé** — verrou source + **12
+  preuves d'exécution**. Rouge mesuré **13 échecs** (12 classes + verrou
+  `n = 12`) → vert **27 PASS**.
+
+### 🔴 Une hypothèse de défaut de garde MESURÉE… et réfutée
+
+En lisant le fichier, le site **75** semblait être un **faux positif** : la
+ligne 60 porte `call. = FALSE` — que C10 **exempte** — et un angle mort
+« ligne par ligne » (le même que §2bg) l'aurait manqué.
+
+**Mesure : 0 faux positif sur les 60 sites.** La ligne **60** est correctement
+**exemptée** et la ligne **75** — un `stop()` *distinct*, sans `call. = FALSE`
+— correctement **signalée**. La garde gère déjà le multi-ligne pour C10.
+
+⇒ **Un soupçon de défaut de garde se mesure comme une réduction de dette** :
+ici la mesure a **innocenté** la garde. C'est le 5ᵉ examen de ce type et le
+**premier dont le verdict est « la garde a raison »** — les quatre précédents
+(§2bg, §2bh, §2bi, §2br) l'avaient mise en défaut.
+
+### 🟢 Ce que le lot apporte de plus
+
+- **Les gardes d'absence de dépendance sont devenues routinières** : 87, 93 et
+  106 sont atteintes par la technique d'environnement enfant (§2bz.3), avec le
+  **garde-fou de non-fuite**. Deuxième lot d'affilée à **100 %**.
+- **Un `.RData` « à objet unique non exploitable »** atteint le site 75 — il
+  faut écrire un objet d'une classe inattendue, sinon c'est la garde
+  « > 1 objet » (site 60) qui tire à sa place.
+
 ## [V1.x — dette de conventions, 15ᵉ incrément] — 2026-09-17 — `spatial_stats.R` classé (`spatial_stats_error`)
 
 **16 sites sur 16 prouvés à l'exécution (100 %)** — le seul lot **intégralement**

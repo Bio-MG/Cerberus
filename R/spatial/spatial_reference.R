@@ -33,7 +33,7 @@
 #' @param path Character path to the staged reference file.
 #' @return A Seurat object, OR list(counts=, meta=).
 read_reference_scrna <- function(path) {
-  if (!file.exists(path)) stop("Fichier de reference introuvable : ", path)
+  if (!file.exists(path)) stop(errorCondition(paste0("Fichier de reference introuvable : ", path), class = "spatial_reference_error"))
   ext <- tolower(tools::file_ext(path))
 
   if (identical(ext, "rds")) {
@@ -45,7 +45,7 @@ read_reference_scrna <- function(path) {
     if (methods::is(obj, "Matrix") || is.matrix(obj)) {
       return(list(counts = obj, meta = NULL))
     }
-    stop(".rds ne contient ni objet Seurat, ni liste counts/meta, ni matrice exploitable.")
+    stop(errorCondition(".rds ne contient ni objet Seurat, ni liste counts/meta, ni matrice exploitable.", class = "spatial_reference_error"))
   }
 
   # .rda/.RData — "Inspecter d'abord, importer ensuite" (contrat
@@ -72,7 +72,7 @@ read_reference_scrna <- function(path) {
     if (methods::is(obj, "Matrix") || is.matrix(obj)) {
       return(list(counts = obj, meta = NULL))
     }
-    stop(".RData ne contient ni objet Seurat, ni liste counts/meta, ni matrice exploitable.")
+    stop(errorCondition(".RData ne contient ni objet Seurat, ni liste counts/meta, ni matrice exploitable.", class = "spatial_reference_error"))
   }
 
   if (identical(ext, "h5ad")) {
@@ -84,13 +84,13 @@ read_reference_scrna <- function(path) {
       SeuratDisk::Convert(path, dest = h5seurat, overwrite = TRUE, verbose = FALSE)
       return(SeuratDisk::LoadH5Seurat(h5seurat))
     }
-    stop("Aucun lecteur .h5ad disponible -- installez 'schard' ",
-         "(remotes::install_github('cellgeni/schard'), recommande) ou 'SeuratDisk'.")
+    stop(errorCondition(paste0("Aucun lecteur .h5ad disponible -- installez 'schard' ",
+         "(remotes::install_github('cellgeni/schard'), recommande) ou 'SeuratDisk'."), class = "spatial_reference_error"))
   }
 
   if (identical(ext, "h5")) {
     if (!requireNamespace("hdf5r", quietly = TRUE)) {
-      stop("Package 'hdf5r' requis pour lire les fichiers .h5.")
+      stop(errorCondition("Package 'hdf5r' requis pour lire les fichiers .h5.", class = "spatial_reference_error"))
     }
     counts <- Seurat::Read10X_h5(path)
     if (is.list(counts)) counts <- counts[[1]]
@@ -103,11 +103,11 @@ read_reference_scrna <- function(path) {
       on.exit(tryCatch(lfile$close_all(), error = function(e) NULL), add = TRUE)
       return(Seurat::as.Seurat(lfile))
     }
-    stop("Aucun lecteur .loom disponible -- installez 'SeuratDisk' ",
-         "(remotes::install_github('mojaveazure/seurat-disk')).")
+    stop(errorCondition(paste0("Aucun lecteur .loom disponible -- installez 'SeuratDisk' ",
+         "(remotes::install_github('mojaveazure/seurat-disk'))."), class = "spatial_reference_error"))
   }
 
-  stop(sprintf("Format de reference non supporte : '.%s' (attendu : .rds, .h5ad, .h5, .loom).", ext))
+  stop(errorCondition(sprintf("Format de reference non supporte : '.%s' (attendu : .rds, .h5ad, .h5, .loom).", ext), class = "spatial_reference_error"))
 }
 
 #' Normalize a read_reference_scrna() result into a clean, single-assay Seurat object
@@ -129,7 +129,7 @@ prepare_reference_seurat <- function(raw_ref, project_name = "Reference") {
     }
     return(obj)
   }
-  stop("Format de reference non reconnu apres lecture (ni objet Seurat, ni liste counts/meta).")
+  stop(errorCondition("Format de reference non reconnu apres lecture (ni objet Seurat, ni liste counts/meta).", class = "spatial_reference_error"))
 }
 
 # -----------------------------------------------------------------------------
@@ -185,9 +185,9 @@ sanitize_celltype_labels <- function(x) {
 prepare_reference_artifact <- function(ref_obj, celltype_col, merge_rare_types = TRUE,
                                         min_cells_per_type = 25L, max_cells_per_type = NA_integer_,
                                         bpcells_threshold = 40000L) {
-  if (!inherits(ref_obj, "Seurat")) stop("prepare_reference_artifact() attend un objet Seurat.")
+  if (!inherits(ref_obj, "Seurat")) stop(errorCondition("prepare_reference_artifact() attend un objet Seurat.", class = "spatial_reference_error"))
   if (!celltype_col %in% colnames(ref_obj@meta.data)) {
-    stop(sprintf("Colonne '%s' absente des metadonnees de la reference.", celltype_col))
+    stop(errorCondition(sprintf("Colonne '%s' absente des metadonnees de la reference.", celltype_col), class = "spatial_reference_error"))
   }
 
   cell_types_raw <- as.character(ref_obj@meta.data[[celltype_col]])
@@ -197,7 +197,7 @@ prepare_reference_artifact <- function(ref_obj, celltype_col, merge_rare_types =
 
   keep <- !is.na(cell_types_raw)
   if (sum(keep) < 10L) {
-    stop("Moins de 10 cellules annotees (non-NA) dans la colonne choisie -- reference inexploitable.")
+    stop(errorCondition("Moins de 10 cellules annotees (non-NA) dans la colonne choisie -- reference inexploitable.", class = "spatial_reference_error"))
   }
   cell_types_raw <- cell_types_raw[keep]
 
@@ -220,7 +220,7 @@ prepare_reference_artifact <- function(ref_obj, celltype_col, merge_rare_types =
   }
 
   if (length(cell_types_raw) < 10L) {
-    stop("Moins de 10 cellules restantes apres filtrage des types trop rares -- reference inexploitable.")
+    stop(errorCondition("Moins de 10 cellules restantes apres filtrage des types trop rares -- reference inexploitable.", class = "spatial_reference_error"))
   }
 
   if (!is.null(max_cells_per_type) && !is.na(max_cells_per_type) &&
