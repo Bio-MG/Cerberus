@@ -60,7 +60,7 @@ build_sc_viz_plot <- function(obj, cfg, sc_palette = "default", manual_colors = 
   # 1. DimPlot ----------------------------------------------------------------
   if (type == "dim") {
     red <- cfg$reduction %||% "umap"
-    if (!red %in% names(obj@reductions)) stop("Réduction non calculée : ", red)
+    if (!red %in% names(obj@reductions)) stop(errorCondition(paste0("Réduction non calculée : ", red), class = "sc_plotting_error"))
     p <- DimPlot(obj, reduction = red, group.by = grp,
                  label = TRUE, pt.size = pt_size, raster = .raster_large) +
          theme_fn + ggtitle(paste(toupper(red), "\u2014", grp))
@@ -70,7 +70,7 @@ build_sc_viz_plot <- function(obj, cfg, sc_palette = "default", manual_colors = 
   # 2. FeaturePlot ------------------------------------------------------------
   if (type == "feature") {
     valid <- intersect(cfg$feat_sel %||% character(0), rownames(obj))
-    if (!length(valid)) stop("Aucun gène valide")
+    if (!length(valid)) stop(errorCondition("Aucun gène valide", class = "sc_plotting_error"))
     # multi-gene returns patchwork: scale only safe for single gene
     if (length(valid) == 1L) {
       p <- FeaturePlot(obj, features = valid[1], pt.size = pt_size, raster = .raster_large) + theme_fn
@@ -93,7 +93,7 @@ build_sc_viz_plot <- function(obj, cfg, sc_palette = "default", manual_colors = 
   # 4. Violin -----------------------------------------------------------------
   if (type == "violin") {
     valid <- intersect(cfg$feat_sel %||% character(0), rownames(obj))
-    if (!length(valid)) stop("Aucun gène valide")
+    if (!length(valid)) stop(errorCondition("Aucun gène valide", class = "sc_plotting_error"))
     if (length(valid) == 1L) {
       p <- plot_violin_enhanced(obj, valid[1], grp,
                                 add_boxplot = isTRUE(cfg$violin_boxplot)) + theme_fn
@@ -108,7 +108,7 @@ build_sc_viz_plot <- function(obj, cfg, sc_palette = "default", manual_colors = 
   # 5. Stacked Violin ---------------------------------------------------------
   if (type == "stacked_violin") {
     valid <- intersect(cfg$feat_sel %||% character(0), rownames(obj))
-    if (!length(valid)) stop("Aucun gène valide")
+    if (!length(valid)) stop(errorCondition("Aucun gène valide", class = "sc_plotting_error"))
     plots <- lapply(head(valid, 8), function(g)
       .add(VlnPlot(obj, features = g, group.by = grp, pt.size = 0) +
            theme(legend.position = "none",
@@ -120,7 +120,7 @@ build_sc_viz_plot <- function(obj, cfg, sc_palette = "default", manual_colors = 
   # 6. Ridge ------------------------------------------------------------------
   if (type == "ridge") {
     valid <- intersect(cfg$feat_sel %||% character(0), rownames(obj))
-    if (!length(valid)) stop("Aucun gène valide")
+    if (!length(valid)) stop(errorCondition("Aucun gène valide", class = "sc_plotting_error"))
     p <- RidgePlot(obj, features = head(valid, 6), ncol = 2) + theme_fn
     return(.add(p, pal_fill))
   }
@@ -128,7 +128,7 @@ build_sc_viz_plot <- function(obj, cfg, sc_palette = "default", manual_colors = 
   # 7. DotPlot ----------------------------------------------------------------
   if (type == "dot") {
     valid <- intersect(cfg$feat_sel %||% character(0), rownames(obj))
-    if (!length(valid)) stop("Aucun gène valide")
+    if (!length(valid)) stop(errorCondition("Aucun gène valide", class = "sc_plotting_error"))
     p <- DotPlot(obj, features = head(valid, 20), group.by = grp) + theme_fn +
          theme(axis.text.x = element_text(angle = 45, hjust = 1))
     # DotPlot: color encodes avg expression (continuous), size encodes pct expressed.
@@ -147,7 +147,7 @@ build_sc_viz_plot <- function(obj, cfg, sc_palette = "default", manual_colors = 
   # NULL (palette=="default") preserves the previous/original behaviour exactly.
   if (type == "heatmap") {
     valid <- intersect(cfg$feat_sel %||% character(0), rownames(obj))
-    if (!length(valid)) stop("Aucun gène valide")
+    if (!length(valid)) stop(errorCondition("Aucun gène valide", class = "sc_plotting_error"))
     valid <- head(valid, 30)
     # Step-3.7A: smart_scale_data()/ScaleData() upstream now restricts scale.data
     # to VariableFeatures by default (RAM-safety) — marker genes picked here that
@@ -169,7 +169,7 @@ build_sc_viz_plot <- function(obj, cfg, sc_palette = "default", manual_colors = 
   # 9. Correlation Matrix -----------------------------------------------------
   if (type == "correlation_matrix") {
     valid <- intersect(cfg$feat_sel %||% character(0), rownames(obj))
-    if (length(valid) < 2) stop("Au moins 2 gènes requis")
+    if (length(valid) < 2) stop(errorCondition("Au moins 2 gènes requis", class = "sc_plotting_error"))
     rc <- diverging_ramp_colors(sc_palette, manual_gradient)
     return(plot_correlation_matrix(obj, head(valid, 30), method = "pearson",
                                    low_color = rc$low, mid_color = rc$mid, high_color = rc$high) + theme_fn)
@@ -177,7 +177,7 @@ build_sc_viz_plot <- function(obj, cfg, sc_palette = "default", manual_colors = 
 
   # 10. Multi-Sample ----------------------------------------------------------
   if (type == "multi_sample") {
-    if (length(unique(obj$orig.ident)) < 2) stop("Au moins 2 échantillons requis")
+    if (length(unique(obj$orig.ident)) < 2) stop(errorCondition("Au moins 2 échantillons requis", class = "sc_plotting_error"))
     p <- plot_multi_sample(obj, cfg$multi_gene %||% rownames(obj)[1],
                            cfg$multi_plot_type %||% "violin") + theme_fn
     return(.add(p, pal_fill))
@@ -186,19 +186,19 @@ build_sc_viz_plot <- function(obj, cfg, sc_palette = "default", manual_colors = 
   # 11. Volcano (ggplot — also carries markers as attr for native plotly) ------
   if (type == "volcano") {
     grp_col <- grp
-    if (!grp_col %in% colnames(obj@meta.data)) stop("Colonne de groupe introuvable")
+    if (!grp_col %in% colnames(obj@meta.data)) stop(errorCondition("Colonne de groupe introuvable", class = "sc_plotting_error"))
     Idents(obj) <- factor(as.character(obj@meta.data[[grp_col]]))
     ident1 <- cfg$volcano_group1 %||% levels(Idents(obj))[1]
     ident2 <- if (is.null(cfg$volcano_group2) ||
                   cfg$volcano_group2 == "rest") NULL else cfg$volcano_group2
-    if (!ident1 %in% levels(Idents(obj))) stop("Groupe 1 invalide: ", ident1)
+    if (!ident1 %in% levels(Idents(obj))) stop(errorCondition(paste0("Groupe 1 invalide: ", ident1), class = "sc_plotting_error"))
 
     markers <- tryCatch(
       FindMarkers(obj, ident.1 = ident1, ident.2 = ident2,
                   only.pos = FALSE, min.pct = 0.1, logfc.threshold = 0,
                   verbose = FALSE),
-      error = function(e) stop("FindMarkers: ", e$message))
-    if (!nrow(markers)) stop("Aucun marqueur trouvé")
+      error = function(e) stop(errorCondition(paste0("FindMarkers: ", e$message), class = "sc_plotting_error")))
+    if (!nrow(markers)) stop(errorCondition("Aucun marqueur trouvé", class = "sc_plotting_error"))
     markers$gene <- rownames(markers)
 
     lfc  <- as.numeric(cfg$volcano_logfc %||% 0.25)
@@ -255,7 +255,7 @@ build_sc_viz_plot <- function(obj, cfg, sc_palette = "default", manual_colors = 
   # Caller MUST route via the static render path, never ggsave()/ggplotly().
   if (type == "heatmap_hier") {
     valid <- intersect(cfg$feat_sel %||% character(0), rownames(obj))
-    if (!length(valid)) stop("Aucun gène valide sélectionné pour la heatmap")
+    if (!length(valid)) stop(errorCondition("Aucun gène valide sélectionné pour la heatmap", class = "sc_plotting_error"))
     # PLOT-S4 — reglages de clustering. k < 2 (ou vide) = pas de decoupage,
     # ce qui reproduit exactement le rendu anterieur au jalon.
     k_row <- suppressWarnings(as.integer(cfg$hier_k_row %||% 0))
@@ -273,14 +273,14 @@ build_sc_viz_plot <- function(obj, cfg, sc_palette = "default", manual_colors = 
   # 13. Densite d'Expression 2D (Nebulosa-like) --------------------------------
   if (type == "density_2d") {
     gene <- cfg$density_gene
-    if (is.null(gene) || !nzchar(gene %||% "")) stop("Aucun gène sélectionné pour la densité")
+    if (is.null(gene) || !nzchar(gene %||% "")) stop(errorCondition("Aucun gène sélectionné pour la densité", class = "sc_plotting_error"))
     red <- cfg$density_reduction %||% "umap"
-    if (!red %in% names(obj@reductions)) stop("Réduction non calculée : ", red)
+    if (!red %in% names(obj@reductions)) stop(errorCondition(paste0("Réduction non calculée : ", red), class = "sc_plotting_error"))
     return(plot_sc_expression_density_2d(obj, feature = gene, reduction = red,
                                          max_cells = as.integer(cfg$density_max_cells %||% 50000L),
                                          palette = sc_palette, manual_gradient = manual_gradient) + theme_fn)
   }
 
-  stop("Type de visualisation non supporté: ", type)
+  stop(errorCondition(paste0("Type de visualisation non supporté: ", type), class = "sc_plotting_error"))
 }
 

@@ -22,6 +22,73 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > du commit `03951cb` cite encore `§2ax` pour 4E-4 : c'est l'état **avant** la
 > renumérotation. Détail : `STATUS.md` §6, item 6.
 
+## [V1.x — dette de conventions, 14ᵉ incrément] — 2026-09-17 — `sc_plotting.R` classé (`sc_plotting_error`)
+
+**16 sites sur 17 prouvés à l'exécution (94 %)** — le meilleur ratio du chantier,
+et le deuxième lot qui paie **deux fois** (C9 −1 *et* C10 −17).
+
+### Modifié
+
+- `R/sc/sc_plotting.R` : les **17** `stop()` non classés passent à
+  `stop(errorCondition(<msg>, class = "sc_plotting_error"))`.
+- **5** sites sont multi-arguments (**63**, **194**, **200**, **278**, **284**)
+  ⇒ **`paste0()`**. Les 12 autres sont à un seul argument ⇒ pas de `paste0()`.
+- `tests/testthat/test-sc-plotting.R` : **créé** — verrou source + **16 sites
+  prouvés à l'exécution**.
+
+### 🟢 Pourquoi un tel ratio : un dispatcheur PUR
+
+`build_sc_viz_plot(obj, cfg, …)` est la **seule** fonction publique du fichier :
+un dispatcheur sur `cfg$type`. Chaque branche commence par une **garde**
+(`if (…) stop(…)`) ⇒ **une entrée triviale suffit**, et **aucun calcul Seurat**
+n'est atteint. C'est la forme la plus favorable du chantier : **94 %**, contre
+**71 %** pour `sc_trajectory.R` (§2bx) et **44 %** pour `sc_helpers.R` (§2bq).
+⇒ **La forme du fichier prédit la joignabilité mieux que son domaine.**
+
+### ⚠️ Deux leçons de mesure
+
+- **Un message à queue VOLATILE peut quand même être asséré.** Site **200** :
+  `stop("FindMarkers: ", e$message)` — la queue est **interne à Seurat**, donc
+  instable d'une version à l'autre. On n'assère donc pas sa **valeur** mais le
+  **préfixe** *et* une **longueur strictement supérieure** à celle du préfixe nu :
+  sans `paste0()`, `errorCondition()` ne garderait que `"FindMarkers: "`
+  (13 caractères). ⇒ **La longueur est un détecteur de troncature là où le
+  contenu ne peut pas l'être.**
+- **Un `stop()` partagé par 6 branches se convertit en une seule substitution**
+  (`"Aucun gène valide"` × 6, branches `feature`, `violin`, `stacked_violin`,
+  `ridge`, `dot`, `heatmap`) — mais il faut **vérifier le compteur
+  d'occurrences**, sinon on convertit à l'aveugle.
+
+### Le seul site non joignable : 201
+
+`if (!nrow(markers)) stop("Aucun marqueur trouvé")` exige que `FindMarkers()`
+**réussisse** et rende **0 ligne** — or un objet dégénéré la fait **échouer**
+(c'est le site 200), pas réussir à vide. Couvert par le **verrou source**.
+
+### Vérifié
+
+- **Test ROUGE d'abord** : **`FAIL 17 | WARN 0 | PASS 18`** — 1 verrou source
+  listant exactement les **17** lignes + **16** assertions de classe ⇒ **vert** :
+  **`FAIL 0 | WARN 0 | SKIP 0 | PASS 35`**.
+- 🟢 **Les 16 messages étaient déjà identiques AVANT la conversion** : l'invariant
+  de non-régression est établi **avant**, pas constaté après.
+- `parse()` **OK** ; **C10 fichier : 0** ; **C16 fichier : 0** ; diff **17/17**
+  symétrique ; **286** lignes (inchangé) ; **17** tokens `stop(` avant **et**
+  après ⇒ aucun site `call. = FALSE` n'a été touché.
+- Garde : **0 erreur / 112 avert.** — **C10 93 → 76**, **C9 36 → 35**,
+  **C11 = 1** (faux positif connu), **C6 = 0**, **C16 = 0**.
+
+### Constaté (listé, NON corrigé)
+
+- `R/` : **62** sites restants sur **12** fichiers (`spatial_stats.R` 16,
+  `spatial_reference.R` 12, `spatial_io.R` 11, `io_helpers.R` 7…).
+- `modules/` : **14** sites, **tous** réactifs ⇒ verrou source seul.
+- ⚠️ `sc_plotting.R` appelle `ggtitle()` / `theme_*()` **sans préfixe** : le
+  test doit **attacher** ggplot2, sinon `could not find function "ggtitle"`.
+  🟢 **C'est le témoin nominal qui l'a vu, pas le verrou source** — un verrou
+  statique ne dit rien sur les dépendances d'exécution.
+
+
 ## [V1.x — dette de conventions, 13ᵉ incrément] — 2026-09-17 — `sc_trajectory.R` classé (`sc_trajectory_error`)
 
 **Le plus gros lot depuis le 7ᵉ** (21 sites) et **le premier qui paie deux fois** :
