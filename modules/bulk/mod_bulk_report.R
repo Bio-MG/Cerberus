@@ -224,7 +224,7 @@ mod_bulk_report_server <- function(id, global_data, shared_rv) {
               })
             if (!is.null(res)) out_files <- c(out_files, res)
           }
-          if (length(out_files) == 0) stop(.tr("Aucun format g\u00e9n\u00e9r\u00e9."))
+          if (length(out_files) == 0) stop(errorCondition(.tr("Aucun format g\u00e9n\u00e9r\u00e9."), class = "bulk_report_error"))
           else if (length(out_files) == 1) file.copy(out_files[1], file, overwrite = TRUE)
           else zip::zip(file, files = out_files, mode = "cherry-pick")
         })
