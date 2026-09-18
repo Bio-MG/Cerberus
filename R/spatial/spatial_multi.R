@@ -65,7 +65,7 @@ integrate_spatial_sketches <- function(sketch_paths, npcs = 30, resolution = 0.8
   }
 
   if (length(sketch_paths) < 2) {
-    stop("Selectionnez au moins 2 echantillons pour l'integration multi-coupes.")
+    stop(errorCondition("Selectionnez au moins 2 echantillons pour l'integration multi-coupes.", class = "spatial_multi_error"))
   }
 
   .log("Chargement des sketches...", 1, 6)
