@@ -67,8 +67,8 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
                       subset = nFeature_RNA > input$sc_ap_min_gene &
                                nFeature_RNA < input$sc_ap_max_gene &
                                percent.mt   < input$sc_ap_mt)
-        if (ncol(obj) < 10) stop(sprintf(
-          .tr("Seulement %d cellule(s) après QC (départ: %d). Réduisez les seuils."), ncol(obj), n_before))
+        if (ncol(obj) < 10) stop(errorCondition(sprintf(
+          .tr("Seulement %d cellule(s) après QC (départ: %d). Réduisez les seuils."), ncol(obj), n_before), class = "sc_pipeline_error"))
         log_sc(sprintf(.tr("✓ QC : %d cellules (retirées: %d)"), ncol(obj), n_before-ncol(obj)))
 
         # ── Step 1b: Backend disque (BPCells) — Step-3.7A ────────────────────
