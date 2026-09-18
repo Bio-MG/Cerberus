@@ -57,7 +57,7 @@ sc_backend_status <- function(obj) {
 #'   when already_disk is TRUE (nothing new was written, nothing to clean up).
 convert_seurat_to_bpcells <- function(obj, dir = NULL) {
   if (!.bpcells_available())
-    stop("Package 'BPCells' non installé. Installez-le via remotes::install_github('bnprks/BPCells/r').")
+    stop(errorCondition("Package 'BPCells' non installé. Installez-le via remotes::install_github('bnprks/BPCells/r').", class = "sc_bpcells_error"))
 
   if (sc_backend_status(obj) == "disk") {
     return(list(object = obj, dir = NULL, n_cells = ncol(obj), n_genes = nrow(obj), already_disk = TRUE))
