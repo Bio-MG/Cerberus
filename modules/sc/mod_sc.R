@@ -621,8 +621,7 @@ mod_sc_server <- function(id, global_data) {
       content = function(file) {
         req(global_data$sc_obj)
         template_path <- file.path("reports","sc_report_template.Rmd")
-        if (!file.exists(template_path))
-          stop("Template introuvable : reports/sc_report_template.Rmd")
+        if (!file.exists(template_path)) stop(errorCondition("Template introuvable : reports/sc_report_template.Rmd", class = "mod_sc_error"))
         tmp_rmd <- file.path(tempdir(), "sc_report_template.Rmd")
         file.copy(template_path, tmp_rmd, overwrite=TRUE)
 
@@ -704,7 +703,7 @@ mod_sc_server <- function(id, global_data) {
                                  type="error", duration=12); NULL })
             if (!is.null(res)) out_files <- c(out_files, res)
           }
-          if (!length(out_files)) stop(.tr_plain("Aucun format généré."))
+          if (!length(out_files)) stop(errorCondition(.tr_plain("Aucun format généré."), class = "mod_sc_error"))
           else if (length(out_files)==1) file.copy(out_files[1], file, overwrite=TRUE)
           else zip::zip(file, files=out_files, mode="cherry-pick")
         })
