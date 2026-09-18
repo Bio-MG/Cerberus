@@ -27,12 +27,11 @@
 #' @return list(counts = <dgCMatrix or BPCells IterableMatrix>, cell_types = <factor>).
 .load_reference_artifact <- function(manifest_path) {
   manifest <- tryCatch(readRDS(manifest_path), error = function(e) {
-    stop("Lecture du manifest de reference impossible (", manifest_path, ") : ",
-         conditionMessage(e))
+    stop(errorCondition(paste0("Lecture du manifest de reference impossible (", manifest_path, ") : ", conditionMessage(e)), class = "spatial_deconv_tasks_error"))
   })
   counts <- if (identical(manifest$backend, "bpcells")) {
     if (!requireNamespace("BPCells", quietly = TRUE)) {
-      stop("Package 'BPCells' requis pour lire la reference preparee (backend bpcells).")
+      stop(errorCondition("Package 'BPCells' requis pour lire la reference preparee (backend bpcells).", class = "spatial_deconv_tasks_error"))
     }
     BPCells::open_matrix_dir(manifest$counts_path)
   } else {
@@ -88,7 +87,7 @@ run_spatial_deconv_body <- function(bpcells_dir, pass_idx, coords, mode,
   # ── RCTD ────────────────────────────────────────────────────────────────
   if (identical(mode, "rctd")) {
     if (!requireNamespace("spacexr", quietly = TRUE)) {
-      stop("Package 'spacexr' requis (remotes::install_github('dmcable/spacexr')).")
+      stop(errorCondition("Package 'spacexr' requis (remotes::install_github('dmcable/spacexr')).", class = "spatial_deconv_tasks_error"))
     }
     write_mirai_log(log_file, "Chargement de la reference preparee (artifact disque)...", 2, 5)
     reloaded   <- .load_reference_artifact(ref_path)
@@ -153,7 +152,7 @@ run_spatial_deconv_body <- function(bpcells_dir, pass_idx, coords, mode,
     ref_obj$cell_type <- as.character(reloaded$cell_types)[match(colnames(ref_obj), names(reloaded$cell_types))]
     ref_obj  <- subset(ref_obj, cells = colnames(ref_obj)[!is.na(ref_obj$cell_type)])
     if (ncol(ref_obj) < 10) {
-      stop("Reference trop petite apres filtrage des annotations manquantes (< 10 cellules annotees).")
+      stop(errorCondition("Reference trop petite apres filtrage des annotations manquantes (< 10 cellules annotees).", class = "spatial_deconv_tasks_error"))
     }
     write_mirai_log(log_file, sprintf("Reference relue : %d cellules x %d genes.",
                                        ncol(ref_obj), nrow(ref_obj)), 2, 5)
@@ -218,7 +217,7 @@ run_spatial_deconv_body <- function(bpcells_dir, pass_idx, coords, mode,
   if (!requireNamespace("STdeconvolve", quietly = TRUE) ||
       !requireNamespace("topicmodels", quietly = TRUE) ||
       !requireNamespace("slam", quietly = TRUE)) {
-    stop("Packages 'STdeconvolve', 'topicmodels' et 'slam' requis.")
+    stop(errorCondition("Packages 'STdeconvolve', 'topicmodels' et 'slam' requis.", class = "spatial_deconv_tasks_error"))
   }
   # Backlog #6 (RAM): pre-filter to a bounded HVG pool BEFORE densifying
   # with as.matrix() -- restrictCorpus() still does its own over-dispersion

@@ -22,6 +22,83 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > du commit `03951cb` cite encore `§2ax` pour 4E-4 : c'est l'état **avant** la
 > renumérotation. Détail : `STATUS.md` §6, item 6.
 
+## [V1.x — dette de conventions, 20ᵉ incrément] — 2026-09-18 — `spatial_deconv_tasks.R` classé (`spatial_deconv_tasks_error`)
+
+**5 sites sur 5 prouvés à l'exécution (100 %)** — et surtout : 🔴 **ce lot
+RÉFUTE partiellement le prédicteur de forme** sur lequel il avait été **écarté**
+la veille. C10 **25 → 20**, C9 **30 → 29**, dette **56 → 50** (−6 = 5 + 1).
+
+### Modifié
+
+- `R/spatial/spatial_deconv_tasks.R` : les **5** `stop()` non classés passent à
+  `stop(errorCondition(<msg>, class = "spatial_deconv_tasks_error"))` — sites
+  **30, 35, 91, 156, 221**. **Un seul multi-argument** (**30**, **4** arguments)
+  ⇒ `paste0()` (C16). ⚠️ Le fichier porte **7** occurrences du token `stop(`
+  pour **5** sites : 2 portent `call. = FALSE` et sont **exemptées** ⇒ les
+  numéros de ligne viennent du **garde**, jamais d'un `grep` (écart : **40 %**).
+- `tests/testthat/test-spatial-deconv-tasks.R` — **NOUVEAU**, rouge d'abord
+  (`failed=6 passed=8`) puis vert (`failed=0 passed=14`). Il **source 3
+  fichiers** : `spatial_async.R` (`write_mirai_log`, appelé dès la 1ʳᵉ ligne),
+  `spatial_deconv_prep.R` (`DECONV_DEFAULT_N_HVG`, `select_hvg_for_deconv`,
+  `cap_matrix_to_hvg`), puis le fichier testé — un fichier de `R/` **n'est pas
+  auto-suffisant**.
+
+### 🔴 Le prédicteur de forme prédit le COÛT, pas la POSSIBILITÉ
+
+Ce fichier avait été **écarté** au 19ᵉ incrément avec cette motivation :
+« une longue fonction « corps de pipeline » (~150 lignes), sites enfouis
+derrière de nombreux prérequis ». Converti au 20ᵉ, il s'est révélé
+**entièrement prouvable**, par trois leviers :
+
+1. **Un VRAI répertoire BPCells** — le prologue appelle
+   `BPCells::open_matrix_dir()` **avant toute garde** ; sans artefact réel,
+   aucun site de la fonction n'est atteignable. `BPCells::write_matrix_dir()`
+   sur une `dgCMatrix` 10 × 20 suffit (~1 s).
+2. **L'environnement enfant** (§2bz.3) force chaque garde de dépendance, alors
+   que `spacexr`, `STdeconvolve`, `topicmodels`, `slam` **et** `BPCells` sont
+   **tous installés**.
+3. **Un mode « tiers »** (`"stdeconvolve"`, ni `"rctd"` ni `"labeltransfer"`)
+   tombe **directement** sur la garde STdeconvolve, sans prérequis intermédiaire.
+
+Le site **156** n'a besoin d'**aucun mock** : avec un `backend` non-`bpcells`,
+`.load_reference_artifact()` fait un simple `readRDS()`, et annoter seulement
+**5** des 20 cellules fait tomber `ncol(ref_obj) < 10` après `subset()`.
+
+⇒ **Correction de doctrine** : le prédicteur sert désormais à **estimer
+l'effort**, **jamais à éliminer** un lot, et **tout lot écarté sur ce critère
+doit être réexaminé**.
+
+⚠️ **Une erreur volontairement provoquée émet un avertissement ATTENDU**
+(`gzfile()` sur un fichier absent) ⇒ `suppressWarnings()` dans le test, sinon
+testthat le compte et le fichier paraît sale à tort.
+
+### 🟢 Mesures
+
+| Indicateur | Avant | Après |
+|---|---|---|
+| Suite complète | `failed=0 passed=6150 error=0 skipped=1` (110 fichiers) | **`failed=0 passed=6164 error=0 skipped=1`** (**111**) — **+14** (6150 + 14 = 6164 **exactement**) |
+| Test ciblé | — | **ROUGE `failed=6 passed=8`** → **VERT `failed=0 passed=14`**, `skipped=0` |
+| Garde — total | 0 erreur / **56** avert. | 0 erreur / **50** avert. |
+| C10 · C9 · C11 | 25 · 30 · 1 | **20** · **29** · 1 |
+
+⚠️ Diff asymétrique (5/6), attendu : le site 30, bi-ligne, a été replié.
+Conclusif : `parse()` (4 expressions) + delta de déséquilibre par ligne
+**40 → 38**.
+
+### 🟡 Prochaine étape — une DÉCISION, pas un lot
+
+`R/` n'a **plus aucun fichier multi-sites** : **6 sites / 6 fichiers, tous à 1
+site** (dont **2 gelés** par l'idiome `state`, **1** avec test éponyme, **3**
+sans test). Les deux fronts sont maintenant à 1 site par lot :
+
+- rester sur `R/` : **−2** par lot (C10 **+** C9), **preuve d'exécution
+  possible**, mais **3** lots seulement ;
+- basculer sur `modules/` : **−1** par lot, **aucun** C9 à payer, **14** lots,
+  mais **preuve réduite au verrou source** (tous en serveurs réactifs).
+
+⇒ Trancher par **objectif** (réduire vite vs réduire avec preuve), pas par
+habitude.
+
 ## [V1.x — dette de conventions, 19ᵉ incrément] — 2026-09-18 — `spatial_niche.R` classé (`spatial_niche_error`)
 
 **5 sites sur 5 prouvés à l'exécution (100 %)** — le lot a été **choisi par le
