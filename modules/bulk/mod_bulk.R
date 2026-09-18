@@ -424,7 +424,7 @@ mod_bulk_server <- function(id, global_data) {
               ok <- ok + 1
             }
           }
-          if (ok == 0) stop(.tr("Aucune paire n'a pu \u00eatre calcul\u00e9e (voir \u00e9checs)."))
+          if (ok == 0) stop(errorCondition(.tr("Aucune paire n'a pu \u00eatre calcul\u00e9e (voir \u00e9checs)."), class = "mod_bulk_error"))
           shared_rv$active_contrast <- names(shared_rv$contrasts)[1]
           shared_rv$lfc_thresh  <- input$ap_lfc; shared_rv$padj_thresh <- input$ap_padj
           shared_rv$active_condition_col <- cond_col
