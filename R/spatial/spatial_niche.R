@@ -70,15 +70,14 @@ compute_spatial_niches <- function(coords, group_labels, k_neighbors = 30,
     if (!is.null(log_file)) write_mirai_log(log_file, msg, step, total)
   }
   if (!requireNamespace("RANN", quietly = TRUE)) {
-    stop("Package 'RANN' requis (install.packages('RANN')).")
+    stop(errorCondition("Package 'RANN' requis (install.packages('RANN')).", class = "spatial_niche_error"))
   }
 
   .log("Alignement coordonnees / labels...", 1, 4)
   group_labels <- group_labels[!is.na(group_labels) & nzchar(as.character(group_labels))]
   common_ids <- intersect(coords$id, names(group_labels))
   if (length(common_ids) < 10) {
-    stop("Moins de 10 elements communs entre les coordonnees et le regroupement choisi ",
-         "(cluster ou deconvolution) — recalculez ce regroupement si necessaire.")
+    stop(errorCondition(paste0("Moins de 10 elements communs entre les coordonnees et le regroupement choisi ", "(cluster ou deconvolution) — recalculez ce regroupement si necessaire."), class = "spatial_niche_error"))
   }
 
   cd <- coords[match(common_ids, coords$id), c("id", "x", "y")]
@@ -86,8 +85,7 @@ compute_spatial_niches <- function(coords, group_labels, k_neighbors = 30,
   grp <- as.character(group_labels[cd$id])
   lv  <- sort(unique(grp))
   if (length(lv) < 2) {
-    stop("Le regroupement choisi n'a qu'une seule categorie — impossible de calculer ",
-         "une composition de voisinage informative.")
+    stop(errorCondition(paste0("Le regroupement choisi n'a qu'une seule categorie — impossible de calculer ", "une composition de voisinage informative."), class = "spatial_niche_error"))
   }
 
   n <- nrow(cd)
@@ -117,8 +115,7 @@ compute_spatial_niches <- function(coords, group_labels, k_neighbors = 30,
   km <- tryCatch(
     stats::kmeans(composition, centers = n_niches_eff, nstart = 10, iter.max = 100),
     error = function(e) {
-      stop("k-means a echoue sur la composition de voisinage (", conditionMessage(e),
-           ") — reduisez le nombre de niches ou augmentez neighbors.k.")
+      stop(errorCondition(paste0("k-means a echoue sur la composition de voisinage (", conditionMessage(e), ") — reduisez le nombre de niches ou augmentez neighbors.k."), class = "spatial_niche_error"))
     }
   )
   niche_vec <- paste0("N", km$cluster)
@@ -153,7 +150,7 @@ compute_spatial_niches <- function(coords, group_labels, k_neighbors = 30,
 #'   with the highest proportion/score for that row).
 dominant_group_labels <- function(deconv_props) {
   cols <- setdiff(colnames(deconv_props), "id")
-  if (length(cols) == 0) stop("Aucune colonne de type cellulaire dans deconv_props.")
+  if (length(cols) == 0) stop(errorCondition("Aucune colonne de type cellulaire dans deconv_props.", class = "spatial_niche_error"))
   mat <- as.matrix(deconv_props[, cols, drop = FALSE])
   idx <- max.col(mat, ties.method = "first")
   stats::setNames(cols[idx], deconv_props$id)

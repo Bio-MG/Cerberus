@@ -22,6 +22,60 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > du commit `03951cb` cite encore `§2ax` pour 4E-4 : c'est l'état **avant** la
 > renumérotation. Détail : `STATUS.md` §6, item 6.
 
+## [V1.x — dette de conventions, 19ᵉ incrément] — 2026-09-18 — `spatial_niche.R` classé (`spatial_niche_error`)
+
+**5 sites sur 5 prouvés à l'exécution (100 %)** — le lot a été **choisi par le
+prédicteur** posé la veille au §2cc.2, et il a fonctionné. C10 **30 → 25**, C9
+**31 → 30**, dette **62 → 56** (−6 = 5 + 1).
+
+### Modifié
+
+- `R/spatial/spatial_niche.R` : les **5** `stop()` non classés passent à
+  `stop(errorCondition(<msg>, class = "spatial_niche_error"))` — sites **73,
+  80, 89, 120, 156**. **3 multi-arguments** (**80**, **89**, **120** ⇒ ce
+  dernier en a **trois**) ⇒ **`paste0()`** obligatoire (C16).
+- `tests/testthat/test-spatial-niche.R` — **NOUVEAU**, écrit **rouge d'abord**
+  (`failed=6 passed=8`) puis vert (`failed=0 passed=14`). 🟡 **2ᵉ lot d'affilée
+  sans aucun test hérité** : deux fichiers *mentionnent* `spatial_niche`
+  (`test-plot-theme.R`, `test-shinytest2-spatial.R`) **sans le couvrir
+  exclusivement** ⇒ aucun `git mv` gratuit n'était possible.
+
+### 🔵 Le lot a été choisi par un critère, et le critère s'en trouve raffiné
+
+Deux candidats payaient **5 sites + 1 C9** — la taille ne départageait pas :
+
+| Candidat | Forme | Verdict |
+|---|---|---|
+| `spatial_niche.R` | 2 fonctions top-level, gardes **en tête**, aucune fonction qui avale | **retenu** → 5/5 |
+| `spatial_deconv_tasks.R` | 1 longue fonction « corps de pipeline » (~150 lignes), sites enfouis | écarté |
+
+**Raffinement du prédicteur** : `spatial_niche.R` contient **un** `tryCatch`
+(ligne 117) — un comptage naïf l'aurait classé « à risque » — mais son site 120
+**est** joignable, parce que le gestionnaire **relance** (`error = function(e)
+stop(...)`). Ce qui condamne un site, ce n'est donc pas la présence de
+`tryCatch`, c'est un gestionnaire qui **retourne** une valeur (`NULL`) ou émet
+un `warning()` ⇒ **lire le corps du gestionnaire**.
+
+🟢 **Astuce réutilisable** : pour faire échouer `kmeans()` sans dépendre d'un
+message interne, on **confond** les coordonnées (12 points au même endroit) ⇒
+lignes de composition identiques ⇒ « more cluster centers than distinct data
+points ». Zéro aléatoire, donc zéro flake. ⚠️ La **queue** du message 120 est
+volatile (elle interpole `conditionMessage(e)` de `stats::kmeans()`) ⇒ assertion
+par **préfixe + longueur strictement supérieure**.
+
+### 🟢 Mesures
+
+| Indicateur | Avant | Après |
+|---|---|---|
+| Suite complète | `failed=0 passed=6136 error=0 skipped=1` (109 fichiers) | **`failed=0 passed=6150 error=0 skipped=1`** (**110**) — **+14** (6136 + 14 = 6150 **exactement**) |
+| Test ciblé | — | **ROUGE `failed=6 passed=8`** → **VERT `failed=0 passed=14`**, `skipped=0` |
+| Garde — total | 0 erreur / **62** avert. | 0 erreur / **56** avert. |
+| C10 · C9 · C11 | 30 · 31 · 1 | **25** · **30** · 1 |
+
+⚠️ **Diff asymétrique (5/8), encore une fois ATTENDU** : trois appels bi-lignes
+repliés ⇒ `2+2+2+1+1 = 8` suppressions, `1×5 = 5` insertions. Conclusif :
+`parse()` + delta de déséquilibre par ligne **18 → 12** (les 6 lignes repliées).
+
 ## [V1.x — dette de conventions, 18ᵉ incrément] — 2026-09-17 — `spatial_io.R` classé (`spatial_io_error`)
 
 **7 sites sur 11 prouvés à l'exécution (64 %)** — 🟡 **la série de trois lots
