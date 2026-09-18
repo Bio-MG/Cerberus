@@ -132,7 +132,8 @@ mod_spatial_cluster_server <- function(id, global_data, shared_rv) {
       mirai::mirai(
         {
           if (!requireNamespace("RANN", quietly = TRUE)) {
-            stop("Package 'RANN' requis (install.packages('RANN')).")
+            stop(errorCondition("Package 'RANN' requis (install.packages('RANN')).",
+                                class = "spatial_cluster_error"))
           }
 
           write_mirai_log(log_file, "Ouverture de la matrice BPCells...", 1, 8)
@@ -288,8 +289,10 @@ mod_spatial_cluster_server <- function(id, global_data, shared_rv) {
           write_mirai_log(log_file, "Alignement des labels de cluster...", 2, 4)
           common_ids <- intersect(colnames(mat), names(cluster_labels))
           if (length(common_ids) < 10) {
-            stop("Trop peu d'elements communs entre la matrice QC-filtree et les labels de cluster ",
-                 "(reimportez ou relancez le clustering si les seuils QC ont change entre-temps).")
+            stop(errorCondition(paste0(
+              "Trop peu d'elements communs entre la matrice QC-filtree et les labels de cluster ",
+              "(reimportez ou relancez le clustering si les seuils QC ont change entre-temps)."),
+              class = "spatial_cluster_error"))
           }
           mat <- mat[, common_ids, drop = FALSE]
 
