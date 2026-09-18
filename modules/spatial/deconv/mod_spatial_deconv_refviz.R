@@ -32,7 +32,10 @@
         write_mirai_log(log_file, "Chargement de la reference...", 1, 4)
         if (identical(mode, "local")) {
           obj <- readRDS(ref_obj_path)
-          if (!celltype_col %in% colnames(obj@meta.data)) stop("Colonne 'type cellulaire' introuvable.")
+          if (!celltype_col %in% colnames(obj@meta.data)) {
+            stop(errorCondition("Colonne 'type cellulaire' introuvable.",
+                                class = "spatial_deconv_refviz_error"))
+          }
           cell_types <- as.character(obj@meta.data[[celltype_col]])
           names(cell_types) <- colnames(obj)
         } else {
