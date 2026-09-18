@@ -530,7 +530,8 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
       gsea_obj <- attr(shared_rv$pathway_results, "gsea_obj")
       req(gsea_obj, input$gsea_curve_pathway)
       if (!requireNamespace("enrichplot", quietly = TRUE)) {
-        stop(.tr("Package 'enrichplot' requis (BiocManager::install('enrichplot'))."))
+        stop(errorCondition(.tr("Package 'enrichplot' requis (BiocManager::install('enrichplot'))."),
+                            class = "bulk_pathways_error"))
       }
       enrichplot::gseaplot2(gsea_obj, geneSetID = input$gsea_curve_pathway,
                             title = input$gsea_curve_pathway,
