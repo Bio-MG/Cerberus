@@ -285,7 +285,10 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
                                                lambda, k_geom, npcs, resolution, log_file) {
       mirai::mirai(
         {
-          if (!requireNamespace("RANN", quietly = TRUE)) stop("Package 'RANN' requis.")
+          if (!requireNamespace("RANN", quietly = TRUE)) {
+            stop(errorCondition("Package 'RANN' requis.",
+                                class = "spatial_pipeline_error"))
+          }
           write_mirai_log(log_file, "[2/9] Ouverture BPCells...", 1, 4)
           mat <- BPCells::open_matrix_dir(bpcells_dir)
           if (!is.null(pass_idx)) mat <- mat[, pass_idx, drop = FALSE]
