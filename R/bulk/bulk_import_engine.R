@@ -26,7 +26,7 @@
       guess_max = 5000,
       progress = FALSE
     ),
-    error = function(e) stop(sprintf("Lecture %s : %s", filename, e$message))
+    error = function(e) stop(errorCondition(sprintf("Lecture %s : %s", filename, e$message), class = "bulk_import_engine_error"))
   )
   df <- as.data.frame(df, check.names = FALSE, stringsAsFactors = FALSE)
   names(df) <- trimws(names(df))
