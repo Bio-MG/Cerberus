@@ -478,7 +478,7 @@ mod_import_spatial_server <- function(id, global_data) {
                             "slideseq" = load_spatial_slideseq(dir_path(), sample_name = sample_name,
                                                                min_counts = input$min_counts_ss %||% 100,
                                                                min_features = input$min_features_ss %||% 200),
-                            stop(.tr("Technologie inconnue."))
+                            stop(errorCondition(.tr("Technologie inconnue."), class = "spatial_import_error"))
           )
           if (isTRUE(attr(raw_obj, "ts_manual_hd_loader"))) {
             add_log(paste0(
