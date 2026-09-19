@@ -210,7 +210,9 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
 
       tryCatch({
         groups <- obj@meta.data[[grp_col]]
-        if (length(unique(groups)) < 2) stop(.tr("Au moins 2 groupes nécessaires"))
+        if (length(unique(groups)) < 2)
+          stop(errorCondition(.tr("Au moins 2 groupes nécessaires"),
+                              class = "sc_markers_error"))
         Idents(obj) <- as.factor(groups)
 
         # ── RAM-safety (Step-3.7): cap cells/cluster before FindAllMarkers.
