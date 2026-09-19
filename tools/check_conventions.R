@@ -668,6 +668,21 @@ check_c8_contract_tests <- function() {
 #' `tests/testthat/test-bulk-gsva.R` (domaine en préfixe, `_` -> `-`), et non
 #' `test-bulk_gsva.R`. Les deux formes sont acceptées pour ne pas pénaliser
 #' l'historique.
+#'
+#' Alias de domaine MESURÉS (39e incrément, §2cy) : le domaine peut être ABRÉGÉ
+#' dans le nom du test. `R/plotting/X.R` se teste dans `test-plot-X.R` — 5 des 6
+#' fichiers du dossier suivent cette forme, et elle est GELÉE par deux contrats
+#' (`PLOT_DATATABLE_CONTRACT.md` et `PLOT_EXPORT_CONTRACT.md` citent nommément
+#' `test-plot-datatable.R` et `test-plot-export.R`). La garde ne générait que la
+#' forme LITÉRALE `test-plotting-X.R`, inexistante => **4 faux positifs mesurés**
+#' (`theme`, `datatable`, `export`, `complex_heatmap`). `plot_dims.R` y échappait
+#' seulement parce que sa base contient DÉJÀ `plot` (`test-plot-dims.R` = forme
+#' `<tiret>`). ⇒ Renommer les tests étant EXCLU (contrats gelés), on étend la garde.
+#' ⚠️ Table VOLONTAIREMENT minimale et explicite : un alias appliqué à TOUS les
+#' domaines blanchirait à tort des fichiers réellement sans test — éprouvé par le
+#' témoin de traversée de `test-conventions-c9-domain-alias.R`.
+.C9_DOMAIN_ALIAS <- c(plotting = "plot")
+
 check_c9_r_tests <- function(r_files) {
   for (f in r_files) {
     base <- tools::file_path_sans_ext(basename(f))
@@ -679,6 +694,18 @@ check_c9_r_tests <- function(r_files) {
       file.path("tests", "testthat", paste0("test-", domain, "-", base, ".R")),
       file.path("tests", "testthat", paste0("test-", domain, "-", dashed, ".R"))
     )
+    alias <- if (domain %in% names(.C9_DOMAIN_ALIAS)) {
+      .C9_DOMAIN_ALIAS[[domain]]
+    } else {
+      NULL
+    }
+    if (!is.null(alias)) {
+      candidates <- c(
+        candidates,
+        file.path("tests", "testthat", paste0("test-", alias, "-", base, ".R")),
+        file.path("tests", "testthat", paste0("test-", alias, "-", dashed, ".R"))
+      )
+    }
     if (!any(file.exists(candidates))) {
       .add("WARN", "C9", .rel(f), NA_integer_,
            sprintf("aucun test éponyme (%s) — règle 5 : tout fichier de R/ est livré avec ses tests.",
