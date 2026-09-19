@@ -2275,7 +2275,10 @@ build_velocity_provenance_export <- function(
 ) {
     if (!gene %in% rownames(velocity_result$spliced) ||
         !gene %in% rownames(velocity_result$unspliced)) {
-        stop("Gene absent des matrices velocity : ", gene)
+        .velocity_stop(
+            "invalid_input",
+            paste0("Gene absent des matrices velocity : ", gene)
+        )
     }
 
     n <- ncol(velocity_result$spliced)
