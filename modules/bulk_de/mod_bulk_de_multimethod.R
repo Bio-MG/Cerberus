@@ -106,8 +106,8 @@
                           p_adjust_method = input$padj_method %||% TS_PADJ_METHOD_DEFAULT)
 
       if (length(de_list) < 2) {
-        stop(.t_fmt(.tr("Au moins 2 m\u00e9thodes doivent r\u00e9ussir pour comparer ({n} r\u00e9ussies). V\u00e9rifiez que edgeR/limma sont install\u00e9s."),
-                    n = length(de_list)))
+        stop(errorCondition(.t_fmt(.tr("Au moins 2 m\u00e9thodes doivent r\u00e9ussir pour comparer ({n} r\u00e9ussies). V\u00e9rifiez que edgeR/limma sont install\u00e9s."),
+                    n = length(de_list)), class = "bulk_de_multimethod_error"))
       }
 
       p$set(0.85, .tr("Consensus de rang..."))
