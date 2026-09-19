@@ -433,12 +433,15 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
         # Zero aligned cells makes every downstream view (phase portrait,
         # embedding, export) empty without any visible explanation.
         if (validated$n_cells_matched == 0L) {
-          stop(
-            "Aucune cellule alignee entre les matrices velocity et ",
-            "l'objet Seurat courant. Verifiez que l'objet charge ",
-            "correspond au meme run Cell Ranger et activez le retrait ",
-            "des suffixes (-1) si necessaire."
-          )
+          stop(errorCondition(
+            paste0(
+              "Aucune cellule alignee entre les matrices velocity et ",
+              "l'objet Seurat courant. Verifiez que l'objet charge ",
+              "correspond au meme run Cell Ranger et activez le retrait ",
+              "des suffixes (-1) si necessaire."
+            ),
+            class = "sc_velocity_error"
+          ))
         }
 
         # BUG 10: preserve RDS metadata on the validated result (never in

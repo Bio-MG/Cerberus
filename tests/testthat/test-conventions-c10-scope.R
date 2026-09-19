@@ -16,13 +16,32 @@
 # calculée »). Pendant ce temps, les 5ᵉ, 6ᵉ et 7ᵉ incréments classaient des
 # helpers de tracé au fond de `R/sc/`.
 #
-# Ce fichier vérifie les TROIS directions :
+# Ce fichier vérifie les QUATRE directions :
 #   1. la règle SIGNALE un `stop()` nu et EXEMPTE les formes légitimes
 #      (`errorCondition`, `call. = FALSE`) ;
-#   2. la POPULATION mesurée par la garde couvre `R/` **et** `modules/`
+#   2. la POPULATION **SCANNÉE** par la garde couvre `R/` **et** `modules/`
 #      (c'est cette assertion qui était au ROUGE avant le correctif) ;
 #   3. `tests/` est EXCLU — décision explicite, pas un oubli : les `stop()` de
-#      fixtures ne sont pas du code de production.
+#      fixtures ne sont pas du code de production ;
+#   4. la dette C10 vaut **0** — invariant atteint au §2cx (2026-09-19).
+#
+# ---------------------------------------------------------------------------
+# 🔴 POURQUOI LA DIRECTION 2 PORTE SUR LA POPULATION SCANNÉE, PAS SIGNALÉE
+# ---------------------------------------------------------------------------
+# Le 38e incrément (§2cx) a ramené la dette C10 à **0**. L'assertion d'origine
+# — « au moins un signalement vient de `modules/` » — exigeait une population
+# SIGNALÉE NON VIDE : elle est donc devenue **infalsifiable** (et, en pratique,
+# ROUGE). La remplacer par « il y a 0 signalement » aurait rendu la portée
+# **VACUE** : un vert qui ne prouve rien — exactement le piège que ce fichier
+# documente déjà plus bas (le répertoire de travail de `test_dir()`).
+# On prouve donc la PORTÉE sur la population **SCANNÉE**, qui ne dépend pas du
+# nombre de signalements : c'est le CÂBLAGE `check_c10_error_style(c(r_files,
+# m_files))` — précisément ce que le défaut §2br avait cassé.
+#
+# ⚠️ `source_project_file()` charge la garde dans `globalenv()` (`sys.source`),
+# donc l'espion doit être installé dans `globalenv()`, PAS dans l'environnement
+# du test : un espion posé dans le test serait simplement **IGNORÉ** (le test
+# passerait au vert sans rien mesurer).
 # =============================================================================
 
 source_project_file("tools/check_conventions.R")
@@ -60,6 +79,69 @@ test_that("C10 : un stop() nu est SIGNALE, les formes legitimes sont exemptes", 
   expect_identical(.c10_scope_flagged(path), c(1L, 4L))
 })
 
+# ---------------------------------------------------------------------------
+# ESPION DU CÂBLAGE — quels fichiers la garde PASSE-t-elle à la règle C10 ?
+# ---------------------------------------------------------------------------
+# On remplace `check_c10_error_style` par un relais qui ENREGISTRE son argument
+# avant de déléguer à l'original. On mesure ainsi la population SCANNÉE, qui est
+# non vide même quand la dette est nulle.
+#
+# Rend des chemins **RELATIFS à la racine** (voir l'avertissement ci-dessous).
+#
+# ⚠️ Installation dans `globalenv()` (cf. l'avertissement en tête de fichier).
+# ⚠️ Restauration par `on.exit()` : un espion laissé en place contaminerait les
+# fichiers de test suivants — le garde doit rendre la main EXACTEMENT dans
+# l'état où il l'a prise.
+# ⚠️ `.rel()` est MÉMOÏSÉ et sa racine est indexée PAR RÉPERTOIRE DE TRAVAIL
+# (`.root_dir()`, cf. l'avertissement dans la garde). Appelée APRÈS la
+# restauration du `setwd()`, elle ne reconnaît plus le préfixe et rend des
+# chemins **ABSOLUS** — mesuré : l'assertion de portée est tombée avec
+# `dirname(rel)` = « D:/.../R/bulk ». On convertit donc ICI, tant que le
+# répertoire courant EST la racine.
+.c10_scope_scanned <- function() {
+  old_wd <- setwd(ts_project_root())
+  on.exit(setwd(old_wd), add = TRUE)
+
+  real <- get("check_c10_error_style", envir = globalenv())
+  seen <- character(0)
+
+  spy <- function(r_files) {
+    seen <<- c(seen, r_files)
+    real(r_files)
+  }
+  assign("check_c10_error_style", spy, envir = globalenv())
+  on.exit(assign("check_c10_error_style", real, envir = globalenv()),
+          add = TRUE)
+
+  .REPORT$errors <- list()
+  .REPORT$warns  <- list()
+  invisible(capture.output(run_check()))
+
+  vapply(seen, .rel, character(1))
+}
+
+test_that("C10 : la population SCANNEE couvre R/ ET modules/ (cablage de la garde)", {
+  # Direction 2 — l'assertion qui était au ROUGE avant le correctif.
+  # On rejoue la garde ENTIÈRE (pas seulement la règle) : c'est le CÂBLAGE de
+  # `run_check()` qui définissait la portée, pas `check_c10_error_style()`.
+  # Rejouer la règle seule sur `c(R, modules)` aurait passé AVANT le correctif
+  # et n'aurait donc rien prouvé.
+  rel <- .c10_scope_scanned()
+
+  # Contrôle de VALIDITÉ : si l'espion n'avait pas été installé (ou si le
+  # câblage disparaissait), `rel` serait VIDE et les assertions ci-dessous
+  # seraient vraies à vide.
+  expect_gt(length(rel), 0L)
+  # Aucune population hors R/ et modules/ ne doit être SCANNÉE.
+  expect_true(all(startsWith(rel, "R/") | startsWith(rel, "modules/")),
+              info = paste(head(setdiff(unique(dirname(rel)),
+                                        c("R", "modules")), 5), collapse = ", "))
+  # Et modules/ doit réellement être SCANNÉ : c'est le cœur du défaut §2br.
+  expect_true(any(startsWith(rel, "modules/")),
+              label = "au moins un fichier de modules/ doit etre scanne",
+              info = "modules/ absent de la population scannee : la regle sous-mesure la dette")
+})
+
 # Rejoue la garde ENTIÈRE et rend les seuls signalements C10.
 #
 # ⚠️ PIÈGE MESURÉ : `run_check()` collecte ses fichiers avec des chemins
@@ -78,36 +160,24 @@ test_that("C10 : un stop() nu est SIGNALE, les formes legitimes sont exemptes", 
   Filter(function(w) identical(w$rule, "C10"), .REPORT$warns)
 }
 
-test_that("C10 : la population mesuree par la garde couvre R/ ET modules/", {
-  # Direction 2 — l'assertion qui était au ROUGE avant le correctif.
-  # On rejoue la garde ENTIÈRE (pas seulement la règle) : c'est le CÂBLAGE de
-  # `run_check()` qui définissait la portée, pas `check_c10_error_style()`.
-  # Rejouer la règle seule sur `c(R, modules)` aurait passé AVANT le correctif
-  # et n'aurait donc rien prouvé.
-  c10 <- .c10_scope_run_guard()
-  rel <- vapply(c10, function(w) .rel(w$file), character(1))
-
-  expect_gt(length(c10), 0L)
-  # Aucune population hors R/ et modules/ ne doit apparaître.
-  expect_true(all(startsWith(rel, "R/") | startsWith(rel, "modules/")),
-              info = paste(head(setdiff(unique(dirname(rel)),
-                                        c("R", "modules")), 5), collapse = ", "))
-  # Et modules/ doit réellement contribuer : c'est le cœur du défaut.
-  expect_true(sum(startsWith(rel, "modules/")) > 0L,
-              label = "au moins un site C10 doit venir de modules/",
-              info = "modules/ absent de la population C10 : la regle sous-mesure la dette")
-})
-
 test_that("C10 : tests/ est EXCLU (decision explicite)", {
-  # Direction 3 — `tests/` porte 12 `stop()` nus (fixtures, gardes de setup).
+  # Direction 3 — `tests/` porte des `stop()` nus (fixtures, gardes de setup).
   # Ce n'est pas du code de production : la règle ne les voit pas, et c'est
   # voulu. On l'énonce pour que l'exclusion ne soit pas confondue avec un
   # nouvel angle mort.
-  c10 <- .c10_scope_run_guard()
-  rel <- vapply(c10, function(w) .rel(w$file), character(1))
+  rel <- .c10_scope_scanned()
 
-  # Contrôle de validité : sans lui, un vert obtenu avec 0 signalement (cf. le
-  # piège du répertoire de travail ci-dessus) validerait aussi cette assertion.
-  expect_gt(length(c10), 0L)
+  # Contrôle de validité : sans lui, un vert obtenu avec 0 fichier scanné
+  # validerait aussi cette assertion.
+  expect_gt(length(rel), 0L)
   expect_false(any(startsWith(rel, "tests/")))
+})
+
+test_that("C10 : la dette est RAMENEE A ZERO (invariant du chantier, §2cx)", {
+  # Direction 4 — nouveau PLAFOND. La doctrine du projet est explicite : les
+  # compteurs d'avertissements sont des **plafonds** qui ne doivent pas
+  # augmenter. Le plafond de C10 est désormais **0** : tout `stop()` nu
+  # introduit dans `R/` ou `modules/` fera ROUGIR ce test.
+  c10 <- .c10_scope_run_guard()
+  expect_length(c10, 0L)
 })
