@@ -233,7 +233,16 @@ bulk_variance_partition <- function(vst_matrix, metadata, covariates,
 
   vp <- tryCatch({
     if (!requireNamespace("variancePartition", quietly = TRUE)) {
-      stop("absent")
+      # Pas de `state` : l'erreur est AVALEE par le tryCatch ci-dessous (repli
+      # R pur), donc JAMAIS routable. Or `state` est le vocabulaire de ROUTAGE
+      # du domaine (BULK_BATCH_QC_CONTRACT.md §6 : « le module branche son
+      # affichage dessus ») et il est gele : y figer une valeur inerte serait
+      # exactement l'inflation que le freeze test interdit.
+      stop(errorCondition(paste0(
+        "bulk_variance_partition() : package 'variancePartition' absent ",
+        "(BiocManager::install('variancePartition')) — repli R pur ",
+        "(R² partiel par lm) appliqué."),
+        class = "bulk_batch_qc_error"))
     }
     vp_obj <- variancePartition::fitExtractVarPartModel(
       expr = expr, formula = stats::as.formula(formula_str), data = meta)

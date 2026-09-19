@@ -140,3 +140,160 @@ test_that("plots : consommateurs purs ggplot", {
   expect_s3_class(plot_bulk_varpart(vp), "ggplot")
   expect_s3_class(plot_bulk_batch_scree(.vst_like(20)), "ggplot")
 })
+
+# =============================================================================
+# Garde 236 — dependance optionnelle `variancePartition` (35e increment C10)
+# =============================================================================
+# Site : R/bulk/bulk_batch_qc.R:236 — `stop("absent")`, branche
+#   `if (!requireNamespace("variancePartition", quietly = TRUE))` placee dans le
+#   `tryCatch(..., error = function(e) ...)` de bulk_variance_partition().
+#
+# Les DEUX verdicts sont MESURES (recon du 35e lot), jamais supposes :
+#
+#   (1) JOIGNABILITE : CONDITIONNELLE, et le site est INJOIGNABLE en l'etat.
+#       La branche n'est prise que si le paquet est ABSENT ; mesure du jour :
+#       `requireNamespace("variancePartition", quietly = TRUE)` vaut TRUE
+#       => sans bouchon, le garde ne tire PAS. Le test est rendu INDEPENDANT de
+#       l'environnement en bouchonnant l'INTERROGATION (`requireNamespace`),
+#       jamais le paquet : on ne bouchonne que ce qu'on OBSERVE.
+#
+#   (2) REMONTEE : la classe est AVALEE. Le gestionnaire `error = function(e)`
+#       du tryCatch englobant RETOURNE le repli R pur au lieu de relancer
+#       (`RELANCE = FALSE`, mesure par AST) => aucune erreur ne s'echappe => la
+#       classe est INOBSERVABLE a l'execution => preuve = VERROU SOURCE, rendu
+#       FALSIFIABLE par le test « le gestionnaire ne contient aucun stop() ».
+#
+# La classe retenue est celle du FICHIER (`bulk_batch_qc_error`, deja portee par
+# les 10 autres sites convertis).
+#
+# 🔴 PAS de `state` sur ce site — decision MESUREE, pas un oubli. Le vocabulaire
+# de `state` est celui du ROUTAGE du domaine : il est gele par
+# BULK_BATCH_QC_CONTRACT.md §6 (« le module branche son affichage dessus ») et
+# garde contre l'inflation par test-bulk-batch-qc-contract-freeze.R. Or cette
+# erreur est AVALEE, donc jamais routable : y figer une valeur serait INERTE.
+# Mesure : les occurrences de `missing_dependency` du depot vivent dans des
+# gardes ESCAPANTES (bulk_gsva.R, bulk_wgcna.R, bulk_signatures.R,
+# batch_correction.R, bulk_network.R, sc_communication_engine.R) — c'est
+# l'OBSERVABILITE qui les distingue, ni le dossier ni le nom.
+# =============================================================================
+
+#' Le noeud `if (!requireNamespace("variancePartition", ...))` du fichier.
+.bq_guard <- function() {
+  p   <- ts_ast_parse("R/bulk/bulk_batch_qc.R")
+  hit <- ts_ast_find(p, function(x) {
+    if (!ts_ast_is_call_to(x, "if")) return(FALSE)
+    l <- as.list(x)
+    if (length(l) != 3L) return(FALSE)
+    grepl("variancePartition", ts_ast_deparse(l[[2]]), fixed = TRUE)
+  })
+  if (is.null(hit)) {
+    stop("garde `if (!requireNamespace(\"variancePartition\", ...))` introuvable",
+         call. = FALSE)
+  }
+  hit
+}
+
+#' Le `stop(...)` du corps du garde (unique).
+.bq_guard_stop <- function() {
+  body <- as.list(.bq_guard())[[3]]
+  if (ts_ast_is_call_to(body, "stop")) return(body)
+  ts_ast_find(body, function(x) ts_ast_is_call_to(x, "stop"))
+}
+
+#' Classe / state / message du garde, lus SANS l'executer.
+#'
+#' ⚠️ On evalue l'ARGUMENT du `stop()` (`call[[2]]`), JAMAIS le `stop()` lui-meme :
+#' `eval()` d'un appel `stop(...)` l'EXECUTE (§2ct.2). Lire la CONDITION
+#' construite (et non la FORME du noeud) garde l'assertion valide dans les DEUX
+#' etats — avant et apres conversion — donc le ROUGE reste lisible.
+.bq_guard_condition <- function() {
+  st  <- .bq_guard_stop()
+  arg <- as.list(st)[[2]]
+  v   <- eval(arg, envir = globalenv())
+  if (inherits(v, "condition")) {
+    list(class = class(v), state = v$state, message = conditionMessage(v))
+  } else {
+    list(class = character(0), state = NULL, message = as.character(v))
+  }
+}
+
+#' Execute `code` avec `variancePartition` declare ABSENT (bouchon spy).
+#'
+#' Le bouchon est pose dans `globalenv()` et RESTAURE en sortie (idiome du depot :
+#' `with_mocked_bindings(.env = globalenv())` ECHOUE ici, §2bz.3). Il ne peut pas
+#' LEVER (il delegue a `base::requireNamespace` pour tout autre paquet) : il ne
+#' contamine donc pas le canal temoin. `seen` est un ENVIRONNEMENT (semantique de
+#' reference) : c'est le seul temoin NON VACUISTE que le garde a ete evalue.
+.bq_without_variancePartition <- function(code, seen = NULL) {
+  old <- get0("requireNamespace", envir = globalenv(), inherits = FALSE)
+  assign("requireNamespace", function(package, ...) {
+    if (!is.null(seen)) seen$pkgs <- c(seen$pkgs, package)
+    if (identical(package, "variancePartition")) return(FALSE)
+    base::requireNamespace(package, ...)
+  }, envir = globalenv())
+  on.exit({
+    if (is.null(old)) rm("requireNamespace", envir = globalenv())
+    else assign("requireNamespace", old, envir = globalenv())
+  }, add = TRUE)
+  code
+}
+
+test_that("garde 236 : temoin de traversee (le garde est evalue PUIS mene au repli)", {
+  seen <- new.env()
+  seen$pkgs <- character(0)
+
+  vp <- .bq_without_variancePartition(
+    bulk_variance_partition(.vst_like(20), .meta_bq(12), c("batch", "condition")),
+    seen = seen)
+
+  # (a) TEMOIN NON VACUISTE : l'interrogation a bien eu lieu.
+  expect_true("variancePartition" %in% seen$pkgs)
+  # (b) La chaine est FERMEE : corps du garde = { stop(...) } et rien d'autre.
+  #     Garde evalue (a) + condition FAUSSE + corps reduit au SEUL stop() => le
+  #     stop() a NECESSAIREMENT ete execute (sans quoi (a) serait un temoin mort).
+  body  <- as.list(.bq_guard())[[3]]
+  stmts <- if (ts_ast_is_call_to(body, "{")) as.list(body)[-1] else list(body)
+  expect_length(stmts, 1L)
+  expect_true(ts_ast_is_call_to(stmts[[1]], "stop"))
+  # (c) Le repli declare a pris le relais, et le resultat reste bien forme.
+  expect_identical(vp$method, "pur_lm_partial_r2")
+  expect_true(any(grepl("indisponible", vp$warnings)))
+  expect_identical(nrow(vp$var_part), 20L)
+})
+
+test_that("garde 236 : la classe est AVALEE — rien ne s'echappe (inobservable)", {
+  seen <- new.env()
+  seen$pkgs <- character(0)
+
+  expect_no_error(
+    .bq_without_variancePartition(
+      bulk_variance_partition(.vst_like(20), .meta_bq(12), "batch"),
+      seen = seen))
+  # Le garde A tire (le bouchon rend FALSE) et pourtant AUCUNE erreur ne remonte :
+  # c'est la justification du verrou source qui suit.
+  expect_true("variancePartition" %in% seen$pkgs)
+})
+
+test_that("garde 236 : le gestionnaire englobant ne RELANCE pas (verrou source falsifiable)", {
+  h <- ts_ast_trycatch_handler("R/bulk/bulk_batch_qc.R", ".varpart_pure_r_fallback")
+  expect_null(ts_ast_find(h, function(x) ts_ast_is_call_to(x, "stop")))
+})
+
+test_that("garde 236 : la classe est gelee, le `state` est ABSENT (verrou source cible)", {
+  cond <- .bq_guard_condition()
+  expect_true("bulk_batch_qc_error" %in% cond$class)
+  # 🔴 PAS de `state` — decision MESUREE, pas un oubli (cf. en-tete du bloc).
+  # ⚠️ Assertion valide dans les DEUX etats (NULL avant comme apres conversion) :
+  # elle GELE la decision, elle ne fabrique pas de rouge.
+  expect_null(cond$state)
+  expect_match(cond$message, "variancePartition", fixed = TRUE)
+  # Queue du message : detecteur de TRONCATURE (C16) — un message multi-arguments
+  # non passe par paste0() perdrait tout ce qui suit le 1er argument (§2bn).
+  expect_match(cond$message, "BiocManager::install", fixed = TRUE)
+  expect_gt(nchar(cond$message),
+            nchar("bulk_variance_partition() : package 'variancePartition' absent"))
+})
+
+test_that("bulk_batch_qc.R ne contribue aucun signalement C10 (35e increment)", {
+  expect_identical(ts_c10_sites("R/bulk/bulk_batch_qc.R"), integer(0))
+})
