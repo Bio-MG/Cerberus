@@ -6718,16 +6718,16 @@
       "en": "  • Max genes < %d: %d cells pass (%d%%)\n"
     },
     {
-      "fr": "  • % Mito < %d%%  : %d cellules passent (%d%%)\n",
-      "en": "  • % Mito < %d%%: %d cells pass (%d%%)\n"
+      "fr": "  • %% Mito < %d%%  : %d cellules passent (%d%%)\n",
+      "en": "  • %% Mito < %d%%: %d cells pass (%d%%)\n"
     },
     {
       "fr": "  • Les 3 combinés  : %d cellules passent\n\n",
       "en": "  • All 3 combined: %d cells pass\n\n"
     },
     {
-      "fr": "Suggestions : réduire Min gènes (essayez %d), augmenter Max gènes (%d) ou % Mito (%d%%).",
-      "en": "Suggestions: reduce Min genes (try %d), increase Max genes (%d) or % Mito (%d%%)."
+      "fr": "Suggestions : réduire Min gènes (essayez %d), augmenter Max gènes (%d) ou %% Mito (%d%%).",
+      "en": "Suggestions: reduce Min genes (try %d), increase Max genes (%d) or %% Mito (%d%%)."
     },
     {
       "fr": "Analyses complémentaires",

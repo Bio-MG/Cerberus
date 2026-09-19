@@ -257,14 +257,14 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
 
         # Actionable QC error with per-filter diagnostics (i18n)
         if (ncol(obj) < 10) {
-          stop(sprintf(
+          stop(errorCondition(sprintf(
             paste0(
               .tr("Seulement %d cellule(s) après QC (départ : %d). Diagnostic par filtre :\n"),
               .tr("  • Min gènes > %d  : %d cellules passent (%d%%)\n"),
               .tr("  • Max gènes < %d  : %d cellules passent (%d%%)\n"),
-              .tr("  • % Mito < %d%%  : %d cellules passent (%d%%)\n"),
+              .tr("  • %% Mito < %d%%  : %d cellules passent (%d%%)\n"),
               .tr("  • Les 3 combinés  : %d cellules passent\n\n"),
-              .tr("Suggestions : réduire Min gènes (essayez %d), augmenter Max gènes (%d) ou % Mito (%d%%).")
+              .tr("Suggestions : réduire Min gènes (essayez %d), augmenter Max gènes (%d) ou %% Mito (%d%%).")
             ),
             ncol(obj), n_before,
             input$qc_min_gene, n_ok_min, round(100*n_ok_min/n_before),
@@ -274,7 +274,7 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
             max(10,  input$qc_min_gene - 100),
             min(50000, input$qc_max_gene + 2000),
             min(50,  input$qc_mt + 15)
-          ))
+          ), class = "mod_sc_pipeline_error"))
         }
 
         # Step-3.7A.2: per-sample QC snapshot (before/after counts + %mito
