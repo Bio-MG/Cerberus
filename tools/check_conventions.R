@@ -263,9 +263,24 @@
 .SHINY_SOFT_ANY <- paste0("(?:", paste0(unname(.SHINY_SOFT), collapse = "|"), ")")
 
 #' Solde des parenthèses d'un fragment de code (ouvertes - fermées).
+#' ⚠️ `fixed = TRUE` exige le CARACTÈRE LITTÉRAL : `"\\("` chercherait un
+#' antislash suivi d'une parenthèse (donc **0** occurrence, mesuré au §2dg).
+#' C'est le motif CORRIGÉ ici — longtemps ce solde valait 0 pour toute entrée,
+#' ce qui faisait sur-consommer les lignes de signature (inoffensif parce que
+#' `formals` restait alors SUR-ensembliste, donc permissif).
 .paren_balance <- function(txt) {
-  sum(unlist(gregexpr("\\(", txt, fixed = TRUE)) > 0) -
-    sum(unlist(gregexpr("\\)", txt, fixed = TRUE)) > 0)
+  sum(unlist(gregexpr("(", txt, fixed = TRUE)) > 0) -
+    sum(unlist(gregexpr(")", txt, fixed = TRUE)) > 0)
+}
+
+#' Solde des accolades d'une ligne (ouvertes - fermées).
+#' Utilisé par C2 pour suivre la profondeur de portée : une définition
+#' imbriquée est « ouverte » tant que la profondeur n'est pas revenue à
+#' celle de son ouverture (voir la pile `scope`, 46e incrément §2dg).
+#' ⚠️ Même piège `fixed = TRUE` que `.paren_balance` ci-dessus.
+.brace_balance <- function(txt) {
+  sum(unlist(gregexpr("{", txt, fixed = TRUE)) > 0) -
+    sum(unlist(gregexpr("}", txt, fixed = TRUE)) > 0)
 }
 
 #' Extrait la liste des paramètres d'une signature `f <- function(a, b = 1)`.
@@ -298,6 +313,23 @@ check_c2_shiny_in_r <- function(r_files) {
     hit_fact <- grepl(.SHINY_FACT_ANY, ann$code, perl = TRUE)
     hit_soft <- grepl(.SHINY_SOFT_ANY, ann$code, perl = TRUE)
 
+    # ⚠️ PILE DE PORTÉE (46e incrément, §2dg) — ne PAS remplacer par une simple
+    # variable `formals` écrasée : c'est précisément le défaut corrigé ici.
+    # Le motif de détection était ancré en `^` SANS `\\s*`, donc une définition
+    # IMBRIQUÉE (indentée) n'était jamais reconnue ⇒ `formals` restait celui de
+    # la fonction EXTERNE, et les `input$` d'un helper local qui les DÉCLARE
+    # étaient signalés à tort. Mais TOLÉRER l'indentation ne suffit pas : un
+    # helper local (`log_sc <- function(msg)`) écraserait alors `formals` pour
+    # TOUT LE RESTE du fichier, et les `input$` de la fonction externe —
+    # pourtant déclarés — deviendraient des faux positifs. Mesuré : `31` faux
+    # positifs sur `R/` dans ce cas (dont 31 sur `R/sc/sc_pipeline.R`).
+    # ⇒ On EMPILE `formals` à l'ouverture d'une définition et on le RESTAURE à
+    #   sa fermeture (profondeur d'accolade). `formals` est donc celui de la
+    #   définition la plus PROFONDE actuellement ouverte — la vraie portée.
+    scope <- list()     # chaque élément : list(depth = <profondeur d'ouverture>,
+                        #                  formals = <ses paramètres>)
+    depth <- 0L
+
     for (i in seq_len(nrow(ann))) {
       ln <- ann$code[i]
 
@@ -307,15 +339,28 @@ check_c2_shiny_in_r <- function(r_files) {
       #    signature contenait un `#` ou une chaîne avec une parenthèse, et
       #    laissait `collecting` bloqué sur des centaines de lignes.
       m_fun <- regexpr("function\\s*\\(", ln, perl = TRUE)
+      # `^\\s*` est nécessaire (annexe A du même incrément) : `ann$code` vient
+      # de `.strip_code_lines()`, qui NE TRIM PAS — sans lui, une définition
+      # imbriquée reste invisible. C'est la PILE ci-dessus qui rend la
+      # reconnaissance correcte au lieu de simplement plus large.
       if (m_fun > 0 &&
-          grepl("^[A-Za-z_.][A-Za-z0-9_.]*\\s*(<-|=)\\s*function\\s*\\(", ln, perl = TRUE)) {
+          grepl("^\\s*[A-Za-z_.][A-Za-z0-9_.]*\\s*(<-|=)\\s*function\\s*\\(", ln, perl = TRUE)) {
         sig <- substring(ln, m_fun)
         j <- i
         while (j < nrow(ann) && .paren_balance(sig) > 0L) {
           j <- j + 1L
           sig <- paste0(sig, " ", ann$code[j])
         }
-        formals <- .parse_formals(sig)
+        scope[[length(scope) + 1L]] <- list(depth = depth,
+                                            formals = .parse_formals(sig))
+        formals <- scope[[length(scope)]]$formals
+      } else {
+        # Referme toute portée ouverte à une profondeur >= celle où l'on est :
+        # `formals` redevient celui de la définition englobante encore ouverte.
+        while (length(scope) && depth <= scope[[length(scope)]]$depth) {
+          scope[[length(scope)]] <- NULL
+        }
+        formals <- if (length(scope)) scope[[length(scope)]]$formals else character(0)
       }
 
       if (hit_hard[i]) {
@@ -346,6 +391,10 @@ check_c2_shiny_in_r <- function(r_files) {
           }
         }
       }
+
+      # Mise à jour de la profondeur d'accolade POUR LA LIGNE SUIVANTE :
+      # c'est elle qui décide de la refermeture des portées au tour d'après.
+      depth <- depth + .brace_balance(ln)
     }
   }
 }
