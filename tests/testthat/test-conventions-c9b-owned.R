@@ -148,29 +148,74 @@ test_that("C9b : le ROUGE existe — un fichier a test eponyme et fonctions orph
   expect_true("R/core/jobs.R" %in% .c9b_flagged(.c9b_population()))
 })
 
-test_that("C9b : les 4 fichiers de la mesure INITIALE sont TOUS hors population C9b", {
+test_that("C9b : les fichiers de la mesure INITIALE sont TOUS hors population C9b", {
   # 🔴 LE POINT LE PLUS IMPORTANT DU LOT. La sonde de §2ct.5 nommait 4 trous ;
-  # ils sont bien orphelins — MAIS AUCUN n'a de test eponyme (mesure du
-  # 2026-09-20 : `test-sc-export.R` et `test-spatial-report.R` n'existent pas).
+  # ils sont bien orphelins — MAIS AUCUN n'avait de test eponyme (mesure du
+  # 2026-09-20 : `test-sc-export.R` et `test-spatial-report.R` n'existaient pas).
   # Or C9b ne signale QUE « test eponyme PRESENT, code jamais cite » (§14.2).
   # ⇒ Les 4 « trous » de la mesure initiale etaient donc, pour C9b, **0
   # signalement** — non pas parce qu'ils sont couverts, mais parce que C9 les
-  # porte deja.
+  # portait deja.
   # ⇒ Ce test verrouille la clause de NON-SUPERPOSITION sur son cas le plus
   # concret, et il nomme la raison : ce sont des DOUBLONS evites.
+  #
+  # ---------------------------------------------------------------------------
+  # ⚠️ AMENDE le 2026-09-20 (§2dd) — le lot a PAYE C9 pour `R/sc/sc_export.R`.
+  # ---------------------------------------------------------------------------
+  # La version precedente affirmait les DEUX proprietes (hors C9b **et** porte
+  # par C9) sur les 4 memes fichiers. C'etait une PHOTOGRAPHIE : des que
+  # `test-sc-export.R` est ecrit, `sc_export.R` sort de C9 et **entre** dans la
+  # population C9b (ou il n'est PAS signale, puisqu'il est cite) ⇒ l'assertion
+  # `f %in% .c9_flagged(...)` a rougi sur `R/sc/sc_export.R`, A JUSTE TITRE.
+  # ⇒ On SEPARE les deux proprietes, parce qu'elles n'ont pas la meme duree de
+  # vie : la NON-SUPERPOSITION (1) est une INVARIANTE de la regle ; le fait
+  # qu'un fichier donne soit porte par C9 (2) est un ETAT, qui change a chaque
+  # lot C9. On ne verrouille donc en (2) que les fichiers encore SANS test
+  # eponyme, et on assere que le solde est passe a la population C9b.
   flagged <- .c9b_flagged(.c9b_population())
   files <- c("R/sc/sc_export.R",
              "R/spatial/spatial_deconv_prep.R",
              "R/spatial/spatial_export.R",
              "R/spatial/spatial_report.R")
+  # (1) INVARIANTE : aucun des 4 n'est signale par C9b, a aucun moment. Un
+  #     fichier sans test eponyme est HORS population ; un fichier qui en a un
+  #     et dont le code est cite n'est PAS signale non plus ⇒ vrai dans les 2 cas.
   expect_false(any(files %in% flagged),
                info = paste(intersect(files, flagged), collapse = ", "))
-  # Temoin de VALIDITE : ils sont TOUS signales par C9 — c'est bien C9 qui les
-  # porte, et c'est pourquoi C9b doit se taire.
-  for (f in files) {
+  # (2) ETAT : ceux qui n'ont TOUJOURS pas de test eponyme restent portes par C9.
+  #     `sc_export.R` est exclu nommement : §2dd lui a ecrit `test-sc-export.R`.
+  #     ⚠️ Si un futur lot paie C9 pour l'un des 3 restants, ce test rougira —
+  #     et c'est VOULU : la reaction est de le retirer de cette liste et
+  #     d'ajouter une ligne au solde (c'est exactement ce qui s'est passe ici).
+  encore_c9 <- c("R/spatial/spatial_deconv_prep.R",
+                 "R/spatial/spatial_export.R",
+                 "R/spatial/spatial_report.R")
+  for (f in encore_c9) {
     expect_true(f %in% .c9_flagged(.c9b_abs(f)),
                 info = f)
   }
+  # (2b) LE SOLDE : `sc_export.R` a bien change de camp (§2dd). On l'assere
+  #      dans les DEUX sens, sinon un test qui « ne rougit plus » pourrait
+  #      aussi bien signaler que le fichier a disparu du depot.
+  #      ⚠️ `.c9b_population()` rend des chemins ABSOLUS (via `.collect_files()`)
+  #      ⇒ il faut `.c9b_abs()` pour comparer, jamais la chaine relative.
+  abs_export <- .c9b_abs("R/sc/sc_export.R")
+  expect_false("R/sc/sc_export.R" %in% .c9_flagged(abs_export))
+  expect_true(abs_export %in% .c9b_population())
+  expect_false("R/sc/sc_export.R" %in% flagged)
+  # (2c) ET LA COUVERTURE EST REELLE : il n'est pas seulement « sorti de C9 »
+  #      (ce qu'un simple `touch tests/.../test-sc-export.R` obtiendrait), il
+  #      est CITE. C'est la distinction que C9 ne fait pas (§2dc.8) et que le
+  #      lot §2dd a payee.
+  #      On reutilise les 2 fonctions INTERNES du garde (meme idiome que
+  #      DIRECTION 6 ci-dessous) : `.collect_function_names()` prend le
+  #      data.frame `.read_code_lines()` et veut sa colonne `$code`.
+  defs <- .collect_function_names(.read_code_lines(abs_export)$code)
+  expect_true("sc_r_script_text" %in% defs)
+  mentions <- .mention_tokens(.read_code_lines(
+    .c9b_abs("tests/testthat/test-sc-export.R"))$code)
+  expect_true("sc_r_script_text" %in% mentions,
+              info = "sc_r_script_text doit etre cite par test-sc-export.R")
 })
 
 test_that("C9b : sans test eponyme, C9b se TAIT — c'est C9 qui parle (non-superposition)", {

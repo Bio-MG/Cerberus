@@ -53,8 +53,8 @@ cat(sprintf("Objet : %d cellules, %d gènes\\n", ncol(obj), nrow(obj)))
 # \u2500\u2500 1. QC ──────────────────────────────────────────────────────────────────────
 ',
 if (!has_mt) '
-mt_pat <- if (any(grepl("^MT-",rownames(obj)))) "^MT-"
-          else if (any(grepl("^mt-",rownames(obj)))) "^mt-" else NULL
+mt_pat <- if (any(grepl("^MT-",rownames(obj)))) { "^MT-"
+          } else if (any(grepl("^mt-",rownames(obj)))) { "^mt-" } else NULL
 if (!is.null(mt_pat)) obj[["percent.mt"]] <- PercentageFeatureSet(obj, pattern=mt_pat)
 ' else '# percent.mt déjà calculé dans l\'objet exporté.',
 '

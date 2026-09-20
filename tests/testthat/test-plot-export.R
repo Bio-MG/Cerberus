@@ -306,6 +306,12 @@ test_that("PLOT-S2 : aucun ggsave() nu ne subsiste dans les fichiers migres", {
 })
 
 test_that("R/sc/sc_export.R reste exclu (chaine de script genere, pas du code)", {
+  # ⚠️ « exclu » porte sur la REGLE DES ggsave() NUS (C10), PAS sur la
+  # testabilite du fichier : `sc_r_script_text()` est une fonction PURE de
+  # premier niveau, et elle A son test eponyme depuis §2dd
+  # (`test-sc-export.R`, qui y a d'ailleurs trouve un P0 — le script genere
+  # n'etait pas du R valide dans la branche `has_mt = FALSE`).
+  # Ne pas lire cette exclusion comme « ce fichier n'est pas testable ».
   path <- file.path(ts_project_root(), "R/sc/sc_export.R")
   code <- paste(readLines(path, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
   expect_match(code, "ggsave\\(")

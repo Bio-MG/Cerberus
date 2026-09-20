@@ -82,11 +82,23 @@ test_that("C9 : les 4 faux positifs de R/plotting/ ont disparu", {
 test_that("C9 : l'alias de domaine ne DEBORDE pas (temoin de traversee)", {
   # Aucun de ces fichiers n'a de `test-plot-*.R` : l'alias `plotting` ne doit pas
   # les sauver. Un alias applique a TOUS les domaines les blanchirait a tort.
+  #
+  # ⚠️ AMENDE le 2026-09-20 (§2dd) : `R/sc/sc_export.R` etait dans cette liste
+  # et n'y est PLUS — le lot §2dd lui a ecrit `test-sc-export.R` (C9 21 -> 20).
+  # ⚠️ Le retirer n'affaiblit PAS le temoin : ce qui est eprouve est que l'alias
+  # `plotting` ne dispense PAS de test les fichiers d'un AUTRE domaine. Trois
+  # domaines restent representes (spatial, core, reports) — et `R/sc/` garde
+  # 2 autres fichiers signales (`sc_state.R`, `sc_multi.R`), donc le domaine
+  # d'ou vient le fichier retire n'est pas orphelin de temoin.
   files <- c("R/spatial/spatial_export.R",
              "R/core/rdata_io.R",
-             "R/sc/sc_export.R",
              "R/reports/report_bundle.R")
-  expect_length(.c9_flagged(.c9_abs(files)), 4L)
+  expect_length(.c9_flagged(.c9_abs(files)), 3L)
+  # Et le solde explicite : `sc_export.R` n'est PLUS signale, mais il l'etait —
+  # on l'assere pour qu'une regression (la garde qui cesse de voir un fichier
+  # sans test) ne puisse pas se cacher derriere ce retrait.
+  expect_length(.c9_flagged(.c9_abs("R/sc/sc_export.R")), 0L)
+  expect_length(.c9_flagged(.c9_abs("R/sc/sc_state.R")), 1L)
 })
 
 test_that("C9 : dans R/plotting/, SEUL palettes.R reste signale (invariant)", {
@@ -97,9 +109,16 @@ test_that("C9 : dans R/plotting/, SEUL palettes.R reste signale (invariant)", {
   expect_identical(.c9_flagged(plotting), "R/plotting/palettes.R")
 })
 
-test_that("C9 : le plafond de dette est 22 (mesure du 39e increment, §2cy)", {
+test_that("C9 : le plafond de dette est 20 (mesure du 44e increment, §2dd)", {
   # Plafond, pas egalite : le compte doit pouvoir BAISSER quand un test est
   # ecrit, mais ne doit jamais REMONTER (une regression de l'alias le ferait).
+  # ⚠️ Le plafond SUIT la derniere mesure : il valait 22 (§2cy), puis 21 (§2db),
+  # et vaut 20 depuis §2dd (test eponyme de `R/sc/sc_export.R`). Le laisser a sa
+  # valeur ancienne autoriserait un retour en arriere SILENCIEUX de 2 fichiers.
   flagged <- .c9_flagged(.c9_population())
-  expect_true(length(flagged) <= 22L)
+  expect_true(length(flagged) <= 20L)
+  # Et le contrat dans l'autre sens, pour que le plafond ne devienne pas
+  # infalsifiable si la garde cesse de signaler quoi que ce soit : la population
+  # C9 n'est pas vide (temoin de NON-VACUITE).
+  expect_true(length(flagged) > 0L)
 })
