@@ -67,63 +67,13 @@ source_project_file("modules/bulk_de/mod_bulk_de_multimethod.R")
 .MBM_HANDLER_ASCII <- "Erreur comparaison multi-m"
 
 # --- AST : le BLOC (3ᵉ élément) de `observeEvent(input$run_multimethod, …)` ----
-.mbm_handler_expr <- function() {
-  p   <- parse(file.path(ts_project_root(), .MBM_FILE))
-  out <- NULL
-  walk <- function(x) {
-    if (!is.null(out)) return(invisible(NULL))
-    if (is.call(x)) {
-      is_obs <- tryCatch(identical(x[[1]], quote(observeEvent)), error = function(e) FALSE)
-      if (isTRUE(is_obs)) {
-        l <- as.list(x)
-        if (length(l) >= 3L) {
-          d <- paste(deparse(l[[2]]), collapse = " ")
-          if (grepl("run_multimethod", d, fixed = TRUE)) { out <<- l[[3]]; return(invisible(NULL)) }
-        }
-      }
-      l <- as.list(x)
-      for (i in seq_along(l)) {
-        ok <- tryCatch(is.call(l[[i]]), error = function(e) FALSE)
-        if (isTRUE(ok)) walk(l[[i]])
-      }
-    }
-    invisible(NULL)
-  }
-  for (i in seq_along(p)) walk(p[[i]])
-  if (is.null(out)) stop("observeEvent(input$run_multimethod, ...) introuvable", call. = FALSE)
-  out
-}
+# Harnais partage `helper-ast.R` (§2dg) : ce fichier portait QUATRE copies du
+# parcours recursif `walk()` — les 4 sont remplacees ci-dessous. C'etait 4 des
+# **14** du depot, et le plus gros contingent d'un seul fichier.
+.mbm_handler_expr <- function() ts_ast_observe_block(.MBM_FILE, "run_multimethod")
 
 # --- AST : le GESTIONNAIRE `error = function(e) …` du tryCatch L80 ------------
-.mbm_outer_handler <- function() {
-  p   <- parse(file.path(ts_project_root(), .MBM_FILE))
-  out <- NULL
-  walk <- function(x) {
-    if (!is.null(out)) return(invisible(NULL))
-    if (is.call(x)) {
-      is_tc <- tryCatch(identical(x[[1]], quote(tryCatch)), error = function(e) FALSE)
-      if (isTRUE(is_tc)) {
-        l  <- as.list(x)
-        nm <- names(l)
-        for (i in seq_along(l)) {
-          if (!is.null(nm) && identical(nm[i], "error")) {
-            d <- paste(deparse(l[[i]]), collapse = " ")
-            if (grepl(.MBM_HANDLER_ASCII, d, fixed = TRUE)) { out <<- l[[i]]; return(invisible(NULL)) }
-          }
-        }
-      }
-      l <- as.list(x)
-      for (i in seq_along(l)) {
-        ok <- tryCatch(is.call(l[[i]]), error = function(e) FALSE)
-        if (isTRUE(ok)) walk(l[[i]])
-      }
-    }
-    invisible(NULL)
-  }
-  for (i in seq_along(p)) walk(p[[i]])
-  if (is.null(out)) stop("gestionnaire 'Erreur comparaison multi-methodes' introuvable", call. = FALSE)
-  out
-}
+.mbm_outer_handler <- function() ts_ast_trycatch_handler(.MBM_FILE, .MBM_HANDLER_ASCII)
 
 # --- Le VRAI `.t_fmt` (global.R:275), extrait par parse() --------------------
 # ⚠️ On ne le RECOPIE pas (règle 3 : ne pas dupliquer une logique du dépôt) et on
@@ -131,28 +81,7 @@ source_project_file("modules/bulk_de/mod_bulk_de_multimethod.R")
 # SEULE définition dont on a besoin, pour que l'interpolation testée soit la
 # VRAIE — sans quoi l'assertion « le message varie » ne mesurerait que notre
 # propre bouchon (défaut-signature : l'instrument mesure autre chose que l'outil).
-.mbm_real_t_fmt <- function() {
-  p   <- parse(file.path(ts_project_root(), "global.R"))
-  out <- NULL
-  walk <- function(x) {
-    if (!is.null(out)) return(invisible(NULL))
-    if (is.call(x)) {
-      l <- as.list(x)
-      if (identical(x[[1]], quote(`<-`)) && length(l) == 3L) {
-        nm <- tryCatch(as.character(l[[2]]), error = function(e) "")
-        if (identical(nm, ".t_fmt")) { out <<- eval(l[[3]], envir = globalenv()); return(invisible(NULL)) }
-      }
-      for (i in seq_along(l)) {
-        ok <- tryCatch(is.call(l[[i]]), error = function(e) FALSE)
-        if (isTRUE(ok)) walk(l[[i]])
-      }
-    }
-    invisible(NULL)
-  }
-  for (i in seq_along(p)) walk(p[[i]])
-  if (is.null(out)) stop(".t_fmt introuvable dans global.R", call. = FALSE)
-  out
-}
+.mbm_real_t_fmt <- function() ts_ast_assignment("global.R", ".t_fmt")
 
 # --- Environnement enfant ----------------------------------------------------
 # `rec` enregistre les etapes (temoins) ; `n_methods` pilote la BORNE.
@@ -307,24 +236,8 @@ test_that("le gestionnaire englobant journalise + notifie SANS stop( (falsifiabl
 test_that("le garde 109 porte la classe bulk_de_multimethod_error (verrou source cible)", {
   # ⚠️ La classe etant INOBSERVABLE a l'execution, la SOURCE est le seul canal
   # ou elle est verifiable — et c'est exactement ce que C10 mesure.
-  p <- parse(file.path(ts_project_root(), .MBM_FILE))
-  hits <- character(0)
-  walk <- function(x) {
-    if (is.call(x)) {
-      is_stop <- tryCatch(identical(x[[1]], quote(stop)), error = function(e) FALSE)
-      if (isTRUE(is_stop)) {
-        d <- gsub("\\s+", " ", paste(deparse(x), collapse = " "))
-        if (grepl(.MBM_MSG_ASCII, d, fixed = TRUE)) hits <<- c(hits, d)
-      }
-      l <- as.list(x)
-      for (i in seq_along(l)) {
-        ok <- tryCatch(is.call(l[[i]]), error = function(e) FALSE)
-        if (isTRUE(ok)) walk(l[[i]])
-      }
-    }
-    invisible(NULL)
-  }
-  for (i in seq_along(p)) walk(p[[i]])
+  # Harnais partage `helper-ast.R` (§2dg) : 4ᵉ et derniere copie `walk()` du fichier.
+  hits <- ts_ast_stop_sites(.MBM_FILE, .MBM_MSG_ASCII)
 
   expect_length(hits, 1L)                                   # exactement UN site
   expect_true(grepl("errorCondition", hits[[1]], fixed = TRUE))

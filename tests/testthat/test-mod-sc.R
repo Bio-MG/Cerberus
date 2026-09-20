@@ -75,34 +75,33 @@ source_project_file("modules/sc/mod_sc.R")
 .MSCR_FILE <- "modules/sc/mod_sc.R"
 
 # --- Extraction AST : l'argument `content` du downloadHandler qui porte la garde
+# Harnais partage `helper-ast.R` (§2dg) : derniere des **14** copies du depot.
+# ⚠️ Le needle porte sur le TEXTE du `content`, pas sur l'appel englobant : on
+# collecte donc l'appel `downloadHandler` puis on filtre sur son `content`.
 .mscr_content_expr <- function(needle) {
-  p <- parse(file.path(ts_project_root(), .MSCR_FILE))
-  out <- NULL
-  walk <- function(x) {
-    if (!is.null(out)) return(invisible(NULL))
-    if (is.call(x)) {
-      is_dh <- tryCatch(identical(x[[1]], quote(downloadHandler)), error = function(e) FALSE)
-      if (isTRUE(is_dh)) {
-        l  <- as.list(x)
-        nm <- names(l)
-        for (i in seq_along(l)) {
-          if (!is.null(nm) && identical(nm[i], "content")) {
-            d <- paste(deparse(l[[i]]), collapse = "\n")
-            if (grepl(needle, d, fixed = TRUE)) { out <<- l[[i]]; return(invisible(NULL)) }
-          }
-        }
-      }
-      l <- as.list(x)
-      for (i in seq_along(l)) {
-        ok <- tryCatch(is.call(l[[i]]), error = function(e) FALSE)
-        if (isTRUE(ok)) walk(l[[i]])
+  p     <- ts_ast_parse(.MSCR_FILE)
+  calls <- ts_ast_find_all(p, function(x) {
+    if (!ts_ast_is_call_to(x, "downloadHandler")) return(FALSE)
+    l  <- as.list(x)
+    nm <- names(l)
+    if (is.null(nm)) return(FALSE)
+    for (i in seq_along(l)) {                    # (1) par INDEX
+      if (!identical(nm[i], "content")) next
+      if (grepl(needle, ts_ast_deparse(l[[i]]), fixed = TRUE)) return(TRUE)
+    }
+    FALSE
+  })
+  for (x in calls) {
+    l  <- as.list(x)
+    nm <- names(l)
+    for (i in seq_along(l)) {
+      if (!is.null(nm) && identical(nm[i], "content")) {
+        d <- ts_ast_deparse(l[[i]])
+        if (grepl(needle, d, fixed = TRUE)) return(l[[i]])
       }
     }
-    invisible(NULL)
   }
-  for (i in seq_along(p)) walk(p[[i]])
-  if (is.null(out)) stop("aucun downloadHandler(content=) contenant '", needle, "'", call. = FALSE)
-  out
+  stop("aucun downloadHandler(content=) contenant '", needle, "'", call. = FALSE)
 }
 
 .MSCR_NEEDLE <- "Template introuvable"

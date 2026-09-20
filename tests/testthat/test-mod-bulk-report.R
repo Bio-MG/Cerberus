@@ -96,33 +96,32 @@ source_project_file("modules/bulk/mod_bulk_report.R")
 .MBR_MSG    <- "Aucun format g\u00e9n\u00e9r\u00e9."
 
 # --- AST : TOUS les `content` de `downloadHandler` portant la garde -----------
+# Harnais partage `helper-ast.R` (§2dg) : ce fichier portait TROIS copies du
+# parcours recursif `walk()` (1ʳᵉ ci-dessous, 2ᵉ « dans un tryCatch ? », 3ᵉ
+# verrou source). L'API partagee a ete ETENDUE pour les accueillir (§14, regle 3)
+# au lieu d'en dupliquer une 15ᵉ : `ts_ast_find_all` (collecte COMPLETE, et non
+# « premier succes »), `ts_ast_find_in_trycatch` (descendance), `ts_ast_stop_sites`.
+#
+# ⚠️ On collecte le BLOC `content`, pas l'appel `downloadHandler` : c'est le
+# premier qui est EVALUE par `.mbr_call()`. `ts_ast_find_all` ne peut rendre que
+# le noeud teste, donc on restreint le predicat a l'appel `downloadHandler` et on
+# extrait le `content` APRES coup — sur `length(out) == 1`, garanti par
+# `.mbr_content_expr()`.
 .mbr_content_exprs <- function() {
-  p   <- parse(file.path(ts_project_root(), .MBR_FILE))
-  out <- list()
-  walk <- function(x) {
-    if (is.call(x)) {
-      is_dh <- tryCatch(identical(x[[1]], quote(downloadHandler)), error = function(e) FALSE)
-      if (isTRUE(is_dh)) {
-        l  <- as.list(x)
-        nm <- names(l)
-        for (i in seq_along(l)) {
-          if (!is.null(nm) && identical(nm[i], "content")) {
-            d <- paste(deparse(l[[i]]), collapse = "\n")
-            if (grepl(.MBR_NEEDLE, d, fixed = TRUE))
-              out[[length(out) + 1L]] <<- l[[i]]
-          }
-        }
-      }
-      l <- as.list(x)
-      for (i in seq_along(l)) {
-        ok <- tryCatch(is.call(l[[i]]), error = function(e) FALSE)
-        if (isTRUE(ok)) walk(l[[i]])
-      }
+  p <- ts_ast_parse(.MBR_FILE)
+  calls <- ts_ast_find_all(p, function(x) {
+    if (!ts_ast_is_call_to(x, "downloadHandler")) return(FALSE)
+    d <- ts_ast_deparse(x)
+    grepl(.MBR_NEEDLE, d, fixed = TRUE)
+  })
+  lapply(calls, function(x) {
+    l  <- as.list(x)
+    nm <- names(l)
+    for (i in seq_along(l)) {                    # (1) par INDEX
+      if (!is.null(nm) && identical(nm[i], "content")) return(l[[i]])
     }
-    invisible(NULL)
-  }
-  for (i in seq_along(p)) walk(p[[i]])
-  out
+    NULL
+  })
 }
 
 .mbr_content_expr <- function() {
@@ -219,56 +218,26 @@ test_that("mod_bulk_report : aucun gestionnaire avaleur n'a tire", {
 # Si un jour quelqu'un enveloppe le garde dans un `tryCatch`, ce test ECHOUE et
 # signale que le lot redevient « source-lock seulement ».
 test_that("le garde 227 n'est englobe par AUCUN tryCatch (falsifiable)", {
-  inside_try <- FALSE
-  found      <- FALSE
-  walk <- function(x, inside) {
-    if (is.call(x)) {
-      is_stop <- tryCatch(identical(x[[1]], quote(stop)), error = function(e) FALSE)
-      if (isTRUE(is_stop)) {
-        d <- gsub("\\s+", " ", paste(deparse(x), collapse = " "))
-        if (grepl(.MBR_NEEDLE, d, fixed = TRUE)) {
-          inside_try <<- inside
-          found      <<- TRUE
-          return(invisible(NULL))
-        }
-      }
-      is_tc <- tryCatch(identical(x[[1]], quote(tryCatch)), error = function(e) FALSE)
-      l <- as.list(x)
-      for (i in seq_along(l)) {
-        ok <- tryCatch(is.call(l[[i]]), error = function(e) FALSE)
-        if (isTRUE(ok)) walk(l[[i]], inside || isTRUE(is_tc))
-      }
-    }
-    invisible(NULL)
-  }
-  walk(.mbr_content_expr(), FALSE)
+  # Harnais partage `helper-ast.R` (§2dg) : la DESCENDANCE (« suis-je dans un
+  # tryCatch ? ») est desormais portee par `ts_ast_find_in_trycatch`, qui est
+  # exactement la 2ᵉ des 14 copies du depot.
+  r <- ts_ast_find_in_trycatch(.mbr_content_expr(), function(x) {
+    if (!ts_ast_is_call_to(x, "stop")) return(FALSE)
+    grepl(.MBR_NEEDLE, ts_ast_deparse(x), fixed = TRUE)
+  })
 
-  expect_true(found)          # le garde est bien DANS le corps extrait
-  expect_false(inside_try)    # …et hors de tout tryCatch => la classe s'echappe
+  expect_true(r$found)             # le garde est bien DANS le corps extrait
+  expect_false(r$inside_try)       # …et hors de tout tryCatch => la classe s'echappe
 })
 
 # ---------------------------------------------------------------------------
 # Verrou source CIBLE : le garde 227 porte bien NOTRE classe
 # ---------------------------------------------------------------------------
 test_that("le garde 227 porte la classe bulk_report_error (verrou source cible)", {
-  p <- parse(file.path(ts_project_root(), .MBR_FILE))
-  hits <- character(0)
-  walk <- function(x) {
-    if (is.call(x)) {
-      is_stop <- tryCatch(identical(x[[1]], quote(stop)), error = function(e) FALSE)
-      if (isTRUE(is_stop)) {
-        d <- gsub("\\s+", " ", paste(deparse(x), collapse = " "))
-        if (grepl(.MBR_NEEDLE, d, fixed = TRUE)) hits <<- c(hits, d)
-      }
-      l <- as.list(x)
-      for (i in seq_along(l)) {
-        ok <- tryCatch(is.call(l[[i]]), error = function(e) FALSE)
-        if (isTRUE(ok)) walk(l[[i]])
-      }
-    }
-    invisible(NULL)
-  }
-  for (i in seq_along(p)) walk(p[[i]])
+  # Harnais partage `helper-ast.R` (§2dg) : 3ᵉ et derniere copie `walk()` de ce
+  # fichier. `ts_ast_stop_sites` rend le TEXTE normalise des `stop()` NON
+  # qualifies — meme contrat que ce que la copie locale produisait.
+  hits <- ts_ast_stop_sites(.MBR_FILE, .MBR_NEEDLE)
 
   expect_length(hits, 1L)                                   # exactement UN site
   expect_true(grepl("errorCondition", hits[[1]], fixed = TRUE))

@@ -81,6 +81,71 @@ ts_ast_is_call_to <- function(x, name) {
 }
 
 
+#' TOUTES les sous-expressions satisfaisant `fn` (parcours COMPLET, pas d'arret).
+#'
+#' Complement de `ts_ast_find()` : celui-ci s'arrete au PREMIER succes, ce qui
+#' est faux quand le fichier peut en contenir PLUSIEURS et qu'on veut en
+#' asserter le NOMBRE (§2cr : `mod_bulk_report.R` porte plusieurs
+#' `downloadHandler(content=)` ; le lot exige `length == 1` — donc il faut
+#' collecter, puis compter, jamais esperer).
+#' `x` : sortie de `parse()` (vecteur expression) ou un appel unique.
+ts_ast_find_all <- function(x, fn) {
+  out <- list()
+  visit <- function(node) {
+    if (!is.call(node)) return(invisible(NULL))
+    if (isTRUE(fn(node))) out[[length(out) + 1L]] <<- node
+    l <- as.list(node)
+    for (i in seq_along(l)) {                    # (1) par INDEX
+      ok <- tryCatch(is.call(l[[i]]), error = function(e) FALSE)   # (2)
+      if (isTRUE(ok)) visit(l[[i]])
+    }
+    invisible(NULL)
+  }
+  if (is.call(x)) {
+    visit(x)
+  } else {
+    for (i in seq_along(x)) visit(x[[i]])        # (1) par INDEX
+  }
+  out
+}
+
+
+#' Le booleen « le premier noeud satisfaisant `fn` est-il DANS un `tryCatch` ? »
+#'
+#' Le parcours porte la DESCENDANCE (`inside || is_tc`), pas l'ascendance : on
+#' propage donc l'etat vers le BAS. Sert a prouver la CAUSE d'un verdict
+#' (`la classe s'echappe`), et non seulement son effet — le test ECHOUE si un
+#' jour quelqu'un enveloppe le site, ce qui est exactement le but (§2cr).
+#'
+#' Rend `list(found = <l'a-t-on rencontre ?>, inside_try = <etait-il enveloppe ?>)`.
+ts_ast_find_in_trycatch <- function(x, fn) {
+  found      <- FALSE
+  inside_try <- FALSE
+  visit <- function(node, inside) {
+    if (found) return(invisible(NULL))
+    if (!is.call(node)) return(invisible(NULL))
+    if (isTRUE(fn(node))) {
+      found      <<- TRUE
+      inside_try <<- inside
+      return(invisible(NULL))
+    }
+    is_tc <- ts_ast_is_call_to(node, "tryCatch")
+    l <- as.list(node)
+    for (i in seq_along(l)) {                    # (1) par INDEX
+      ok <- tryCatch(is.call(l[[i]]), error = function(e) FALSE)   # (2)
+      if (isTRUE(ok)) visit(l[[i]], inside || isTRUE(is_tc))
+    }
+    invisible(NULL)
+  }
+  if (is.call(x)) {
+    visit(x, FALSE)
+  } else {
+    for (i in seq_along(x)) visit(x[[i]], FALSE) # (1) par INDEX
+  }
+  list(found = found, inside_try = inside_try)
+}
+
+
 #' Le BLOC (3e element) de `observeEvent(input$<input_id>, { ... })`.
 #'
 #' ⚠️ Le gestionnaire d'`observeEvent` est un BLOC, pas une definition : il faut

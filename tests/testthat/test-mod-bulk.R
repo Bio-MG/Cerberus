@@ -67,63 +67,13 @@ source_project_file("modules/bulk/mod_bulk.R")
 .MBK_MSG_ASCII <- "Aucune paire n'a pu"
 
 # --- AST : le BLOC (3ᵉ élément) de `observeEvent(input$ap_confirm, …)` ---------
-.mbk_handler_expr <- function() {
-  p   <- parse(file.path(ts_project_root(), .MBK_FILE))
-  out <- NULL
-  walk <- function(x) {
-    if (!is.null(out)) return(invisible(NULL))
-    if (is.call(x)) {
-      is_obs <- tryCatch(identical(x[[1]], quote(observeEvent)), error = function(e) FALSE)
-      if (isTRUE(is_obs)) {
-        l <- as.list(x)
-        if (length(l) >= 3L) {
-          d <- paste(deparse(l[[2]]), collapse = " ")
-          if (grepl("ap_confirm", d, fixed = TRUE)) { out <<- l[[3]]; return(invisible(NULL)) }
-        }
-      }
-      l <- as.list(x)
-      for (i in seq_along(l)) {
-        ok <- tryCatch(is.call(l[[i]]), error = function(e) FALSE)
-        if (isTRUE(ok)) walk(l[[i]])
-      }
-    }
-    invisible(NULL)
-  }
-  for (i in seq_along(p)) walk(p[[i]])
-  if (is.null(out)) stop("observeEvent(input$ap_confirm, ...) introuvable", call. = FALSE)
-  out
-}
+# Harnais partage `helper-ast.R` (§2dg) : ce fichier portait TROIS copies du
+# parcours recursif `walk()` — les 1ʳᵉ et 2ᵉ sont remplacees ici, la 3ᵉ l'a ete
+# juste en dessous (verrou source). C'etait 3 des **14** du depot.
+.mbk_handler_expr <- function() ts_ast_observe_block(.MBK_FILE, "ap_confirm")
 
 # --- AST : le GESTIONNAIRE `error = function(e) …` qui porte « Erreur pipeline »
-.mbk_outer_handler <- function() {
-  p   <- parse(file.path(ts_project_root(), .MBK_FILE))
-  out <- NULL
-  walk <- function(x) {
-    if (!is.null(out)) return(invisible(NULL))
-    if (is.call(x)) {
-      is_tc <- tryCatch(identical(x[[1]], quote(tryCatch)), error = function(e) FALSE)
-      if (isTRUE(is_tc)) {
-        l  <- as.list(x)
-        nm <- names(l)
-        for (i in seq_along(l)) {
-          if (!is.null(nm) && identical(nm[i], "error")) {
-            d <- paste(deparse(l[[i]]), collapse = " ")
-            if (grepl("Erreur pipeline", d, fixed = TRUE)) { out <<- l[[i]]; return(invisible(NULL)) }
-          }
-        }
-      }
-      l <- as.list(x)
-      for (i in seq_along(l)) {
-        ok <- tryCatch(is.call(l[[i]]), error = function(e) FALSE)
-        if (isTRUE(ok)) walk(l[[i]])
-      }
-    }
-    invisible(NULL)
-  }
-  for (i in seq_along(p)) walk(p[[i]])
-  if (is.null(out)) stop("gestionnaire 'Erreur pipeline' introuvable", call. = FALSE)
-  out
-}
+.mbk_outer_handler <- function() ts_ast_trycatch_handler(.MBK_FILE, "Erreur pipeline")
 
 # --- Environnement enfant ----------------------------------------------------
 # `rec` enregistre les etapes (temoins) ; `dispatch_ok` sert au controle de BORNE.
@@ -260,24 +210,9 @@ test_that("le garde 427 porte la classe mod_bulk_error (verrou source cible)", {
   # ⚠️ La classe etant INOBSERVABLE a l'execution, la SOURCE est le seul canal
   # ou elle est verifiable — et c'est exactement ce que C10 mesure. On assere
   # donc le `stop()` du site, precisement, plutot que le seul compteur C10.
-  p <- parse(file.path(ts_project_root(), .MBK_FILE))
-  hits <- character(0)
-  walk <- function(x) {
-    if (is.call(x)) {
-      is_stop <- tryCatch(identical(x[[1]], quote(stop)), error = function(e) FALSE)
-      if (isTRUE(is_stop)) {
-        d <- gsub("\\s+", " ", paste(deparse(x), collapse = " "))
-        if (grepl(.MBK_MSG_ASCII, d, fixed = TRUE)) hits <<- c(hits, d)
-      }
-      l <- as.list(x)
-      for (i in seq_along(l)) {
-        ok <- tryCatch(is.call(l[[i]]), error = function(e) FALSE)
-        if (isTRUE(ok)) walk(l[[i]])
-      }
-    }
-    invisible(NULL)
-  }
-  for (i in seq_along(p)) walk(p[[i]])
+  # Harnais partage `helper-ast.R` (§2dg) : ce bloc portait sa PROPRE copie du
+  # parcours recursif — la 3ᵉ de ce fichier, et l'une des 14 du depot.
+  hits <- ts_ast_stop_sites(.MBK_FILE, .MBK_MSG_ASCII)
 
   expect_length(hits, 1L)                                   # exactement UN site
   expect_true(grepl("errorCondition", hits[[1]], fixed = TRUE))

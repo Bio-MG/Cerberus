@@ -99,64 +99,13 @@ source_project_file("modules/import/mod_import_spatial.R")
 .MIS_MSG <- "Technologie inconnue."
 
 # --- AST : le BLOC (3ᵉ élément) de `observeEvent(input$btn_import, …)` ---------
-.mis_handler_expr <- function() {
-  p   <- parse(file.path(ts_project_root(), .MIS_FILE))
-  out <- NULL
-  walk <- function(x) {
-    if (!is.null(out)) return(invisible(NULL))
-    if (is.call(x)) {
-      is_obs <- tryCatch(identical(x[[1]], quote(observeEvent)), error = function(e) FALSE)
-      if (isTRUE(is_obs)) {
-        l <- as.list(x)
-        if (length(l) >= 3L) {
-          d <- paste(deparse(l[[2]]), collapse = " ")
-          if (grepl("btn_import", d, fixed = TRUE)) { out <<- l[[3]]; return(invisible(NULL)) }
-        }
-      }
-      l <- as.list(x)
-      for (i in seq_along(l)) {
-        ok <- tryCatch(is.call(l[[i]]), error = function(e) FALSE)
-        if (isTRUE(ok)) walk(l[[i]])
-      }
-    }
-    invisible(NULL)
-  }
-  for (i in seq_along(p)) walk(p[[i]])
-  if (is.null(out)) stop("observeEvent(input$btn_import, ...) introuvable", call. = FALSE)
-  out
-}
+# Harnais partage `helper-ast.R` (§2dg) : ce fichier portait TROIS copies du
+# parcours recursif `walk()` — les trois sont remplacees ici (3 des 14 du depot).
+.mis_handler_expr <- function() ts_ast_observe_block(.MIS_FILE, "btn_import")
 
 # --- AST : le GESTIONNAIRE `error = function(e) …` qui porte « Erreur import
 # spatial » (L614-617). Sert à la justification falsifiable du verrou source.
-.mis_outer_handler <- function() {
-  p   <- parse(file.path(ts_project_root(), .MIS_FILE))
-  out <- NULL
-  walk <- function(x) {
-    if (!is.null(out)) return(invisible(NULL))
-    if (is.call(x)) {
-      is_tc <- tryCatch(identical(x[[1]], quote(tryCatch)), error = function(e) FALSE)
-      if (isTRUE(is_tc)) {
-        l  <- as.list(x)
-        nm <- names(l)
-        for (i in seq_along(l)) {
-          if (!is.null(nm) && identical(nm[i], "error")) {
-            d <- paste(deparse(l[[i]]), collapse = " ")
-            if (grepl("Erreur import spatial", d, fixed = TRUE)) { out <<- l[[i]]; return(invisible(NULL)) }
-          }
-        }
-      }
-      l <- as.list(x)
-      for (i in seq_along(l)) {
-        ok <- tryCatch(is.call(l[[i]]), error = function(e) FALSE)
-        if (isTRUE(ok)) walk(l[[i]])
-      }
-    }
-    invisible(NULL)
-  }
-  for (i in seq_along(p)) walk(p[[i]])
-  if (is.null(out)) stop("gestionnaire 'Erreur import spatial' introuvable", call. = FALSE)
-  out
-}
+.mis_outer_handler <- function() ts_ast_trycatch_handler(.MIS_FILE, "Erreur import spatial")
 
 # --- Environnement enfant ----------------------------------------------------
 # `rec` enregistre les étapes (témoins) ; `loader_throws` sert au contrôle de
@@ -272,24 +221,8 @@ test_that("le gestionnaire englobant journalise + notifie SANS stop( (falsifiabl
 # Verrou source CIBLÉ : le garde 481 porte bien NOTRE classe
 # ---------------------------------------------------------------------------
 test_that("le garde 481 porte la classe spatial_import_error (verrou source cible)", {
-  p <- parse(file.path(ts_project_root(), .MIS_FILE))
-  hits <- character(0)
-  walk <- function(x) {
-    if (is.call(x)) {
-      is_stop <- tryCatch(identical(x[[1]], quote(stop)), error = function(e) FALSE)
-      if (isTRUE(is_stop)) {
-        d <- gsub("\\s+", " ", paste(deparse(x), collapse = " "))
-        if (grepl(.MIS_MSG, d, fixed = TRUE)) hits <<- c(hits, d)
-      }
-      l <- as.list(x)
-      for (i in seq_along(l)) {
-        ok <- tryCatch(is.call(l[[i]]), error = function(e) FALSE)
-        if (isTRUE(ok)) walk(l[[i]])
-      }
-    }
-    invisible(NULL)
-  }
-  for (i in seq_along(p)) walk(p[[i]])
+  # Harnais partage `helper-ast.R` (§2dg) : 3ᵉ et derniere copie `walk()` du fichier.
+  hits <- ts_ast_stop_sites(.MIS_FILE, .MIS_MSG)
 
   expect_length(hits, 1L)                                   # exactement UN site
   expect_true(grepl("errorCondition", hits[[1]], fixed = TRUE))
