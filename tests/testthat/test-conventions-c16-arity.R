@@ -1,5 +1,5 @@
 # =============================================================================
-# test-conventions-c16-arity.R — cas NÉGATIF de la règle C16
+# test-conventions-c16-arity.R — cas NÉGATIF de la règle C16, et invariant §14.3
 # =============================================================================
 # Règle du dépôt : une règle statique doit être éprouvée sur un cas NÉGATIF. Un
 # garde qui affiche « 0 erreur » ne prouve rien si on ne l'a jamais vu au rouge.
@@ -19,12 +19,37 @@
 # runtime ajouté dans `test-bulk-helpers.R`, et cette règle STATIQUE pour que le
 # défaut ne puisse pas revenir lors de la conversion des 152 sites restants.
 #
-# Ce fichier vérifie les TROIS directions :
+# Ce fichier vérifie les SEPT directions :
 #   1. le défaut est SIGNALÉ (le rouge existe) ;
 #   2. les formes légitimes ne sont PAS des faux positifs (paste0 / sprintf /
 #      paste, arguments nommés `class=` / `state=` / `message=`) ;
 #   3. le dépôt est conforme (0 site) — c'est cette assertion qui échouerait si
-#      le défaut revenait.
+#      le défaut revenait ;
+#   4. le signalement atterrit dans le canal **ERREUR** (`.REPORT$errors`) ;
+#   5. **TÉMOIN DE CANAL** — une règle qui reste une DETTE (C9) doit, elle,
+#      atterrir dans `$warns` : sans ce témoin, la direction 4 passerait aussi
+#      sur un garde qui bloque sur n'importe quoi ;
+#   6. donc la garde **BLOQUE sans `--strict`** (invariant §14.3), mesuré sur une
+#      violation RÉELLE injectée dans `R/` ;
+#   7. la table AFFICHÉE ne contredit pas le canal (anti-« mensonge cosmétique »).
+#
+# ---------------------------------------------------------------------------
+# 🔴 §14.3 — POURQUOI LE CORRECTIF « ÉVIDENT » ÉTAIT INERTE (40ᵉ incrément)
+# ---------------------------------------------------------------------------
+# La décision §14.3 s'énonce « `C16` passe en `ERREUR` », et le code le plus
+# proche de cette phrase est la table de niveaux :
+#
+#     lvl[c("C6", "C8", "C9", "C10", "C11", "C12", "C16")] <- "AVERT."
+#
+# ⇒ En retirer `"C16"` **ne change RIEN au blocage**. Mesure du modèle de
+# sévérité — `blocking <- n_err + (if (strict) n_warn else 0L)` : ce qui décide
+# est le **CANAL** où `.add()` dépose le signalement. `lvl` n'est lu QUE pour
+# l'affichage (`sprintf("%-5s %-8s ...", r, lvl[[r]], desc[[r]])`). Corriger la
+# table seule produirait un **mensonge cosmétique** : elle annoncerait `ERREUR`
+# pendant que la garde continuerait de ne pas bloquer.
+# ⇒ Le correctif réel est au **SOURCE de la sévérité** : `.add("ERROR", "C16",
+# ...)`. Les directions 4 et 7 verrouillent la **PAIRE** (canal **et** affichage) :
+# n'en corriger qu'une des deux fait rougir ce fichier.
 # =============================================================================
 
 source_project_file("tools/check_conventions.R")
@@ -39,11 +64,16 @@ source_project_file("tools/check_conventions.R")
 }
 
 #' Rejoue la SEULE règle C16 sur un fichier et rend les lignes signalées.
+#'
+#' ⚠️ Depuis le 40ᵉ incrément (§14.3), C16 dépose dans `.REPORT$errors`. Lire
+#' `$warns` rendrait **0** et le test deviendrait **vrai à vide** — c'est
+#' exactement ce qui est arrivé à ce fichier lors du passage au nouveau contrat.
 .c16_flagged_lines <- function(path) {
-  .REPORT$warns <- list()
+  .REPORT$errors <- list()
+  .REPORT$warns  <- list()
   check_c16_errorcondition_arity(path)
-  if (!length(.REPORT$warns)) return(integer(0))
-  sort(vapply(.REPORT$warns,
+  if (!length(.REPORT$errors)) return(integer(0))
+  sort(vapply(.REPORT$errors,
               function(w) as.integer(w$line),
               integer(1), USE.NAMES = FALSE))
 }
@@ -87,12 +117,101 @@ test_that("C16 : le depot est conforme (0 site)", {
   # lors de la conversion des 152 `stop()` restants.
   files <- c(.collect_files(file.path(ts_project_root(), "R")),
              .collect_files(file.path(ts_project_root(), "modules")))
-  .REPORT$warns <- list()
+  .REPORT$errors <- list()
+  .REPORT$warns  <- list()
   check_c16_errorcondition_arity(files)
-  c16 <- Filter(function(w) identical(w$rule, "C16"), .REPORT$warns)
+  c16 <- Filter(function(w) identical(w$rule, "C16"), .REPORT$errors)
   expect_identical(
     length(c16), 0L,
     info = paste(vapply(c16, function(w) sprintf("%s:%s", .rel(w$file), w$line),
                         character(1)), collapse = ", ")
   )
+})
+
+# ---------------------------------------------------------------------------
+# CANAL — c'est LUI, et non la table d'affichage, qui décide du blocage
+# ---------------------------------------------------------------------------
+# `.add(severity, ...)` range dans `.REPORT$errors` SI ET SEULEMENT SI la
+# sévérité vaut exactement `"ERROR"` ; tout le reste va dans `.REPORT$warns`.
+# Et `run_check()` calcule `blocking <- n_err + (if (strict) n_warn else 0L)`.
+# ⇒ La sévérité EFFECTIVE d'une règle est son canal, pas son libellé.
+.c16_channel <- function(path) {
+  .REPORT$errors <- list()
+  .REPORT$warns  <- list()
+  check_c16_errorcondition_arity(path)
+  if (length(.REPORT$errors)) return("errors")
+  if (length(.REPORT$warns))  return("warns")
+  "aucun"
+}
+
+test_that("C16 : le signalement atterrit dans le canal ERREUR (donc bloquant)", {
+  path <- .c16_write_fixture('stop(errorCondition("a", "b", class = "x"))')
+  on.exit(unlink(dirname(path), recursive = TRUE), add = TRUE)
+
+  expect_identical(.c16_channel(path), "errors")
+})
+
+test_that("C16 : TEMOIN DE CANAL — une regle de DETTE reste dans les avertissements", {
+  # ⚠️ Le témoin est CONSTRUIT (chemin bidon dont aucun test éponyme n'existe),
+  # jamais lu sur la population du dépôt : une assertion exigeant une population
+  # signalée NON VIDE devient **infalsifiable** le jour où la dette tombe à 0 —
+  # piège payé au §2cx sur `test-conventions-c10-scope.R`.
+  # `check_c9_r_tests()` ne teste PAS l'existence du fichier : elle ne regarde
+  # que les noms de tests candidats.
+  old <- setwd(ts_project_root())
+  on.exit(setwd(old), add = TRUE)
+
+  path <- file.path(ts_project_root(), "R", "core", "zzz_aucun_test_tmp.R")
+  .REPORT$errors <- list()
+  .REPORT$warns  <- list()
+  check_c9_r_tests(path)
+
+  # Le témoin doit avoir TIRÉ (sinon la direction 4 ne prouve rien)...
+  expect_identical(length(.REPORT$warns), 1L)
+  # ... et il doit avoir tiré dans l'AUTRE canal.
+  expect_length(.REPORT$errors, 0L)
+})
+
+# ---------------------------------------------------------------------------
+# BOUT EN BOUT — la garde BLOQUE-t-elle vraiment, sans `--strict` ?
+# ---------------------------------------------------------------------------
+# ⚠️ PIÈGE MESURÉ (documenté dans `test-conventions-c10-scope.R`) : `run_check()`
+# collecte ses fichiers avec des chemins RELATIFS (`.collect_files("R")`) et
+# `test_dir()` place le répertoire de travail dans `tests/testthat`. Sans le
+# `setwd()`, la garde ne trouve **0 fichier** et rend un vert qui ne prouve rien.
+.c16_guard_once <- function() {
+  old <- setwd(ts_project_root())
+  on.exit(setwd(old), add = TRUE)
+  .REPORT$errors <- list()
+  .REPORT$warns  <- list()
+  st  <- NA_integer_
+  out <- capture.output(st <- run_check(strict = FALSE, use_git = FALSE))
+  ln  <- grep("^C16[[:space:]]", out, value = TRUE)
+  list(status = st,
+       level  = if (length(ln)) strsplit(trimws(ln[[1]]), "[[:space:]]+")[[1]][[2]] else NA_character_)
+}
+
+test_that("C16 est BLOQUANT sans --strict (invariant §14.3)", {
+  # TÉMOIN : sans violation, la garde NE bloque PAS (le dépôt est à 0 erreur).
+  # Sans ce témoin, un `1L` obtenu pour une tout autre raison passerait.
+  expect_identical(.c16_guard_once()$status, 0L)
+
+  # Violation RÉELLE, injectée dans `R/`. `.collect_files()` n'est PAS mémoïsé
+  # (mesuré) ⇒ le fichier est bien vu par la garde.
+  # ⚠️ Ce fichier déclenche AUSSI C9 et C12 — des AVERTISSEMENTS, non bloquants.
+  #    C'est précisément l'objet de la mesure : seul le canal ERREUR décide.
+  probe <- file.path(ts_project_root(), "R", "zzz_probe_c16_tmp.R")
+  writeLines('f <- function() stop(errorCondition("a", "b", class = "x"))',
+             probe, useBytes = TRUE)
+  on.exit(unlink(probe), add = TRUE)
+
+  expect_identical(.c16_guard_once()$status, 1L)
+})
+
+test_that("C16 : la table AFFICHEE ne contredit pas le canal (anti-mensonge cosmetique)", {
+  # La table lit `lvl`, le blocage lit le canal. Corriger l'un SANS l'autre
+  # donne soit un mensonge cosmétique (affiche ERREUR, ne bloque pas), soit un
+  # blocage silencieux (bloque, affiche AVERT.). Les directions 4/5 et 7
+  # verrouillent la PAIRE.
+  expect_identical(.c16_guard_once()$level, "ERREUR")
 })

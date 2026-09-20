@@ -1104,6 +1104,19 @@ check_c13_choices_named_values <- function(files) {
 #'
 #' Les arguments NOMMÉS (`class=`, `state=`, `call.=`) ne comptent pas : seule la
 #' pluralité d'arguments POSITIONNELS est le défaut.
+#'
+#' SEVERITE : `ERREUR`, pas `AVERT.` (§14.3, code au 40e increment). C16 ne detecte
+#' pas une preference de style mais une TRONCATURE SILENCIEUSE : l'application
+#' tourne, le diagnostic est ampute, et la troncature est INVISIBLE au niveau
+#' source. Les autres `AVERT.` sont des COMPTEURS DE DETTE (code herite a
+#' migrer) ; C16 est un INVARIANT a 0 site. Un invariant a cout nul doit etre
+#' bloquant.
+#'
+#' ATTENTION : la severite se regle ICI (le CANAL de `.add()`), PAS dans la table
+#' `lvl`. Le blocage vaut `blocking <- n_err + (if (strict) n_warn else 0L)` : il
+#' ne lit que les canaux. Corriger `lvl` seul produirait un MENSONGE COSMIQUE
+#' (affiche `ERREUR`, ne bloque pas) - ce que verrouille
+#' `test-conventions-c16-arity.R`.
 check_c16_errorcondition_arity <- function(files) {
   for (f in files) {
     ann <- .read_code_lines(f)
@@ -1139,7 +1152,7 @@ check_c16_errorcondition_arity <- function(files) {
       named <- grepl("^\\s*[A-Za-z_.][A-Za-z0-9_.]*\\s*=(?!=)", args, perl = TRUE)
       n_pos <- sum(!named)
       if (n_pos > 1L) {
-        .add("WARN", "C16", .rel(f), ann$line_no[i],
+        .add("ERROR", "C16", .rel(f), ann$line_no[i],
              sprintf(paste0("errorCondition() a %d arguments POSITIONNELS : seul ",
                             "le 1er devient le message (`stop()` concatene, ",
                             "`errorCondition()` NON) -> envelopper dans paste0()."),
@@ -1208,10 +1221,10 @@ run_check <- function(strict = FALSE, use_git = TRUE, list_all = FALSE) {
     C11 = "primitives parallèles à vérifier (mirai uniquement)",
     C12 = "en-tête commenté dans chaque fichier de R/ (dette)",
     C13 = "choices nommé : la valeur n'est jamais un appel traduit",
-    C16 = "errorCondition() : un SEUL argument positionnel (sinon message tronqué) (dette)"
+    C16 = "errorCondition() : un SEUL argument positionnel (sinon message tronqué)"
   )
   lvl <- setNames(rep("ERREUR", length(rules)), rules)
-  lvl[c("C6", "C8", "C9", "C10", "C11", "C12", "C16")] <- "AVERT."
+  lvl[c("C6", "C8", "C9", "C10", "C11", "C12")] <- "AVERT."
   for (r in rules) {
     n <- sum(vapply(.REPORT$errors, function(e) identical(e$rule, r), logical(1))) +
       sum(vapply(.REPORT$warns, function(e) identical(e$rule, r), logical(1)))
