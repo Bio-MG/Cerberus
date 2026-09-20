@@ -27,7 +27,12 @@
 #   - les effectifs de gènes pour la décomposition sont plafonnés à
 #     TS_BULK_VARPART_MAX_GENES (repli R pur : sous-échantillonnage déterministe
 #     des gènes les plus variables, seed enregistré).
-# Erreurs : classées `bulk_batch_qc_error` (français, call. = FALSE).
+# Erreurs : classées `bulk_batch_qc_error` (français) — **11** des **12** sites
+# `stop()` passent par `errorCondition(...)` (forme sanctionnée par C10, avec
+# `class` et `state`) ; le **12ᵉ** (`plot_bulk_varpart()`, aucune fraction à
+# tracer) est un `stop("...", call. = FALSE)` — l'autre forme que C10 exempte.
+# ⚠️ Cette ligne annonçait « (français, call. = FALSE) » : c'était une **dérive
+# antérieure** (les `errorCondition` sont arrivés après), corrigée ici (§2dg).
 # =============================================================================
 
 #' Surface publique figée du domaine diagnostics batch (gel par test de freeze)
