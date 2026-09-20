@@ -714,6 +714,201 @@ check_c9_r_tests <- function(r_files) {
   }
 }
 
+#' C9b (43e increment, 2026-09-20) — forme B : les fonctions POSSEDEES d'un
+#' fichier sont-elles MENTIONNEES par son test eponyme ?
+#'
+#' POURQUOI — C9 ne verifie que l'EXISTENCE d'un fichier au bon nom. Elle est
+#' donc satisfaite par un NOM : `R/sc/sc_pipeline.R` a un `test-sc-pipeline.R`
+#' qui `source()` le fichier et n'appelle JAMAIS sa seule fonction (§2ck.1). C9
+#' rend « vert » sur un fichier que rien n'exerce. C9b est **la seule regle du
+#' depot qui mesure l'APPEL**, et c'est tout son objet (§14.2 de
+#' `docs/CONVENTIONS.md`).
+#'
+#' ---------------------------------------------------------------------------
+#' TROIS DECISIONS, CHACUNE IMPOSEE PAR UNE MESURE (jamais par une preference)
+#' ---------------------------------------------------------------------------
+#' 1. DEUX FILTRES SANS LESQUELS LA REGLE EST FAUSSE (§14.2, mesures du
+#'    2026-09-19 et 2026-09-20) :
+#'    - ne compter que les fonctions **POSSEDEES** (definies dans UN SEUL
+#'      fichier de `R/`). Le depot partage **21** noms (`%||%`, `.tr`, `add`,
+#'      `add_log`, `log`, ...) : sans ce filtre, tout fichier qui definit
+#'      `%||%` est declare « exerce » et **la regle ne peut plus echouer** —
+#'      defaut du TOKEN juge a la place de l'UNITE (§12.1), deja corrige QUATRE
+#'      fois dans ce depot.
+#'    - **EXEMPTER** les fichiers qui ne possedent **aucune** fonction
+#'      (`R/sc/sc_state.R` : ses 3 noms sont partages). Le critere y est
+#'      INAPPLICABLE ; le signaler produirait un faux positif permanent, non
+#'      corrigeable sans polluer le fichier.
+#' 2. NON-SUPERPOSITION A C9. Une premiere version signalait **6** fichiers,
+#'    dont **5 deja** signales par C9 : c'etait **5 doublons**, pas 5
+#'    informations. C9b ne signale donc QUE « **test eponyme PRESENT, code
+#'    jamais mentionne** » — c'est-a-dire le seul defaut que C9 ne peut pas
+#'    voir. Cout mesure apres filtre : **37** fichiers et **174** fonctions
+#'    orphelines (mesure du 2026-09-20, apres correction — voir 4.).
+#' 3. SENS DE « APPELE » = application `f(...)` OU **MENTION** comme mot
+#'    entier (`get("f")`, `` `f` ``, `do.call`). ⚠️ Ce choix est **MESURE** dans
+#'    le depot, pas deduit : `test-plot-export.R` affirme l'exclusion de
+#'    `R/sc/sc_export.R` par `expect_match(code, "ggsave\\(")` — une MENTION,
+#'    pas un appel. Un sens STRICT laisserait C9b AVEUGLE sur une convention
+#'    que le depot pratique depuis PLOT-S2. La definition retenue est l'UNION
+#'    des deux : plus PERMISSIVE, donc conservatrice (elle ne peut que reduire
+#'    les faux positifs). ⚠️ `R/sc/sc_export.R` reste signale **malgre** elle :
+#'    le test exclut le fichier par un motif regex sur `ggsave(`, jamais sur un
+#'    nom de fonction possede — l'exemption est une decision documentee, pas un
+#'    effet de bord de la mesure. C'est un **faux positif connu**, epingle par
+#'    `test-conventions-c9b-owned.R`.
+#' 4. 🔴 LA PREMISSE DE §14.2 ETAIT FAUSSE, ET C'EST LA MESURE QUI L'A DITE.
+#'    §14.2 annoncait « cout mesure aujourd'hui : **0 signalement** » et en
+#'    deduisait un **invariant prospectif**, donc `ERROR` (un invariant a cout
+#'    nul doit bloquer, comme C16). **Cette premisse repose sur une sonde
+#'    FAUSSE** : son motif d'identifiant (`[.A-Za-z][.A-Za-z0-9_.]*`) ne
+#'    pouvait pas capturer un nom commencant par un POINT — les **195**
+#'    fonctions privees (`.*`) du depot etaient donc INVISIBLES a la sonde, et
+#'    le « compteur » de 4 trous ne comptait que des fonctions PUBLIQUES.
+#'    Re-mesure avec la detection du garde : **37** fichiers / **174**
+#'    fonctions orphelines, dont **176 privees sur 272** au total du depot
+#'    (36 % des fonctions possedees ne sont citees par AUCUN test).
+#'    ⇒ La conclusion « invariant prospectif » tombe, et avec elle la
+#'    justification de `ERROR`. C9b est un **COMPTEUR DE DETTE** comme C9 et
+#'    C10 : sa severite est `WARN`. ⚠️ Ce n'est PAS un renoncement — c'est le
+#'    meme raisonnement que §14.3 applique **dans l'autre sens** : C16 a ete
+#'    promu parce qu'il mesurait **0** site ; C9b est laisse en avertissement
+#'    parce qu'il en mesure **174**. Une regle dont le compteur depend de la
+#'    mesure, jamais de l'intention.
+check_c9b_owned_functions_mentioned <- function(r_files) {
+  # --- 1. Fonctions definies par fichier, et leur degre de POSSESSION --------
+  defs <- list()
+  for (f in r_files) {
+    ann <- .read_code_lines(f)
+    code <- if (nrow(ann) == 0L) character(0) else ann$code
+    defs[[f]] <- .collect_function_names(code)
+  }
+  universe <- unique(unlist(defs, use.names = FALSE))
+  if (!length(universe)) return(invisible(NULL))
+  holders <- vapply(universe, function(nm) {
+    sum(vapply(defs, function(v) nm %in% v, logical(1)))
+  }, integer(1))
+
+  # --- 2. Univers de TOKENS cites par les tests -----------------------------
+  t_files <- list.files(file.path("tests", "testthat"),
+                        pattern = "[.]R$", full.names = TRUE)
+  test_tokens <- character(0)
+  for (t in t_files) {
+    ann <- .read_code_lines(t)
+    code <- if (nrow(ann) == 0L) character(0) else ann$code
+    test_tokens <- c(test_tokens, .mention_tokens(code))
+  }
+  test_tokens <- unique(test_tokens)
+
+  # --- 3. Le fichier a-t-il un test EPONYME ? (criteres de C9, NON DUPLIQUES)
+  dir_tests <- file.path("tests", "testthat")
+
+  for (f in r_files) {
+    owned <- defs[[f]][holders[defs[[f]]] == 1L]
+    # (1) critere INAPPLICABLE : aucune fonction possedee => hors population.
+    if (!length(owned)) next
+
+    # (2) NON-SUPERPOSITION : si C9 signale deja le fichier, on se tait.
+    base   <- tools::file_path_sans_ext(basename(f))
+    dashed <- gsub("_", "-", base)
+    domain <- basename(dirname(f))
+    cands  <- c(
+      file.path(dir_tests, paste0("test-", base, ".R")),
+      file.path(dir_tests, paste0("test-", dashed, ".R")),
+      file.path(dir_tests, paste0("test-", domain, "-", base, ".R")),
+      file.path(dir_tests, paste0("test-", domain, "-", dashed, ".R"))
+    )
+    alias <- if (domain %in% names(.C9_DOMAIN_ALIAS)) {
+      .C9_DOMAIN_ALIAS[[domain]]
+    } else {
+      NULL
+    }
+    if (!is.null(alias)) {
+      cands <- c(cands,
+                 file.path(dir_tests, paste0("test-", alias, "-", base, ".R")),
+                 file.path(dir_tests,
+                           paste0("test-", alias, "-", dashed, ".R")))
+    }
+    if (!any(file.exists(cands))) next
+
+    # (3) Le VRAI critere : au moins une fonction possedee est-elle citee ?
+    missing <- setdiff(owned, test_tokens)
+    if (length(missing)) {
+      # WARN, pas ERROR : 37 fichiers / 174 fonctions (cf. en-tete, point 4).
+      .add("WARN", "C9b", .rel(f), NA_integer_,
+           sprintf(paste0("test eponyme PRESENT mais %d/%d fonction(s) possedee(s) ",
+                          "jamais mentionnee(s) : %s -> C9 est satisfaite par le NOM, ",
+                          "pas par la couverture."),
+                   length(missing), length(owned),
+                   paste(utils::head(sort(missing), 6L), collapse = ", ")))
+    }
+  }
+}
+
+#' Noms des fonctions definies dans un fichier (motif maison `<nom> <- function`).
+#'
+#' ⚠️ On lit le code ANNOTE (`.read_code_lines()`), pas le texte brut : un
+#' `f <- function` cite dans une CHAINE (cas frequent ici — les fichiers du
+#' depot embarquent des scripts R generes, cf. `R/sc/sc_export.R`) ferait de
+#' `f` une fausse fonction possedee. Meme classe de defaut que C6 (§2bg) et C10.
+#'
+#' ⚠️ DEUX PIEGES MESURES le 2026-09-20, chacun paye par une 1re version FAUSSE
+#' qui signalait **37** fichiers au lieu de **5** :
+#'   - un ARGUMENT NOMME dont l'expression `function` tombe en debut de ligne
+#'     (`}, error = function(e) ...`, `cell_fun = function(...)`) est
+#'     indistinguable d'une definition par une regex LIGNE A LIGNE. Mesure :
+#'     `error`, `cell_fun` (2 faux), plus `create_nested_histograms` et
+#'     `render_communication_sunburst` (formes multi-lignes equivalentes)
+#'     entraient dans la population a couvrir. Remede ADOPTE : la forme `=`
+#'     n'est acceptee qu'a **indentation NULLE** (`^[A-Za-z]`), qui est la
+#'     convention de TOUT le depot pour une definition (`<-` y compris). Le
+#'     filtre est DECLARE : il peut manquer une definition indentee ecrite avec
+#'     `=` (aucune mesuree dans `R/`) — defaut dans le sens CONSERVATEUR, il
+#'     ferait SIGNALER a tort, jamais taire ;
+#'   - les mots RESERVES qui satisfont `[A-Za-z]+ *= *function` (`NA`, `NULL`,
+#'     `TRUE`, `FALSE`, `Inf`, ...) sont ecartes explicitement. Mesure : `NA`
+#'     etait rendu comme « fonction possedee » dans **16** fichiers.
+.collect_function_names <- function(code) {
+  if (!length(code)) return(character(0))
+  get1 <- function(pat, ln) {
+    m <- regexpr(pat, ln, perl = TRUE)
+    if (m < 0L) return(NULL)
+    gsub("`", "", trimws(sub("\\s*(<-|=)\\s*function.*$", "",
+                             regmatches(ln, m))), fixed = TRUE)
+  }
+  # Forme `<-` : n'importe ou (aucun argument nomme ne s'ecrit `<-`), nom
+  # precede d'un debut d'instruction (whitespace seulement).
+  # Forme `=` : INDENTATION NULLE uniquement (definition top-level).
+  pat_arrow <- "^\\s*(`[^`]+`|[.A-Za-z]([.A-Za-z0-9_]|\\.(?![.A-Za-z0-9_]))*)\\s*<-\\s*function"
+  pat_equal <- "^(`[^`]+`|[.A-Za-z]([.A-Za-z0-9_]|\\.(?![.A-Za-z0-9_]))*)\\s*=\\s*function"
+  nm <- c(
+    vapply(code, function(ln) get1(pat_arrow, ln) %||% NA_character_, character(1)),
+    vapply(code, function(ln) get1(pat_equal, ln) %||% NA_character_, character(1))
+  )
+  nm <- unique(nm[!is.na(nm) & nzchar(nm)])
+  # Mots reserves : ils ne peuvent pas nommer une fonction.
+  nm[!nm %in% c("NA", "NULL", "TRUE", "FALSE", "Inf", "NaN", "if", "else",
+                "for", "while", "repeat", "function", "return")]
+}
+
+#' Tokens cites par un fichier de test : identifiants + operateurs infixes.
+#'
+#' Deux regles de precision, chacune payee par un faux positif possible :
+#'   - un POINT n'est admis dans un identifiant que s'il n'est PAS suivi d'un
+#'     caractere de mot : sinon on collecte aussi les methodes S3 `fun.classe`,
+#'     qui ne sont pas des fonctions possedees.
+#'   - les operateurs infixes declares entre backticks (`` `%||%` ``) sont
+#'     ajoutes, sans les quotes : `.collect_function_names()` rend le nom NU.
+.mention_tokens <- function(code) {
+  if (!length(code) || !any(nzchar(code))) return(character(0))
+  blob <- paste(code, collapse = "\n")
+  ids <- unlist(regmatches(blob, gregexpr(
+    "[.A-Za-z]([.A-Za-z0-9_]|\\.(?![.A-Za-z0-9_]))*", blob, perl = TRUE)))
+  ops <- unlist(regmatches(blob,
+                           gregexpr("`%[^`%]{1,10}%`", blob, perl = TRUE)))
+  unique(c(ids, gsub("`", "", ops, fixed = TRUE)))
+}
+
 #' Noms des constructeurs d'erreur CLASSÉE définis dans le projet.
 #'
 #' POURQUOI — le motif maison est un constructeur local :
@@ -1183,6 +1378,11 @@ run_check <- function(strict = FALSE, use_git = TRUE, list_all = FALSE) {
   check_c7_i18n_keys(all_code)
   check_c8_contract_tests()
   check_c9_r_tests(r_files)
+  # C9b (43e increment) — meme POPULATION que C9 (`r_files` seul), decision
+  # explicitement mesuree : `modules/` est hors sujet (C9 n'y est pas applique,
+  # §2bs.6) et `tests/` n'est pas du code de production. Passer une autre liste
+  # ferait de C9b une regle SUPERPOSEE, ce que §14.2 a refuse.
+  check_c9b_owned_functions_mentioned(r_files)
   # ⚠️ PORTÉE : `R/` **et** `modules/`, pas `R/` seul. Jusqu'au 2026-09-17 la
   # règle ne recevait que `r_files` : elle sous-mesurait la dette de 37,5 %
   # (100 sites mesurés sur 160 réels — 48 invisibles dans `modules/`, 12 dans
@@ -1201,8 +1401,8 @@ run_check <- function(strict = FALSE, use_git = TRUE, list_all = FALSE) {
   check_c13_choices_named_values(c(r_files, m_files))
   check_c16_errorcondition_arity(c(r_files, m_files))
 
-  rules <- c("C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11",
-             "C12", "C13", "C16")
+  rules <- c("C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C9b", "C10",
+             "C11", "C12", "C13", "C16")
 
   cat("\n--------------------------------------------------------------------\n")
   cat(sprintf("%-5s %-8s %s\n", "RÈGLE", "NIVEAU", "DESCRIPTION"))
@@ -1217,6 +1417,7 @@ run_check <- function(strict = FALSE, use_git = TRUE, list_all = FALSE) {
     C7  = "toute clé tr() existe dans i18n/translation.json",
     C8  = "chaque contrat gelé est référencé par un test (dette)",
     C9  = "chaque fichier de R/ a son fichier de test (dette)",
+    C9b = "test eponyme PRESENT : ses fonctions sont-elles citees ? (appel)",
     C10 = "stop() classé (errorCondition) ou call. = FALSE (dette)",
     C11 = "primitives parallèles à vérifier (mirai uniquement)",
     C12 = "en-tête commenté dans chaque fichier de R/ (dette)",
@@ -1224,7 +1425,7 @@ run_check <- function(strict = FALSE, use_git = TRUE, list_all = FALSE) {
     C16 = "errorCondition() : un SEUL argument positionnel (sinon message tronqué)"
   )
   lvl <- setNames(rep("ERREUR", length(rules)), rules)
-  lvl[c("C6", "C8", "C9", "C10", "C11", "C12")] <- "AVERT."
+  lvl[c("C6", "C8", "C9", "C9b", "C10", "C11", "C12")] <- "AVERT."
   for (r in rules) {
     n <- sum(vapply(.REPORT$errors, function(e) identical(e$rule, r), logical(1))) +
       sum(vapply(.REPORT$warns, function(e) identical(e$rule, r), logical(1)))
