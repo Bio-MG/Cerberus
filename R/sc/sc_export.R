@@ -28,7 +28,11 @@ sc_r_script_text <- function(obj, shared_rv = NULL) {
                   nrow(shared_rv$markers_data) > 0
   has_corr     <- !is.null(shared_rv) && !is.null(shared_rv$corr_target_gene)
   has_traj     <- "pseudotime" %in% colnames(meta)
-  pca_dims     <- if (has_pca) min(ncol(Embeddings(obj,"pca")), 50) else 20
+  # ⚠️ PREFIXE OBLIGATOIRE : `Embeddings()` est re-exporte par Seurat ET
+  # SeuratObject, mais AUCUN `library(Seurat)` inconditionnel n'existe au boot
+  # de l'app (spatial_async.R:222 ne l'attache que dans une garde paresseuse).
+  # Un appel nu echoue sur `could not find function "Embeddings"` (§2dd, §2dg).
+  pca_dims     <- if (has_pca) min(ncol(Seurat::Embeddings(obj,"pca")), 50) else 20
   n_clusters   <- if (has_clusters) length(levels(factor(meta$seurat_clusters))) else "?"
 
   paste0(

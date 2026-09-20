@@ -431,7 +431,7 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
         } else if (input$reduction_method == "dm") {
           if (requireNamespace("destiny", quietly=TRUE)) {
             library(destiny)
-            dm <- DiffusionMap(t(Embeddings(obj,"pca")[, 1:input$pca_dim]))
+            dm <- DiffusionMap(t(Seurat::Embeddings(obj,"pca")[, 1:input$pca_dim]))
             obj[["dm"]] <- CreateDimReducObject(embeddings=dm@eigenvectors[,1:2],
                                                 key="DM_", assay=DefaultAssay(obj))
           } else {

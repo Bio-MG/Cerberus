@@ -27,17 +27,20 @@
 # ---------------------------------------------------------------------------
 # DEPENDANCE D'EXECUTION INVISIBLE AU VERROU SOURCE (§2by.6 #3) — MESUREE
 # ---------------------------------------------------------------------------
-# Ligne 31 : `pca_dims <- if (has_pca) min(ncol(Embeddings(obj,"pca")), 50) else 20`.
-# `Embeddings()` est appele SANS PREFIXE, or **aucun `library(Seurat)`**
+# Ligne 31 : `pca_dims <- if (has_pca) min(ncol(Seurat::Embeddings(obj,"pca")), 50) else 20`.
+# `Embeddings()` etait appele SANS PREFIXE, or **aucun `library(Seurat)`**
 # inconditionnel n'existe dans le boot de l'app (`spatial_async.R:222` ne
 # l'attache que dans une garde paresseuse). Sonde : sans Seurat attache,
 # `has_pca = TRUE` fait echouer l'appel sur `could not find function "Embeddings"`.
 # ⇒ Ce fichier de test **attache Seurat**, exactement comme `test-sc-plotting.R`
 #   attache ggplot2 pour `ggtitle()` (§2by). C'est la dependance reelle qui est
 #   eprouvee, pas une version mochee.
-#   ⚠️ La convention du depot est PREFIXEE : 11 sites `Seurat::` /
-#   `SeuratObject::` contre 3 nus. Le nu de `sc_export.R:31` est une observation
-#   MESUREE, consignee en `STATUS.md` §2dd — ce lot ne la corrige pas.
+#   ⚠️ La convention du depot est PREFIXEE : 13 sites `Seurat::` /
+#   `SeuratObject::` contre 0 nu. Le nu de `sc_export.R:31` etait une observation
+#   MESUREE, consignee en `STATUS.md` §2dd — **corrigee au §2dg** (`Seurat::`,
+#   prefixe DOMINANT). Les 3 autres sites nus (`sc_helpers.R:1238`,
+#   `mod_sc_pipeline.R:434`, `mod_sc_viz.R:598`) le sont aussi.
+#   ⇒ Le contrat est desormais verrouille par `test-embeddings-prefix.R`.
 #
 # ---------------------------------------------------------------------------
 # TOUTES les attentes sont MESUREES par une sonde hors depot avant d'etre
@@ -298,14 +301,17 @@ test_that("avec PCA, PCA_DIMS est le nombre REEL de composantes (5 ici)", {
 })
 
 test_that("PCA_DIMS est PLAFONNE a 50 par min(ncol(...), 50)", {
-  # L'expression source est `min(ncol(Embeddings(obj,"pca")), 50)`.
+  # L'expression source est `min(ncol(Seurat::Embeddings(obj,"pca")), 50)`.
   # On falsifie le plafond sans dependre de Seurat : on verifie la LIGNE SOURCE,
   # car construire > 50 composantes coute cher et ne testerait que Seurat.
+  # ⚠️ Le prefixe `Seurat::` fait partie du CONTRAT depuis le §2dg : cet appel
+  # est du CODE EXECUTE, et aucun `library(Seurat)` inconditionnel n'existe au
+  # boot (le nu echouait sur `could not find function`). Cf. test-embeddings-prefix.R.
   src <- readLines(file.path(ts_project_root(), "R/sc/sc_export.R"),
                    warn = FALSE, encoding = "UTF-8")
   def <- grep("^\\s*pca_dims\\s*<-", src, value = TRUE)
   expect_length(def, 1L)
-  expect_match(def, "min(ncol(Embeddings(obj,\"pca\")), 50)", fixed = TRUE)
+  expect_match(def, "min(ncol(Seurat::Embeddings(obj,\"pca\")), 50)", fixed = TRUE)
 })
 
 # =============================================================================

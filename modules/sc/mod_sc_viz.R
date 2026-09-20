@@ -595,7 +595,7 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
       updateSelectizeInput(session, "density_gene", choices = gene_choices, server = TRUE)
 
       red_3d <- avail_red[vapply(avail_red, function(r) {
-        tryCatch(ncol(Embeddings(obj, r)) >= 3L, error = function(e) FALSE)
+        tryCatch(ncol(Seurat::Embeddings(obj, r)) >= 3L, error = function(e) FALSE)
       }, logical(1))]
       updateSelectInput(session, "reduction_3d_pick", choices = red_3d,
                         selected = if ("pca" %in% red_3d) "pca" else if (length(red_3d)) red_3d[1] else character(0))

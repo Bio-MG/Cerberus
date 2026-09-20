@@ -1235,7 +1235,8 @@ standardize_sketch_reductions <- function(obj, full_pca_name = "pca.full") {
       umap_candidates <- reds[grepl("umap", reds, ignore.case = TRUE)]
       full_n <- ncol(obj)
       for (cand in umap_candidates) {
-        if (nrow(Embeddings(obj[[cand]])) == full_n) {
+        # ⚠️ Prefixe obligatoire : aucun `library(Seurat)` inconditionnel au boot.
+        if (nrow(Seurat::Embeddings(obj[[cand]])) == full_n) {
           obj[["umap"]] <- obj[[cand]]
           break
         }
