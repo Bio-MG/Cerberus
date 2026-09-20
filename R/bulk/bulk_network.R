@@ -109,10 +109,9 @@ bulk_network_node_roles <- function() {
 #' @param e condition attrapée.
 #' @return character(1) : le champ `state`, ou NA_character_ si non classée.
 #' @export
-bulk_network_error_state <- function(e) {
-  st <- e$state
-  if (is.null(st)) NA_character_ else as.character(st)
-}
+# §14.1 : délégation à l'accesseur générique. Famille F2 MESURÉE — la classe
+# n'est PAS vérifiée : l'état est rendu dès qu'il existe.
+bulk_network_error_state <- function(e) ts_error_state(e)
 
 #' Surface publique figée (le freeze test refuse toute fonction non listée)
 #'

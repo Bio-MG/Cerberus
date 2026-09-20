@@ -53,11 +53,10 @@
 cellchat_engine_states <- function() .CELLCHAT_ENGINE_STATES
 
 #' Etat porte par une erreur du moteur (lecture defensive)
-cellchat_engine_error_state <- function(e) {
-  if (!inherits(e, "condition")) return(NA_character_)
-  st <- tryCatch(e$state, error = function(e2) NULL)
-  if (is.null(st) || length(st) != 1L || is.na(st)) NA_character_ else as.character(st)
-}
+# §14.1 : délégation à l'accesseur générique. Famille F3 MESURÉE — c'est ce
+# corps qui a servi de modèle à `ts_error_state()` ; la classe n'est PAS
+# vérifiée au-delà de `"condition"`.
+cellchat_engine_error_state <- function(e) ts_error_state(e)
 
 .cellchat_engine_stop <- function(state, message) {
   stop(errorCondition(

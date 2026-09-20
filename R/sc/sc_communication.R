@@ -235,9 +235,10 @@ communication_status_is_valid <- function(status) {
 #' @return La chaine d'etat structuree, NA_character_ pour une erreur sans
 #'   etat (ex. erreur R generique).
 #' @export
-communication_error_state <- function(e) {
-  if (inherits(e, "communication_import_error")) e$state else NA_character_
-}
+# §14.1 : délégation à l'accesseur générique. Famille F1 MESURÉE — la CLASSE
+# est vérifiée : l'état d'une erreur d'un autre domaine rend NA.
+# ⚠️ La classe gardée est `communication_import_error`, PAS `communication_error`.
+communication_error_state <- function(e) ts_error_state(e, "communication_import_error")
 
 # Alias de colonnes par source — resolution DETERMINISTE et DOCUMENTEE
 # (column_mapping), jamais une supposition silencieuse entre schemas

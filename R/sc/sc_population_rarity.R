@@ -178,9 +178,9 @@ population_rarity_rule_types <- function() {
 #' @param e Condition (erreur) capturee.
 #' @return Chaine d'etat structuree, NA_character_ pour une erreur sans etat.
 #' @export
-population_rarity_error_state <- function(e) {
-  if (inherits(e, "population_rarity_error")) e$state else NA_character_
-}
+# §14.1 : délégation à l'accesseur générique. Famille F1 MESURÉE — la CLASSE
+# est vérifiée : l'état d'une erreur d'un autre domaine rend NA.
+population_rarity_error_state <- function(e) ts_error_state(e, "population_rarity_error")
 
 # Champ vide ? (NA, "" ou whitespace) — VECTORISE (meme longueur que x).
 # Utilise sur des colonnes entieres (libelles, echantillons).

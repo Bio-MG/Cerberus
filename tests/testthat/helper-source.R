@@ -47,3 +47,11 @@ source_project_file <- function(relpath) {
 }
 .local_source_if_exists("config/defaults.R")
 .local_source_if_exists("config/thresholds.R")
+
+# §14.1 : `ts_error_state()` est appelé par les 11 accesseurs `*_error_state()`
+# de R/bulk/ et R/sc/ (délégation d'une ligne). app.R le source dans le bloc
+# CORE, donc AVANT tout domaine — le bootstrap de test doit refléter app.R.
+# Sans cette ligne, un test qui source UN SEUL fichier de domaine (ex.
+# test-bulk-network.R) perd l'accesseur et échoue pour une raison étrangère à
+# son sujet. Les deux lignes ci-dessus suivent déjà ce motif pour config/.
+.local_source_if_exists("R/core/error_state.R")

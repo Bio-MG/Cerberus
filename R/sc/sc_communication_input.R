@@ -111,9 +111,9 @@ cellchat_database_for_species <- function(species) {
 #' @param e Condition (erreur) capturee.
 #' @return La chaine d'etat structuree, NA_character_ pour une erreur sans etat.
 #' @export
-cellchat_input_error_state <- function(e) {
-  if (inherits(e, "cellchat_input_error")) e$state else NA_character_
-}
+# §14.1 : délégation à l'accesseur générique. Famille F1 MESURÉE — la CLASSE
+# est vérifiée : l'état d'une erreur d'un autre domaine rend NA.
+cellchat_input_error_state <- function(e) ts_error_state(e, "cellchat_input_error")
 
 # ---------------------------------------------------------------------------
 # Helpers internes

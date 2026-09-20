@@ -184,9 +184,9 @@ sccoda_status_labels <- function() {
 #' @param e Condition (erreur) capturee.
 #' @return Chaine d'etat structuree, NA_character_ pour une erreur sans etat.
 #' @export
-sccoda_error_state <- function(e) {
-  if (inherits(e, "sccoda_error")) e$state else NA_character_
-}
+# §14.1 : délégation à l'accesseur générique. Famille F1 MESURÉE — la CLASSE
+# est vérifiée : l'état d'une erreur d'un autre domaine rend NA.
+sccoda_error_state <- function(e) ts_error_state(e, "sccoda_error")
 
 #' Champ vide ? (NA, "" ou whitespace)
 .sccoda_is_blank <- function(x) {
