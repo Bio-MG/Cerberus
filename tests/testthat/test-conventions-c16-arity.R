@@ -78,6 +78,32 @@ source_project_file("tools/check_conventions.R")
               integer(1), USE.NAMES = FALSE))
 }
 
+# ---------------------------------------------------------------------------
+# 🔴 §2df.10 — NETTOYAGE D'ENTREE (au niveau du FICHIER, pas d'un bloc)
+# ---------------------------------------------------------------------------
+# Le bloc « C16 est BLOQUANT sans --strict » ÉCRIT une violation dans `R/`
+# (obligatoire : la garde ne scanne que `R/`) et la retire par `on.exit()`.
+# Or `on.exit()` ne s'exécute PAS sur SIGTERM/SIGSEGV : une suite INTERROMPUE
+# laisse `R/zzz_probe_c16_tmp.R` sur le disque.
+#
+# Conséquence MESURÉE le 2026-09-20 : ce résidu a (a) fait rougir
+# `test-app-sourcing.R` — le garde P0 qui exige que `app.R` source tout fichier
+# de `R/` — et (b) fait rougir DEUX assertions de CE fichier, celles qui
+# exigent un dépôt conforme (`.c16_flagged_lines` sur `R/`) et un statut de
+# garde à 0. Le tout dans une session qui n'avait rien cassé.
+#
+# ⚠️ Un `unlink()` placé DANS le bloc concerné ne suffit PAS : testthat évalue
+# les `test_that` dans l'ordre du fichier, et les assertions qui mesurent le
+# dépôt (lignes ~124 et ~197) s'exécutent AVANT le bloc qui écrit (~205). Le
+# nettoyage doit donc être au niveau du FICHIER, avant tout `test_that`.
+#
+# ⚠️ Ce n'est PAS un pansement : la sentinelle ci-dessous est elle-même
+# testée (bloc dédié plus bas), pour que le mode de défaillance reste visible.
+.c16_probe_path <- function() {
+  file.path(ts_project_root(), "R", "zzz_probe_c16_tmp.R")
+}
+unlink(.c16_probe_path())     # résidu d'une exécution précédente TUÉE
+
 test_that("C16 : le message multi-arguments est SIGNALE, les formes legitimes non", {
   lines <- c(
     'stop(errorCondition("a", "b", class = "x"))',                     # 1 SIGNALE
@@ -200,11 +226,74 @@ test_that("C16 est BLOQUANT sans --strict (invariant §14.3)", {
   # (mesuré) ⇒ le fichier est bien vu par la garde.
   # ⚠️ Ce fichier déclenche AUSSI C9 et C12 — des AVERTISSEMENTS, non bloquants.
   #    C'est précisément l'objet de la mesure : seul le canal ERREUR décide.
-  probe <- file.path(ts_project_root(), "R", "zzz_probe_c16_tmp.R")
+  #
+  # 🔴 §2df.10 — CE TEST ÉCRIT DANS L'ARBRE, ET SON NETTOYAGE NE SURVIT PAS À UN
+  #    `kill`. `on.exit()` ne s'exécute PAS sur SIGTERM/SIGSEGV : une suite
+  #    interrompue LAISSE `R/zzz_probe_c16_tmp.R` sur le disque. Conséquence
+  #    MESURÉE le 2026-09-20 (20:30) : `test-app-sourcing.R` — le garde P0 qui
+  #    exige que `app.R` source tout fichier de `R/` — est devenu ROUGE
+  #    (`fail=1`) à cause de ce résidu, dans une session qui n'avait rien cassé.
+  #    ⇒ L'IDEMPOTENCE NE SUFFIT PAS ICI : on NETTOIE AVANT d'écrire, pour que
+  #    le résidu d'une exécution tuée soit réparé par la suivante. Le test reste
+  #    ce qu'il était (il doit écrire dans `R/` pour que la garde le voie) ;
+  #    c'est le MODE DE DÉFAILLANCE qui change : de « l'arbre reste sale » à
+  #    « le prochain passage répare ».
+  probe <- .c16_probe_path()
+  unlink(probe)                       # résidu d'une exécution précédente TUÉE
   writeLines('f <- function() stop(errorCondition("a", "b", class = "x"))',
              probe, useBytes = TRUE)
   on.exit(unlink(probe), add = TRUE)
 
+  expect_identical(.c16_guard_once()$status, 1L)
+})
+
+test_that("C16 : le nettoyage d'ENTREE existe et est au niveau du FICHIER (§2df.10)", {
+  # Ce test verrouille le MODE DE DÉFAILLANCE, pas la règle.
+  #
+  # Le bloc « BLOQUANT sans --strict » ÉCRIT dans `R/` (obligatoire : la garde
+  # ne scanne que `R/`) et retire sa trace par `on.exit()`. Or `on.exit()` ne
+  # s'exécute PAS sur SIGTERM/SIGSEGV ⇒ une suite INTERROMPUE laisse
+  # `R/zzz_probe_c16_tmp.R` sur le disque. MESURÉ le 2026-09-20 : ce résidu a
+  # (a) fait rougir `test-app-sourcing.R` (garde P0 : `app.R` doit sourcer tout
+  # fichier de `R/`) et (b) fait rougir les DEUX assertions de CE fichier qui
+  # mesurent le dépôt. Dans une session qui n'avait rien cassé.
+  #
+  # ⚠️ La leçon de conception : un `unlink()` DANS le bloc qui écrit est
+  # INSUFFISANT, car testthat évalue les `test_that` dans l'ordre du fichier et
+  # les assertions « dépôt conforme » (~l. 124 et ~197) passent AVANT le bloc
+  # qui écrit (~l. 205). Le nettoyage doit donc vivre au niveau du FICHIER.
+  # C'est ce que ce test protège : si quelqu'un déplace le `unlink()` dans un
+  # bloc, il casse ici — AVANT de casser `test-app-sourcing.R`.
+
+  # (1) Le helper existe (le déplacer/supprimer doit faire échouer ici).
+  expect_true(exists(".c16_probe_path", mode = "function"))
+  expect_identical(.c16_probe_path(),
+                   file.path(ts_project_root(), "R", "zzz_probe_c16_tmp.R"))
+
+  # (2) L'APPEL de nettoyage est bien AU NIVEAU DU FICHIER, c.-à-d. HORS de tout
+  #     `test_that`. On le lit dans la source : le `unlink(.c16_probe_path())`
+  #     d'entrée doit apparaître AVANT la première ligne `test_that(`.
+  #     ⚠️ Lecture de SOURCE, donc on retire les commentaires d'abord (sinon on
+  #     compterait les mentions du commentaire d'explication ci-dessus).
+  src <- readLines("test-conventions-c16-arity.R", warn = FALSE)
+  code <- sub("#.*$", "", src)
+  first_test <- min(grep("^\\s*test_that\\(", code))
+  clean_line <- grep("^\\s*unlink\\(\\.c16_probe_path\\(\\)\\)", code)
+  expect_true(length(first_test) == 1L && is.finite(first_test))
+  expect_true(length(clean_line) >= 1L,
+              info = "le nettoyage d'entree doit exister")
+  expect_true(min(clean_line) < first_test,
+              info = paste0("le nettoyage d'entree (l.", min(clean_line),
+                            ") doit preceder le 1er test_that (l.", first_test,
+                            ") : sinon les assertions qui mesurent le depot",
+                            " tournent AVANT lui et le residu les fait rougir."))
+
+  # (3) TÉMOIN DE NON-VACUITÉ : la garde voit bien ce chemin. Sans cela, tout ce
+  #     qui précède passerait même si `R/` n'était plus scanné.
+  probe <- .c16_probe_path()
+  writeLines('f <- function() stop(errorCondition("a", "b", class = "x"))',
+             probe, useBytes = TRUE)
+  on.exit(unlink(probe), add = TRUE)
   expect_identical(.c16_guard_once()$status, 1L)
 })
 

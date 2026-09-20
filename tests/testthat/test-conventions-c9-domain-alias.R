@@ -109,14 +109,15 @@ test_that("C9 : dans R/plotting/, SEUL palettes.R reste signale (invariant)", {
   expect_identical(.c9_flagged(plotting), "R/plotting/palettes.R")
 })
 
-test_that("C9 : le plafond de dette est 20 (mesure du 44e increment, §2dd)", {
+test_that("C9 : le plafond de dette est 19 (mesure du 45e increment, §2df)", {
   # Plafond, pas egalite : le compte doit pouvoir BAISSER quand un test est
   # ecrit, mais ne doit jamais REMONTER (une regression de l'alias le ferait).
   # ⚠️ Le plafond SUIT la derniere mesure : il valait 22 (§2cy), puis 21 (§2db),
-  # et vaut 20 depuis §2dd (test eponyme de `R/sc/sc_export.R`). Le laisser a sa
-  # valeur ancienne autoriserait un retour en arriere SILENCIEUX de 2 fichiers.
+  # 20 (§2dd), et vaut 19 depuis §2df (test eponyme de
+  # `R/spatial/spatial_report.R`). Le laisser a sa valeur ancienne autoriserait
+  # un retour en arriere SILENCIEUX d'un fichier.
   flagged <- .c9_flagged(.c9_population())
-  expect_true(length(flagged) <= 20L)
+  expect_true(length(flagged) <= 19L)
   # Et le contrat dans l'autre sens, pour que le plafond ne devienne pas
   # infalsifiable si la garde cesse de signaler quoi que ce soit : la population
   # C9 n'est pas vide (temoin de NON-VACUITE).

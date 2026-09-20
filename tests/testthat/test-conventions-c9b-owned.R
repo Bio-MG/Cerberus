@@ -184,12 +184,14 @@ test_that("C9b : les fichiers de la mesure INITIALE sont TOUS hors population C9
                info = paste(intersect(files, flagged), collapse = ", "))
   # (2) ETAT : ceux qui n'ont TOUJOURS pas de test eponyme restent portes par C9.
   #     `sc_export.R` est exclu nommement : §2dd lui a ecrit `test-sc-export.R`.
-  #     ⚠️ Si un futur lot paie C9 pour l'un des 3 restants, ce test rougira —
+  #     `spatial_report.R` est exclu nommement : §2df lui a ecrit
+  #     `test-spatial-report.R` (la prediction de ce commentaire s'est realisee
+  #     une 2ᵉ fois — la reaction a bien ete de le retirer de la liste).
+  #     ⚠️ Si un futur lot paie C9 pour l'un des 2 restants, ce test rougira —
   #     et c'est VOULU : la reaction est de le retirer de cette liste et
   #     d'ajouter une ligne au solde (c'est exactement ce qui s'est passe ici).
   encore_c9 <- c("R/spatial/spatial_deconv_prep.R",
-                 "R/spatial/spatial_export.R",
-                 "R/spatial/spatial_report.R")
+                 "R/spatial/spatial_export.R")
   for (f in encore_c9) {
     expect_true(f %in% .c9_flagged(.c9b_abs(f)),
                 info = f)
@@ -203,6 +205,24 @@ test_that("C9b : les fichiers de la mesure INITIALE sont TOUS hors population C9
   expect_false("R/sc/sc_export.R" %in% .c9_flagged(abs_export))
   expect_true(abs_export %in% .c9b_population())
   expect_false("R/sc/sc_export.R" %in% flagged)
+  # (2b-bis) 2ᵉ changement de camp, meme forme : §2df a ecrit
+  #      `test-spatial-report.R` ⇒ `spatial_report.R` quitte C9 a son tour.
+  #      ⚠️ La clause (1) ci-dessus reste VRAIE pour lui : maintenant qu'il a un
+  #      test eponyme ET que son code est cite, C9b ne le signale pas non plus.
+  #      C'est le sens de l'INVARIANTE — elle tient aux DEUX etats.
+  abs_report <- .c9b_abs("R/spatial/spatial_report.R")
+  expect_false("R/spatial/spatial_report.R" %in% .c9_flagged(abs_report))
+  expect_true(abs_report %in% .c9b_population())
+  expect_false("R/spatial/spatial_report.R" %in% flagged)
+  # (2c-bis) COUVERTURE REELLE, ici aussi : `spatial_report.R` est CITE, pas
+  #      seulement « sorti de C9 » par un `touch`.
+  defs_rep <- .collect_function_names(.read_code_lines(abs_report)$code)
+  expect_true("build_spatial_report_dataset" %in% defs_rep)
+  mentions_rep <- .mention_tokens(.read_code_lines(
+    .c9b_abs("tests/testthat/test-spatial-report.R"))$code)
+  expect_true(all(c("build_spatial_report_dataset",
+                    "find_spatial_report_template") %in% mentions_rep),
+              info = "les 2 fonctions possedees doivent etre citees")
   # (2c) ET LA COUVERTURE EST REELLE : il n'est pas seulement « sorti de C9 »
   #      (ce qu'un simple `touch tests/.../test-sc-export.R` obtiendrait), il
   #      est CITE. C'est la distinction que C9 ne fait pas (§2dc.8) et que le
@@ -219,14 +239,23 @@ test_that("C9b : les fichiers de la mesure INITIALE sont TOUS hors population C9
 })
 
 test_that("C9b : sans test eponyme, C9b se TAIT — c'est C9 qui parle (non-superposition)", {
-  # Direction 4, cas concret. `R/spatial/spatial_report.R` est un trou REEL
-  # (ses 2 fonctions possedees ne sont citees nulle part) mais il n'a aucun test
+  # Direction 4, cas concret. `R/spatial/spatial_export.R` est un trou REEL
+  # (ses 8 fonctions possedees ne sont citees nulle part) mais il n'a aucun test
   # eponyme : C9 le signale deja, et l'y ajouter produirait un DOUBLON — pas une
   # information. C'est la clause que §14.2 a posee, et elle est ici verrouillee.
-  expect_false("R/spatial/spatial_report.R" %in% .c9b_flagged(.c9b_population()))
+  # ⚠️ Ce bloc illustrait `spatial_report.R` jusqu'au §2df : ce lot lui a ecrit
+  # `test-spatial-report.R`, donc il n'est PLUS un exemple du cas « sans test
+  # eponyme ». Le prendre a nouveau rougirait — remplacer l'EXEMPLE est la
+  # reaction attendue, exactement comme pour la clause (2).
+  expect_false("R/spatial/spatial_export.R" %in% .c9b_flagged(.c9b_population()))
   # Temoin de VALIDITE : C9 doit bien le signaler, LUI (sinon l'assertion
   # ci-dessus serait vraie pour une trivialite — fichier inexistant, etc.).
-  expect_true("R/spatial/spatial_report.R" %in% .c9_flagged(.c9b_abs("R/spatial/spatial_report.R")))
+  expect_true("R/spatial/spatial_export.R" %in% .c9_flagged(.c9b_abs("R/spatial/spatial_export.R")))
+  # Et la BORNE inverse, qui rend l'exemple honnete : le fichier qui VIENT de
+  # recevoir son test eponyme n'est plus, lui, un cas de non-superposition —
+  # il est hors de la classe. Sans cette assertion, on pourrait « reparer » le
+  # test en gardant un exemple perime.
+  expect_false("R/spatial/spatial_report.R" %in% .c9_flagged(.c9b_abs("R/spatial/spatial_report.R")))
 })
 
 # =============================================================================

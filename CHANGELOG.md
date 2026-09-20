@@ -21,6 +21,300 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > **chronologique** : `PLOT-S6` → **`§2ax`**, `4E-4` → **`§2ay`**. ⚠️ Le message
 > du commit `03951cb` cite encore `§2ax` pour 4E-4 : c'est l'état **avant** la
 > renumérotation. Détail : `STATUS.md` §6, item 6.
+>
+> ✅ **Trou de maintenance des incréments 21 → 45 COMBLÉ le 2026-09-20** : le
+> fichier s'arrêtait au **20ᵉ** incrément (2026-09-18) alors que `STATUS.md` en
+> comptait **45** ⇒ **25 jalons** n'avaient **aucune** entrée. Les 25 entrées ont
+> été **écrites d'après `STATUS.md`** (`§2cf`…`§2df`), **pas** d'après le message
+> de commit : ce fichier est un **index**, il **cite**, il ne **re-mesure** pas.
+> ⚠️ Les chiffres de garde de ces entrées sont ceux **consignés** dans `STATUS.md`
+> au moment du jalon ; en cas d'écart, **`STATUS.md` §0 et §6 font foi**.
+
+## [V1.x — dette de conventions, 45ᵉ incrément] — 2026-09-20 — `R/spatial/spatial_report.R` : C9 payé, **et un 2ᵉ P0 de produit trouvé par le test**
+
+Écrit `test-spatial-report.R` (**17** blocs, **52** assertions) — le dernier fichier de `R/`
+dont **aucune** fonction n'était citée. Le test a révélé un défaut **antérieur** :
+
+### Corrigé
+- 🔴 **P0 de produit** : `build_spatial_report_dataset()` rendait `NULL` au lieu de son
+  instantané documenté pour **tout** jeu de données **sans histologie** — c'est-à-dire le cas
+  **ordinaire**. Trois `return(NULL)` vivaient à l'intérieur d'un `tryCatch` **argument** de
+  `list(...)` : en R, `return()` y sort de la **fonction**, donc le `list(...)` n'était **jamais
+  construit**. Les appelants (`mod_spatial_report.R:149` et `:157`) poussaient `NULL` dans
+  `ds_list`, transmis au Rmd comme `datasets` ⇒ **perte silencieuse** de l'instantané.
+  Corrigé en `if`/élse rendant des valeurs.
+- 🟡 En-tête périmé : `R/utils_spatial_report.R` → `R/spatial/spatial_report.R`
+  (🔴 défaut **systémique mesuré** : **10** fichiers de `R/spatial/` déclarent encore `R/utils_*.R`).
+
+### Vérifié
+- Règle 0 exécutée en entier : test **écrit d'abord** (🔴 **25 fail / 26 pass**) → correctif →
+  🟢 **0 fail / 52 pass** → **falsifié** (un `return(NULL)` réintroduit ⇒ **23 fail / 29 pass**) →
+  **restauré à l'octet** (md5 `458c697f…`).
+- Garde : `0 erreur / 58 avert.` → **`0 erreur / 57 avert.`** ; **C9 20 → 19** ; C9b **inchangé à 37** ;
+  C10 = 0. `spatial_report.R` **n'est pas** dans la liste C9b ⇒ paiement le plus propre du chantier.
+
+### Constaté (listé, NON corrigé)
+- `Embeddings()` **non préfixé** en **4** sites (re-mesuré : `sc_export.R:31`, `sc_helpers.R:1238`,
+  `mod_sc_pipeline.R:434`, `mod_sc_viz.R:598`) — et non **1** comme l'affirmait §2dd.5.
+
+## [V1.x — dette de conventions, 44ᵉ incrément] — 2026-09-20 — C9 direct : `R/sc/sc_export.R` + **un P0 trouvé en chemin**
+
+### Corrigé
+- 🔴 **P0 de produit** : le script R **généré** par `sc_r_script_text()` n'était **pas du R valide**
+  dans la branche `has_mt = FALSE` — un **`else` orphelin** (R exige que `else` commence sur la
+  **même ligne** que la fin du `if`). **Portée** : l'export était **inexécutable** pour tout objet
+  **sans** `percent.mt`, sur **les deux** sorties (téléchargement **et** rapport). Corrigé en
+  **2** lignes (+2/−2, accolades), **falsifié** (bug restauré à l'octet ⇒ **1** assertion rouge).
+- 🟢 Test éponyme `test-sc-export.R` — **C9 21 → 20**, gardes **59 → 58**.
+
+### 🔴 Une affirmation écrite TROIS fois, corrigée par la mesure
+« `sc_export.R` est le **seul** fichier dont aucune fonction n'est citée » (§2da.5, §2dc.3, §2dc.11.1) :
+ils sont **3** — `R/sc/sc_export.R` (**0/1**, soldé ici), `R/spatial/spatial_export.R` (**0/8**),
+`R/spatial/spatial_report.R` (**0/2**). ⚠️ **Un chiffre n'est pas une mesure parce qu'il est écrit.**
+
+### 🔴 Le lot a CASSÉ DEUX TESTS DE GARDE
+`test-conventions-c9b-owned.R` et `test-conventions-c9-domain-alias.R` (**1 fail** chacun) parce
+qu'ils **épinglaient une PHOTOGRAPHIE de la population C9**, mêlant une **invariante** de la règle à
+un **état** du dépôt. Le correctif **n'a pas supprimé** les assertions (elles seraient devenues
+**infalsifiables**) : il **sépare** les deux, garde l'**invariante**, assère le **solde dans les deux
+sens**, ajoute une assertion de **couverture réelle**, et abaisse le **plafond de dette de 22 à 20**
+avec une assertion de **non-vacuité**. 🔑 *Un test qui épingle une POPULATION doit distinguer
+l'**invariante de la règle** de l'**instantané du dépôt**.* ⚠️ **Corollaire** : un lot **« local »** peut
+casser les tests d'une **autre** règle ⇒ la suite **complète** n'est **jamais** facultative.
+
+## [V1.x — dette de conventions, 43ᵉ incrément] — 2026-09-20 — `C9b` CODÉE, et la prémisse de §14.2 était FAUSSE
+
+### Ajouté
+- 🛡️ **Règle `C9b`** (`tools/check_conventions.R`) : signale « test éponyme PRÉSENT, code jamais
+  cité ». Population = fichiers ayant **déjà** un test éponyme ; sévérité **`WARN`**.
+
+### 🔴 La prémisse « 0 signalement » ÉTAIT FAUSSE
+La sonde d'origine portait **deux** cécités **silencieuses**, dont une regex de noms qui ne
+**capturait jamais** un identifiant **commençant par `.`** ⇒ **195** fonctions **privées** invisibles
+(**36 %** des **762** fonctions possédées). Mesure réelle : **37** fichiers / **174** fonctions
+orphelines, chaque fois **re-confirmée** par recomputation indépendante (**34** ; l'écart de **3** est
+l'**alias de domaine** `plotting → plot`, §2cy).
+⇒ **Verdict INVERSE de §14.3** (`C16`, lui, a **0** site sur **136** fichiers ⇒ **`ERREUR`**).
+🔑 *La sévérité se décide sur le COÛT MESURÉ, jamais sur la forme de la règle* — et **la mesure
+doit venir d'une sonde PROUVÉE SAINE**, sinon on grave dans la doctrine un chiffre faux.
+
+## [V1.x — dette de conventions, 42ᵉ incrément] — 2026-09-20 — C9 : le premier lot choisi sur la MESURE DE COUVERTURE
+
+### Modifié
+- `R/spatial/spatial_plotting.R` : test éponyme **écrit** — **C9 22 → 21**.
+
+### 🟢 Premier lot C9 choisi par la mesure de couverture, pas par la liste du garde
+`spatial_plotting.R` était le **seul** fichier signalé dont **aucune** des **10** fonctions n'était
+citée par un test ⇒ le test **exerce** réellement le fichier, au lieu de satisfaire la règle par
+son **nom**.
+
+## [V1.x — dette de conventions, 41ᵉ incrément] — 2026-09-20 — §14.1 CODÉ : `ts_error_state()`, et la PRÉMISSE de la décision était FAUSSE
+
+### Ajouté
+- 🟢 `R/core/error_state.R` : **`ts_error_state(e, class = NULL)`** — les **11** accesseurs
+  `*_error_state()` deviennent des **délégations d'une ligne** (leur nom est appelé par les
+  contrats gelés : on ne les renomme pas).
+
+### 🔴 La prémisse écrite de §14.1 était FAUSSE
+« les 11 corps sont textuellement identiques » : mesure ⇒ **3** familles (**7** gardés par leur
+classe, **3** aveugles, **1** gardé sur `"condition"`), et la divergence est **observable** — les
+aveugles rendent l'état d'une erreur **étrangère**, les gardés rendent `NA`. D'où l'**élargissement**
+de la forme prescrite d'un argument `class` **optionnel**, qui **reproduit** les trois familles au
+lieu d'en changer une. ⚠️ **Aucun compteur de garde ne bouge** (C9 = 22, C10 = 0, C11 = 1, C16 = 0).
+
+### ⚠️ Piège
+- **Sans** la ligne ajoutée à `helper-source.R`, le lot casse **11 domaines** : `test-bulk-network.R`
+  ne source que son propre fichier.
+
+## [V1.x — dette de conventions, 40ᵉ incrément] — 2026-09-19 — §14.3 CODÉ : `C16` passe en `ERREUR` (au SOURCE de la sévérité)
+
+### Modifié
+- 🛡️ **`C16`** (`paste0()`/`paste()` appelé seul) est promue **`ERREUR`** et codée — au **source
+  de la sévérité**, c'est-à-dire au **canal** de `.add()`.
+
+### 🔑 Leçon
+- **La sévérité EFFECTIVE d'une règle est le CANAL de `.add()`, pas son libellé** : `lvl` n'est lu
+  que pour l'**affichage**. Mesure : **0** site sur **136** fichiers ⇒ `ERREUR` est sans coût.
+
+## [V1.x — dette de conventions, 39ᵉ incrément] — 2026-09-19 — CORRECTION DE MESURE C9 : l'alias de domaine
+
+### Corrigé
+- 🔴 **Erreur de mesure** : le calcul de la population `C9b` séparait à tort **`plotting`** de
+  **`plot`** — ce sont les **mêmes** test (**C9 26 → 22** après correction).
+
+### 🔑 Leçon
+- Un **alias de domaine** ne se voit **pas** en lisant la règle : il se **mesure**.
+
+## [V1.x — dette de conventions, 38ᵉ incrément] — 2026-09-19 — `modules/sc/mod_sc_velocity.R` classe `sc_velocity_error` : 🏁 la dette C10 est SOLDÉE
+
+### Modifié
+- `modules/sc/mod_sc_velocity.R` : **10 → 1** site apres classement — **C10 1 → 0**.
+- 🏁 **C10 = 0 site dans tout le dépôt** : la dette **C10 est SOLDÉE**.
+
+### 🔑 Ce qui reste
+- Ce qui reste ouvert n'est **plus** C10 mais **C9** (**20** fichiers, dont **2** à couverture
+  **nulle**) **et** `C9b` (**37**).
+
+## [V1.x — dette de conventions, 37ᵉ incrément] — 2026-09-19 — `modules/sc/mod_sc_pipeline.R` classe `mod_sc_pipeline_error`
+
+### Modifié
+- `modules/sc/mod_sc_pipeline.R` → classe `mod_sc_pipeline_error` — **C10 2 → 1**.
+
+### Corrigé
+- 🔴 **Défaut latent** de `sprintf()` corrigé au passage.
+
+## [V1.x — dette de conventions, 36ᵉ incrément] — 2026-09-19 — `R/sc/sc_velocity.R` rejoint la classe EXISTANTE `velocity_validation_error`
+
+### Modifié
+- `R/sc/sc_velocity.R` : les sites rejoignent la classe **existante** `velocity_validation_error`
+  — **C10 3 → 2**. 🏁 **Le front `R/` est TERMINÉ.**
+
+## [V1.x — dette de conventions, 35ᵉ incrément] — 2026-09-19 — `bulk_batch_qc.R` classe `bulk_batch_qc_error`, et le `state` d'une erreur AVALÉE
+
+### Modifié
+- `R/bulk/bulk_batch_qc.R` → `bulk_batch_qc_error` — **C10 4 → 3**.
+
+### 🔑 Résultat de doctrine
+- Le **`state` d'une erreur AVALÉE** : démonstration qu'une erreur **avalée** par un gestionnaire qui
+  **retourne** une valeur ne peut pas être observée par sa classe ⇒ preuve = **verrou source**.
+
+## [V1.x — dette de conventions, 34ᵉ incrément] — 2026-09-19 — `mod_sc_markers.R` classe `sc_markers_error`, et les 4 décisions ouvertes TRANCHÉES
+
+### Modifié
+- `modules/sc/mod_sc_markers.R` → classe `sc_markers_error` — **C10 5 → 4**.
+
+### 🟢 `docs/CONVENTIONS.md` §14 — les 4 décisions ouvertes sont TRANCHÉES
+- `state`/`class` = **deux axes orthogonaux** + **UN** accesseur générique ⇒ **`R/` est DÉBLOQUÉ**
+  (les 2 lots gelés redeviennent convertibles) ;
+- `C9b` = forme B **avec clause de non-superposition** (0 signal neuf) ;
+- `C16` = **promu `ERREUR`** et **codé** (§14.3, §2cz — au **source** de la sévérité) ;
+- portée de `C6` = **profondeur d'accolade 0**.
+
+## [V1.x — dette de conventions, 33ᵉ incrément] — 2026-09-19 — `mod_bulk_de_multimethod.R` → `bulk_de_multimethod_error`
+
+### Modifié
+- `modules/bulk/mod_bulk_de_multimethod.R` → `bulk_de_multimethod_error` — **C10 6 → 5**.
+  **6ᵉ domaine `modules/` bouclé**.
+
+## [V1.x — dette de conventions, 32ᵉ incrément] — 2026-09-18 — `modules/bulk/mod_bulk_report.R` → `bulk_report_error` — **la CLASSE S'ÉCHAPPE**
+
+### Modifié
+- `modules/bulk/mod_bulk_report.R` → `bulk_report_error` — **C10 7 → 6**, dette **34 → 33**.
+  Domaine `modules/bulk/` **bouclé**.
+
+### 🟢 Verdict INVERSE de §2cp/§2cq
+- **La classe S'ÉCHAPPE** (aucun gestionnaire avaleur sur le chemin de sortie) : preuve
+  **COMPORTEMENTALE**. Le **discriminant** est la présence d'un gestionnaire qui **retourne** une
+  valeur, **pas** le dossier ni le construit.
+
+## [V1.x — dette de conventions, 31ᵉ incrément] — 2026-09-18 — `modules/import/mod_import_spatial.R` → `spatial_import_error`
+
+### Modifié
+- `modules/import/mod_import_spatial.R` → `spatial_import_error` — le lot qui **BOUCLE** — et
+  **CORRIGE** — un domaine.
+
+### 🔑 Premier **contrôle de BORNE** réel
+- Le site est le **bras par DÉFAUT** d'un `switch()`.
+
+## [V1.x — dette de conventions, 30ᵉ incrément] — 2026-09-18 — `modules/bulk/mod_bulk.R` → `mod_bulk_error`
+
+### Modifié
+- `modules/bulk/mod_bulk.R` → `mod_bulk_error` — **C10 9 → 8**. 2ᵉ **routeur parent**.
+
+### 🔑 « ATTEIGNABLE » n'est PAS « OBSERVABLE »
+- Le corps du site est **atteint** (prouvé par témoin : le message du garde ressort par la
+  notification) mais son erreur est **AVALÉE** par un `tryCatch` dont le gestionnaire **retourne**
+  une valeur au lieu de relancer ⇒ preuve = **verrou source**, rendu **falsifiable** par un test qui
+  assère que le gestionnaire ne contient pas `stop(`.
+
+### 🟢 Technique neuve et réutilisable
+- `shiny::withReactiveDomain(shiny::MockShinySession$new(), …)` **débloque les primitives à
+  session** appelées via `::` (`Progress$new()`, `removeModal()`) — exactement le motif qui avait
+  fait conclure « injoignable » au §2cc.
+
+## [V1.x — dette de conventions, 29ᵉ incrément] — 2026-09-18 — `modules/sc/mod_sc.R` → `mod_sc_error` (lot « qui paie DEUX fois »)
+
+### Modifié
+- `modules/sc/mod_sc.R` → **`mod_sc_error`** — **C10 11 → 9**.
+
+### 🟢 Doctrine de nommage tranchée
+- Un **routeur parent** (`mod_sc.R`, `mod_bulk.R`, `mod_spatial.R`) n'a **pas** de domaine unique
+  ⇒ sa classe porte le **FICHIER**, `mod_` inclus (`mod_sc_error`) — **pas** `sc_error`, nom
+  **interdit** par `CONVENTIONS.md` §7.
+
+## [V1.x — dette de conventions, 28ᵉ incrément] — 2026-09-18 — re-qualification de 10 sites, puis `mod_bulk_pathways.R` → `bulk_pathways_error`
+
+### Modifié
+- Re-qualification des **10** sites de `modules/`, puis `mod_bulk_pathways.R` →
+  `bulk_pathways_error` — **C10 12 → 11**.
+
+## [V1.x — dette de conventions, 27ᵉ incrément] — 2026-09-18 — `mod_spatial_deconv_refviz.R` → `spatial_deconv_refviz_error`
+
+### Modifié
+- `modules/spatial/mod_spatial_deconv_refviz.R` → `spatial_deconv_refviz_error` —
+  **C10 13 → 12**.
+
+## [V1.x — dette de conventions, 26ᵉ incrément] — 2026-09-18 — re-qualification de 12 sites, puis `mod_spatial_pipeline.R` → `spatial_pipeline_error`
+
+### Modifié
+- Re-qualification des **12** sites de `modules/`, puis `mod_spatial_pipeline.R` →
+  `spatial_pipeline_error` — **C10 14 → 13**.
+
+## [V1.x — dette de conventions, 25ᵉ incrément] — 2026-09-18 — `modules/spatial/mod_spatial_cluster.R` → `spatial_cluster_error`
+
+### Modifié
+- `modules/spatial/mod_spatial_cluster.R` → `spatial_cluster_error` — **C10 16 → 14**.
+
+## [V1.x — dette de conventions, 24ᵉ incrément] — 2026-09-18 — `R/sc/sc_pipeline.R` → `sc_pipeline_error`
+
+### Modifié
+- `R/sc/sc_pipeline.R` → `sc_pipeline_error` — **premier lot du chantier qui ne paie QUE C10**.
+
+### 🔴 Et son test éponyme est TROMPEUR, mesuré
+- `test-sc-pipeline.R` n'exerce que `resolve_sketch_preset()`, qui vit dans **`R/sc/sc_helpers.R`** ;
+  `sc_pipeline.R` ne contient qu'**UNE** fonction et le test ne l'appelle **jamais** ⇒ **C9 est
+  satisfaite par le NOM, jamais par la couverture**.
+- 🟢 La justification est rendue **EXÉCUTABLE** : un second test lit la source et assère que le
+  **dernier** gestionnaire journalise + notifie **sans** `stop(` — si un jour il relance, le test
+  **échoue** et signale que le lot devient **prouvable à l'exécution**. C'est la réponse au piège
+  « une justification non vérifiée pourrit ».
+
+## [V1.x — dette de conventions, 23ᵉ incrément] — 2026-09-18 — `R/bulk/bulk_import_engine.R` → `bulk_import_engine_error`
+
+### Modifié
+- `R/bulk/bulk_import_engine.R` → `bulk_import_engine_error` — **C9 27 → 26** *et* **C10 18 → 17**.
+  **1/1 = 100 %** prouvé. Dernier lot de `R/` qui **paie −2**.
+
+### 🔑 Joignabilité : elle se lit dans le CORPS du gestionnaire
+- Le site est un gestionnaire de `tryCatch` qui **RELANCE** ⇒ joignable **sans aucun mock**, par un
+  simple **chemin absent** — l'**inverse** du cas où le gestionnaire **retourne** une valeur.
+
+## [V1.x — dette de conventions, 22ᵉ incrément] — 2026-09-18 — `R/sc/sc_bpcells.R` → `sc_bpcells_error`
+
+### Modifié
+- `R/sc/sc_bpcells.R` → `sc_bpcells_error` — **C9 28 → 27** *et* **C10 19 → 18**.
+  **1/1 = 100 %** prouvé.
+
+### 🔴 La technique de l'environnement enfant NE SE PROPAGE PAS à une indirection à DEUX niveaux
+- Re-pointer seulement la fonction externe **échoue en silence** : la recherche du helper part de
+  l'environnement enfant, ne l'y trouve pas, **retombe sur `globalenv`** (version non mockée).
+  ⇒ **Déposer AUSSI le helper mocké DANS l'environnement enfant.** Dès qu'une **indirection**
+  s'interpose, il faut **injecter chaque maillon**.
+
+## [V1.x — dette de conventions, 21ᵉ incrément] — 2026-09-18 — `R/spatial/spatial_multi.R` → `spatial_multi_error`
+
+### Modifié
+- `R/spatial/spatial_multi.R` → `spatial_multi_error` — **C9 29 → 28** *et* **C10 20 → 19**.
+  **1/1 = 100 %** prouvé. **Le lot le moins cher du chantier**.
+
+### 🟢 Le témoin nominal a payé
+- Un 3ᵉ test vérifie que `length >= 2` **franchit** la garde — sans ce contrôle de validité, une
+  garde **trop large** passerait les deux tests de borne.
+
+### 🔴 Rechute d'un défaut déjà payé
+- La ligne « Reste ouvert technique » de `STATUS.md` §0 annonçait `324 → 112` alors que la ligne
+  « Gardes » du **même tableau** disait **50** ⇒ **2ᵉ occurrence** : le chiffre vrai est sorti de
+  l'**incohérence interne**, pas d'une relecture.
 
 ## [V1.x — dette de conventions, 20ᵉ incrément] — 2026-09-18 — `spatial_deconv_tasks.R` classé (`spatial_deconv_tasks_error`)
 
