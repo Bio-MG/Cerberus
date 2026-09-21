@@ -151,15 +151,72 @@ via `chromote`, app started with `tools/launch_dev_drive.R`, port 7789):
 | session invalidation | closing the tab removes `ready.json` |
 | stale-token rejection | a `ready.json` older than `hb_timeout_s` is refused |
 
-**NOT yet validated — this is a G2/G3 acceptance, not a G0/G1 one:**
+## Grade G2 — the four bulk buttons, on the live session
 
-- **Real bulk execution against a PRELOADED object.** In the live run
-  `run_pipeline` returned **`status: invalid`** because the target button was
-  not bound on that module. That is a **protocol rejection correctly reported**,
-  *not* a successful pipeline run. It depends on the G2 button-binding work and
-  on the G3 `import_file` / data-preservation work.
+**Validated on a REAL session** (same harness: `chromote` client, port 7789,
+`tools/launch_dev_drive.R`):
+
+| # | Acceptance | Result on the live session |
+|---|---|---|
+| 1 | the real bulk buttons are BOUND on a live session | ✅ all four answer. The refusal names the button **and** the missing object, which only a *bound* button can do |
+| 2 | `preserve_data` defaults to `true` | ✅ `preserve_data: true` echoed on every `result.json` |
+| 3 | two consecutive `run_pipeline` both fire | ⚠️ both are **consumed and acked** (`ack_seq` 3 then 4, second not lost); the *firing* case needs a preloaded object — see below |
+| 4 | no object loaded ⇒ `invalid`, explicitly | ✅ `invalid` + `button '<id>' is bound but not ready: no bulk object loaded (shared_rv$filtered_counts is NULL)` |
+| 5 | `fileInput` is never faked | ✅ no `fileInput` id is on the allowlist; the import guard reads the WIDGET, never a path |
+| 6 | G3 not started | ✅ `import_file` / `reset_module` still return `invalid` |
+
+Observed refusals, per click site, on a session with nothing loaded:
+
+| button | refusal |
+|---|---|
+| `bulk-de-run_de` | `not ready: no bulk object loaded (shared_rv$filtered_counts is NULL)` |
+| `bulk-pathways-run_pathway` | `not ready: no bulk object loaded (shared_rv$filtered_counts is NULL)` |
+| `bulk-pathways-run_scores` | `not ready: Step 1 has not produced a VST matrix (shared_rv$vst_mat is NULL)` |
+| `import_bulk-btn_load` | `not ready: no counts file selected (fileInput `counts_file` is empty)` |
+
+### Two defects the G2 acceptance run exposed
+
+Both were **silent** — no error, no warning — and both were invisible to the
+offline suite as it stood. Each now has a durable test.
+
+1. **The registry was never populated.** `ts_drive_publish_token()` read
+   `global_data$drive_registry` with a bare `$`, and Shiny ABORTS a
+   `reactiveValues` field read outside a reactive consumer — which is exactly
+   what module init is:
+   `Can't access reactive value 'drive_registry' outside of reactive consumer.`
+   A defensive `tryCatch(..., error = function(e) NULL)` turned that abort into
+   a silent `NULL`, so every button reported **"not bound"** on a live session
+   while the source-level wiring looked perfect. That is the G0/G1 live finding,
+   explained. The read now goes through `ts_drive_registry()`, which wraps it in
+   `shiny::isolate()`.
+2. **The validator dropped `button` and `expect`.** `ts_drive_validate_scenario()`
+   rebuilds the scenario from a field whitelist, and that whitelist omitted both
+   — so `scn$button` was always `NULL`, `ts_drive_apply()` always fell back to the
+   module default, and `bulk-pathways-run_scores` was **unreachable**
+   (`bulk_pathways` defaults to `run_pathway`). A scenario naming `run_scores`
+   came back for `run_pathway`. Found on the live session, not by a test.
+
+### Not yet validated — still a G2/G3 acceptance, not a G2 one
+
+- **Real bulk execution against a PRELOADED object** (`result.status: done` for
+  a `run_pipeline` that actually computed something). On a session with nothing
+  loaded every `run_pipeline` is now refused *explicitly* — which is the honest
+  answer, and not the same thing as a successful run. It needs a human or the
+  G3 `import_file` route to put an object in memory first.
 - `import_file` and `reset_module` return **`invalid`** by design in this grade
   (spec §G3.14: not-implemented must return `invalid`, never silently no-op).
+
+### Known observation — heartbeat mirror on the FIRST arm
+
+Measured on a fresh session: the **first** `arm.json` after session start is
+honoured (scenarios are processed) but `ready.json` is **not** rewritten, so it
+keeps `armed:false, hb_n:0` and goes **stale** after `hb_timeout_s`. Re-arming
+the **same** session recovers it (`armed:true`, `hb_n` climbing, fresh again).
+No `*.tmp` file is left behind either way. The likely cause is a Windows
+sharing violation on `unlink()`/`file.rename()` of a just-created file, made
+invisible by `try(..., silent = TRUE)` around the heartbeat write — the same
+class of silent failure as defect 1 above. Reported, **not fixed here**: it is
+G0/G1 territory, which is frozen, and it is out of G2's scope.
 
 ### Where the evidence lives (read this before citing a result)
 

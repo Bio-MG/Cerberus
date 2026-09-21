@@ -556,6 +556,61 @@ test_that("ts_drive_bump_token on a NULL token is FALSE, never a crash", {
   expect_false(ts_drive_bump_token(NULL))
 })
 
+test_that("a token can be published from MODULE INIT, outside any reactive consumer", {
+  # REGRESSION for the G0/G1 live finding, finally explained — and the reason
+  # grade G2 exists at all.
+  #
+  # `global_data` is a `reactiveValues`, and Shiny ABORTS a field read outside
+  # a reactive consumer:
+  #   Can't access reactive value 'drive_registry' outside of reactive consumer.
+  # Module init IS such a place: `moduleServer()` bodies run while `server()`
+  # is still executing, before any flush. The first implementation read the
+  # registry through `tryCatch(..., error = function(e) NULL)`, so that abort
+  # became a SILENT NULL, `ts_drive_publish_token()` returned FALSE without a
+  # word, and the registry stayed EMPTY. Every bound button then reported
+  # "not bound" on a real session — which is precisely what the G0/G1 live run
+  # observed, and why the source-level wiring looked perfect while the runtime
+  # was dead.
+  #
+  # This test reproduces the init-time context faithfully: no reactive consumer
+  # anywhere. Nothing here needs Shiny running, so the defect is catchable
+  # offline — which is the whole point.
+  gd <- shiny::reactiveValues()
+  gd$drive_registry <- new.env(parent = emptyenv())
+  counter <- shiny::reactiveVal(0L)
+
+  expect_true(ts_drive_publish_token(gd, "bulk-de-run_de", counter,
+                                     ready = function() TRUE))
+
+  # The registry must actually HOLD the entry. `isolate()` on the test's own
+  # read too: the test lives outside a consumer, exactly like the module.
+  reg <- shiny::isolate(gd$drive_registry)
+  expect_true("bulk-de-run_de" %in% ls(reg))
+  entry <- reg[["bulk-de-run_de"]]
+  expect_true(is.list(entry))
+  expect_identical(ts_drive_entry_ready(entry), "ready")
+  # And the poller's own accessor must find the same counter.
+  expect_identical(ts_drive_token_of(gd, "bulk-de-run_de"), counter)
+  # Bumping it through the record must move the real reactiveVal.
+  expect_true(ts_drive_bump_token(entry))
+  expect_identical(shiny::isolate(counter()), 1L)
+
+  # A second publish accumulates rather than replaces, and an id outside
+  # TS_DRIVE_BUTTONS is refused loudly instead of widening the surface.
+  expect_true(ts_drive_publish_token(gd, "bulk-pathways-run_pathway",
+                                     shiny::reactiveVal(0L)))
+  expect_true(all(c("bulk-de-run_de", "bulk-pathways-run_pathway") %in%
+                    ls(shiny::isolate(gd$drive_registry))))
+  expect_warning(ts_drive_publish_token(gd, "bulk-de-not_a_button",
+                                        shiny::reactiveVal(0L)))
+  expect_false("bulk-de-not_a_button" %in% ls(shiny::isolate(gd$drive_registry)))
+
+  # With NO registry at all (a unit test that sources a module alone) the call
+  # must stay silent and harmless, never throw.
+  expect_false(ts_drive_publish_token(shiny::reactiveValues(), "bulk-de-run_de",
+                                      counter))
+})
+
 test_that("run_pipeline without a binding is invalid and names the missing bind", {
   .drv_local_root()
   .drv_write_arm("tok")
@@ -598,6 +653,300 @@ test_that("run_pipeline remembers the seq and reports done", {
   res <- ts_drive_tick(NULL, NULL, NULL, "tok", 0, FALSE, effects = effects)
   expect_identical(res$last_seq, 11L)
   expect_identical(ts_drive_read_result()$ack_seq, 11L)
+})
+
+# -----------------------------------------------------------------------------
+# 10b. THE READINESS GATE — a bound button that cannot run must not report done
+# -----------------------------------------------------------------------------
+# Spec G2 asks for the BIND (acceptance 9: two consecutive `run_pipeline` both
+# fire). It does not ask what the poller reports when a module is bound but has
+# nothing to work on — and the first implementation answered `done`, which is a
+# lie. The module's own `req()` aborted in silence, the poller had already
+# bumped the token, and the agent was told the pipeline had run. This is the
+# same class of defect as the dead navigation branch in §12: a seam that fails
+# SILENTLY. It needs a test, not a promise.
+#
+# The gate belongs to the MODULE, never to the poller: only the module can know
+# whether its object is loaded (`shared_rv$filtered_counts`, `input$counts_file`,
+# `shared_rv$vst_mat`). So `ts_drive_publish_token()` takes an optional `ready`
+# guard and the poller asks it BEFORE firing. `unknown` — no guard published —
+# keeps the G1 behaviour, so a module that has not adopted the guard still runs.
+
+test_that("ts_drive_entry_ready classifies a guard into a frozen vocabulary", {
+  expect_setequal(TS_DRIVE_READY,
+                  c("ready", "not-ready", "probe-failed", "unknown"))
+
+  # No entry at all, or an entry with no guard -> "unknown". That is the G0/G1
+  # shape (a counter announced, nothing said about preconditions) and it must
+  # stay PERMISSIVE: refusing there would stop every module that has not yet
+  # adopted a guard.
+  expect_identical(ts_drive_entry_ready(NULL), "unknown")
+  expect_identical(ts_drive_entry_ready(list(counter = function() 0L)), "unknown")
+
+  expect_identical(ts_drive_entry_ready(list(ready = function() TRUE)), "ready")
+  expect_identical(ts_drive_entry_ready(list(ready = function() FALSE)), "not-ready")
+  # A guard may return the REASON, so the refusal names the missing object
+  # instead of a bare "not ready" the agent cannot act on.
+  expect_identical(ts_drive_entry_ready(list(ready = function() "no object")), "not-ready")
+  # A character is ALWAYS a reason, never a disguised boolean. `"TRUE"` is a
+  # perfectly serviceable reason string ("the flag named TRUE is unset"), and
+  # coercing it to TRUE would be the same class of mistake as truthy-string
+  # comparison — the kind that makes a refusal look like a success.
+  expect_identical(ts_drive_entry_ready(list(ready = function() "TRUE")), "not-ready")
+
+  # FAIL CLOSED. A guard that cannot answer is not evidence of readiness, and
+  # the alternative — firing a doomed click and reporting `done` — is precisely
+  # the lie this gate exists to remove.
+  expect_identical(ts_drive_entry_ready(list(ready = function() stop("boom"))), "probe-failed")
+  expect_identical(ts_drive_entry_ready(list(ready = function() NA)), "probe-failed")
+  # Malformed guards: a non-logical/non-character answer, an empty reason, and
+  # a `ready` slot that is not even a function.
+  expect_identical(ts_drive_entry_ready(list(ready = function() 1)), "probe-failed")
+  expect_identical(ts_drive_entry_ready(list(ready = function() c(TRUE, TRUE))), "probe-failed")
+  expect_identical(ts_drive_entry_ready(list(ready = function() "")), "probe-failed")
+  expect_identical(ts_drive_entry_ready(list(ready = "not a function")), "probe-failed")
+})
+
+test_that("run_pipeline is invalid, not done, when the button's guard refuses", {
+  .drv_local_root()
+  .drv_write_arm("tok")
+  .drv_write_scn(21L, action = "run_pipeline", module = "bulk_de",
+                 session_token = "tok")
+
+  fired <- new.env(); fired$n <- 0L
+  reason <- "no bulk object loaded (shared_rv$filtered_counts is NULL)"
+  effects <- function(id, mode = NULL, module = NULL) {
+    if (identical(mode, "tokens")) {
+      return(stats::setNames(list(list(ready = function() reason)), "bulk-de-run_de"))
+    }
+    fired$n <- fired$n + 1L
+    TRUE
+  }
+
+  res <- ts_drive_tick(NULL, NULL, NULL, "tok", 0, FALSE, effects = effects)
+  expect_true(res$consumed)
+  r <- ts_drive_read_result()
+  expect_identical(r$status, "invalid")
+  # The refusal still ACKNOWLEDGES the seq, or a polling agent would wait for
+  # a terminal status that never arrives.
+  expect_identical(r$ack_seq, 21L)
+  expect_match(r$errors[[1]], "not ready")
+  expect_match(r$errors[[1]], "no bulk object loaded")
+  expect_match(r$errors[[1]], "shared_rv$filtered_counts", fixed = TRUE)
+  # The doomed click must NOT have been fired. Bumping first and reporting
+  # afterwards would leave the module's counter advanced for a run that never
+  # happened — and the NEXT scenario would then be one click out of step.
+  expect_identical(fired$n, 0L)
+})
+
+test_that("a bound button with NO guard still reports done (the G1 behaviour is kept)", {
+  .drv_local_root()
+  .drv_write_arm("tok")
+  .drv_write_scn(31L, action = "run_pipeline", module = "bulk_pathways",
+                 session_token = "tok")
+
+  fired <- new.env(); fired$n <- 0L
+  effects <- function(id, mode = NULL, module = NULL) {
+    if (identical(mode, "tokens")) {
+      return(stats::setNames(list(list(counter = function() 0L)), "bulk-pathways-run_pathway"))
+    }
+    fired$n <- fired$n + 1L
+    TRUE
+  }
+
+  res <- ts_drive_tick(NULL, NULL, NULL, "tok", 0, FALSE, effects = effects)
+  expect_true(res$consumed)
+  expect_identical(ts_drive_read_result()$status, "done")
+  expect_identical(fired$n, 1L)
+})
+
+test_that("a guard that cannot answer is a refusal, never a silent done", {
+  .drv_local_root()
+  .drv_write_arm("tok")
+  .drv_write_scn(32L, action = "run_pipeline", module = "bulk_de",
+                 session_token = "tok")
+
+  fired <- new.env(); fired$n <- 0L
+  effects <- function(id, mode = NULL, module = NULL) {
+    if (identical(mode, "tokens")) {
+      return(stats::setNames(list(list(ready = function() stop("probe exploded"))), "bulk-de-run_de"))
+    }
+    fired$n <- fired$n + 1L
+    TRUE
+  }
+
+  ts_drive_tick(NULL, NULL, NULL, "tok", 0, FALSE, effects = effects)
+  r <- ts_drive_read_result()
+  expect_identical(r$status, "invalid")
+  expect_match(r$errors[[1]], "probe")
+  expect_identical(fired$n, 0L)
+})
+
+test_that("two consecutive run_pipeline both fire, guard satisfied (G2 acceptance 9)", {
+  # The attach-level version of this property lives in §12 ("two consecutive
+  # scenarios both fire, and the token is read live"). What is added HERE is
+  # the piece §12 cannot reach: the guard is satisfied, so the button is
+  # really fired, and the counter's VALUE advances twice. §12 asserts that the
+  # poller CALLS the effect twice; this asserts the counter itself moves,
+  # which is what separates a working trigger from a one-shot latch.
+  .drv_local_root()
+  .drv_write_arm("tok")
+
+  box <- new.env(); box$n <- 0L
+  counter <- function(v) {
+    if (missing(v)) return(box$n)
+    box$n <- as.integer(v); invisible(NULL)
+  }
+  fired <- new.env(); fired$n <- 0L
+  effects <- function(id, mode = NULL, module = NULL) {
+    if (identical(mode, "tokens")) {
+      return(stats::setNames(
+        list(list(counter = counter, ready = function() TRUE)), "bulk-de-run_de"))
+    }
+    fired$n <- fired$n + 1L
+    ts_drive_bump_token(list(counter = counter))
+  }
+
+  .drv_write_scn(1L, action = "run_pipeline", module = "bulk_de", session_token = "tok")
+  r1 <- ts_drive_tick(NULL, NULL, NULL, "tok", 0L, FALSE, effects = effects)
+  expect_true(r1$consumed)
+  expect_identical(r1$last_seq, 1L)
+  expect_identical(box$n, 1L)
+  expect_identical(ts_drive_read_result()$status, "done")
+  expect_identical(ts_drive_read_result()$ack_seq, 1L)
+
+  # The SECOND scenario must move the SAME counter again — a latch would leave
+  # it at 1, and the module's observer would never re-fire.
+  .drv_write_scn(2L, action = "run_pipeline", module = "bulk_de", session_token = "tok")
+  r2 <- ts_drive_tick(NULL, NULL, NULL, "tok", r1$last_seq, FALSE, effects = effects)
+  expect_true(r2$consumed)
+  expect_identical(r2$last_seq, 2L)
+  expect_identical(box$n, 2L)
+  expect_identical(ts_drive_read_result()$status, "done")
+  expect_identical(ts_drive_read_result()$ack_seq, 2L)
+
+  expect_identical(fired$n, 2L)
+})
+
+test_that("set_inputs refuses a button whose guard says not-ready", {
+  .drv_local_root()
+  fired <- new.env(); fired$n <- 0L
+  res <- ts_drive_apply(NULL, NULL,
+    list(action = "set_inputs", module = "bulk_de",
+         inputs = list("bulk-de-run_de" = 1)),
+    effects = function(id, mode = NULL, module = NULL) {
+      if (identical(mode, "tokens")) {
+        return(stats::setNames(list(list(ready = function() "no object")), "bulk-de-run_de"))
+      }
+      fired$n <- fired$n + 1L
+      TRUE
+    })
+  expect_identical(res$status, "applied")
+  expect_match(res$warnings, "not ready")
+  expect_identical(fired$n, 0L)
+})
+
+test_that("a scenario's `button` and `expect` survive validation (spec §2.3)", {
+  # The validator REBUILDS the scenario from a field whitelist, and the first
+  # version omitted `button` and `expect`. Both are then always NULL downstream:
+  #   * `ts_drive_apply()` falls back to the module's DEFAULT button, so
+  #     `bulk-pathways-run_scores` — one of the four bound click sites — could
+  #     never be fired, because that module's default is `run_pathway`;
+  #   * `ts_drive_nav_plan()` never saw a requested tab.
+  # Nothing warns, nothing errors: the scenario just drives the WRONG button.
+  # Found on the live session, where seq 7 named `run_scores` and the result
+  # came back for `run_pathway`.
+  v <- ts_drive_validate_scenario(
+    list(protocol = TS_DRIVE_PROTOCOL, seq = 5L, module = "bulk_pathways",
+         action = "run_pipeline", inputs = list(),
+         button = "bulk-pathways-run_scores",
+         expect = list(nav = "tab_volcano")),
+    "tok", 0L)
+  expect_identical(v$status, "applied-candidate")
+  expect_identical(v$scenario$button, "bulk-pathways-run_scores")
+  expect_identical(v$scenario$expect$nav, "tab_volcano")
+
+  # Absent, they must stay absent — not become a stray empty string or list.
+  v2 <- ts_drive_validate_scenario(
+    list(protocol = TS_DRIVE_PROTOCOL, seq = 6L, module = "bulk_de",
+         action = "run_pipeline", inputs = list()), "tok", 0L)
+  expect_null(v2$scenario$button)
+  expect_null(v2$scenario$expect)
+})
+
+test_that("run_pipeline honours an explicit `button`, and `expect$nav` reaches the nav plan", {
+  .drv_local_root()
+  .drv_write_arm("tok")
+  # The 4th bound click site: reachable ONLY through an explicit `button`,
+  # since bulk_pathways defaults to `run_pathway`.
+  .drv_write_scn(41L, action = "run_pipeline", module = "bulk_pathways",
+                 session_token = "tok", button = "bulk-pathways-run_scores",
+                 expect = list(nav = "tab_volcano"))
+  seen <- character(0)
+  effects <- function(id, mode = NULL, module = NULL) {
+    if (identical(mode, "tokens")) {
+      return(list("bulk-pathways-run_scores" = list(ready = function() TRUE)))
+    }
+    seen <<- c(seen, id); TRUE
+  }
+  res <- ts_drive_tick(NULL, NULL, NULL, "tok", 0L, FALSE, effects = effects)
+  expect_true(res$consumed)
+  expect_identical(ts_drive_read_result()$status, "done")
+  expect_identical(seen, "bulk-pathways-run_scores")
+  # `expect$nav` is carried by the tick to app.R, which performs the jump.
+  expect_identical(res$nav$tab, "tab_volcano")
+  expect_identical(res$nav$panel, "panel_pathways")
+})
+
+test_that("an explicit `button` outside TS_DRIVE_BUTTONS is refused as invalid", {
+  .drv_local_root()
+  .drv_write_arm("tok")
+  .drv_write_scn(42L, action = "run_pipeline", module = "bulk_de",
+                 session_token = "tok", button = "bulk-de-run_de_typo")
+  res <- ts_drive_tick(NULL, NULL, NULL, "tok", 0L, FALSE,
+                       effects = function(...) TRUE)
+  expect_true(res$consumed)
+  r <- ts_drive_read_result()
+  expect_identical(r$status, "invalid")
+  expect_match(r$errors[[1]], "no bound button")
+})
+
+test_that("every bound button is published by a real module, WITH a readiness guard", {
+  # REGRESSION for the G0/G1 live finding. That run reported
+  # `run_pipeline -> invalid` because "the target button was not bound on that
+  # module" — and NOTHING in the suite could have caught a missing
+  # `ts_drive_publish_token()` call: every watcher test injects its own
+  # `effects` closure, so they prove the POLLER's logic and never the WIRING.
+  # A binding that exists only in the allowlist is a promise, not a fact.
+  files <- list.files(file.path(ts_project_root(), "modules"),
+                      pattern = "[.]R$", recursive = TRUE, full.names = TRUE)
+  lines <- unlist(lapply(files, function(f) readLines(f, warn = FALSE, encoding = "UTF-8")))
+
+  for (btn in TS_DRIVE_BUTTONS) {
+    hit <- grep(sprintf('ts_drive_publish_token\\(.*"%s"', btn), lines)
+    expect_true(length(hit) >= 1L,
+                info = paste("no module publishes a token for", btn))
+    # The guard is what turns a doomed run into `invalid` instead of `done`.
+    # A bind without one re-introduces the lie this grade removed, so the two
+    # are asserted together: the binding is not "done" until it can refuse.
+    window <- paste(lines[hit[1]:min(length(lines), hit[1] + 4L)], collapse = "\n")
+    expect_match(window, "ready", info = paste("no readiness guard for", btn))
+  }
+})
+
+test_that("no fileInput id is injectable (spec S5: the widget is never faked)", {
+  # Spec S5: "in live session BYPASS the widget ... Never pass a raw path string
+  # into update*". The three fileInput ids of mod_import_bulk.R are `counts_file`,
+  # `metadata_file` and `ps_files`; none may be on the allowlist, or the poller
+  # would be pretending to be a file chooser. G3's `import_file` is the
+  # sanctioned route, and it is NOT this one.
+  for (id in c("import_bulk-counts_file", "import_bulk-metadata_file",
+               "import_bulk-ps_files")) {
+    expect_false(ts_drive_allowlisted(id), info = id)
+  }
+  # And no kind in the frozen vocabulary is a file kind, so no future entry can
+  # smuggle one in without changing the vocabulary — which is itself frozen.
+  expect_false(any(grepl("file", TS_DRIVE_KINDS, ignore.case = TRUE)))
 })
 
 # =============================================================================

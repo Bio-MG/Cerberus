@@ -505,6 +505,19 @@ ts_drive_validate_scenario <- function(scn, token, last_seq) {
   warnings <- c(warnings, skipped)
 
   status <- if (length(errors)) "invalid" else "applied-candidate"
+  # The rebuilt scenario is a WHITELIST, and that is deliberate: a field the
+  # injector never reads must not reach it. The list below is therefore the
+  # contract, and anything omitted here is silently unreachable downstream.
+  #
+  # `expect` (spec §2.3) and `button` were omitted by the first version, and
+  # both omissions were SILENT — no error, no warning, just the wrong click
+  # site. `ts_drive_apply()` fell back to the module's default button, so
+  # `bulk-pathways-run_scores` could never be fired (that module defaults to
+  # `run_pathway`), and `ts_drive_nav_plan()` never saw a requested tab. Found
+  # on the live session: a scenario naming `run_scores` came back for
+  # `run_pathway`. Both are carried through unchanged now, with only their
+  # TYPE checked here; `button` is validated against TS_DRIVE_BUTTONS by the
+  # injector, which owns that refusal.
   list(ok = !length(errors), status = status, errors = errors,
        warnings = warnings,
        scenario = list(
@@ -515,7 +528,10 @@ ts_drive_validate_scenario <- function(scn, token, last_seq) {
          inputs = inputs,
          # Keys the injector WILL attempt: allowlisted AND owned by `module`.
          # An allowlisted key from another module is refused, never applied.
-         inputs_ok = as.list(inputs[setdiff(names(inputs), c(bad_keys, sub(" .*$", "", skipped)))])
+         inputs_ok = as.list(inputs[setdiff(names(inputs), c(bad_keys, sub(" .*$", "", skipped)))]),
+         expect = if (is.list(scn$expect)) scn$expect else NULL,
+         button = if (is.character(scn$button) && length(scn$button) == 1L &&
+                     !is.na(scn$button) && nzchar(scn$button)) scn$button else NULL
        ))
 }
 
@@ -618,6 +634,108 @@ ts_drive_bind_button <- function(input_id) {
   paste0(TS_DRIVE_TOKEN_PREFIX, input_id)
 }
 
+#' Readiness vocabulary for a bound button (frozen).
+#'
+#' A binding says "this button CAN be fired". It says nothing about whether
+#' firing it would DO anything — and that gap produced a real lie. A bound
+#' button whose module had no object loaded was fired, the module's own `req()`
+#' aborted in silence, and `result.json` reported `done` for a pipeline that
+#' never ran. So `run_pipeline` asks the owning module FIRST.
+#'
+#'   ready        the module states it can run  -> fire
+#'   not-ready    the module states it cannot   -> `invalid`, and NOTHING fires
+#'   probe-failed the guard could not answer    -> `invalid`. FAIL CLOSED: an
+#'                unanswerable probe is not evidence of readiness, and reading
+#'                it as permission is exactly how the `done` lie comes back.
+#'   unknown      no guard was published        -> fire. This is the G0/G1
+#'                shape, kept so a module that has not adopted a guard still
+#'                runs; it is the ONLY permissive case.
+TS_DRIVE_READY <- c("ready", "not-ready", "probe-failed", "unknown")
+
+#' Unwrap the counter a registry entry carries.
+#'
+#' Two shapes are accepted so the G1 call sites keep working unchanged:
+#'   * a bare `reactiveVal` — which IS a function, and was the original shape;
+#'   * a record `list(counter =, ready =)` — what `ts_drive_publish_token()`
+#'     stores now that a button can also announce a readiness guard.
+#' @noRd
+ts_drive_entry_counter <- function(entry) {
+  if (is.null(entry)) return(NULL)
+  if (is.function(entry)) return(entry)
+  if (is.list(entry)) return(entry$counter)
+  NULL
+}
+
+#' Ask one registry entry's readiness guard, and classify the answer.
+#'
+#' A guard may return:
+#'   * `TRUE`                -> `"ready"`
+#'   * `FALSE`               -> `"not-ready"`, generic
+#'   * a non-empty character -> `"not-ready"`, carrying the REASON, so the
+#'     refusal can name the missing object instead of a bare "not ready" that
+#'     an agent cannot act on.
+#' Anything else — an error, `NA`, a non-logical — is `"probe-failed"`.
+#'
+#' The guard is called from inside the poller's reactive beat, so a module
+#' should wrap its own reactive read in `shiny::isolate()`: reactivity is the
+#' module's business (C2), and an un-isolated read would silently enrol the
+#' module's object in the poller's dependency set.
+#'
+#' Returns the verdict AND the reason from ONE evaluation, so a guard with a
+#' side effect (a log line) is not run twice by the caller that needs both.
+#'
+#' @param entry One registry entry, a bare counter, or `NULL`.
+#' @return list(verdict = one of `TS_DRIVE_READY`, reason = character or NULL).
+ts_drive_ready_probe <- function(entry) {
+  if (is.null(entry) || is.function(entry) ||
+      !is.list(entry) || is.null(entry$ready)) {
+    return(list(verdict = "unknown", reason = NULL))
+  }
+  guard <- entry$ready
+  if (!is.function(guard)) {
+    return(list(verdict = "probe-failed",
+                reason = "the readiness guard is not a function"))
+  }
+  ans <- tryCatch(guard(), error = function(e) e)
+  if (inherits(ans, "condition")) {
+    return(list(verdict = "probe-failed",
+                reason = sprintf("the readiness guard raised: %s",
+                                 conditionMessage(ans))))
+  }
+  if (isTRUE(ans)) return(list(verdict = "ready", reason = NULL))
+  if (identical(ans, FALSE)) return(list(verdict = "not-ready", reason = NULL))
+  if (is.character(ans) && length(ans) == 1L && !is.na(ans) && nzchar(ans)) {
+    return(list(verdict = "not-ready", reason = ans))
+  }
+  list(verdict = "probe-failed",
+       reason = "the readiness guard returned neither TRUE/FALSE nor a reason")
+}
+
+#' The verdict alone, for callers that only switch on it.
+#' @noRd
+ts_drive_entry_ready <- function(entry) ts_drive_ready_probe(entry)$verdict
+
+#' Build the refusal message for a non-ready button.
+#'
+#' `not ready` and `probe failed` are kept as two distinct sentences on
+#' purpose: the first is a normal refusal the agent can act on (load an
+#' object), the second is a bug in the module's guard and must not be
+#' mistaken for "the app is simply not ready yet".
+#' @noRd
+ts_drive_ready_refusal <- function(button_id, probe) {
+  if (identical(probe$verdict, "probe-failed")) {
+    return(sprintf(
+      "button '%s' is bound but its readiness probe failed: %s",
+      button_id, probe$reason %||% "no reason reported"))
+  }
+  if (is.null(probe$reason) || !nzchar(probe$reason)) {
+    sprintf("button '%s' is bound but not ready (the module reports no object loaded)",
+            button_id)
+  } else {
+    sprintf("button '%s' is bound but not ready: %s", button_id, probe$reason)
+  }
+}
+
 #' How a module turns the trigger id into a reactive counter read.
 #'
 #' Contract, written once here so the four call sites stay identical:
@@ -640,6 +758,38 @@ ts_drive_read_token <- function(counter) {
   as.integer(shiny::isolate(counter())) + 1L
 }
 
+#' Read the session-scoped drive registry — legally, from ANY context.
+#'
+#' `global_data` is a `reactiveValues`, and Shiny ABORTS a read of one of its
+#' fields outside a reactive consumer:
+#'
+#'     Can't access reactive value 'drive_registry' outside of reactive consumer.
+#'
+#' Module INIT is such a place. A `moduleServer()` body runs while `server()`
+#' is still executing, before any flush, so there is no active reactive
+#' context. The first version of this file read the registry through
+#' `tryCatch(..., error = function(e) NULL)`, which turned that abort into a
+#' SILENT `NULL`; `ts_drive_publish_token()` then returned FALSE without a
+#' word, the registry stayed empty, and on a REAL session every bound button
+#' reported "not bound" — the exact symptom the G0/G1 live run recorded, with
+#' source-level wiring that looked perfect. A seam that fails silently needs a
+#' test, and this one now has it (`test-drive-watcher.R`, "a token can be
+#' published from MODULE INIT").
+#'
+#' `shiny::isolate()` is the sanctioned way to read outside a consumer, and it
+#' ALSO suppresses the dependency a tick-time read would otherwise register on
+#' the poller — which is what we want in both directions.
+#'
+#' @param global_data The app-wide `reactiveValues`.
+#' @return The registry environment, or `NULL` when there is none (a unit test
+#'   that sources a module alone). Never throws.
+#' @noRd
+ts_drive_registry <- function(global_data) {
+  reg <- tryCatch(shiny::isolate(global_data$drive_registry),
+                  error = function(e) NULL)
+  if (is.environment(reg)) reg else NULL
+}
+
 #' Publish one button's counter into the session-scoped registry.
 #'
 #' Called from a module (which owns the `reactiveVal`) so the poller can
@@ -647,43 +797,67 @@ ts_drive_read_token <- function(counter) {
 #' per-SESSION — never a global environment, which would let two tabs share a
 #' counter (spec §2.1: a scenario may pin one session).
 #'
+#' The stored value is a RECORD, `list(counter =, ready =)`, not the bare
+#' counter: `run_pipeline` must be able to ask whether the button can actually
+#' run before it fires (see `TS_DRIVE_READY`). `ts_drive_entry_counter()` keeps
+#' the bare-`reactiveVal` shape readable, so nothing else had to change.
+#'
+#' The registry is reached through `ts_drive_registry()` — NOT with a bare
+#' `$` read, which would abort here and be swallowed. See that function.
+#'
 #' Silently does nothing when no registry is present (e.g. a unit test that
 #' sources a module alone), so the module keeps working outside the app.
 #'
 #' @param global_data The app-wide `reactiveValues`.
 #' @param input_id Namespaced button id (must be in TS_DRIVE_BUTTONS).
 #' @param counter The module's `reactiveVal`.
-ts_drive_publish_token <- function(global_data, input_id, counter) {
+#' @param ready Optional zero-argument guard, owned by the module, returning
+#'   `TRUE`, `FALSE`, or a character REASON. It answers "could this button run
+#'   right now?" — e.g. `function() !is.null(shiny::isolate(shared_rv$filtered_counts))`.
+#'   Omitted (`NULL`) means "no guard": the button stays fireable and the poller
+#'   reports what it always did. A guard is deliberately NOT validated here —
+#'   `ts_drive_ready_probe()` classifies whatever it is, and a non-function
+#'   fails closed there rather than silently disappearing at publish time.
+ts_drive_publish_token <- function(global_data, input_id, counter, ready = NULL) {
   if (!input_id %in% TS_DRIVE_BUTTONS) {
     warning(sprintf("ts_drive_publish_token(): '%s' is not in TS_DRIVE_BUTTONS — ignored.", input_id))
     return(invisible(FALSE))
   }
-  reg <- tryCatch(global_data$drive_registry, error = function(e) NULL)
-  if (is.null(reg) || !is.environment(reg)) return(invisible(FALSE))
-  reg[[input_id]] <- counter
+  reg <- ts_drive_registry(global_data)
+  if (is.null(reg)) return(invisible(FALSE))
+  reg[[input_id]] <- list(counter = counter, ready = ready)
   invisible(TRUE)
 }
 
 #' Read one published counter (used by the poller through the effects callback).
+#'
+#' Unwraps the registry record, so the returned value is the `reactiveVal`
+#' itself — which is what the name promises and what every caller wants.
 ts_drive_token_of <- function(global_data, input_id) {
-  reg <- tryCatch(global_data$drive_registry, error = function(e) NULL)
-  if (is.null(reg) || !is.environment(reg)) return(NULL)
-  reg[[input_id]]
+  reg <- ts_drive_registry(global_data)
+  if (is.null(reg)) return(NULL)
+  ts_drive_entry_counter(reg[[input_id]])
 }
 
 #' Increment one bound button token (used by `run_pipeline`).
 #'
 #' The counter only ever increases: an `actionButton` fires on a CHANGE, and
 #' a monotonically growing counter is what makes two consecutive
-#' `run_pipeline` scenarios both fire (G2 acceptance 9).
+#' `run_pipeline` scenarios both fire (G2 acceptance 9). A latch — a counter
+#' that stops moving after the first fire — would show up as the second
+#' scenario never advancing it, which is why the test asserts the VALUE, not
+#' just that a call happened.
 #'
-#' @param rv The `reactiveVal` handed back by `ts_drive_bind_button()`. It is
-#'   passed explicitly (never looked up) because a `reactiveVal` is only
-#'   readable inside an active reactive context: the value is both read and
-#'   written by the caller in `modules/`, where reactivity belongs.
+#' @param rv The registry entry for one button — either the record
+#'   `list(counter =, ready =)` that `ts_drive_publish_token()` stores, or a
+#'   bare `reactiveVal` (the G1 shape). It is passed explicitly (never looked
+#'   up) because a `reactiveVal` is only readable inside an active reactive
+#'   context: the value is both read and written by the caller in `modules/`,
+#'   where reactivity belongs.
 #' @return TRUE when a binding existed and was incremented.
 ts_drive_bump_token <- function(rv) {
-  if (is.null(rv)) return(FALSE)
+  rv <- ts_drive_entry_counter(rv)
+  if (is.null(rv) || !is.function(rv)) return(FALSE)
   rv(shiny::isolate(rv()) + 1L)
   TRUE
 }
@@ -710,8 +884,9 @@ ts_drive_bump_token <- function(rv) {
 
 #' Apply the allowlisted `inputs` block of a scenario.
 #'
-#' @param tokens Named list id -> `reactiveVal` announced by the module for
-#'   THIS scenario's module (read through `ts_drive_read_tokens()`).
+#' @param tokens Named list id -> registry entry (`list(counter =, ready =)`)
+#'   announced by the module for THIS scenario's module (read through
+#'   `ts_drive_tokens_for()`).
 #' @return list(applied = character(), refused = character(), warnings = character())
 ts_drive_apply_inputs <- function(session, inputs, module, tokens = list()) {
   applied <- character(0); refused <- character(0); warns <- character(0)
@@ -731,7 +906,17 @@ ts_drive_apply_inputs <- function(session, inputs, module, tokens = list()) {
     }
     kind <- entry$kind
     if (identical(kind, "button")) {
-      # Buttons are fired, never set: an actionButton is a counter.
+      # Buttons are fired, never set: an actionButton is a counter. And they
+      # are fired only when the owning module says it can run — firing a
+      # doomed click and reporting success is the `done` lie the readiness
+      # gate exists to remove (see TS_DRIVE_READY).
+      probe <- ts_drive_ready_probe(tokens[[id]])
+      if (probe$verdict %in% c("not-ready", "probe-failed")) {
+        refused <- c(refused, id)
+        warns <- c(warns, sprintf("%s: %s — skipped", id,
+                                  ts_drive_ready_refusal(id, probe)))
+        next
+      }
       ok <- ts_drive_bump_token(tokens[[id]])
       if (isTRUE(ok)) applied <- c(applied, id)
       else {
@@ -850,6 +1035,22 @@ ts_drive_apply <- function(session, input, scn, effects = NULL) {
       return(list(status = "invalid", errors = errors, warnings = warnings,
                   active_module = module, nav = nav))
     }
+
+    # ASK BEFORE FIRING. The owning module is the only side that can know
+    # whether its button would do anything (see TS_DRIVE_READY), and the
+    # refusal has to happen HERE — before the counter moves — or the module's
+    # `req()` aborts in silence and the agent is told `done` for work that
+    # never ran. An unpublished button answers `unknown` and falls through to
+    # the "not bound" branch below, so the two failures stay distinguishable:
+    #   not bound  -> the WIRING is missing (the G0/G1 live finding)
+    #   not ready  -> the wiring is there and the module refused (no object)
+    probe <- ts_drive_ready_probe(ts_drive_tokens_for(module, effects)[[btn]])
+    if (probe$verdict %in% c("not-ready", "probe-failed")) {
+      errors <- c(errors, ts_drive_ready_refusal(btn, probe))
+      return(list(status = "invalid", errors = errors, warnings = warnings,
+                  active_module = module, nav = nav))
+    }
+
     if (is.null(effects) || !isTRUE(effects(btn))) {
       errors <- c(errors, sprintf(
         "button '%s' is not bound — its observeEvent does not read ts_drive_bind_button()/ts_drive_button_token()",
@@ -857,10 +1058,13 @@ ts_drive_apply <- function(session, input, scn, effects = NULL) {
       return(list(status = "invalid", errors = errors, warnings = warnings,
                   active_module = module, nav = nav))
     }
-    # The real observeEvent now runs. It is synchronous for the bulk pipeline
-    # (import -> DE), so by the time the tick returns the work is done and
-    # `done` is the honest status; a job that finishes later is read through
-    # the NEXT snapshot (spec §2.4: `running` is for mirai / long observers).
+    # What `done` means here, precisely: the token moved, so the module's
+    # `observeEvent` HAS BEEN TRIGGERED. It has not necessarily finished. The
+    # counter is set from inside the poller's own observer, and Shiny runs the
+    # dependent observer on the NEXT step of the same flush — i.e. after this
+    # tick returns. So `done` is terminal for the SEQ (nothing more will be
+    # written for it), never a claim that the pipeline completed; the
+    # pipeline's own outcome is read through the following `snapshot`.
     return(list(status = "done", errors = character(0), warnings = warnings,
                 active_module = module, nav = nav))
   }

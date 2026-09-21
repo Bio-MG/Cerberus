@@ -306,7 +306,21 @@ mod_import_bulk_server <- function(id, global_data) {
     # and the observer behaves exactly as before.
     drive_btn <- ts_drive_bind_button("import_bulk-btn_load")
     drive_counter <- shiny::reactiveVal(0L)
-    ts_drive_publish_token(global_data, "import_bulk-btn_load", drive_counter)
+    # READINESS GUARD (G2). `btn_load`'s observer opens with
+    # `req(counts_reactive())` — and `counts_reactive()` itself opens with
+    # `req(input$counts_file)` — so with no file chosen the observer aborts in
+    # SILENCE and the poller would report `done` for an import that never
+    # happened. The guard tests the WIDGET's own value, never a path string
+    # (spec S5: the fileInput is never faked), and it deliberately does NOT
+    # call `counts_reactive()`: that PARSES the file, and a readiness probe
+    # must stay cheap enough to run on every scenario.
+    drive_ready <- function() {
+      if (is.null(shiny::isolate(input$counts_file))) {
+        "no counts file selected (fileInput `counts_file` is empty)"
+      } else TRUE
+    }
+    ts_drive_publish_token(global_data, "import_bulk-btn_load", drive_counter,
+                           ready = drive_ready)
     # A `reactive()` is the documented trigger type that respects both a
     # reactiveVal and an actionButton counter, so drag-and-click share one path.
     drive_trigger <- shiny::reactive(list(drive_counter(), input$btn_load))

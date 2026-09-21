@@ -25,7 +25,21 @@
   # publishes in the session-scoped registry (see ts_drive_publish_token()).
   # `updateActionButton()` does NOT click; this second trigger does.
   drive_counter <- shiny::reactiveVal(0L)
-  ts_drive_publish_token(global_data, "bulk-de-run_de", drive_counter)
+  # READINESS GUARD (G2). The observer below opens with
+  # `req(shared_rv$filtered_counts, ...)`, which aborts in SILENCE when Step 1
+  # has not run. Without this guard the poller would fire the token, the
+  # observer would quietly do nothing, and `result.json` would report `done`
+  # for a DE analysis that never started. The guard mirrors the observer's OWN
+  # precondition — it is measured from the line below, not guessed — and
+  # `shiny::isolate()` keeps the read out of the poller's dependency set
+  # (reactivity is the module's business).
+  drive_ready <- function() {
+    if (is.null(shiny::isolate(shared_rv$filtered_counts))) {
+      "no bulk object loaded (shared_rv$filtered_counts is NULL)"
+    } else TRUE
+  }
+  ts_drive_publish_token(global_data, "bulk-de-run_de", drive_counter,
+                         ready = drive_ready)
   drive_trigger <- shiny::reactive(list(drive_counter(), input$run_de))
 
   .tr <- function(key) {

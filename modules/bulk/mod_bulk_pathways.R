@@ -145,8 +145,27 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
     # does NOT click; these second triggers do.
     drive_counter_pathway <- shiny::reactiveVal(0L)
     drive_counter_scores  <- shiny::reactiveVal(0L)
-    ts_drive_publish_token(global_data, "bulk-pathways-run_pathway", drive_counter_pathway)
-    ts_drive_publish_token(global_data, "bulk-pathways-run_scores",  drive_counter_scores)
+    # READINESS GUARDS (G2). Each observer below opens with its own `req()` —
+    # `shared_rv$filtered_counts` for the enrichment, `shared_rv$vst_mat` for
+    # the per-sample scores — and `req()` aborts in SILENCE. Without a guard
+    # the poller would fire the token, the observer would quietly do nothing,
+    # and `result.json` would report `done` for an analysis that never ran.
+    # Each guard mirrors its OWN observer's precondition, and
+    # `shiny::isolate()` keeps the read out of the poller's dependency set.
+    ready_pathway <- function() {
+      if (is.null(shiny::isolate(shared_rv$filtered_counts))) {
+        "no bulk object loaded (shared_rv$filtered_counts is NULL)"
+      } else TRUE
+    }
+    ready_scores <- function() {
+      if (is.null(shiny::isolate(shared_rv$vst_mat))) {
+        "Step 1 has not produced a VST matrix (shared_rv$vst_mat is NULL)"
+      } else TRUE
+    }
+    ts_drive_publish_token(global_data, "bulk-pathways-run_pathway", drive_counter_pathway,
+                           ready = ready_pathway)
+    ts_drive_publish_token(global_data, "bulk-pathways-run_scores",  drive_counter_scores,
+                           ready = ready_scores)
     drive_trigger_pathway <- shiny::reactive(list(drive_counter_pathway(), input$run_pathway))
     drive_trigger_scores  <- shiny::reactive(list(drive_counter_scores(),  input$run_scores))
 
