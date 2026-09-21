@@ -1,0 +1,1159 @@
+# =============================================================================
+# test-drive-watcher.R — Live Control Protocol, app side (G0 + G1 gates)
+# =============================================================================
+# Eponymous test for `R/core/drive_watcher.R` ONLY. The allowlist's own tests
+# live in `tests/testthat/test-drive-allowlist.R`, which is what rule 5 asks
+# for — see the header of that file for the MEASURED reason the split was
+# necessary (the C9 guard checks a file NAME, never its content).
+#
+# The allowlist is still READ here, but only as `drive_watcher.R` consumes it:
+# `ts_drive_validate_scenario()` refuses off-allowlist keys, and
+# `ts_drive_apply()` refuses a scenario whose module owns no bound button.
+#
+# Spec: docs/DRIVE_LIVE_CONTROL_PLAN.md. Grade G0 accepts 1-4, G1 accepts 5-8.
+# Integration points of app.R are asserted separately (test-app-sourcing.R
+# already guards the source() wiring).
+#
+# WHAT THIS FILE IS ALLOWED TO ASSERT
+#   The poller's REAL decision logic: schema validation, the seq/stale rule,
+#   the arm gate, the allowlist refusal, the atomic write, and the ready.json
+#   lifecycle. It does NOT boot Shiny — that is the G0/G1 acceptance run on a
+#   live session, which cannot be mechanised from Rscript (spec §7: the agent
+#   waits for a real client to connect).
+# =============================================================================
+
+# --- Fixtures ---------------------------------------------------------------
+
+# Isolated root per test file: the protocol resolves EVERY path from the boot
+# root, so pointing `ts_drive_boot()` at a tempdir makes the tests hermetic and
+# stops them from ever touching the real `tools/_drive/` of the working tree.
+.drv_local_root <- function() {
+  root <- file.path(tempdir(), paste0("tsdrive-", as.integer(runif(1, 1, 1e9))))
+  dir.create(file.path(root, "tools", "_drive"), recursive = TRUE, showWarnings = FALSE)
+  ts_drive_boot(root)
+  root
+}
+
+.drv_write_arm <- function(token, armed = TRUE, protocol = TS_DRIVE_PROTOCOL) {
+  ts_drive_write_json(
+    list(protocol = protocol, token = token, armed = armed),
+    ts_drive_path("arm.json")
+  )
+}
+
+.drv_write_scn <- function(seq, action = "noop", module = "bulk_de",
+                           inputs = list(), session_token = NULL,
+                           protocol = TS_DRIVE_PROTOCOL,
+                           preserve_data = NULL, expect = NULL, button = NULL) {
+  payload <- list(protocol = protocol, seq = seq, module = module,
+                  action = action, inputs = inputs)
+  if (!is.null(session_token)) payload$session_token <- session_token
+  if (!is.null(preserve_data)) payload$preserve_data <- preserve_data
+  if (!is.null(expect)) payload$expect <- expect
+  if (!is.null(button)) payload$button <- button
+  ts_drive_write_json(payload, ts_drive_path("scenario.json"))
+}
+
+# The three functions under test that need no Shiny at all.
+.drv_source <- function() {
+  source_project_file("R/core/drive_allowlist.R")
+  source_project_file("R/core/drive_watcher.R")
+}
+
+.drv_source()
+
+# Force the arm gate OPEN for the whole file. `Rscript` is never interactive,
+# so without this the token/schema half of the protocol would be unreachable
+# from a test — and a gate nobody can exercise is a gate nobody has checked.
+# The gate itself is asserted separately (see §3, "non-interactive refuses").
+options(ts.drive.interactive = TRUE)
+
+# Sections 0 and 1 (the allowlist's own consistency and frozen data) MOVED to
+# tests/testthat/test-drive-allowlist.R, the eponymous test that rule 5 asks
+# for. Nothing was dropped and no assertion was weakened: the C9 guard reads
+# only the FILE NAME, so keeping them here left `R/core/drive_allowlist.R`
+# reported as untested while its tests ran in this file. This file now keeps
+# only what the WATCHER owns.
+
+# 2. ready.json lifecycle (G0 acceptance 2 and 3)
+# =============================================================================
+
+test_that("ready.json is absent until written, then round-trips the token", {
+  .drv_local_root()
+  expect_null(ts_drive_read_ready())
+
+  fake_session <- list()
+  written <- ts_drive_write_ready(fake_session, "abc12345", armed = FALSE)
+
+  expect_true(file.exists(ts_drive_path("ready.json")))
+  expect_identical(written$protocol, TS_DRIVE_PROTOCOL)
+  expect_identical(written$session_token, "abc12345")
+  expect_false(written$armed)
+  expect_identical(written$last_seq, 0L)
+  expect_identical(written$pid, Sys.getpid())
+
+  back <- ts_drive_read_ready()
+  expect_identical(back$session_token, "abc12345")
+})
+
+test_that("invalidating ready.json with the right token removes it", {
+  .drv_local_root()
+  ts_drive_write_ready(list(), "tokA", armed = TRUE)
+  expect_true(file.exists(ts_drive_path("ready.json")))
+
+  expect_true(ts_drive_invalidate_ready("tokA"))
+  expect_false(file.exists(ts_drive_path("ready.json")))
+})
+
+test_that("invalidating ready.json with a STALE token leaves a newer handshake intact", {
+  # Two tabs: the second overwrote ready.json. The first tab closing must not
+  # delete the second tab's handshake — otherwise a departing session would
+  # silently unadvertise a live one (spec §2.1, "last connected session wins").
+  .drv_local_root()
+  ts_drive_write_ready(list(), "newer", armed = TRUE)
+
+  expect_false(ts_drive_invalidate_ready("older"))
+  expect_true(file.exists(ts_drive_path("ready.json")))
+  expect_identical(ts_drive_read_ready()$session_token, "newer")
+})
+
+test_that("a malformed ready.json reads as NULL instead of throwing", {
+  .drv_local_root()
+  writeLines("{ this is not json", ts_drive_path("ready.json"))
+  expect_silent(expect_null(ts_drive_read_ready()))
+})
+
+# =============================================================================
+# 3. arm gate (spec §1) — the ONLY thing that keeps production inert
+# =============================================================================
+
+test_that("no arm.json means disarmed, with a reason", {
+  .drv_local_root()
+  res <- ts_drive_arm_state("tok")
+  expect_false(res$armed)
+  expect_match(res$reason, "no arm.json")
+})
+
+test_that("a matching token arms; a mismatch does not", {
+  .drv_local_root()
+  .drv_write_arm("tok")
+  expect_true(ts_drive_arm_state("tok")$armed)
+
+  .drv_write_arm("other")
+  res <- ts_drive_arm_state("tok")
+  expect_false(res$armed)
+  expect_match(res$reason, "token mismatch")
+})
+
+test_that("armed=false in arm.json disarms without deleting the file", {
+  .drv_local_root()
+  .drv_write_arm("tok", armed = FALSE)
+  res <- ts_drive_arm_state("tok")
+  expect_false(res$armed)
+  expect_match(res$reason, "armed=false")
+})
+
+test_that("a foreign protocol version is refused, not obeyed", {
+  .drv_local_root()
+  .drv_write_arm("tok", protocol = "ts-drive/99")
+  res <- ts_drive_arm_state("tok")
+  expect_false(res$armed)
+  expect_match(res$reason, "protocol")
+})
+
+test_that("the wildcard token is refused unless TRANSCRIPTO_DEV_DRIVE=1", {
+  # This is the helper-launch escape hatch (spec §1). It must NOT be open by
+  # default, otherwise any file drop would arm any session.
+  .drv_local_root()
+  .drv_write_arm("*")
+  old <- Sys.getenv("TRANSCRIPTO_DEV_DRIVE", unset = NA)
+  on.exit({
+    if (is.na(old)) Sys.unsetenv("TRANSCRIPTO_DEV_DRIVE")
+    else Sys.setenv(TRANSCRIPTO_DEV_DRIVE = old)
+  }, add = TRUE)
+
+  Sys.unsetenv("TRANSCRIPTO_DEV_DRIVE")
+  expect_false(ts_drive_arm_state("tok")$armed)
+
+  Sys.setenv(TRANSCRIPTO_DEV_DRIVE = "1")
+  expect_true(ts_drive_arm_state("tok")$armed)
+})
+
+test_that("an unreadable arm.json is treated as absent (no throw)", {
+  .drv_local_root()
+  writeLines("}}}", ts_drive_path("arm.json"))
+  res <- ts_drive_arm_state("tok")
+  expect_false(res$armed)
+  expect_match(res$reason, "no arm.json")
+})
+
+test_that("a NON-interactive session is disarmed even with a perfect arm.json", {
+  # The single gate that keeps production inert. `Rscript` is non-interactive
+  # by definition, which is exactly why the check is exercised by unsetting the
+  # override rather than by pretending.
+  .drv_local_root()
+  .drv_write_arm("tok")
+  op <- options(ts.drive.interactive = FALSE)
+  on.exit(options(op), add = TRUE)
+
+  res <- ts_drive_arm_state("tok")
+  expect_false(res$armed)
+  expect_match(res$reason, "non-interactive")
+
+  # And the whole tick stays silent, even with a valid scenario on disk.
+  .drv_write_scn(1L, action = "noop", module = "bulk_de", session_token = "tok")
+  tick <- ts_drive_tick(NULL, NULL, NULL, "tok", 0, FALSE)
+  expect_false(tick$consumed)
+  expect_false(file.exists(ts_drive_path("result.json")))
+})
+
+# =============================================================================
+# 4. Scenario validation — status enum freeze (spec §2.3 / §2.4)
+# =============================================================================
+
+test_that("a well-formed set_inputs scenario passes validation", {
+  scn <- list(protocol = TS_DRIVE_PROTOCOL, seq = 1, module = "bulk_de",
+              action = "set_inputs", session_token = "tok",
+              inputs = list("bulk-de-lfc_thresh" = 2))
+  v <- ts_drive_validate_scenario(scn, "tok", last_seq = 0)
+  expect_true(v$ok)
+  expect_identical(v$status, "applied-candidate")
+  expect_length(v$errors, 0)
+  expect_identical(v$scenario$seq, 1L)
+  expect_true(v$scenario$preserve_data)
+})
+
+test_that("an unknown protocol is IGNORED, not invalid", {
+  # The distinction matters to the agent: `ignored` means "the session did not
+  # understand the version", `invalid` means "your payload is broken". They
+  # call for different fixes, so they must not be merged.
+  scn <- list(protocol = "something-else/1", seq = 5, module = "bulk_de",
+              action = "noop")
+  v <- ts_drive_validate_scenario(scn, "tok", last_seq = 0)
+  expect_false(v$ok)
+  expect_identical(v$status, "ignored")
+  expect_length(v$errors, 0)
+  expect_match(v$warnings[1], "unknown protocol")
+})
+
+test_that("a stale seq is IGNORED (G1 acceptance 8)", {
+  scn <- list(protocol = TS_DRIVE_PROTOCOL, seq = 3, module = "bulk_de",
+              action = "noop", session_token = "tok")
+  v <- ts_drive_validate_scenario(scn, "tok", last_seq = 3)
+  expect_identical(v$status, "ignored")
+  expect_match(v$warnings[1], "stale seq")
+
+  # And an equal seq is stale too (spec: `seq` <= last_seq).
+  v2 <- ts_drive_validate_scenario(scn, "tok", last_seq = 4)
+  expect_identical(v2$status, "ignored")
+})
+
+test_that("a wrong session_token invalidates — the wrong tab is never touched", {
+  scn <- list(protocol = TS_DRIVE_PROTOCOL, seq = 1, module = "bulk_de",
+              action = "noop", session_token = "other-tab")
+  v <- ts_drive_validate_scenario(scn, "this-tab", last_seq = 0)
+  expect_identical(v$status, "invalid")
+  expect_match(v$errors[1], "session_token mismatch")
+})
+
+test_that("unknown module and unknown action both land in invalid", {
+  v <- ts_drive_validate_scenario(
+    list(protocol = TS_DRIVE_PROTOCOL, seq = 1, module = "sc",
+         action = "noop", session_token = "tok"), "tok", 0)
+  expect_identical(v$status, "invalid")
+  expect_match(v$errors[1], "outside the v1 bulk pilot allowlist")
+
+  v2 <- ts_drive_validate_scenario(
+    list(protocol = TS_DRIVE_PROTOCOL, seq = 1, module = "bulk_de",
+         action = "teleport", session_token = "tok"), "tok", 0)
+  expect_identical(v2$status, "invalid")
+  expect_match(v2$errors[1], "unknown action")
+})
+
+test_that("an off-allowlist inputId is reported AND the valid keys survive", {
+  # S3: "Unknown inputId -> error item, skip that key, do not abort the
+  # session." A blanket all-or-nothing refusal would be easier to write and
+  # wrong to ship. The surviving keys are what the injector may still apply.
+  scn <- list(protocol = TS_DRIVE_PROTOCOL, seq = 1, module = "bulk_de",
+              action = "set_inputs", session_token = "tok",
+              inputs = list("bulk-de-lfc_thresh" = 2,
+                            "bulk-de-total_nonsense" = 1))
+  v <- ts_drive_validate_scenario(scn, "tok", 0)
+  expect_identical(v$status, "invalid")
+  expect_match(v$errors[1], "not on the driver allowlist")
+  expect_match(v$errors[1], "bulk-de-total_nonsense")
+  expect_true("bulk-de-lfc_thresh" %in% names(v$scenario$inputs_ok))
+  expect_false("bulk-de-total_nonsense" %in% names(v$scenario$inputs_ok))
+})
+
+test_that("an allowlisted input from ANOTHER module is reported as unowned", {
+  # The message must name both modules: "belongs to bulk_pathways, not bulk_de"
+  # is actionable, "not on the allowlist" would be a lie (it IS on it).
+  scn <- list(protocol = TS_DRIVE_PROTOCOL, seq = 1, module = "bulk_de",
+              action = "set_inputs", session_token = "tok",
+              inputs = list("bulk-pathways-pathway_pval" = 0.01))
+  v <- ts_drive_validate_scenario(scn, "tok", 0)
+  expect_match(v$warnings[1], "belongs to 'bulk_pathways', not 'bulk_de'")
+  expect_false("bulk-pathways-pathway_pval" %in% names(v$scenario$inputs_ok))
+  # It is allowlisted, so it is NOT an "unknown inputId" error.
+  expect_length(v$errors, 0)
+})
+
+test_that("preserve_data defaults to TRUE and a non-boolean is refused", {
+  base <- list(protocol = TS_DRIVE_PROTOCOL, seq = 1, module = "bulk_de",
+               action = "noop", session_token = "tok")
+  expect_true(ts_drive_validate_scenario(base, "tok", 0)$scenario$preserve_data)
+
+  bad <- base; bad$preserve_data <- "yes"
+  v <- ts_drive_validate_scenario(bad, "tok", 0)
+  expect_identical(v$status, "invalid")
+  expect_match(v$errors[1], "preserve_data")
+
+  explicit <- base; explicit$preserve_data <- FALSE
+  expect_false(ts_drive_validate_scenario(explicit, "tok", 0)$scenario$preserve_data)
+})
+
+test_that("a missing seq is invalid; a NULL scenario is invalid and never throws", {
+  v <- ts_drive_validate_scenario(
+    list(protocol = TS_DRIVE_PROTOCOL, module = "bulk_de", action = "noop"),
+    "tok", 0)
+  expect_identical(v$status, "invalid")
+  expect_match(v$errors[1], "seq")
+
+  v2 <- ts_drive_validate_scenario(NULL, "tok", 0)
+  expect_identical(v2$status, "invalid")
+  expect_match(v2$errors[1], "absent")
+})
+
+# =============================================================================
+# 5. result.json — field freeze (spec §2.4)
+# =============================================================================
+
+test_that("result.json carries every frozen field, and the status enum is respected", {
+  .drv_local_root()
+  ts_drive_write_result(7L, "done", "bulk_de", armed = TRUE,
+                        preserve_data = TRUE, errors = character(0),
+                        warnings = character(0), snapshot = list(has_data = FALSE))
+
+  res <- ts_drive_read_result()
+  expect_identical(res$protocol, TS_DRIVE_PROTOCOL)
+  expect_identical(res$ack_seq, 7L)
+  expect_identical(res$status, "done")
+  expect_identical(res$active_module, "bulk_de")
+  expect_true(res$armed)
+  expect_true(res$preserve_data)
+  expect_identical(res$errors, list())
+  expect_identical(res$warnings, list())
+  expect_false(res$snapshot$has_data)
+  expect_true(grepl("^\\d{4}-\\d{2}-\\d{2}T", res$applied_at))
+})
+
+test_that("errors and warnings survive the round trip as arrays", {
+  .drv_local_root()
+  ts_drive_write_result(1L, "invalid", "bulk_de", armed = TRUE,
+                        errors = c("one", "two"), warnings = "w3")
+  res <- ts_drive_read_result()
+  expect_length(res$errors, 2)
+  expect_identical(res$errors[[1]], "one")
+  expect_length(res$warnings, 1)
+})
+
+test_that("snapshot reports objects, never image data", {
+  .drv_local_root()
+  gd <- list(bulk_obj = list(counts = matrix(1:12, nrow = 4, ncol = 3)))
+  snap <- ts_drive_snapshot(gd)
+  expect_true(snap$has_data)
+  expect_identical(snap$n_genes, 4L)
+  expect_identical(snap$n_samples, 3L)
+  # No base64 blob may leak into the verdict: renderPlot returns a PNG, which
+  # is exactly what the spec forbids relying on.
+  expect_false(any(grepl("base64", unlist(snap), fixed = TRUE)))
+})
+
+test_that("snapshot on empty or absent state is honest, not an error", {
+  .drv_local_root()
+  empty <- ts_drive_snapshot(list())
+  expect_false(empty$has_data)
+  expect_null(empty$n_genes)
+  expect_false(ts_drive_snapshot(NULL)$has_data)
+})
+
+# =============================================================================
+# 6. Atomic write (spec §2.3 / S8) — the Windows rename trap
+# =============================================================================
+
+test_that("write_json leaves no .tmp behind and overwrites an existing file", {
+  .drv_local_root()
+  dest <- ts_drive_path("scenario.json")
+  expect_true(ts_drive_write_json(list(seq = 1), dest))
+  expect_true(file.exists(dest))
+  expect_false(file.exists(paste0(dest, ".tmp")))
+
+  # POSIX would overwrite silently; Windows file.rename() does NOT. The
+  # implementation unlink()s first — this asserts the observable result.
+  expect_true(ts_drive_write_json(list(seq = 2), dest))
+  # jsonlite returns an integer for `2`; compare on value, not on storage mode.
+  expect_equal(ts_drive_read_json(dest)$seq, 2)
+  expect_false(file.exists(paste0(dest, ".tmp")))
+})
+
+test_that("a mid-write failure cannot leave a half-written scenario.json", {
+  # FALSIFICATION: if the payload is un-serialisable, the destination must keep
+  # its previous content rather than being truncated to garbage. A protocol
+  # that can hand a half-parsed JSON to the poller is worse than one that
+  # fails loudly.
+  .drv_local_root()
+  dest <- ts_drive_path("scenario.json")
+  ts_drive_write_json(list(seq = 1), dest)
+  before <- readLines(dest, warn = FALSE)
+
+  ok <- ts_drive_write_json(list(seq = 2, bad = new.env()), dest)
+  # jsonlite CAN serialise an environment (as a list), so accept either
+  # outcome — but the file must never be corrupt.
+  expect_type(ok, "logical")
+  expect_silent(parsed <- ts_drive_read_json(dest))
+  expect_false(is.null(parsed))
+  expect_true(is.list(parsed))
+  expect_false(file.exists(paste0(dest, ".tmp")))
+  expect_true(length(before) > 0)
+})
+
+test_that("write_json returns FALSE rather than throwing on an unwritable path", {
+  .drv_local_root()
+  bogus <- file.path(tempdir(), "no-such-dir-xyz", "sub", "out.json")
+  dir.create(dirname(bogus), recursive = TRUE, showWarnings = FALSE)
+  # A DIRECTORY at the destination is the portable way to force a rename
+  # failure on Windows.
+  dir.create(bogus, showWarnings = FALSE)
+  expect_false(ts_drive_write_json(list(a = 1), bogus))
+})
+
+test_that("ts_drive_mtime is NA for a missing file and numeric otherwise", {
+  .drv_local_root()
+  expect_true(is.na(ts_drive_mtime(ts_drive_path("nope.json"))))
+  ts_drive_write_json(list(x = 1), ts_drive_path("here.json"))
+  expect_true(is.numeric(ts_drive_mtime(ts_drive_path("here.json"))))
+})
+
+# =============================================================================
+# 7. Path derivation — the root is captured at boot, never getwd()
+# =============================================================================
+
+test_that("every drive path resolves under the boot root", {
+  root <- .drv_local_root()
+  expect_identical(ts_drive_root(), normalizePath(root, winslash = "/", mustWork = FALSE))
+  expect_identical(
+    ts_drive_path("arm.json"),
+    file.path(normalizePath(root, winslash = "/", mustWork = FALSE),
+              "tools", "_drive", "arm.json")
+  )
+})
+
+test_that("ts_drive_boot normalises the separator and survives a getwd() change", {
+  root <- .drv_local_root()
+  old <- getwd()
+  on.exit(setwd(old), add = TRUE)
+  setwd(tempdir())
+  # The protocol must not follow the working directory: RStudio drifts.
+  expect_identical(ts_drive_root(), normalizePath(root, winslash = "/", mustWork = FALSE))
+  expect_false(grepl("\\\\", ts_drive_root()))
+})
+
+test_that("ts_drive_ensure_dir is idempotent", {
+  root <- .drv_local_root()
+  unlink(file.path(root, "tools"), recursive = TRUE)
+  expect_false(dir.exists(ts_drive_path()))
+  ts_drive_ensure_dir()
+  expect_true(dir.exists(ts_drive_path()))
+  expect_silent(ts_drive_ensure_dir())
+})
+
+# =============================================================================
+# 8. The no-op guarantee (G0 acceptance 1 / §10 invariant)
+# =============================================================================
+
+test_that("the tick writes NOTHING while disarmed", {
+  # This is the acceptance-1 mechanisation: with no arm.json, dropping a
+  # scenario.json must leave no trace at all. If the poller emitted a
+  # result.json here, the app would no longer be "indistinguishable from
+  # today" with the arm file removed.
+  .drv_local_root()
+  .drv_write_scn(1L, action = "set_inputs", session_token = "tok",
+                 inputs = list("bulk-de-lfc_thresh" = 5))
+
+  token <- "tok"
+  res <- ts_drive_tick(session = NULL, input = NULL, global_data = NULL,
+                       token = token, last_seq = 0, armed = FALSE)
+
+  expect_false(res$consumed)
+  expect_false(res$armed)
+  expect_false(file.exists(ts_drive_path("result.json")))
+})
+
+test_that("a wrong token consumes nothing either (still silent)", {
+  .drv_local_root()
+  .drv_write_arm("other")
+  .drv_write_scn(1L, action = "set_inputs", session_token = "tok",
+                 inputs = list("bulk-de-lfc_thresh" = 5))
+  res <- ts_drive_tick(NULL, NULL, NULL, "tok", 0, FALSE)
+  expect_false(res$consumed)
+  expect_false(file.exists(ts_drive_path("result.json")))
+})
+
+# =============================================================================
+# 9. seq cursor semantics (G1 acceptance 8, mechanised end to end)
+# =============================================================================
+
+test_that("the arm token gate runs before any scenario is even read", {
+  # Order matters: a disarmed session must not validate, apply, or answer.
+  .drv_local_root()
+  .drv_write_scn(1L, action = "noop", module = "bulk_de", session_token = "tok")
+  .drv_write_arm("tok", armed = FALSE)
+  res <- ts_drive_tick(NULL, NULL, NULL, "tok", 0, FALSE)
+  expect_false(res$consumed)
+  expect_false(file.exists(ts_drive_path("result.json")))
+})
+
+test_that("an invalid scenario is consumed (so its seq is not retried forever)", {
+  # Subtle but load-bearing: `invalid` must raise last_seq, otherwise the poller
+  # would re-report the same broken payload on every tick, eight hundred times
+  # a minute, and the agent could never distinguish a new attempt from a stuck
+  # one.
+  .drv_local_root()
+  .drv_write_arm("tok")
+  .drv_write_scn(1L, action = "teleport", module = "bulk_de", session_token = "tok")
+  res <- ts_drive_tick(NULL, NULL, NULL, "tok", 0, FALSE)
+  expect_true(res$consumed)
+  expect_identical(res$last_seq, 0)      # unchanged: the payload was never applied
+  expect_true(file.exists(ts_drive_path("result.json")))
+  expect_identical(ts_drive_read_result()$status, "invalid")
+})
+
+test_that("a stale scenario produces no result and no consumption", {
+  .drv_local_root()
+  .drv_write_arm("tok")
+  .drv_write_scn(2L, action = "noop", module = "bulk_de", session_token = "tok")
+  res <- ts_drive_tick(NULL, NULL, NULL, "tok", last_seq = 5, armed = TRUE)
+  expect_false(res$consumed)
+  expect_false(file.exists(ts_drive_path("result.json")))
+})
+
+# =============================================================================
+# 10. Button wiring contract (G2 preparation, no Shiny needed)
+# =============================================================================
+
+test_that("ts_drive_bind_button refuses an id outside TS_DRIVE_BUTTONS", {
+  expect_warning(
+    expect_null(ts_drive_bind_button("bulk-de-run_de_typo"))
+  )
+  expect_match(ts_drive_bind_button("bulk-de-run_de"), "bulk-de-run_de$")
+})
+
+test_that("ts_drive_bump_token on a NULL token is FALSE, never a crash", {
+  # The G0/G1 situation: no module has announced a binding yet. run_pipeline
+  # must then report `invalid` with an actionable message instead of erroring.
+  expect_false(ts_drive_bump_token(NULL))
+})
+
+test_that("run_pipeline without a binding is invalid and names the missing bind", {
+  .drv_local_root()
+  .drv_write_arm("tok")
+  .drv_write_scn(9L, action = "run_pipeline", module = "bulk_de",
+                 session_token = "tok")
+  res <- ts_drive_tick(NULL, NULL, NULL, "tok", 0, FALSE, effects = NULL)
+  expect_true(res$consumed)
+  r <- ts_drive_read_result()
+  expect_identical(r$status, "invalid")
+  expect_match(r$errors[[1]], "not bound")
+})
+
+test_that("a bulk_de scenario with no explicit button resolves to run_de", {
+  .drv_local_root()
+  .drv_write_arm("tok")
+  .drv_write_scn(4L, action = "run_pipeline", module = "bulk_de",
+                 session_token = "tok")
+  calls <- new.env(); calls$ids <- character(0)
+  effects <- function(id, mode = NULL, module = NULL) {
+    if (identical(mode, "tokens")) return(list())
+    if (is.null(id)) return(FALSE)
+    calls$ids <- c(calls$ids, id)
+    TRUE
+  }
+  res <- ts_drive_tick(NULL, NULL, NULL, "tok", 0, FALSE, effects = effects)
+  expect_true(res$consumed)
+  expect_identical(calls$ids, "bulk-de-run_de")
+  expect_identical(ts_drive_read_result()$status, "done")
+})
+
+test_that("run_pipeline remembers the seq and reports done", {
+  .drv_local_root()
+  .drv_write_arm("tok")
+  .drv_write_scn(11L, action = "run_pipeline", module = "bulk_pathways",
+                 session_token = "tok")
+  effects <- function(id, mode = NULL, module = NULL) {
+    if (identical(mode, "tokens")) return(list())
+    TRUE
+  }
+  res <- ts_drive_tick(NULL, NULL, NULL, "tok", 0, FALSE, effects = effects)
+  expect_identical(res$last_seq, 11L)
+  expect_identical(ts_drive_read_result()$ack_seq, 11L)
+})
+
+# =============================================================================
+# 11. Actions that must refuse rather than silently no-op (G3 acceptance 14)
+# =============================================================================
+
+test_that("reset_module returns invalid, never a silent no-op", {
+  # Spec G3.14: "if not implemented, the action must return invalid, not
+  # silently no-op". A silent success here would let an agent believe it had
+  # cleared data it did not clear.
+  .drv_local_root()
+  ts_drive_apply_res <- ts_drive_apply(NULL, NULL,
+    list(action = "reset_module", module = "bulk_de", inputs = list()),
+    effects = NULL)
+  expect_identical(ts_drive_apply_res$status, "invalid")
+  expect_match(ts_drive_apply_res$errors[1], "reset_module")
+})
+
+test_that("import_file returns invalid in this grade", {
+  res <- ts_drive_apply(NULL, NULL,
+    list(action = "import_file", module = "import_bulk", inputs = list()),
+    effects = NULL)
+  expect_identical(res$status, "invalid")
+  expect_match(res$errors[1], "import_file")
+})
+
+test_that("noop and snapshot are done, and change nothing", {
+  for (act in c("noop", "snapshot")) {
+    res <- ts_drive_apply(NULL, NULL,
+      list(action = act, module = "bulk_de", inputs = list("bulk-de-lfc_thresh" = 9)),
+      effects = NULL)
+    expect_identical(res$status, "done", info = act)
+    expect_length(res$errors, 0)
+  }
+})
+
+test_that("set_inputs reports applied (inputs updated, pipeline not finished)", {
+  # Spec §2.4: `applied` = inputs updated, pipeline NOT finished. Distinguishing
+  # it from `done` is what lets the agent tell "I changed a widget" from "I ran
+  # the analysis".
+  .drv_local_root()
+  res <- ts_drive_apply(NULL, NULL,
+    list(action = "set_inputs", module = "bulk_de",
+         inputs = list("bulk-de-nonexistent_probe" = 1)),
+    effects = NULL)
+  expect_identical(res$status, "applied")
+})
+
+test_that("the nav plan targets the bulk tab, and the right panel per module", {
+  expect_identical(ts_drive_nav_plan("bulk_de")$top, "tab_bulk")
+  expect_identical(ts_drive_nav_plan("bulk_de")$panel, "panel_de")
+  expect_identical(ts_drive_nav_plan("bulk_pathways")$panel, "panel_pathways")
+  expect_null(ts_drive_nav_plan("import_bulk")$panel)
+  # A tab value outside the measured list is dropped, not passed through.
+  expect_null(ts_drive_nav_plan("bulk_de", "tab_made_up")$tab)
+  expect_identical(ts_drive_nav_plan("bulk_de", "tab_volcano")$tab, "tab_volcano")
+})
+
+# =============================================================================
+# 12. The attach() CONTRACT that app.R's observe() depends on
+# =============================================================================
+# This is the seam between `R/` (pure decisions) and `app.R` (the one reactive
+# beat). It was written BECAUSE the first version of that seam was broken: the
+# observer read `.drive$last_nav`, a member `ts_drive_attach()` never returned,
+# so the navigation branch could never fire — and nothing failed, because a
+# `NULL` read is silent. A seam that fails SILENTLY needs a test, not a promise.
+#
+# No Shiny is booted. `ts_drive_attach()` only needs `session$onSessionEnded()`;
+# everything else it touches is the file system, which is why this seam is
+# reachable from `Rscript` at all.
+
+.drv_fake_session <- function(env) {
+  list(onSessionEnded = function(f) { env$f <- f; invisible(NULL) })
+}
+
+test_that("attach exposes the closure contract app.R reads", {
+  .drv_local_root()
+  env <- new.env(); env$f <- NULL
+  d <- ts_drive_attach(.drv_fake_session(env), list(run_de = 0L))
+
+  # The exact members app.R touches. If one is renamed, app.R must be updated —
+  # better a red test here than a silently dead branch in the observer.
+  expect_true(all(c("token", "poll_ms", "on_tick", "pending_nav",
+                    "last_seq", "armed") %in% names(d)))
+  expect_type(d$token, "character")
+  expect_length(d$token, 1)
+  expect_true(is.numeric(d$poll_ms))
+  # Spec §3: 500-1000 ms. Pinned so a "performance tweak" cannot leave it.
+  expect_true(d$poll_ms >= 500 && d$poll_ms <= 1000)
+
+  expect_true(is.function(env$f))            # onSessionEnded registered
+  expect_true(file.exists(ts_drive_path("ready.json")))
+})
+
+test_that("disarmed, on_tick consumes nothing and writes no scenario", {
+  root <- .drv_local_root()
+  d <- ts_drive_attach(.drv_fake_session(new.env()), list())
+  tick <- d$on_tick(global_data = list())
+
+  expect_false(isTRUE(tick$consumed))
+  expect_identical(d$last_seq(), 0L)
+  expect_null(d$pending_nav())
+  # The no-op guarantee, restated at the attach() level: nothing is created.
+  expect_false(file.exists(ts_drive_path("scenario.json")))
+  expect_false(file.exists(ts_drive_path("result.json")))
+  expect_true(dir.exists(file.path(root, "tools", "_drive")))
+})
+
+test_that("an applied scenario stores its nav plan, and pending_nav() is ONE-SHOT", {
+  .drv_local_root()
+  d <- ts_drive_attach(.drv_fake_session(new.env()), list())
+  .drv_write_arm(d$token)
+  .drv_write_scn(1L, action = "set_inputs", module = "bulk_de",
+                 session_token = d$token)
+
+  tick <- d$on_tick(global_data = list())
+  expect_true(isTRUE(tick$consumed))
+  # The plan is BOTH returned to the caller and stashed for it.
+  expect_identical(tick$nav$top, "tab_bulk")
+  expect_identical(tick$nav$panel, "panel_de")
+
+  expect_false(is.null(d$pending_nav()))
+  # ONE-SHOT is a correctness property, not a memory optimisation: replaying a
+  # jump on a later idle tick would drag the human back to a tab they left.
+  expect_null(d$pending_nav())
+})
+
+test_that("two consecutive scenarios both fire, and the token is read live", {
+  .drv_local_root()
+  d <- ts_drive_attach(.drv_fake_session(new.env()), list())
+  .drv_write_arm(d$token)
+
+  seen <- character(0)
+  effects <- function(input_id, mode = "bump", module = NULL) {
+    if (identical(mode, "tokens")) return(list())
+    seen <<- c(seen, input_id); TRUE
+  }
+
+  .drv_write_scn(1L, action = "run_pipeline", module = "bulk_de",
+                 session_token = d$token)
+  expect_true(isTRUE(d$on_tick(global_data = list(), effects = effects)$consumed))
+
+  # G2 acceptance 9's shape: a SECOND scenario must fire too. This is the
+  # property that separates a working token trigger from a one-shot latch.
+  .drv_write_scn(2L, action = "run_pipeline", module = "bulk_de",
+                 session_token = d$token)
+  expect_true(isTRUE(d$on_tick(global_data = list(), effects = effects)$consumed))
+
+  expect_identical(seen, c("bulk-de-run_de", "bulk-de-run_de"))
+  expect_identical(d$last_seq(), 2L)
+  expect_true(d$armed())
+})
+
+test_that("an idle armed tick is a true no-op (absent scenario.json)", {
+  # REGRESSION for a defect measured while building the badge. With
+  # `scenario.json` merely ABSENT, `ts_drive_validate_scenario(NULL, ...)`
+  # reports `invalid`, and the tick CONSUMED it — so every idle beat of an
+  # armed session wrote a bogus `status:"invalid"` result and queued a badge
+  # transition. The poller would have cried failure ~1.25x per second forever.
+  #
+  # The two cases must stay DISTINCT:
+  #   absent file  -> nothing to do (no-op)
+  #   malformed    -> invalid (there IS a payload, and it is wrong)
+  .drv_local_root()
+  d <- ts_drive_attach(.drv_fake_session(new.env()), list())
+  .drv_write_arm(d$token)
+  expect_false(file.exists(ts_drive_path("scenario.json")))
+
+  tick <- d$on_tick(global_data = list())
+  expect_false(isTRUE(tick$consumed))
+  expect_identical(as.integer(d$last_seq()), 0L)
+  expect_false(file.exists(ts_drive_path("result.json")))
+  # The only event an idle armed beat may produce is the arm itself.
+  expect_identical(vapply(d$pending_events(), function(e) e$event, ""), "arm")
+
+  # A second idle beat produces NOTHING at all: no re-arm, no invalid.
+  tick2 <- d$on_tick(global_data = list())
+  expect_false(isTRUE(tick2$consumed))
+  expect_length(d$pending_events(), 0L)
+  expect_false(file.exists(ts_drive_path("result.json")))
+})
+
+test_that("a malformed scenario.json is still reported as invalid", {
+  # The other half of the distinction above: a file that EXISTS but does not
+  # parse must NOT be silently swallowed as "nothing to do".
+  .drv_local_root()
+  d <- ts_drive_attach(.drv_fake_session(new.env()), list())
+  .drv_write_arm(d$token)
+
+  con <- file(ts_drive_path("scenario.json"), open = "wb")
+  writeLines("{not valid json", con = con, useBytes = TRUE)
+  close(con)
+
+  tick <- d$on_tick(global_data = list())
+  expect_true(isTRUE(tick$consumed))
+  expect_identical(tick$status, "invalid")
+  res <- ts_drive_read_result()
+  expect_identical(as.character(res$status), "invalid")
+})
+
+test_that("the ready.json handshake is invalidated when the session ends", {
+  .drv_local_root()
+  env <- new.env(); env$f <- NULL
+  d <- ts_drive_attach(.drv_fake_session(env), list())
+  expect_true(file.exists(ts_drive_path("ready.json")))
+
+  env$f()
+  # A dead session must not leave a handshake an agent would trust: otherwise
+  # the agent arms a token nobody is listening for and waits forever.
+  expect_false(file.exists(ts_drive_path("ready.json")))
+})
+
+# =============================================================================
+# 13. Heartbeat — the liveness proof in ready.json
+# =============================================================================
+# WHY THIS EXISTS: a `ready.json` left behind by a process that died mid-session
+# is byte-identical to a live one as far as "the file exists" is concerned. Only
+# a timestamp that keeps moving distinguishes them. Without it the agent's only
+# recourse would be scraping stdout — the very thing the protocol exists to
+# avoid, since Rscript exits 139 on teardown and loses buffered stdout.
+
+test_that("ready.json carries the heartbeat fields", {
+  .drv_local_root()
+  d <- ts_drive_attach(.drv_fake_session(new.env()), list())
+  hb <- ts_drive_read_ready()
+
+  expect_true(all(c("hb_at", "hb_n", "hb_timeout_s") %in% names(hb)))
+  expect_identical(as.integer(hb$hb_n), 0L)
+  expect_identical(as.character(hb$session_token), d$token)
+  # The timeout is published BY the app, so the agent need not hardcode it.
+  expect_true(is.numeric(hb$hb_timeout_s) && hb$hb_timeout_s > 0)
+})
+
+test_that("hb_n increases monotonically and never restarts mid-session", {
+  .drv_local_root()
+  d <- ts_drive_attach(.drv_fake_session(new.env()), list())
+  .drv_write_arm(d$token)
+
+  # hb_interval = 0 forces a write on every beat, so the counter's behaviour is
+  # observable without sleeping the suite.
+  old <- options(ts.drive.hb_interval = 0.001)
+  on.exit(options(old), add = TRUE)
+
+  seq_n <- integer(0)
+  for (i in 1:5) {
+    d$on_tick(global_data = list())
+    seq_n <- c(seq_n, as.integer(ts_drive_read_ready()$hb_n))
+  }
+  expect_true(all(diff(seq_n) > 0L))
+  # Strictly increasing is the load-bearing property: it is what lets the agent
+  # tell "same session, still alive" from "a NEW session reusing the same pid".
+  expect_identical(seq_n, sort(seq_n, method = "radix"))
+})
+
+test_that("the heartbeat preserves the token, the pid and started_at", {
+  .drv_local_root()
+  d <- ts_drive_attach(.drv_fake_session(new.env()), list())
+  .drv_write_arm(d$token)
+
+  first <- ts_drive_read_ready()
+  old <- options(ts.drive.hb_interval = 0.001)
+  on.exit(options(old), add = TRUE)
+  for (i in 1:3) d$on_tick(global_data = list())
+  later <- ts_drive_read_ready()
+
+  expect_identical(as.character(later$session_token), d$token)
+  expect_identical(as.integer(later$pid), as.integer(first$pid))
+  # started_at identifies the SESSION, not the beat: it must stay put, or the
+  # agent would see a "new session" every 3 seconds.
+  expect_identical(as.character(later$started_at), as.character(first$started_at))
+  expect_gt(as.integer(later$hb_n), as.integer(first$hb_n))
+})
+
+test_that("the heartbeat stops when disarmed but the file is KEPT", {
+  .drv_local_root()
+  d <- ts_drive_attach(.drv_fake_session(new.env()), list())
+  .drv_write_arm(d$token)
+  old <- options(ts.drive.hb_interval = 0.001)
+  on.exit(options(old), add = TRUE)
+
+  for (i in 1:3) d$on_tick(global_data = list())
+  before <- ts_drive_read_ready()
+  expect_true(isTRUE(before$armed))
+
+  .drv_write_arm(d$token, armed = FALSE)
+  d$on_tick(global_data = list())
+  after <- ts_drive_read_ready()
+
+  expect_false(isTRUE(after$armed))
+  # DELIBERATE: not deleted. `armed:false` + a frozen counter says "this session
+  # exists but is no longer driven", and keeping the file preserves the token the
+  # agent needs to re-arm the SAME session without a restart (spec §0).
+  expect_true(file.exists(ts_drive_path("ready.json")))
+  expect_identical(as.character(after$session_token), d$token)
+
+  # Once disarmed, further idle beats must not advance the counter.
+  n <- as.integer(after$hb_n)
+  for (i in 1:3) d$on_tick(global_data = list())
+  expect_identical(as.integer(ts_drive_read_ready()$hb_n), n)
+})
+
+test_that("freshness accepts a live handshake and rejects a stale one", {
+  .drv_local_root()
+  ts_drive_write_json(
+    list(protocol = TS_DRIVE_PROTOCOL, session_token = "abc12345",
+         hb_at = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
+         hb_n = 7L),
+    ts_drive_path("ready.json")
+  )
+  expect_true(ts_drive_ready_fresh(timeout_s = 15))
+
+  # Backdate the heartbeat instead of sleeping: freshness must be decidable
+  # from the data, not from wall-clock patience.
+  p <- ts_drive_read_ready()
+  p$hb_at <- format(Sys.time() - 3600, "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+  ts_drive_write_json(p, ts_drive_path("ready.json"))
+
+  expect_false(ts_drive_ready_fresh(timeout_s = 15))
+  expect_gt(ts_drive_ready_age(), 3000)
+  # Same data, wider window -> accepted. Proves the timeout is a real knob and
+  # not a constant baked into the comparison.
+  expect_true(ts_drive_ready_fresh(timeout_s = 7200))
+})
+
+test_that("freshness refuses a missing, malformed or foreign handshake", {
+  .drv_local_root()
+  expect_false(ts_drive_ready_fresh())                       # absent
+
+  ts_drive_write_json(list(nope = TRUE), ts_drive_path("ready.json"))
+  expect_false(ts_drive_ready_fresh())                       # no hb_at
+
+  ts_drive_write_json(
+    list(protocol = "ts-drive/99", hb_at = ts_drive_now_iso(), hb_n = 1L),
+    ts_drive_path("ready.json")
+  )
+  expect_false(ts_drive_ready_fresh())                       # wrong protocol
+
+  ts_drive_write_json(
+    list(protocol = TS_DRIVE_PROTOCOL, hb_at = "not-a-timestamp", hb_n = 1L),
+    ts_drive_path("ready.json")
+  )
+  expect_false(ts_drive_ready_fresh())                       # unparseable date
+  expect_identical(ts_drive_ready_age(), Inf)
+})
+
+test_that("the freshness timeout is a dev-protocol knob, never a scenario field", {
+  old <- options(ts.drive.hb_timeout = 42)
+  on.exit(options(old), add = TRUE)
+  expect_identical(ts_drive_hb_timeout(), 42)
+
+  options(ts.drive.hb_timeout = NULL)
+  # A nonsense value must fall back to the documented default rather than
+  # producing a window of 0 (which would make every session look stale) or Inf
+  # (which would make every dead session look alive).
+  for (bad in list(0, -1, NA_real_, "abc")) {
+    options(ts.drive.hb_timeout = bad)
+    expect_identical(ts_drive_hb_timeout(), 15)
+  }
+  options(ts.drive.hb_timeout = NULL)
+
+  # The honest structural check: the timeout must not be reachable from a
+  # scenario payload, otherwise a scenario could widen its own liveness window.
+  scn <- .drv_write_scn
+  expect_true(is.function(scn))
+  expect_false("hb_timeout_s" %in% names(formals(scn)))
+})
+
+# =============================================================================
+# 14. Badge — passive, observational, and unable to leak
+# =============================================================================
+# The badge is rendered into the UI, so anything it prints can be read by
+# anyone with the tab open. These tests pin BEHAVIOUR (what moves it) and
+# SECRECY (what it cannot show), the two things a "dev affordance" gets wrong.
+
+test_that("the badge moves only on real protocol transitions", {
+  m <- ts_drive_badge_model()
+  expect_identical(m$state, "off")
+
+  for (pair in list(list("arm", "armed"), list("accepted", "armed"),
+                    list("started", "running"))) {
+    m <- ts_drive_badge_advance(m, pair[[1]])
+    expect_identical(m$state, pair[[2]])
+  }
+  m <- ts_drive_badge_advance(m, "completed", status = "done", ack_seq = 3L)
+  expect_identical(m$state, "done")
+  expect_identical(m$ack_seq, 3L)
+
+  m <- ts_drive_badge_advance(m, "disarm")
+  expect_identical(m$state, "off")
+})
+
+test_that("an unknown badge event cannot move the badge", {
+  m <- ts_drive_badge_advance(ts_drive_badge_model(), "arm")
+  expect_identical(ts_drive_badge_advance(m, "invented_event"), m)
+  expect_identical(ts_drive_badge_advance(m, ""), m)
+  expect_identical(ts_drive_badge_advance(m, NA_character_), m)
+})
+
+test_that("invalid and ignored are NOT error states", {
+  # A refused payload means "nothing ran", not "the app broke". Painting red
+  # there would teach the operator to ignore red — the badge is only useful if
+  # red means red.
+  m <- ts_drive_badge_advance(ts_drive_badge_model(), "arm")
+  expect_identical(ts_drive_badge_advance(m, "completed", status = "invalid")$state, "armed")
+  expect_identical(ts_drive_badge_advance(m, "completed", status = "ignored")$state, "armed")
+  expect_identical(ts_drive_badge_advance(m, "completed", status = "error")$state, "error")
+})
+
+test_that("a stale error is cleared by the next healthy state", {
+  m <- ts_drive_badge_advance(ts_drive_badge_model(), "arm")
+  m <- ts_drive_badge_advance(m, "error", error = "boom")
+  expect_identical(m$error, "boom")
+  m <- ts_drive_badge_advance(m, "completed", status = "done")
+  expect_identical(m$error, "")
+})
+
+test_that("the badge view is a WHITELIST and cannot expose a secret", {
+  # A model carrying every forbidden field at once.
+  bad <- list(state = "armed", ack_seq = 1L, module = "bulk_de",
+              action = "run_pipeline", elapsed_s = 1.2, error = "",
+              token = "a1b2c3d4", root = "C:/secret/root", pid = 999L,
+              payload = list(inputs = list()), snapshot = list(n_genes = 5))
+  v <- ts_drive_badge_view(bad)
+
+  expect_false(any(c("token", "root", "pid", "payload", "snapshot") %in% names(v)))
+  expect_identical(names(v), c("visible", "state", "ack_seq", "module",
+                               "action", "elapsed", "error"))
+})
+
+test_that("the sanitizer strips tokens and absolute paths from an error message", {
+  win <- file.path("C:", "Users", "someone", "private", "ready.json")
+  leaky <- paste0("Error in ts_drive_write_json(\"", win,
+                  "\"): token=a1b2c3d4; pid=12345; matrix loaded")
+  s <- ts_drive_badge_sanitize(leaky)
+
+  expect_false(grepl("a1b2c3d4", s, fixed = TRUE))
+  expect_false(grepl("C:", s, fixed = TRUE))
+  expect_false(grepl("Users", s, fixed = TRUE))
+  expect_true(grepl("<path>", s, fixed = TRUE))
+
+  # A condition body carries a trailing newline and a call stack; only the
+  # first line is a message, so the rest must be dropped.
+  expect_identical(ts_drive_badge_sanitize("boom\nCall: f()\nExtra"), "boom")
+  expect_identical(ts_drive_badge_sanitize(""), "")
+  expect_identical(ts_drive_badge_sanitize(NULL), "")
+  expect_identical(ts_drive_badge_sanitize(NA_character_), "")
+  expect_identical(ts_drive_badge_sanitize(numeric(0)), "")
+  # Long messages are truncated rather than allowed to blow up the layout.
+  expect_lte(nchar(ts_drive_badge_sanitize(strrep("x", 500))), 80L)
+})
+
+test_that("an NA module or error cannot crash the view", {
+  # MEASURED, not imagined: `nchar(NA)` is NA and `if (NA)` is an error, so the
+  # first version of the sanitizer ABORTED on exactly this input. Found by the
+  # probe, kept as a regression test.
+  v <- ts_drive_badge_view(list(state = "armed", ack_seq = 1L,
+                                module = NA_character_, action = NA,
+                                elapsed_s = NA_real_, error = NA_character_))
+  expect_true(v$visible)
+  expect_identical(v$module, "")
+  expect_identical(v$action, "")
+  expect_identical(v$error, "")
+  expect_identical(v$elapsed, "")
+})
+
+test_that("the badge is hidden unless EVERY gate condition holds", {
+  # Note these are passed POSITIONALLY as length-1 values; an earlier probe
+  # packed them into a vector, R coerced the string to "TRUE", and the probe
+  # lied. The all-true row is the one that matters.
+  expect_true(ts_drive_badge_visible(TRUE, TRUE, TRUE, TRUE, "armed"))
+  expect_false(ts_drive_badge_visible(FALSE, TRUE, TRUE, TRUE, "armed"))  # dev off
+  expect_false(ts_drive_badge_visible(TRUE, FALSE, TRUE, TRUE, "armed"))  # not interactive
+  expect_false(ts_drive_badge_visible(TRUE, TRUE, FALSE, TRUE, "armed"))  # not selected
+  expect_false(ts_drive_badge_visible(TRUE, TRUE, TRUE, FALSE, "armed"))  # not armed
+  expect_false(ts_drive_badge_visible(TRUE, TRUE, TRUE, TRUE, "off"))     # nothing to say
+  expect_false(ts_drive_badge_visible(TRUE, TRUE, TRUE, TRUE, ""))        # no state
+  expect_false(ts_drive_badge_visible(TRUE, TRUE, TRUE, TRUE, NA))
+})
+
+test_that("hidden means NO UI element at all, not an empty one", {
+  expect_null(ts_drive_badge_ui(list(visible = FALSE)))
+  expect_null(ts_drive_badge_ui(NULL))
+
+  m <- ts_drive_badge_advance(ts_drive_badge_model(), "arm")
+  el <- ts_drive_badge_ui(ts_drive_badge_view(m))
+  # The app must be indistinguishable from before when the protocol is off, so
+  # "hidden" has to mean absent from the DOM, not a zero-width node.
+  expect_false(is.null(el))
+  html <- as.character(el)
+  expect_true(grepl("ts_drive_badge", html, fixed = TRUE))
+  expect_true(grepl("drive: armed", html, fixed = TRUE))
+})
+
+test_that("the badge never renders a token, a path or a payload", {
+  m <- ts_drive_badge_advance(ts_drive_badge_model(), "arm")
+  m <- ts_drive_badge_advance(m, "error",
+                              error = "failed at C:/secret/root/ready.json token=zz999999")
+  html <- as.character(ts_drive_badge_ui(ts_drive_badge_view(m)))
+  expect_false(grepl("C:/secret", html, fixed = TRUE))
+  expect_false(grepl("zz999999", html, fixed = TRUE))
+  expect_true(grepl("drive: error", html, fixed = TRUE))
+})
+
+test_that("an idle tick queues no badge event", {
+  .drv_local_root()
+  d <- ts_drive_attach(.drv_fake_session(new.env()), list())
+  expect_length(d$pending_events(), 0L)
+
+  d$on_tick(global_data = list())            # disarmed: nothing happened
+  expect_length(d$pending_events(), 0L)
+})
+
+test_that("arming queues exactly one 'arm' event, and reading it clears it", {
+  .drv_local_root()
+  d <- ts_drive_attach(.drv_fake_session(new.env()), list())
+  .drv_write_arm(d$token)
+  d$on_tick(global_data = list())
+
+  ev <- d$pending_events()
+  # ONE event, and reading drains the queue: the badge must not be re-armed by
+  # every later idle tick, or "done" would decay to "armed" every 800 ms and the
+  # human would never see the outcome.
+  expect_length(ev, 1L)
+  expect_identical(ev[[1]]$event, "arm")
+  expect_length(d$pending_events(), 0L)
+})
+
+test_that("a consumed scenario queues accepted + completed with its seq", {
+  .drv_local_root()
+  d <- ts_drive_attach(.drv_fake_session(new.env()), list())
+  .drv_write_arm(d$token)
+  d$on_tick(global_data = list())            # drain the arm event
+  invisible(d$pending_events())
+
+  .drv_write_scn(4L, action = "noop", module = "bulk_de")
+  effects <- function(input_id, mode = "bump", module = NULL) TRUE
+  d$on_tick(global_data = list(ts_error_state = NULL), effects = effects)
+
+  ev <- d$pending_events()
+  expect_true(length(ev) >= 2L)
+  expect_identical(ev[[1]]$event, "accepted")
+  expect_identical(ev[[2]]$event, "completed")
+  # The acknowledged sequence is what the human cross-checks against the agent.
+  expect_identical(as.integer(ev[[2]]$ack_seq), 4L)
+})
+
+test_that("a disarmed session queues a 'disarm' event", {
+  .drv_local_root()
+  d <- ts_drive_attach(.drv_fake_session(new.env()), list())
+  .drv_write_arm(d$token)
+  d$on_tick(global_data = list())
+  invisible(d$pending_events())
+
+  .drv_write_arm(d$token, armed = FALSE)
+  d$on_tick(global_data = list())
+  ev <- d$pending_events()
+  expect_length(ev, 1L)
+  expect_identical(ev[[1]]$event, "disarm")
+})
+

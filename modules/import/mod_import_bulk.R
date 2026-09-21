@@ -292,6 +292,25 @@ mod_import_bulk_ui <- function(id) {
 mod_import_bulk_server <- function(id, global_data) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    # ── DRIVE LIVE CONTROL (docs/DRIVE_LIVE_CONTROL_PLAN.md, grade G2) ─────
+    # `updateActionButton()` does NOT click an actionButton, and
+    # `session$setInputs()` does not exist on a LIVE session. So the existing
+    # `observeEvent(input$btn_load, ...)` below is given a SECOND trigger: a
+    # counter the file-drop poller increments.
+    #
+    # The counter is created HERE (a `reactiveVal` is reactivity, and reactivity
+    # belongs to modules/ — C2), then published into the session-scoped registry
+    # that `app.R` gave us via `global_data$drive_registry`, so the poller can
+    # increment it. With `tools/_drive/arm.json` absent the counter never moves
+    # and the observer behaves exactly as before.
+    drive_btn <- ts_drive_bind_button("import_bulk-btn_load")
+    drive_counter <- shiny::reactiveVal(0L)
+    ts_drive_publish_token(global_data, "import_bulk-btn_load", drive_counter)
+    # A `reactive()` is the documented trigger type that respects both a
+    # reactiveVal and an actionButton counter, so drag-and-click share one path.
+    drive_trigger <- shiny::reactive(list(drive_counter(), input$btn_load))
+
     # ── i18n proxy ──────────────────────────────────────────────────────────
     .tr <- function(key) {
       tr <- isolate(global_data$i18n)
@@ -875,7 +894,21 @@ mod_import_bulk_server <- function(id, global_data) {
     # BTN_LOAD — dispatch merged_matrix / per_sample
     # =========================================================================
     
-    observeEvent(input$btn_load, {
+    # DRIVE (G2): `drive_trigger` is a `reactive()` on (driver counter, button).
+    # Reading it in the trigger position keeps the ORIGINAL click semantics
+    # (`ignoreNULL` default) while letting the file-drop poller fire the same
+    # body. Nothing else in this observer changed.
+    #
+    # MEASURED RISK, not yet observed on a live session: on the FIRST flush a
+    # `reactive()` can deliver its start value (`list(0L, NULL)`) before the
+    # observer has a trigger, so the `req()` below must reject that value.
+    # `input$btn_load > 0` is FALSE on NULL *and* the second branch relies on
+    # `||` short-circuit, so the start value is rejected — but `x > 0` on a
+    # LENGTH-0 `numeric(0)` returns `logical(0)`, which `req()` would also
+    # refuse. The guard is therefore safe by two independent paths; it must
+    # still be confirmed live (G0/G1 acceptance) rather than assumed.
+    observeEvent(drive_trigger(), {
+      req(input$btn_load > 0 || shiny::isolate(drive_counter()) > 0)
       
       # ── Branch merged_matrix (code original inchangé) ─────────────────
       if (input$bulk_import_mode == "merged_matrix") {

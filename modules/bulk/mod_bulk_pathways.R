@@ -139,6 +139,17 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
+    # ── DRIVE LIVE CONTROL (docs/DRIVE_LIVE_CONTROL_PLAN.md, grade G2) ─────
+    # Two click sites in this module are fired by the file-drop poller through
+    # counters it publishes in the session-scoped registry. `updateActionButton()`
+    # does NOT click; these second triggers do.
+    drive_counter_pathway <- shiny::reactiveVal(0L)
+    drive_counter_scores  <- shiny::reactiveVal(0L)
+    ts_drive_publish_token(global_data, "bulk-pathways-run_pathway", drive_counter_pathway)
+    ts_drive_publish_token(global_data, "bulk-pathways-run_scores",  drive_counter_scores)
+    drive_trigger_pathway <- shiny::reactive(list(drive_counter_pathway(), input$run_pathway))
+    drive_trigger_scores  <- shiny::reactive(list(drive_counter_scores(),  input$run_scores))
+
     # PLOT-S6b — jeux de gènes réellement chargés (source native ou .gmt).
     # Déclaré ICI, avant tout observe() qui le lit : un observe() évalue son
     # corps immédiatement, donc une définition plus bas serait introuvable.
@@ -253,7 +264,8 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
       .tr(row$description)
     })
 
-    observeEvent(input$run_scores, {
+    observeEvent(drive_trigger_scores(), {
+      req(input$run_scores > 0 || shiny::isolate(drive_counter_scores()) > 0)
       req(shared_rv$vst_mat)
       # PLOT-S6b — la source décide : jeux NATIFS (aucun fichier à fournir) ou
       # .gmt fourni. Les deux rendent la même forme (nom -> gènes), donc tout
@@ -393,7 +405,8 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
     )
 
     # ── Enrichment (ORA + GSEA) — strings translated ─────────────────────
-    observeEvent(input$run_pathway, {
+    observeEvent(drive_trigger_pathway(), {
+      req(input$run_pathway > 0 || shiny::isolate(drive_counter_pathway()) > 0)
       req(shared_rv$filtered_counts)
       p <- shiny::Progress$new(); on.exit(p$close())
 

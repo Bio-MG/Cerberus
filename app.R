@@ -55,6 +55,15 @@ source("R/core/jobs.R")         # <-- CHRYSALIS 2D : wrapper fin sync/async
 source("R/core/caching.R")      # <-- CHRYSALIS 2D : memoisation a portee contrainte
 source("R/core/pathway_helpers.R")
 source("R/core/error_state.R")  # <-- §14.1 : ts_error_state(), l'accesseur generique d'etat d'erreur
+# DRIVE LIVE CONTROL (docs/DRIVE_LIVE_CONTROL_PLAN.md) : canal de pilotage
+# fichier -> session VIVANTE. Dev-only, SANS effet quand arm.json est absent
+# (politique par defaut du poller). Source APRES error_state.R : le snapshot
+# d'objet lit ts_error_state().
+source("R/core/drive_allowlist.R")  # donnees gelees (aucun appel Shiny)
+source("R/core/drive_watcher.R")    # poller fichier -> session (injecte)
+# Racine applicative capturee UNE fois, au chargement (app.R tourne depuis la
+# racine renv). JAMAIS getwd() au moment du tick : RStudio peut deriver.
+ts_drive_boot(getwd())
 
 # 4. DOMAIN PURE LOGIC (No Shiny reactivity)
 # 4a. Plotting & Palettes
@@ -237,7 +246,17 @@ ui <- page_navbar(
   # entity-escape the embedded translation dict ("&" -> "&amp;"), so every
   # key containing & ' " < > silently failed client-side lookup. The wrapper
   # re-renders the dict <script> as raw HTML.
-  header = if (I18N_AVAILABLE) .usei18n_fixed(i18n),
+  #
+  # The DRIVE LIVE CONTROL badge rides in the SAME `header=` slot, for the same
+  # reason: it is not a nav_panel(). The slot is shared with the i18n shim via
+  # a tagList so neither can displace the other when one of them is absent.
+  # `uiOutput()` yields an EMPTY container when renderUI() returns NULL, and it
+  # is `display:contents`-free: it is a zero-height span until the badge shows,
+  # so the layout is byte-identical to before when the protocol is off.
+  header = tagList(
+    if (I18N_AVAILABLE) .usei18n_fixed(i18n),
+    uiOutput("drive_badge")
+  ),
   
   
   
@@ -490,6 +509,123 @@ server <- function(input, output, session) {
   # page_navbar and open the analysis accordion panels. Write-once, never
   # mutated afterwards — no reactive side effects.
   global_data$session <- session
+
+  # ── DRIVE LIVE CONTROL (docs/DRIVE_LIVE_CONTROL_PLAN.md) ──────────────────
+  # A poller is ALWAYS registered, and does NOTHING until tools/_drive/arm.json
+  # is valid. This is the only design that lets an agent drive a session the
+  # human ALREADY opened (Run App clicked, Viewer or localhost tab, data
+  # loaded): an env var set after the load cannot retrofit server(), and
+  # session$setInputs() does not exist on a live session. Idle cost is a few
+  # file.exists() calls per tick; with arm.json absent the app is
+  # indistinguishable from before.
+  #
+  # `global_data$drive_registry` is the SESSION-scoped table in which the bulk
+  # modules publish the button counters that `run_pipeline` fires (grade G2).
+  # It lives here, not in a global environment, so two tabs can never share a
+  # counter (spec §2.1).
+  global_data$drive_registry <- new.env(parent = emptyenv())
+  .drive <- ts_drive_attach(session, input)
+
+  # ── DEV-ONLY STATUS BADGE ─────────────────────────────────────────────────
+  # A LIGHTWEIGHT, DEDICATED reactive state — deliberately NOT derived from
+  # global_data, Seurat objects, matrices, plots, reports or long-running jobs.
+  # Deriving it from any of those would (a) invalidate expensive reactives on
+  # every protocol beat and (b) couple a dev affordance to the data path. This
+  # value is written ONLY on a real protocol transition (see `.drive$events`).
+  drive_state <- shiny::reactiveVal(ts_drive_badge_model())
+
+  # This session is "selected" when ready.json names ITS token. With several
+  # tabs open the last one to boot owns the file, so only that tab badges.
+  .drive_selected <- function() {
+    hb <- ts_drive_read_ready()
+    !is.null(hb) && identical(as.character(hb$session_token), .drive$token)
+  }
+
+  # Read the badge view. `visible` is FALSE unless the dev protocol is on, the
+  # session is live and selected, and it is armed — so in every other case
+  # `output$drive_badge` renders NOTHING and the UI is untouched.
+  output$drive_badge <- shiny::renderUI({
+    st <- drive_state()
+    vis <- ts_drive_badge_visible(
+      enabled     = identical(Sys.getenv("TRANSCRIPTO_DEV_DRIVE"), "1"),
+      interactive = isTRUE(ts_drive_interactive()),
+      selected    = .drive_selected(),
+      armed       = isTRUE(.drive$armed()),
+      state       = st$state
+    )
+    if (!vis) return(NULL)
+    ts_drive_badge_ui(ts_drive_badge_view(st))
+  })
+
+  # The ONE reactive beat of the protocol. `invalidateLater()` is the only
+  # polling style used (spec §6) — not `reactiveFileReader`, to avoid a second
+  # mechanism. `R/` carries the decision; this observer only beats the heart.
+  #
+  # No `isolate()` is needed on `global_data`: the tick runs INSIDE this
+  # observer, so reads of the reactiveValues are legitimately reactive. An
+  # `isolate()` wrapper would ALSO be possible; what is forbidden is reading a
+  # reactive value outside any reactive consumer.
+  observe({
+    # The single gate keeping production inert (spec §1).
+    if (!isTRUE(ts_drive_interactive())) return()
+    invalidateLater(.drive$poll_ms, session)
+
+    tick <- .drive$on_tick(
+      global_data,
+      # `effects()` is how the poller reaches module-owned counters without any
+      # reactive machinery living in R/. Two modes: bump one button, or list a
+      # module's announced tokens.
+      effects = function(input_id, mode = "bump", module = NULL) {
+        reg <- global_data$drive_registry
+        if (!is.environment(reg)) {
+          # Should be unreachable: the registry is created a few lines above.
+          # If it ever isn't, the protocol must SAY so rather than report a
+          # silently unbound button (which would read as "G2 not implemented").
+          message("[drive] drive_registry is missing — button binds unavailable")
+          if (identical(mode, "tokens")) return(list())
+          return(FALSE)
+        }
+        ids <- if (identical(mode, "tokens")) {
+          if (is.null(module)) ls(reg) else ls(reg)[vapply(ls(reg), function(i) {
+            identical(ts_drive_module_of(i), module)
+          }, logical(1))]
+        } else if (is.null(input_id)) {
+          character(0)
+        } else {
+          input_id
+        }
+        if (identical(mode, "tokens")) {
+          return(stats::setNames(lapply(ids, function(i) reg[[i]]), ids))
+        }
+        ok <- FALSE
+        for (i in ids) ok <- isTRUE(ts_drive_bump_token(reg[[i]])) || ok
+        ok
+      }
+    )
+
+    # Navigation is an EFFECT (bslib + session), so it is performed here, from
+    # the one-shot plan the tick stored. A plan is read ONCE: an idle tick
+    # afterwards must not replay a tab jump the human has since undone.
+    plan <- .drive$pending_nav()
+    if (!is.null(plan)) ts_drive_perform_nav(session, plan)
+
+    # Badge: apply ONLY the transitions the tick actually produced. An idle
+    # tick returns an empty list, so the badge is untouched — no reactive
+    # invalidation, no repaint, nothing. This keeps the badge OBSERVATIONAL:
+    # it never triggers a pipeline, never touches `input`, never clears data.
+    evs <- .drive$pending_events()
+    if (length(evs) > 0L) {
+      st <- drive_state()
+      for (e in evs) {
+        st <- ts_drive_badge_advance(
+          st, e$event, status = e$status, ack_seq = e$ack_seq,
+          module = e$module, action = e$action,
+          elapsed_s = e$elapsed_s, error = e$error
+        )
+      }
+      drive_state(st)
+    }
+  })
   
   # ── i18n (Phase 1): language switch ───────────────────────────────────────
   # Three coordinated effects:

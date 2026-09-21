@@ -20,6 +20,14 @@
 
 .de_run_server <- function(input, output, session, ns, global_data, shared_rv, helpers) {
 
+  # ── DRIVE LIVE CONTROL (docs/DRIVE_LIVE_CONTROL_PLAN.md, grade G2) ───────
+  # The DE run button is fired by the file-drop poller through a counter it
+  # publishes in the session-scoped registry (see ts_drive_publish_token()).
+  # `updateActionButton()` does NOT click; this second trigger does.
+  drive_counter <- shiny::reactiveVal(0L)
+  ts_drive_publish_token(global_data, "bulk-de-run_de", drive_counter)
+  drive_trigger <- shiny::reactive(list(drive_counter(), input$run_de))
+
   .tr <- function(key) {
     tr <- global_data$i18n
     if (is.null(tr)) return(key)
@@ -73,7 +81,8 @@
   # =========================================================================
   # STEP 2 — Differential Expression (single pair)
   # =========================================================================
-  observeEvent(input$run_de, {
+  observeEvent(drive_trigger(), {
+    req(input$run_de > 0 || shiny::isolate(drive_counter()) > 0)
     req(shared_rv$filtered_counts, input$condition_col, input$group_ref, input$group_target,
         input$de_engine)
 
