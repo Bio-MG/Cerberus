@@ -387,6 +387,31 @@ ts_drive_arm_state <- function(token) {
 TS_DRIVE_ACTIONS <- c("noop", "set_inputs", "run_pipeline", "import_file",
                       "snapshot", "reset_module")
 
+#' The `result.json` status enum (spec §2.4, FROZEN).
+#'
+#' Declared once so the six values are checkable rather than spread as 27
+#' literals through this file. An agent switches on these names; a seventh
+#' would be an unhandled case in every client, so the set is pinned by a test.
+TS_DRIVE_STATUSES <- c("ignored", "invalid", "applied", "running", "done",
+                       "error")
+
+#' Is a `result.json` status TERMINAL for its `seq`?
+#'
+#' This is the distinction a polling agent depends on (spec §2.4):
+#'   * `applied` (inputs updated, pipeline NOT finished) and `running` (a job
+#'     has started) ACKNOWLEDGE the seq but are NOT terminal — keep polling;
+#'   * `done` / `error` are terminal for that seq;
+#'   * `ignored` / `invalid` are terminal refusals — nothing further will happen.
+#' An UNKNOWN status is deliberately NOT terminal: a client that does not
+#' recognise a value must keep waiting rather than mistake it for completion.
+#'
+#' @param status A status string, possibly `NA`.
+#' @return TRUE only for the four terminal values.
+ts_drive_status_terminal <- function(status) {
+  if (length(status) != 1L || is.na(status)) return(FALSE)
+  as.character(status) %in% c("done", "error", "ignored", "invalid")
+}
+
 #' Validate one scenario payload against the frozen schema.
 #'
 #' Never throws (spec S1). Every rejection becomes an `errors[]` entry so the

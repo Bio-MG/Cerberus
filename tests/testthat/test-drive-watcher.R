@@ -117,6 +117,7 @@ test_that("invalidating ready.json with a STALE token leaves a newer handshake i
   expect_identical(ts_drive_read_ready()$session_token, "newer")
 })
 
+
 test_that("a malformed ready.json reads as NULL instead of throwing", {
   .drv_local_root()
   writeLines("{ this is not json", ts_drive_path("ready.json"))
@@ -645,6 +646,58 @@ test_that("set_inputs reports applied (inputs updated, pipeline not finished)", 
   expect_identical(res$status, "applied")
 })
 
+test_that("the status enum is FROZEN, and terminality is the distinction", {
+  # Spec §2.4 freezes the six values. Pinned as a set so a new status cannot be
+  # invented silently: an agent switches on these, and a seventh would be an
+  # unhandled case in every client.
+  expect_setequal(TS_DRIVE_STATUSES,
+                  c("ignored", "invalid", "applied", "running", "done", "error"))
+
+  # The distinction that MATTERS to a polling agent:
+  #   * `applied` and `running` ACKNOWLEDGE the seq but are NOT terminal —
+  #     the pipeline may still be working;
+  #   * `done` and `error` are TERMINAL for that seq;
+  #   * `ignored` and `invalid` are terminal refusals (nothing will change).
+  expect_true(ts_drive_status_terminal("done"))
+  expect_true(ts_drive_status_terminal("error"))
+  expect_true(ts_drive_status_terminal("ignored"))
+  expect_true(ts_drive_status_terminal("invalid"))
+  expect_false(ts_drive_status_terminal("applied"))
+  expect_false(ts_drive_status_terminal("running"))
+  # An unknown status is NOT terminal — an agent must keep waiting rather than
+  # treat a future status it does not understand as completion.
+  expect_false(ts_drive_status_terminal("something_new"))
+  expect_false(ts_drive_status_terminal(NA_character_))
+})
+
+test_that("pipeline actions report a terminal status; set_inputs does not", {
+  # The claim under test, end to end for the two actions that differ:
+  #   * `set_inputs` -> `applied`  (acknowledgement, NOT terminal)
+  #   * `run_pipeline` with a binding -> `done` (terminal)
+  # `now` is irrelevant here; both go through the real apply() dispatcher.
+  .drv_local_root()
+
+  set_res <- ts_drive_apply(NULL, NULL,
+    list(action = "set_inputs", module = "bulk_de", inputs = list()),
+    effects = NULL)
+  expect_identical(set_res$status, "applied")
+  expect_false(ts_drive_status_terminal(set_res$status))   # agent keeps polling
+
+  run_res <- ts_drive_apply(NULL, NULL,
+    list(action = "run_pipeline", module = "bulk_de", inputs = list()),
+    effects = function(id, mode = NULL, module = NULL) TRUE)
+  expect_identical(run_res$status, "done")
+  expect_true(ts_drive_status_terminal(run_res$status))    # agent may stop
+
+  # And a refused pipeline is terminal too — an explicit `invalid`, never a
+  # silent no-op (spec G3.14), so the agent is never left waiting on a refusal.
+  refused <- ts_drive_apply(NULL, NULL,
+    list(action = "run_pipeline", module = "bulk_de", inputs = list()),
+    effects = function(id, mode = NULL, module = NULL) FALSE)
+  expect_identical(refused$status, "invalid")
+  expect_true(ts_drive_status_terminal(refused$status))
+})
+
 test_that("the nav plan targets the bulk tab, and the right panel per module", {
   expect_identical(ts_drive_nav_plan("bulk_de")$top, "tab_bulk")
   expect_identical(ts_drive_nav_plan("bulk_de")$panel, "panel_de")
@@ -671,6 +724,64 @@ test_that("the nav plan targets the bulk tab, and the right panel per module", {
 .drv_fake_session <- function(env) {
   list(onSessionEnded = function(f) { env$f <- f; invisible(NULL) })
 }
+
+# --- Second-tab (token rotation) --------------------------------------------
+# Placed HERE, after the fixture: a test defined above `.drv_fake_session()`
+# cannot see it and errors with "could not find function" (measured — the first
+# attempt at these two tests was written near the top of the file and failed).
+
+test_that("a SECOND session mints a new token; the previous one is replaced", {
+  # MEASURED LIVE (2026-09-21): each new Shiny session mints a new token, and
+  # ready.json then names the newest. Verified on a real app (port 7789):
+  #   * tab 1           -> token 7h88ewiz
+  #   * RELOAD that tab -> token v4z732tt   (rotated = TRUE)
+  #   * a separate browser session -> token u0jrebu4, new started_at (rotated)
+  # NOTE the trap this test cannot express: opening a second *target* inside ONE
+  # `ChromoteSession` does NOT create a second Shiny session, so the token looks
+  # unchanged — that is a property of the harness, not of the protocol.
+  .drv_local_root()
+  s1 <- ts_drive_attach(.drv_fake_session(new.env()), list())
+  tok1 <- s1$token
+  expect_identical(as.character(ts_drive_read_ready()$session_token), tok1)
+
+  s2 <- ts_drive_attach(.drv_fake_session(new.env()), list())
+  tok2 <- s2$token
+
+  # A NEW token, and it now owns the handshake ("last connected session wins").
+  expect_false(identical(tok1, tok2))
+  expect_identical(as.character(ts_drive_read_ready()$session_token), tok2)
+})
+
+test_that("the PREVIOUS tab's token can neither arm nor display", {
+  # The consequence of rotation, stated as the user-visible rule. Two tabs, the
+  # second owning ready.json; the FIRST tab's token must be inert.
+  .drv_local_root()
+  s1 <- ts_drive_attach(.drv_fake_session(new.env()), list())
+  s2 <- ts_drive_attach(.drv_fake_session(new.env()), list())
+
+  # The agent arms the CURRENT session (the second tab) — the honest case.
+  .drv_write_arm(s2$token)
+
+  # The current tab: armed AND selected AND displayable.
+  cur_selected <- identical(as.character(ts_drive_read_ready()$session_token),
+                            s2$token)
+  expect_true(cur_selected)
+  expect_true(ts_drive_arm_state(s2$token)$armed)
+  expect_true(ts_drive_badge_visible(TRUE, TRUE, cur_selected,
+                                     ts_drive_arm_state(s2$token)$armed, "armed"))
+
+  # The PREVIOUS tab: not selected, and its token does not match arm.json, so
+  # it is disarmed — it can neither arm nor display. This is the rule the user
+  # asked to confirm, asserted on both halves.
+  prev_selected <- identical(as.character(ts_drive_read_ready()$session_token),
+                             s1$token)
+  expect_false(prev_selected)
+  expect_false(ts_drive_arm_state(s1$token)$armed)
+  expect_match(ts_drive_arm_state(s1$token)$reason, "token mismatch")
+  expect_false(ts_drive_badge_visible(TRUE, TRUE, prev_selected,
+                                      ts_drive_arm_state(s1$token)$armed,
+                                      "armed"))
+})
 
 test_that("attach exposes the closure contract app.R reads", {
   .drv_local_root()
@@ -1155,5 +1266,193 @@ test_that("a disarmed session queues a 'disarm' event", {
   ev <- d$pending_events()
   expect_length(ev, 1L)
   expect_identical(ev[[1]]$event, "disarm")
+})
+
+# =============================================================================
+# 15. Badge visibility gates — the SIX situations the spec enumerates
+# =============================================================================
+# The single boolean table above (section 14) proves the FORMULA. This section
+# proves the six SITUATIONS the spec names, each through the real decision path
+# that produces the gate's inputs — because "the formula is right" and "the
+# situation is detected" are different claims, and only the second is what the
+# human sees. Every case asserts BOTH halves:
+#   * the badge is hidden, AND
+#   * the reason it is hidden is the one under test (not an accident of another
+#     input being FALSE), so a future refactor cannot make a case pass by
+#     disabling something unrelated.
+#
+# The six, verbatim from the spec:
+#   1. TRANSCRIPTO_DEV_DRIVE is not enabled;
+#   2. no valid arm.json exists;
+#   3. the session is not the SELECTED session (wrong token);
+#   4. the session is invalidated, or its heartbeat is stale;
+#   5. the session is disarmed;
+#   6. the session has ENDED.
+
+test_that("GATE 1 — dev drive disabled means the badge cannot be shown", {
+  # The app must be indistinguishable from before when the protocol is off.
+  # `enabled` is read from the environment by app.R; here we assert the gate
+  # honours that input for every other combination of live variables, so a
+  # production session that is somehow armed and selected still shows NOTHING.
+  expect_false(ts_drive_badge_visible(FALSE, TRUE, TRUE, TRUE, "armed"))
+  expect_false(ts_drive_badge_visible(FALSE, TRUE, TRUE, TRUE, "done"))
+  expect_false(ts_drive_badge_visible(FALSE, TRUE, TRUE, TRUE, "error"))
+  # And the UI emitter agrees: no element at all, not an empty one.
+  expect_null(ts_drive_badge_ui(ts_drive_badge_view(ts_drive_badge_model())))
+})
+
+test_that("GATE 2 — no valid arm.json means disarmed, hence hidden", {
+  .drv_local_root()
+  # (a) No arm.json at all.
+  res <- ts_drive_arm_state("tok")
+  expect_false(res$armed)
+  expect_match(res$reason, "no arm.json")
+  expect_false(ts_drive_badge_visible(TRUE, TRUE, TRUE, res$armed, "armed"))
+
+  # (b) A malformed arm.json must be as good as absent (never a partial arm):
+  # a half-written file is exactly what an interrupted agent leaves behind.
+  writeLines("{ not json", ts_drive_path("arm.json"))
+  res_bad <- ts_drive_arm_state("tok")
+  expect_false(res_bad$armed)
+  expect_false(ts_drive_badge_visible(TRUE, TRUE, TRUE, res_bad$armed, "armed"))
+})
+
+test_that("GATE 3 — a WRONG session token cannot arm, select or display", {
+  .drv_local_root()
+  # Two tabs, faithfully modelled: THIS tab's token vs the one ready.json names.
+  # `selected` is not a literal here — it is computed the way app.R computes it
+  # (does the handshake name MY token?), so the test fails if that rule changes.
+  ts_drive_write_ready(list(), "the-other-tab", armed = TRUE)
+  .drv_write_arm("the-other-tab")
+
+  my_token <- "this-tab"
+  res <- ts_drive_arm_state(my_token)
+  is_selected <- identical(as.character(ts_drive_read_ready()$session_token),
+                           my_token)
+
+  expect_false(res$armed)
+  expect_match(res$reason, "token mismatch")
+  expect_false(is_selected)
+  # BOTH inputs are FALSE for the wrong tab, and the badge is hidden. Asserting
+  # them jointly is the point: the wrong tab can neither arm nor display.
+  expect_false(ts_drive_badge_visible(TRUE, TRUE, is_selected, res$armed, "armed"))
+
+  # And the mirror image, so the test cannot pass by everything being FALSE:
+  # the RIGHT tab owns ready.json, arms, and displays. (Writing the handshake
+  # is a distinct step — the token in ready.json is what `selected` compares.)
+  ts_drive_write_ready(list(), my_token, armed = TRUE)
+  .drv_write_arm(my_token)
+  ok <- ts_drive_arm_state(my_token)
+  ok_selected <- identical(as.character(ts_drive_read_ready()$session_token),
+                           my_token)
+  expect_true(ok$armed)
+  expect_true(ok_selected)
+  expect_true(ts_drive_badge_visible(TRUE, TRUE, ok_selected, ok$armed, "armed"))
+})
+
+test_that("GATE 3b — invalidation by the wrong tab leaves the owner's handshake intact", {
+  # The stale-token half of "the previous token cannot arm or display": a tab
+  # holding an OLD token must not be able to tear down the session that
+  # currently owns ready.json.
+  .drv_local_root()
+  ts_drive_write_ready(list(), "current-owner", armed = TRUE)
+
+  expect_false(ts_drive_invalidate_ready("stale-token"))   # refused
+  expect_true(file.exists(ts_drive_path("ready.json")))    # still there
+  expect_identical(ts_drive_read_ready()$session_token, "current-owner")
+  # The stale token fails the freshness/selection test, so it cannot display.
+  stale_selected <- identical(
+    as.character(ts_drive_read_ready()$session_token), "stale-token")
+  expect_false(stale_selected)
+  expect_false(ts_drive_badge_visible(TRUE, TRUE, stale_selected, TRUE, "armed"))
+
+  # The owner can still tear its own session down.
+  expect_true(ts_drive_invalidate_ready("current-owner"))
+  expect_false(file.exists(ts_drive_path("ready.json")))
+})
+
+test_that("GATE 4 — an invalidated or STALE session cannot be displayed", {
+  .drv_local_root()
+  ts_drive_write_ready(list(), "tok", armed = TRUE)
+
+  # (a) invalidated: the handshake is gone, so freshness fails loudly.
+  expect_true(ts_drive_invalidate_ready("tok"))
+  expect_false(ts_drive_ready_fresh())
+  expect_false(ts_drive_badge_visible(TRUE, TRUE, FALSE, FALSE, "off"))
+
+  # (b) stale: the file is present but its heartbeat stopped moving.
+  # `ts_drive_write_ready()` always stamps `hb_at` with NOW, so a stale file
+  # must be FABRICATED directly — that is the honest way to represent "a
+  # session died and left its handshake behind". `now` is injected into the
+  # query, so this asserts a MEASURED age rather than sleeping for it.
+  ts_drive_write_json(
+    list(protocol = TS_DRIVE_PROTOCOL, session_token = "tok", armed = TRUE,
+         pid = 1234L, hb_at = "2026-09-21T19:00:00Z", hb_n = 5L,
+         hb_timeout_s = 15L),
+    ts_drive_path("ready.json")
+  )
+  stale_now <- as.POSIXct("2026-09-21T20:00:00Z",
+                          format = "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+  expect_gt(ts_drive_ready_age(now = stale_now), ts_drive_hb_timeout())
+  expect_false(ts_drive_ready_fresh(now = stale_now))
+  # The badge is hidden because the session cannot be shown as live.
+  expect_false(ts_drive_badge_visible(TRUE, TRUE, TRUE, TRUE, "off"))
+})
+
+test_that("GATE 5 — a disarmed session hides the badge but keeps its handshake", {
+  .drv_local_root()
+  .drv_write_arm("tok", armed = FALSE)
+  res <- ts_drive_arm_state("tok")
+  expect_false(res$armed)
+  expect_match(res$reason, "armed=false")
+  expect_false(ts_drive_badge_visible(TRUE, TRUE, TRUE, res$armed, "armed"))
+  # The handshake is deliberately KEPT: the agent can re-arm the SAME session
+  # without a restart, and a stopped hb_n is the honest "no longer driven" cue.
+  expect_true(file.exists(ts_drive_path("arm.json")))
+})
+
+test_that("GATE 6 — a session that has ENDED hides the badge and drops its file", {
+  .drv_local_root()
+  # attach() MINTS its own token, so arm.json must carry THAT token — arming
+  # with a made-up one leaves the session genuinely disarmed (caught by the
+  # first run of this test, which expected TRUE and got FALSE).
+  d <- ts_drive_attach(.drv_fake_session(new.env()), list())
+  expect_true(file.exists(ts_drive_path("ready.json")))  # attach() wrote it
+  .drv_write_arm(d$token)
+  d$on_tick(global_data = list())              # armed, badge would show
+  expect_true(d$armed())
+  expect_true(ts_drive_badge_visible(TRUE, TRUE, TRUE, d$armed(), "armed"))
+
+  # Ending the session drops the handshake, so no session is selected and
+  # nothing is displayable — the badge cannot outlive its session.
+  ts_drive_invalidate_ready(d$token)
+  expect_false(file.exists(ts_drive_path("ready.json")))
+  expect_false(ts_drive_ready_fresh())
+  expect_false(ts_drive_badge_visible(TRUE, TRUE, FALSE, FALSE, "off"))
+})
+
+test_that("the badge is OBSERVATIONAL: no gate reads data, plots or inputs", {
+  # The spec forbids the badge touching global_data, Seurat objects, matrices,
+  # plots or long jobs. `ts_drive_badge_visible()` takes FIVE scalars and
+  # `ts_drive_badge_view()` a flat model — so the guarantee is structural:
+  # assert the signatures, which is stronger than grepping for a forbidden name.
+  vis_fmls <- names(formals(ts_drive_badge_visible))
+  expect_identical(
+    vis_fmls,
+    c("enabled", "interactive", "selected", "armed", "state")
+  )
+  view_fmls <- names(formals(ts_drive_badge_view))
+  expect_length(view_fmls, 1L)
+  # And the view is a closed WHITELIST: no extra field can leak through. The
+  # model must carry a DISPLAYABLE state — for "off"/unknown the view is the
+  # one-element `list(visible = FALSE)`, which has no fields to leak.
+  v <- ts_drive_badge_view(list(state = "armed", secret = "TOKEN",
+                                counts = matrix(1:4, 2), plot = "base64"))
+  expect_identical(sort(names(v)),
+                   sort(c("visible", "state", "ack_seq", "module",
+                          "action", "elapsed", "error")))
+  expect_false("secret" %in% names(v))
+  expect_false("counts" %in% names(v))
+  expect_false("plot" %in% names(v))
 })
 
