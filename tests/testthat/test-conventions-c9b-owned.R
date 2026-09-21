@@ -319,14 +319,21 @@ test_that("C9b : un fichier ENTIEREMENT exerce n'est pas signale (temoin de trav
 # =============================================================================
 # DIRECTION 5 — le plafond de la population (invariant prospectif)
 # =============================================================================
-test_that("C9b : la population signalee est un PLAFOND a 37, jamais un compte exact", {
+test_that("C9b : la population signalee est un PLAFOND a 39, jamais un compte exact", {
   # Plafond, pas egalite : le compte doit pouvoir BAISSER quand un test est
   # ecrit, mais JAMAIS remonter. Un plafond ecrit en `==` deviendrait rouge au
   # premier trou bouche — piege paye au §2cx sur `test-conventions-c10-scope.R`.
-  # ⚠️ Le plafond est 37 (mesure du 43e increment), PAS 4 : c'est le chiffre
+  # ⚠️ Le plafond est 39 (mesure du 2026-09-21), PAS 4 : c'est le chiffre
   # CORRIGE. Voir la direction 6 pour ce que la mesure de 4 ratait.
+  # 🔴 La valeur precedente (37, 43e increment) etait FAUSSE DES SA POSE : la
+  # mesure rejouee SUR LE COMMIT MEME qui l'a ecrite (`a53dc82`) rend 39, et la
+  # liste des 39 fichiers y est byte-identique a celle d'aujourd'hui. Le pin et
+  # son commentaire ont ete ecrits « 37 » alors que la sonde disait 39 : le test
+  # est rouge depuis le jour de sa naissance, sans rapport avec un changement de
+  # `R/` (mesure `git archive` + `diff` de listes, pas deduction). Lecon : un
+  # plafond se MESURE sur une ligne de base EXTRAITE, jamais ne se recopie.
   flagged <- .c9b_flagged(.c9b_population())
-  expect_true(length(flagged) <= 37L,
+  expect_true(length(flagged) <= 39L,
               info = paste(flagged, collapse = ", "))
   expect_gt(length(flagged), 0L)
 })
