@@ -207,7 +207,7 @@ offline suite as it stood. Each now has a durable test.
   (spec §G3.14: not-implemented must return `invalid`, never silently no-op).
   ⚠️ **Superseded for `import_file`** — implemented in G3, see below.
 
-## Grade G3 (part 1/2) — `import_file` on a live session
+## Grade G3 (part 1/3) — `import_file` on a live session
 
 **Validated on a REAL session** (port 7790, `chromote` client, dataset
 `D:/Data_science/Données/bulk/GSE164073_Eye_count_matrix.csv`, which is a
@@ -219,7 +219,7 @@ DIRECTORY holding the counts CSV and the metadata CSV):
 | 13 | `preserve_data=true` + `set_inputs` does not drop it | ✅ `applied`, matrix intact |
 | 14 | `reset_module` returns `invalid` | ✅ never a silent no-op |
 
-## Grade G3 (part 2/2) — Step 1 Filtering & VST, on a live session
+## Grade G3 (part 2/3) — Step 1 Filtering & VST, on a live session
 
 Bulk is a **staged** workflow: `import_file → global_data$bulk_obj → Step 1
 Filtering & VST → shared_rv$filtered_counts / $dds_blind / $vst_mat → design &
@@ -367,6 +367,81 @@ One write = `payload` → **unique** `<dest>.<pid>.<n>.<tag>.tmp` → `flush` �
 Note for readers of the failure messages: they pass through
 `ts_drive_badge_sanitize()`, which redacts absolute paths **and any 8+-character
 alphanumeric run** (its token heuristic). Messages are worded to survive it.
+
+## Grade G3 (part 3/3) — the DE contrast, on a live session
+
+Steps 6 and 7 of the staged workflow: design & contrast inputs, then the DE
+action. **One fresh session** (fresh app process, drop dir deleted first),
+`seq` 1 → 10, all `ack_seq` matched, dataset
+`D:/Data_science/Données/bulk/GSE164073_Eye_count_matrix.csv`
+(17 925 genes × 18 samples, 9 mock / 9 CoV2), engine **DESeq2**.
+
+| # | Step | Result |
+|---|---|---|
+| 1 | `import_file` | `done` 3.1 s → **17925 × 18** |
+| 2–3 | Step 1 (`bulk-filter-run_filter_norm`) | `filtered_counts` **17925 × 18**, `vst_mat` **17925 × 18**, 18 unique sample names |
+| 4 | `snapshot` BEFORE any contrast | `modules$bulk_de` present; **`n_contrasts = 0`**, **`active_contrast = NULL`** — the probe says "no contrast yet" instead of leaving it to be inferred |
+| 5 | `set_inputs` `bulk-de-condition_col = condition` | `applied` |
+| 6 | `set_inputs` `group_ref = CoV2`, `group_target = mock`, `de_engine = deseq2` | `applied`; DOM readback returned **`CoV2` / `mock` / `deseq2`** |
+| 7 | `run_pipeline` **`bulk_de`** | `done` in **2.1 s** — and the contrast was first observable **852.7 s** later |
+| 8 | `snapshot` | **`n_contrasts = 1`**, **`active_contrast = mock_vs_CoV2`**, `n_genes = 17925`, `n_padj_finite = 14102`, `n_significant = 29`, `bypass = FALSE` |
+| 9–10 | **second** DE run, same pair | `done`; `n_contrasts` stays **1** (same name overwritten), `n_genes` unchanged, imported object **intact**, 18 samples |
+
+⚠️ **Why `done` in 2.1 s is the whole point.** `status: done` means the token
+MOVED — that the module's `observeEvent` was triggered — **not** that the
+analysis finished. Here it finished **14 minutes later**. Without a published
+state, that entire window is indistinguishable from a run that never started,
+because the observer's opening `req(shared_rv$filtered_counts, input$condition_col,
+input$group_ref, input$group_target, input$de_engine)` aborts in **silence**.
+
+⚠️ **`mock_vs_CoV2` is the INVERTED pair, and that is deliberate.** The module's
+own observer defaults to ref = `lvls[1]` = `mock`, target = `lvls[2]` = `CoV2`,
+so the auto-generated name `CoV2_vs_mock` appears with **no injection at all**.
+The driver injected the pair reversed, so reading back `mock_vs_CoV2` proves
+**both** `group_ref` and `group_target` took. This is why `bulk-de-contrast_name`
+stays **absent from the allowlist**: the auto-name is the only end-to-end
+self-check a scenario has, and a free-text name would overwrite that evidence.
+
+⚠️ **`n_genes = 17925` equals Step 1's gene count**, so the DE ran on
+`shared_rv$filtered_counts` — not on the imported matrix.
+
+⚠️ **`n_padj_finite = 14102`** (of 17925) is what shows the model actually
+fitted; `n_significant = 29` is computed under a FIXED, NAMED convention
+(`padj < 0.05 & |log2FoldChange| > 1`) reported in the payload as `convention`,
+**never** under the panel's live thresholds — those are inputs, and a probe that
+borrowed them would describe the last click instead of the state.
+
+### Two instruments that lied during this run (both nearly became false findings)
+
+**1. Re-reading `result.json` is not polling.** The file is written when a
+scenario is *consumed* and is static in between, so a wait loop that re-reads it
+can never observe a transition — it is **guaranteed to time out**. It did, twice
+(`filtered_counts appeared after (s) = TIMEOUT`, then 852.7 s of apparent
+silence). The fix is to issue a **fresh `snapshot` scenario each poll** and read
+the field you care about from the answer.
+
+**2. A DOM option list measures the SELECTED value, not the choices.** Every
+select in this app reported exactly one option — its selected value — because a
+JS enhancement owns the real list. `bulk-de-condition_col` reported `["tissue"]`
+for a column set that genuinely contained `condition`, and `group_ref` /
+`group_target` reported one option each. That was one step from being filed as a
+**product defect that does not exist**; an offline replication of the same import
+path returned `cat_cols = tissue | condition`, and the injected values read back
+correctly.
+
+Trust instead: the element's **`.value` readback**, and the app's **derived
+output** (the contrast name). Also: use `textContent`, not `innerText`, to read
+a panel in an inactive tab — `innerText` returns `""` for `display:none`.
+
+### Not validated at this grade
+
+- **`edger` and `limma` were NOT driven** — only `deseq2`.
+- **Pathways were NOT driven** (`bulk-pathways-run_pathway`,
+  `bulk-pathways-run_scores` remain bound, guarded, and unexercised).
+- The **padj-recompute path (STAT-Q1)** was NOT exercised.
+- `result.json` carries **no session token**, so a driver matching on `ack_seq`
+  alone can read a *previous* session's verdict. Clean the drop dir and use a
+  fresh app process; this is a harness hazard, not a protocol verdict.
 
 ### Where the evidence lives (read this before citing a result)
 
