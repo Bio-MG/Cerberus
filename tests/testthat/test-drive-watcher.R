@@ -970,12 +970,20 @@ test_that("reset_module returns invalid, never a silent no-op", {
   expect_match(ts_drive_apply_res$errors[1], "reset_module")
 })
 
-test_that("import_file returns invalid in this grade", {
+test_that("import_file is implemented in G3 — a refusal now names the MISSING PAYLOAD", {
+  # This assertion USED to read `import_file is not implemented in this grade
+  # (G3)`, and it was the pin on the not-implemented state. G3 implements the
+  # action, so the pin moves to the NEW contract rather than being deleted: an
+  # `import_file` with no `import` block must still refuse — because the
+  # PAYLOAD is missing, never because the action is absent. The full G3
+  # contract (path validation, importer seam) lives in §16.
   res <- ts_drive_apply(NULL, NULL,
     list(action = "import_file", module = "import_bulk", inputs = list()),
     effects = NULL)
   expect_identical(res$status, "invalid")
-  expect_match(res$errors[1], "import_file")
+  msg <- paste(res$errors, collapse = " ")
+  expect_match(msg, "import")
+  expect_false(grepl("not implemented", msg))
 })
 
 test_that("noop and snapshot are done, and change nothing", {
@@ -2064,5 +2072,212 @@ test_that("the badge is OBSERVATIONAL: no gate reads data, plots or inputs", {
   expect_false("secret" %in% names(v))
   expect_false("counts" %in% names(v))
   expect_false("plot" %in% names(v))
+})
+
+# =============================================================================
+# 16. import_file — G3: load a REAL file without faking the widget
+# =============================================================================
+# Spec G3: "reuse the existing bulk import helper (discover in G0). Build the
+# `fileInput`-shaped data.frame internally if that helper expects it; do not
+# fake the widget." Spec S5 adds: "in live session BYPASS the widget ... Never
+# pass a raw path string into `update*`."
+#
+# MEASURED (G0 discovery): the bulk load path is
+#   mod_import_bulk.R  counts_reactive() -> input$counts_file$datapath
+#                      -> smart_read()    -> global_data$bulk_obj
+# so `import_file` is NOT an input injection at all. It has its own validated
+# payload (`import`) and its own module-side seam: a published IMPORTER, which
+# is deliberately a DIFFERENT registry slot from a button TOKEN — conflating
+# the two would make the poller believe a button was bound and hand
+# `run_pipeline` a `done` it never earned.
+#
+# The dataset this grade was handed is `GSE164073_Eye_count_matrix.csv`, which
+# is a DIRECTORY containing a file of the same name. That is why the
+# directory case below is not hypothetical: it is the literal input.
+
+test_that("the import payload has a FROZEN key set", {
+  expect_setequal(TS_DRIVE_IMPORT_KEYS, c("counts_path", "metadata_path", "mode"))
+})
+
+test_that("a path containing a `..` component is refused (spec S11)", {
+  root <- .drv_local_root()
+  v <- ts_drive_validate_import_path(file.path(root, "..", "escape.csv"), roots = root)
+  expect_false(v$ok)
+  expect_match(v$reason, "\\.\\.")
+})
+
+test_that("a path outside every allowlisted root is refused (spec S11)", {
+  root <- .drv_local_root()
+  outside <- file.path(dirname(root), "elsewhere.csv")
+  v <- ts_drive_validate_import_path(outside, roots = root)
+  expect_false(v$ok)
+  expect_match(v$reason, "outside")
+})
+
+test_that("a DIRECTORY is refused with a reason that says so", {
+  # Not hypothetical: the path this grade was given IS a directory.
+  root <- .drv_local_root()
+  d <- file.path(root, "GSE164073_Eye_count_matrix.csv")
+  dir.create(d, showWarnings = FALSE)
+  v <- ts_drive_validate_import_path(d, roots = root)
+  expect_false(v$ok)
+  expect_match(v$reason, "director")
+})
+
+test_that("a missing file, a non-string and an empty string are all refused", {
+  root <- .drv_local_root()
+  for (bad in list(file.path(root, "nope.csv"), 42L, "")) {
+    v <- ts_drive_validate_import_path(bad, roots = root)
+    expect_false(v$ok)
+    expect_true(nzchar(v$reason))
+  }
+})
+
+test_that("a real file inside the root is ACCEPTED", {
+  root <- .drv_local_root()
+  f <- file.path(root, "counts.csv")
+  writeLines(c("gene,s1,s2", "A,1,2", "B,3,4"), f)
+  v <- ts_drive_validate_import_path(f, roots = root)
+  expect_true(v$ok)
+  expect_true(file.exists(v$path))
+})
+
+test_that("import_file without an `import` block is refused, never a silent no-op", {
+  .drv_local_root()
+  v <- ts_drive_validate_scenario(
+    list(protocol = TS_DRIVE_PROTOCOL, seq = 1, action = "import_file",
+         module = "import_bulk"),
+    "tok", 0L)
+  expect_false(v$ok)
+  expect_match(paste(v$errors, collapse = " "), "import")
+})
+
+test_that("an unknown key inside `import` is refused, and only the frozen keys survive", {
+  root <- .drv_local_root()
+  f <- file.path(root, "counts.csv")
+  writeLines(c("gene,s1,s2", "A,1,2", "B,3,4"), f)
+
+  bad <- ts_drive_validate_scenario(
+    list(protocol = TS_DRIVE_PROTOCOL, seq = 1, action = "import_file",
+         module = "import_bulk",
+         import = list(counts_path = f, rm_rf = "C:/")),
+    "tok", 0L)
+  expect_false(bad$ok)
+  expect_match(paste(bad$errors, collapse = " "), "rm_rf")
+
+  ok <- ts_drive_validate_scenario(
+    list(protocol = TS_DRIVE_PROTOCOL, seq = 2, action = "import_file",
+         module = "import_bulk",
+         import = list(counts_path = f, mode = "merged_matrix")),
+    "tok", 0L)
+  expect_true(ok$ok)
+  # A WHITELIST, like every other rebuilt scenario: the injector can only ever
+  # see the keys it declares.
+  expect_setequal(names(ok$scenario$import), c("counts_path", "mode"))
+})
+
+test_that("import_file with NO published importer is invalid and names the seam", {
+  root <- .drv_local_root()
+  f <- file.path(root, "counts.csv")
+  writeLines(c("gene,s1,s2", "A,1,2", "B,3,4"), f)
+  res <- ts_drive_apply(NULL, NULL,
+    list(action = "import_file", module = "import_bulk", inputs = list(),
+         import = list(counts_path = f)),
+    effects = function(input_id, mode = "bump", module = NULL, request = NULL) {
+      if (identical(mode, "import")) return(NULL)   # nothing published
+      FALSE
+    })
+  expect_identical(res$status, "invalid")
+  expect_match(paste(res$errors, collapse = " "), "importer")
+})
+
+test_that("import_file hands the VALIDATED request to the module importer", {
+  root <- .drv_local_root()
+  f <- file.path(root, "counts.csv")
+  writeLines(c("gene,s1,s2", "A,1,2", "B,3,4"), f)
+  seen <- new.env(parent = emptyenv())
+  seen$request <- NULL
+
+  res <- ts_drive_apply(NULL, NULL,
+    list(action = "import_file", module = "import_bulk", inputs = list(),
+         import = list(counts_path = f)),
+    effects = function(input_id, mode = "bump", module = NULL, request = NULL) {
+      if (identical(mode, "import")) {
+        seen$request <- request
+        return(list(ok = TRUE, status = "applied",
+                    errors = character(0), warnings = character(0)))
+      }
+      FALSE
+    })
+
+  expect_identical(res$status, "applied")
+  expect_identical(seen$request$counts_path, f)
+  # Spec S5: the raw path must NEVER be routed through an `update*()` call.
+  # The request travels as DATA to the module; no input id is touched.
+  expect_length(res$errors, 0)
+})
+
+test_that("a module importer that refuses makes import_file invalid, not done", {
+  root <- .drv_local_root()
+  f <- file.path(root, "counts.csv")
+  writeLines(c("gene,s1,s2", "A,1,2", "B,3,4"), f)
+  res <- ts_drive_apply(NULL, NULL,
+    list(action = "import_file", module = "import_bulk", inputs = list(),
+         import = list(counts_path = f)),
+    effects = function(input_id, mode = "bump", module = NULL, request = NULL) {
+      if (identical(mode, "import")) {
+        return(list(ok = FALSE, status = "invalid",
+                    errors = "the counts file has no numeric columns",
+                    warnings = character(0)))
+      }
+      FALSE
+    })
+  expect_identical(res$status, "invalid")
+  expect_match(paste(res$errors, collapse = " "), "numeric columns")
+})
+
+test_that("a published IMPORTER is never listed as a button TOKEN", {
+  # The two live in ONE registry environment, so this is the invariant that
+  # keeps them apart: `effects(mode = "tokens")` filters `ls(reg)` by
+  # `ts_drive_module_of()`, and an importer key must not survive that filter —
+  # otherwise `run_pipeline` would read a published importer as a bound button
+  # and report `done` for a click that never happened.
+  gd <- list(drive_registry = new.env(parent = emptyenv()))
+  expect_true(ts_drive_publish_importer(gd, "import_bulk", function(request) NULL))
+  expect_true(is.function(ts_drive_importer_of(gd, "import_bulk")))
+
+  ids  <- ls(gd$drive_registry)
+  toks <- ids[vapply(ids, function(i)
+    identical(ts_drive_module_of(i), "import_bulk"), logical(1))]
+  expect_length(toks, 0L)
+  # And it is keyed by the frozen prefix, so the separation is visible in `ls()`.
+  expect_true(any(startsWith(ids, TS_DRIVE_IMPORTER_PREFIX)))
+  # The DISCRIMINATING assertion — the one that actually pins the prefix. The
+  # empty listing above would ALSO hold for a key with no dash at all
+  # (`ts_drive_module_of()` returns NA there), so it cannot tell a correct
+  # prefix from a lucky one. What matters is that the prefix defeats the token
+  # filter for EVERY allowlisted module: a prefix ending in the module name
+  # (e.g. "tsdrive-import_bulk") would be attributed to that module and read as
+  # a bound button.
+  for (m in TS_DRIVE_MODULES) {
+    expect_false(identical(ts_drive_module_of(paste0(TS_DRIVE_IMPORTER_PREFIX, m)), m),
+                 info = m)
+  }
+})
+
+test_that("publishing an importer for an unknown module is refused, LOUDLY", {
+  # A SILENT refusal here would read as "G3 is wired for sc". The v1 allowlist is
+  # bulk-only (spec S3), so the warning is what makes the mistake visible in the
+  # console instead of at the first scenario.
+  gd <- list(drive_registry = new.env(parent = emptyenv()))
+  expect_warning(
+    ok_sc <- ts_drive_publish_importer(gd, "sc", function(request) NULL),
+    "TS_DRIVE_MODULES")
+  expect_false(isTRUE(ok_sc))
+  expect_warning(
+    ok_sp <- ts_drive_publish_importer(gd, "spatial", function(request) NULL),
+    "TS_DRIVE_MODULES")
+  expect_false(isTRUE(ok_sp))
+  expect_null(ts_drive_importer_of(gd, "sc"))
 })
 

@@ -734,6 +734,18 @@ ts_drive_validate_scenario <- function(scn, token, last_seq) {
   }
   warnings <- c(warnings, skipped)
 
+  # `import_file` carries a PATH, not a widget value (spec G3/S5), so it has its
+  # own validated block. Validated HERE rather than in the injector for the same
+  # reason `inputs` is: the refusal must reach `result.errors[]` before anything
+  # is attempted, and a path is exactly the kind of value that must never be
+  # handed downstream unexamined (spec S11).
+  imp <- NULL
+  if (identical(action, "import_file")) {
+    iv <- ts_drive_validate_import(scn$import)
+    errors <- c(errors, iv$errors)
+    if (length(iv$import)) imp <- iv$import
+  }
+
   status <- if (length(errors)) "invalid" else "applied-candidate"
   # The rebuilt scenario is a WHITELIST, and that is deliberate: a field the
   # injector never reads must not reach it. The list below is therefore the
@@ -761,7 +773,9 @@ ts_drive_validate_scenario <- function(scn, token, last_seq) {
          inputs_ok = as.list(inputs[setdiff(names(inputs), c(bad_keys, sub(" .*$", "", skipped)))]),
          expect = if (is.list(scn$expect)) scn$expect else NULL,
          button = if (is.character(scn$button) && length(scn$button) == 1L &&
-                     !is.na(scn$button) && nzchar(scn$button)) scn$button else NULL
+                     !is.na(scn$button) && nzchar(scn$button)) scn$button else NULL,
+         # The WHITELISTED import block (G3), NULL for every other action.
+         import = imp
        ))
 }
 
@@ -1309,8 +1323,51 @@ ts_drive_apply <- function(session, input, scn, effects = NULL) {
   }
 
   if (identical(action, "import_file")) {
-    errors <- c(errors, "import_file is not implemented in this grade (G3)")
-    return(list(status = "invalid", errors = errors, warnings = warnings,
+    # G3. The MODULE owns the load: `smart_read()`, the numeric coercion, the
+    # `min_counts` filter and the write to `global_data$bulk_obj` all live in
+    # modules/import/mod_import_bulk.R, and `R/` may touch none of them (C2, and
+    # spec S6 "the watcher must not run DESeq2/Seurat"). So the request travels
+    # as DATA through the same `effects` callback that fires buttons — never as
+    # a string handed to `update*()` (spec S5).
+    req <- scn$import
+    if (is.null(req) || is.null(req$counts_path)) {
+      errors <- c(errors, "`import_file` needs an `import` block carrying `counts_path`")
+      return(list(status = "invalid", errors = errors, warnings = warnings,
+                  active_module = module, nav = nav))
+    }
+
+    out <- if (is.null(effects)) NULL else
+      tryCatch(effects(NULL, mode = "import", module = module, request = req),
+               error = function(e) e)
+
+    if (inherits(out, "condition")) {
+      # The importer THREW. That is an app-side failure, not a refusal, and the
+      # two must stay distinguishable: `error` is terminal-with-a-cause,
+      # `invalid` means the payload was declined.
+      errors <- c(errors, sprintf("the importer raised: %s", conditionMessage(out)))
+      return(list(status = "error", errors = errors, warnings = warnings,
+                  active_module = module, nav = nav))
+    }
+    if (is.null(out)) {
+      # The seam is missing, not the data. Naming it keeps "G3 not wired into
+      # this module" from looking like "your file was rejected".
+      errors <- c(errors, sprintf(
+        "module '%s' published no importer — its server() does not call ts_drive_publish_importer()",
+        module))
+      return(list(status = "invalid", errors = errors, warnings = warnings,
+                  active_module = module, nav = nav))
+    }
+    if (!isTRUE(out$ok)) {
+      errors <- c(errors, out$errors %||% "the importer refused the request")
+      return(list(status = out$status %||% "invalid", errors = errors,
+                  warnings = c(warnings, out$warnings %||% character(0)),
+                  active_module = module, nav = nav))
+    }
+    # `applied`, not `done`: the object is in memory, but `applied` is the
+    # honest terminal-for-seq status of a load — the same distinction the spec
+    # draws for `set_inputs`. `snapshot` is what proves the object exists.
+    return(list(status = "applied", errors = character(0),
+                warnings = c(warnings, out$warnings %||% character(0)),
                 active_module = module, nav = nav))
   }
 

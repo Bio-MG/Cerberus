@@ -300,6 +300,186 @@ ts_drive_button_module <- function(button_id) {
 
 
 # =============================================================================
+# import_file — the G3 import contract (frozen data + pure validation)
+# =============================================================================
+# Spec G3 / S5 / S11. `import_file` BYPASSES the `fileInput` widget: the agent
+# names a PATH, and the module performs the load through the same helper the UI
+# uses. Two things therefore have to be frozen as data:
+#
+#   1. the KEY SET of the `import` payload — a whitelist, exactly like `inputs`,
+#      so a field the injector never reads can never reach it;
+#   2. the ROOTS a path may come from — spec S11: "Do not execute
+#      user-supplied file paths outside the project, `tempdir()`, or an
+#      explicit allowlisted data dir. Reject `..`".
+#
+# Everything here is pure: no Shiny call (C2), and the only I/O is
+# `file.exists()` / `dir.exists()`, so the whole rule is testable from Rscript
+# without a session.
+
+#' Keys the `import` block may carry (frozen).
+TS_DRIVE_IMPORT_KEYS <- c("counts_path", "metadata_path", "mode")
+
+#' Import modes the loader understands — measured from the `bulk_import_mode`
+#' radio in modules/import/mod_import_bulk.R, not invented.
+TS_DRIVE_IMPORT_MODES <- c("merged_matrix", "per_sample")
+
+#' Registry-key prefix for a published IMPORTER.
+#'
+#' A published importer is NOT a button token and must never be mistaken for
+#' one. `effects(mode = "tokens")` lists the registry by filtering `ls(reg)`
+#' through `ts_drive_module_of()`, and this prefix is chosen so that filter
+#' DROPS it: `tsdrive-importer-import_bulk` splits on its last dash to
+#' `tsdrive-importer-import`, which is no module. Without that, `run_pipeline`
+#' would read a published importer as a bound button and report `done` for a
+#' click that never happened — the exact `done` lie the readiness gate exists to
+#' remove. Pinned by `test-drive-watcher.R` §16.
+TS_DRIVE_IMPORTER_PREFIX <- "tsdrive-importer-"
+
+#' Roots an import path may be read from (spec S11).
+#'
+#' The app root is the project itself; `tempdir()` is where a test — and any
+#' agent-side staging — writes; `extra` lets an operator allowlist a data
+#' directory without editing code.
+ts_drive_import_roots <- function(root = ts_drive_root(), extra = character(0)) {
+  unique(c(root, tempdir(), extra))
+}
+
+#' Validate ONE path an agent asked to import (spec S11).
+#'
+#' Returns a VERDICT, not a boolean, because a refusal has to be actionable: an
+#' agent told only `FALSE` will retry the same path forever.
+#'
+#' @param path The candidate path (one string).
+#' @param roots Allowlisted roots. Defaults to `ts_drive_import_roots()`.
+#' @return list(ok = logical, path = normalised-or-NULL, reason = character-or-NULL)
+ts_drive_validate_import_path <- function(path, roots = ts_drive_import_roots()) {
+  if (!is.character(path) || length(path) != 1L || is.na(path) || !nzchar(path)) {
+    return(list(ok = FALSE, path = NULL,
+                reason = "the path must be one non-empty string"))
+  }
+
+  # `..` is refused on the RAW string, BEFORE any normalisation: normalising
+  # first would resolve the traversal away and hide the attempt, so a refusal
+  # would depend on where the path happened to land.
+  parts <- strsplit(path, "[/\\\\]+")[[1]]
+  if (any(parts == "..")) {
+    return(list(ok = FALSE, path = NULL,
+                reason = "the path contains a `..` component"))
+  }
+
+  full <- tryCatch(normalizePath(path, winslash = "/", mustWork = FALSE),
+                   error = function(e) NULL)
+  if (is.null(full) || is.na(full)) {
+    return(list(ok = FALSE, path = NULL, reason = "the path could not be resolved"))
+  }
+
+  roots <- tryCatch(normalizePath(roots, winslash = "/", mustWork = FALSE),
+                    error = function(e) character(0))
+  roots <- roots[!is.na(roots) & nzchar(roots)]
+  inside <- any(vapply(roots, function(r)
+    identical(substr(full, 1L, nchar(r)), r), logical(1)))
+  if (!inside) {
+    return(list(ok = FALSE, path = NULL,
+                reason = sprintf("the path is outside every allowlisted root (%s)",
+                                 paste(basename(roots), collapse = ", "))))
+  }
+
+  if (!file.exists(full)) {
+    return(list(ok = FALSE, path = NULL, reason = "the path does not exist"))
+  }
+  if (dir.exists(full)) {
+    # MEASURED, not hypothetical: the dataset this grade was handed over as is
+    # `GSE164073_Eye_count_matrix.csv/` — a DIRECTORY holding a file of the same
+    # name. Naming that is the difference between one retry and a mystery.
+    return(list(ok = FALSE, path = NULL,
+                reason = "the path is a directory; pass the counts FILE inside it"))
+  }
+  list(ok = TRUE, path = full, reason = NULL)
+}
+
+#' Validate the `import` block of a scenario.
+#'
+#' @param block The parsed `import` object, or NULL.
+#' @return list(ok, errors, import) — `import` is the WHITELISTED block.
+ts_drive_validate_import <- function(block, roots = ts_drive_import_roots()) {
+  if (is.null(block) || !is.list(block) || !length(block)) {
+    return(list(ok = FALSE,
+                errors = "`import` must be a JSON object carrying at least `counts_path`",
+                import = NULL))
+  }
+  errors <- character(0)
+  unknown <- setdiff(names(block), TS_DRIVE_IMPORT_KEYS)
+  if (length(unknown)) {
+    errors <- c(errors, sprintf("unknown key(s) in `import`: %s",
+                                paste(unknown, collapse = ", ")))
+  }
+
+  out <- list()
+  cp <- ts_drive_validate_import_path(block$counts_path, roots = roots)
+  if (!isTRUE(cp$ok)) errors <- c(errors, sprintf("`counts_path`: %s", cp$reason))
+  else out$counts_path <- cp$path
+
+  if (!is.null(block$metadata_path)) {
+    mp <- ts_drive_validate_import_path(block$metadata_path, roots = roots)
+    if (!isTRUE(mp$ok)) errors <- c(errors, sprintf("`metadata_path`: %s", mp$reason))
+    else out$metadata_path <- mp$path
+  }
+
+  if (!is.null(block$mode)) {
+    m <- as.character(block$mode)
+    if (length(m) != 1L || is.na(m) || !m %in% TS_DRIVE_IMPORT_MODES) {
+      errors <- c(errors, sprintf("`mode` must be one of: %s",
+                                  paste(TS_DRIVE_IMPORT_MODES, collapse = ", ")))
+    } else {
+      out$mode <- m
+    }
+  }
+
+  list(ok = !length(errors), errors = errors, import = out)
+}
+
+#' Publish a module's IMPORTER so `import_file` can reach it.
+#'
+#' The counterpart of `ts_drive_publish_token()`, and deliberately a different
+#' slot: the importer is a FUNCTION the poller calls with a validated request,
+#' not a counter it increments. Stored under `TS_DRIVE_IMPORTER_PREFIX` so the
+#' token listing cannot see it.
+#'
+#' Silently does nothing when no registry is present (a unit test that sources a
+#' module alone), so the module keeps working outside the app.
+#'
+#' @param global_data The app-wide `reactiveValues`.
+#' @param module One of `TS_DRIVE_MODULES`.
+#' @param importer `function(request)` -> list(ok, status, errors, warnings).
+ts_drive_publish_importer <- function(global_data, module, importer) {
+  if (!is.character(module) || length(module) != 1L || is.na(module) ||
+      !module %in% TS_DRIVE_MODULES) {
+    warning(sprintf("ts_drive_publish_importer(): '%s' is not in TS_DRIVE_MODULES — ignored.",
+                    module))
+    return(invisible(FALSE))
+  }
+  if (!is.function(importer)) {
+    warning("ts_drive_publish_importer(): the importer must be a function — ignored.")
+    return(invisible(FALSE))
+  }
+  reg <- ts_drive_registry(global_data)
+  if (is.null(reg)) return(invisible(FALSE))
+  reg[[paste0(TS_DRIVE_IMPORTER_PREFIX, module)]] <- importer
+  invisible(TRUE)
+}
+
+#' Read a module's published importer (used by the poller through `effects`).
+#'
+#' @return The importer function, or NULL when none was published.
+ts_drive_importer_of <- function(global_data, module) {
+  reg <- ts_drive_registry(global_data)
+  if (is.null(reg)) return(NULL)
+  fn <- reg[[paste0(TS_DRIVE_IMPORTER_PREFIX, module)]]
+  if (is.function(fn)) fn else NULL
+}
+
+
+# =============================================================================
 # Badge state — the PASSIVE dev-only status model
 # =============================================================================
 # The badge the agent (and a human) reads must be OBSERVATIONAL. This block
