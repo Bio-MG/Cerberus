@@ -2210,7 +2210,14 @@ test_that("import_file hands the VALIDATED request to the module importer", {
       FALSE
     })
 
-  expect_identical(res$status, "applied")
+  # `done` — TERMINAL. The load is SYNCHRONOUS: by the time the result is
+  # written the object is already in `global_data$bulk_obj`, so an agent must be
+  # able to STOP polling. MEASURED on a live session: with `applied` — which is
+  # not terminal — the driver waited its full 300 s on a load that had succeeded
+  # in seconds. Asserting the PROPERTY (`terminal`) and not only the label is
+  # what pins that; the label alone would move again silently.
+  expect_identical(res$status, "done")
+  expect_true(ts_drive_status_terminal(res$status))
   expect_identical(seen$request$counts_path, f)
   # Spec S5: the raw path must NEVER be routed through an `update*()` call.
   # The request travels as DATA to the module; no input id is touched.
@@ -2279,5 +2286,40 @@ test_that("publishing an importer for an unknown module is refused, LOUDLY", {
     "TS_DRIVE_MODULES")
   expect_false(isTRUE(ok_sp))
   expect_null(ts_drive_importer_of(gd, "sc"))
+})
+
+test_that("only an OPERATOR can widen the import roots — never the scenario", {
+  # The G3 dataset lives outside the project (`D:/Data_science/Données/bulk/…`),
+  # so a data directory has to be allowlistable. It must be widened from the
+  # ENVIRONMENT, which requires control of the launching process — the agent
+  # driving a session a human opened cannot set it. If the scenario could name
+  # its own root, spec S11 would be decoration.
+  old <- Sys.getenv("TRANSCRIPTO_DRIVE_DATA_DIR", unset = NA_character_)
+  on.exit({
+    if (is.na(old)) Sys.unsetenv("TRANSCRIPTO_DRIVE_DATA_DIR")
+    else Sys.setenv(TRANSCRIPTO_DRIVE_DATA_DIR = old)
+  }, add = TRUE)
+
+  root <- .drv_local_root()
+  d <- file.path(tempdir(), "tsdrive-data-dir")
+  dir.create(d, showWarnings = FALSE, recursive = TRUE)
+  f <- file.path(d, "counts.csv")
+  writeLines(c("gene,s1", "A,1"), f)
+
+  Sys.unsetenv("TRANSCRIPTO_DRIVE_DATA_DIR")
+  expect_false(ts_drive_validate_import_path(f, roots = root)$ok)
+
+  Sys.setenv(TRANSCRIPTO_DRIVE_DATA_DIR = d)
+  expect_true(ts_drive_validate_import_path(f, roots = ts_drive_import_roots(root))$ok)
+
+  # And a SCENARIO cannot widen it: the roots come from the validator's own
+  # arguments, and nothing in the payload reaches them.
+  v <- ts_drive_validate_scenario(
+    list(protocol = TS_DRIVE_PROTOCOL, seq = 1, action = "import_file",
+         module = "import_bulk",
+         import = list(counts_path = f, roots = d)),
+    "tok", 0L)
+  expect_false(v$ok)
+  expect_match(paste(v$errors, collapse = " "), "roots")
 })
 

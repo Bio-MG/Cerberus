@@ -29,6 +29,17 @@
 
 source_project_file("R/core/io_helpers.R")
 source_project_file("R/core/rdata_io.R")
+# G3: `mod_import_bulk_server()` now also calls `ts_drive_publish_importer()`,
+# on top of the G2 `ts_drive_bind_button()`. BOTH live in `R/core/`, and
+# without these two sources this file only passed when another test file had
+# already sourced them — i.e. it PASSED IN THE FULL SUITE AND ERRORED ALONE.
+# MEASURED: filtered to `mod-import-bulk` alone, `moduleServer()` init raised
+# `could not find function "ts_drive_bind_button"` (1 error); adding `drive`
+# to the filter made it green, which is the signature of an order dependency.
+# The module is not being tested in isolation if its dependencies are not
+# loaded, so they are loaded here, explicitly.
+source_project_file("R/core/drive_allowlist.R")
+source_project_file("R/core/drive_watcher.R")
 source_project_file("modules/import/mod_rdata_picker.R")
 source_project_file("modules/import/mod_import_bulk.R")
 source_project_file("tools/check_conventions.R")

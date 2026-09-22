@@ -575,7 +575,18 @@ server <- function(input, output, session) {
       # `effects()` is how the poller reaches module-owned counters without any
       # reactive machinery living in R/. Two modes: bump one button, or list a
       # module's announced tokens.
-      effects = function(input_id, mode = "bump", module = NULL) {
+      effects = function(input_id, mode = "bump", module = NULL, request = NULL) {
+        # G3: `import_file` does NOT touch a counter. It calls the module's
+        # published IMPORTER with an already-validated request. Returning NULL
+        # means "no importer published", which the watcher reports as a missing
+        # SEAM — never as a rejected file. Handled BEFORE the registry guard
+        # below, because `ts_drive_importer_of()` does its own lookup and a
+        # missing registry is one of the cases it already answers.
+        if (identical(mode, "import")) {
+          imp <- ts_drive_importer_of(global_data, module)
+          if (is.null(imp)) return(NULL)
+          return(imp(request))
+        }
         reg <- global_data$drive_registry
         if (!is.environment(reg)) {
           # Should be unreachable: the registry is created a few lines above.

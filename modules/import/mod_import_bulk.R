@@ -440,6 +440,60 @@ mod_import_bulk_server <- function(id, global_data) {
         df
       }, error = function(e) stop(errorCondition(paste("Erreur de lecture:", e$message), class = "bulk_import_error")))
     }
+
+    # ── Assemblage de l'objet bulk — UNE seule source de vérité (G3) ───────
+    # Extrait du corps de l'observer `btn_load` pour que l'import par le widget
+    # ET l'import piloté par l'agent (`import_file`) passent par EXACTEMENT le
+    # même code. Dupliquer ces lignes aurait créé deux objets bulk pouvant
+    # diverger selon le chemin d'entrée, et `check_duplication.R` l'aurait
+    # refusé — à juste titre.
+    #
+    # Ne touche à AUCUN état : l'appelant écrit `global_data$bulk_obj`. C'est ce
+    # qui rend la fonction réutilisable depuis l'importeur, qui n'est pas un
+    # observer et n'a donc pas de contexte réactif.
+    #
+    # `counts`   : data.frame/matrix gènes × échantillons.
+    # `metadata` : data.frame aligné par ROWNAMES, ou NULL.
+    assemble_bulk_obj <- function(counts, metadata, min_counts, project_name) {
+      add_log(" → Conversion des valeurs en numérique...")
+      counts <- as.data.frame(counts, check.names = FALSE, stringsAsFactors = FALSE)
+      for (col in colnames(counts)) {
+        if (is.character(counts[[col]]))
+          counts[[col]] <- suppressWarnings(as.numeric(counts[[col]]))
+      }
+      if (anyNA(as.matrix(counts)))
+        add_log(" ⚠️ Certaines valeurs ne sont pas numériques (NA après conversion)")
+
+      counts_matrix <- as.matrix(counts)
+      gene_counts   <- rowSums(counts_matrix, na.rm = TRUE)
+      keep_genes    <- gene_counts >= min_counts
+      counts_matrix <- counts_matrix[keep_genes, , drop = FALSE]
+      add_log(paste(" → Gènes filtrés:", sum(!keep_genes), "retirés,",
+                    sum(keep_genes), "conservés"))
+
+      bulk_obj <- list(counts    = counts_matrix,
+                       metadata  = NULL,
+                       project   = project_name,
+                       type      = "bulk",
+                       timestamp = Sys.time())
+
+      if (!is.null(metadata)) {
+        sample_names   <- colnames(counts_matrix)
+        metadata_names <- rownames(metadata)
+        if (all(sample_names %in% metadata_names)) {
+          bulk_obj$metadata <- metadata[sample_names, , drop = FALSE]
+          add_log(paste(" ✓ Métadonnées alignées:", ncol(bulk_obj$metadata), "variables"))
+        } else {
+          bulk_obj$metadata <- data.frame(sample = sample_names, row.names = sample_names)
+          add_log(" ⚠️ Métadonnées non alignées - création de métadonnées par défaut")
+        }
+      } else {
+        bulk_obj$metadata <- data.frame(
+          sample = colnames(counts_matrix), row.names = colnames(counts_matrix))
+        add_log(" → Aucune métadonnée — colonne 'sample' par défaut créée")
+      }
+      bulk_obj
+    }
     
     # =========================================================================
     # MODE MERGED_MATRIX — inchangé
@@ -546,6 +600,83 @@ mod_import_bulk_server <- function(id, global_data) {
     })
     
     effective_metadata <- reactive({ metadata_file_reactive() %||% inferred_metadata() })
+
+    # ── DRIVE LIVE CONTROL (G3) : l'importeur publié pour `import_file` ─────
+    # Spec G3 : « reuse the existing bulk import helper ; do not fake the
+    # widget ». Le chemin vient d'un SCÉNARIO déjà validé par le watcher
+    # (spec S11 : `..` refusé, hors racines refusé, répertoire refusé). Il est
+    # lu par `smart_read()` — le MÊME lecteur que le widget — puis assemblé par
+    # `assemble_bulk_obj()` — le MÊME assembleur. Aucun `update*()` ne reçoit
+    # jamais ce chemin : on CONTOURNE le widget, on ne le falsifie pas (S5).
+    #
+    # Les options (format, min_counts, project_name) sont lues sur les widgets
+    # par `isolate()`. Elles se règlent donc par un `set_inputs` ANTÉRIEUR : un
+    # `update*()` part vers le client, et la valeur ne revient côté serveur
+    # qu'après un aller-retour. C'est le seul ordre correct.
+    #
+    # Retourne une LISTE, jamais une exception : le watcher traduit `ok = FALSE`
+    # en `invalid` (charge utile déclinée) et une exception en `error` (échec
+    # applicatif). Les deux doivent rester distinguables.
+    ts_drive_publish_importer(global_data, "import_bulk", function(request) {
+      warnings <- character(0)
+
+      counts_df <- tryCatch(smart_read(request$counts_path, TRUE, TRUE),
+                            error = function(e) e)
+      if (inherits(counts_df, "condition")) {
+        return(list(ok = FALSE, status = "invalid",
+                    errors = sprintf("counts: %s", conditionMessage(counts_df)),
+                    warnings = warnings))
+      }
+      if (nrow(counts_df) == 0L || ncol(counts_df) == 0L) {
+        return(list(ok = FALSE, status = "invalid",
+                    errors = "the counts matrix is empty after reading",
+                    warnings = warnings))
+      }
+      # Le widget `counts_format` est honoré, exactement comme `counts_reactive()`.
+      if (identical(shiny::isolate(input$counts_format), "cols")) {
+        counts_df <- as.data.frame(t(counts_df))
+        add_log(" ↻ Matrice transposée (genes étaient en colonnes)")
+      }
+
+      meta_df <- NULL
+      if (!is.null(request$metadata_path)) {
+        meta_df <- tryCatch(smart_read(request$metadata_path, TRUE, TRUE),
+                            error = function(e) e)
+        if (inherits(meta_df, "condition")) {
+          # Les métadonnées sont OPTIONNELLES — l'assembleur retombe sur des
+          # métadonnées par défaut — donc un échec ici est un AVERTISSEMENT,
+          # jamais un refus de la matrice.
+          warnings <- c(warnings, sprintf("metadata ignored: %s",
+                                          conditionMessage(meta_df)))
+          meta_df <- NULL
+        }
+      }
+
+      min_counts <- shiny::isolate(input$min_counts) %||% 10
+      project    <- shiny::isolate(input$project_name) %||% "Bulk"
+
+      add_log("🚀 Import piloté par l'agent (import_file)...")
+      bulk_obj <- tryCatch(
+        assemble_bulk_obj(counts_df, meta_df, min_counts, project),
+        error = function(e) e)
+      if (inherits(bulk_obj, "condition")) {
+        return(list(ok = FALSE, status = "error",
+                    errors = sprintf("assembly: %s", conditionMessage(bulk_obj)),
+                    warnings = warnings))
+      }
+
+      global_data$bulk_obj <- bulk_obj
+      temp_data$is_loaded  <- TRUE
+      .register_multi_dataset(global_data$bulk_obj)
+      add_log(paste("✅ Import (drive) réussi :", nrow(bulk_obj$counts), "gènes ×",
+                    ncol(bulk_obj$counts), "échantillons"))
+      showNotification(paste("✅ Import piloté réussi :", ncol(bulk_obj$counts),
+                             "échantillons,", nrow(bulk_obj$counts), "gènes"),
+                       type = "message", duration = 5)
+
+      list(ok = TRUE, status = "applied", errors = character(0),
+           warnings = warnings)
+    })
     
     observe({
       shinyjs::toggleState("btn_infer_preview", condition = is.null(metadata_file_reactive()))
@@ -934,52 +1065,22 @@ mod_import_bulk_server <- function(id, global_data) {
           counts   <- counts_reactive()
           metadata <- effective_metadata()
           
-          add_log(" → Conversion des valeurs en numérique...")
-          counts <- as.data.frame(counts, check.names = FALSE, stringsAsFactors = FALSE)
-          for (col in colnames(counts)) {
-            if (is.character(counts[[col]]))
-              counts[[col]] <- suppressWarnings(as.numeric(counts[[col]]))
-          }
-          if (anyNA(as.matrix(counts)))
-            add_log(" ⚠️ Certaines valeurs ne sont pas numériques (NA après conversion)")
-          
-          counts_matrix <- as.matrix(counts)
-          gene_counts   <- rowSums(counts_matrix, na.rm = TRUE)
-          keep_genes    <- gene_counts >= input$min_counts
-          counts_matrix <- counts_matrix[keep_genes, , drop = FALSE]
-          add_log(paste(" → Gènes filtrés:", sum(!keep_genes), "retirés,",
-                        sum(keep_genes), "conservés"))
-          
-          bulk_obj <- list(counts    = counts_matrix,
-                           metadata  = NULL,
-                           project   = input$project_name,
-                           type      = "bulk",
-                           timestamp = Sys.time())
-          
-          if (!is.null(metadata)) {
-            sample_names   <- colnames(counts_matrix)
-            metadata_names <- rownames(metadata)
-            if (all(sample_names %in% metadata_names)) {
-              bulk_obj$metadata <- metadata[sample_names, , drop = FALSE]
-              add_log(paste(" ✓ Métadonnées alignées:", ncol(bulk_obj$metadata), "variables"))
-            } else {
-              bulk_obj$metadata <- data.frame(sample = sample_names, row.names = sample_names)
-              add_log(" ⚠️ Métadonnées non alignées - création de métadonnées par défaut")
-            }
-          } else {
-            bulk_obj$metadata <- data.frame(
-              sample = colnames(counts_matrix), row.names = colnames(counts_matrix))
-            add_log(" → Aucune métadonnée — colonne 'sample' par défaut créée")
-          }
+          # G3 : l'assemblage est DÉSORMAIS PARTAGÉ avec l'importeur de
+          # `import_file` (`assemble_bulk_obj()`, défini plus haut) — les deux
+          # chemins produisent donc le même objet, et une correction future ne
+          # peut plus n'en atteindre qu'un. Aucune autre ligne ne change ici :
+          # le corps extrait a été déplacé tel quel.
+          bulk_obj <- assemble_bulk_obj(counts, metadata,
+                                        input$min_counts, input$project_name)
           
           global_data$bulk_obj <- bulk_obj
           temp_data$is_loaded  <- TRUE
-          add_log(paste("✅ Import réussi!", nrow(counts_matrix), "gènes ×",
-                        ncol(counts_matrix), "échantillons"))
+          add_log(paste("✅ Import réussi!", nrow(bulk_obj$counts), "gènes ×",
+                        ncol(bulk_obj$counts), "échantillons"))
           .register_multi_dataset(global_data$bulk_obj)  # MD-1 (label optionnel)
           removeNotification(id = ns("progress"))
-          showNotification(paste("✅ Import réussi:", ncol(counts_matrix),
-                                 "échantillons,", nrow(counts_matrix), "gènes"),
+          showNotification(paste("✅ Import réussi:", ncol(bulk_obj$counts),
+                                 "échantillons,", nrow(bulk_obj$counts), "gènes"),
                            type = "message", duration = 5)
           
         }, error = function(e) {

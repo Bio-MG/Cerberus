@@ -335,13 +335,28 @@ TS_DRIVE_IMPORT_MODES <- c("merged_matrix", "per_sample")
 #' remove. Pinned by `test-drive-watcher.R` §16.
 TS_DRIVE_IMPORTER_PREFIX <- "tsdrive-importer-"
 
+#' Extra roots an OPERATOR may allowlist without editing this file.
+#'
+#' Read from the environment, deliberately NOT from the scenario: an agent that
+#' could widen its own roots would make spec S11 decorative. Setting an env var
+#' requires control of the process that launches the app, which the agent does
+#' not have on a session a human opened.
+TS_DRIVE_IMPORT_EXTRA_ROOTS <- character(0)
+
 #' Roots an import path may be read from (spec S11).
 #'
 #' The app root is the project itself; `tempdir()` is where a test — and any
-#' agent-side staging — writes; `extra` lets an operator allowlist a data
-#' directory without editing code.
-ts_drive_import_roots <- function(root = ts_drive_root(), extra = character(0)) {
-  unique(c(root, tempdir(), extra))
+#' agent-side staging — writes; `TRANSCRIPTO_DRIVE_DATA_DIR` (path-separator
+#' separated) is the operator's data directory; `extra` is for programmatic
+#' callers and tests.
+ts_drive_import_roots <- function(root = ts_drive_root(), extra = NULL) {
+  env <- Sys.getenv("TRANSCRIPTO_DRIVE_DATA_DIR", "")
+  env <- if (nzchar(env)) {
+    strsplit(env, .Platform$path.sep, fixed = TRUE)[[1]]
+  } else {
+    character(0)
+  }
+  unique(c(root, tempdir(), TS_DRIVE_IMPORT_EXTRA_ROOTS, env, extra))
 }
 
 #' Validate ONE path an agent asked to import (spec S11).

@@ -1363,10 +1363,23 @@ ts_drive_apply <- function(session, input, scn, effects = NULL) {
                   warnings = c(warnings, out$warnings %||% character(0)),
                   active_module = module, nav = nav))
     }
-    # `applied`, not `done`: the object is in memory, but `applied` is the
-    # honest terminal-for-seq status of a load — the same distinction the spec
-    # draws for `set_inputs`. `snapshot` is what proves the object exists.
-    return(list(status = "applied", errors = character(0),
+    # `done`, and this is the ONE status that lets an agent STOP polling.
+    #
+    # MEASURED ON A LIVE SESSION, and my first choice was WRONG: I returned
+    # `applied`, reasoning that a load is "acknowledged but maybe not finished".
+    # But `applied` is by definition NOT terminal
+    # (`ts_drive_status_terminal("applied")` is FALSE), while this load is
+    # SYNCHRONOUS — the importer has already written `global_data$bulk_obj` by
+    # the time this returns. So an agent doing exactly what the spec says
+    # ("poll until `ack_seq == seq` and the status is terminal, or `timeout_s`")
+    # waited its FULL timeout on a load that had succeeded seconds earlier: the
+    # live driver burned 300.7 s and recorded
+    # `TIMEOUT — no terminal result.json`, while a following `snapshot` was
+    # already answering `has_data=TRUE, genes=17925, samples=18`.
+    #
+    # The unit tests could not catch this: they asserted `applied` because I
+    # wrote them from the implementation. A refusal stays `invalid`/`error`.
+    return(list(status = "done", errors = character(0),
                 warnings = c(warnings, out$warnings %||% character(0)),
                 active_module = module, nav = nav))
   }
