@@ -2323,3 +2323,166 @@ test_that("only an OPERATOR can widen the import roots — never the scenario", 
   expect_match(paste(v$errors, collapse = " "), "roots")
 })
 
+
+# =============================================================================
+# 17. The Step 1 filtering action (G3, second milestone)
+# =============================================================================
+# Bulk is STAGED: `shared_rv$filtered_counts` is produced ONLY by Step 1 (or by
+# the auto-pipeline), and EVERY downstream panel gates on it. So this section
+# asserts three separate things, because passing one without the others proves
+# nothing:
+#   (a) the action is REACHABLE (`run_pipeline` finds it);
+#   (b) it REFUSES, by name, when its precondition is missing;
+#   (c) it rides the EXISTING observer that writes the state — no drive-only
+#       copy, and no write to `shared_rv` from the drive layer.
+# (c) is the one a behavioural test can never catch: a second, drive-only
+# filtering implementation would pass (a) and (b) while leaving the human path
+# to rot.
+
+test_that("run_pipeline reaches Step 1 through its measured module", {
+  # The button is resolved from the MODULE, so the scenario names
+  # `bulk_filter` and the protocol must know its default click site. If the
+  # module is not in TS_DRIVE_MODULES the scenario is refused at validation
+  # time, which is exactly the state this test was written against.
+  .drv_local_root()
+  .drv_write_arm("tok")
+  seen <- character(0)
+  effects <- function(input_id = NULL, mode = "bump", module = NULL, request = NULL) {
+    if (identical(mode, "tokens")) {
+      return(list("bulk-filter-run_filter_norm" =
+                    list(counter = NULL, ready = function() TRUE)))
+    }
+    seen <<- c(seen, input_id)
+    TRUE
+  }
+  .drv_write_scn(7L, action = "run_pipeline", module = "bulk_filter",
+                 session_token = "tok")
+  res <- ts_drive_tick(NULL, NULL, NULL, "tok", 0L, FALSE, effects = effects)
+  expect_true(res$consumed)
+  expect_identical(ts_drive_read_result()$status, "done")
+  expect_identical(seen, "bulk-filter-run_filter_norm")
+})
+
+test_that("the Step 1 action is refused, naming the missing object, when nothing is loaded", {
+  # The refusal has to happen BEFORE the counter moves, or the module's `req()`
+  # aborts in silence and the agent is told `done` for work that never ran.
+  .drv_local_root()
+  .drv_write_arm("tok")
+  effects <- function(input_id = NULL, mode = "bump", module = NULL, request = NULL) {
+    if (identical(mode, "tokens")) {
+      return(list("bulk-filter-run_filter_norm" = list(
+        counter = NULL,
+        ready = function() "no bulk object loaded (global_data$bulk_obj is NULL)")))
+    }
+    stop("the poller must NOT fire a button whose readiness guard refused")
+  }
+  .drv_write_scn(8L, action = "run_pipeline", module = "bulk_filter",
+                 session_token = "tok")
+  res <- ts_drive_tick(NULL, NULL, NULL, "tok", 0L, FALSE, effects = effects)
+  expect_true(res$consumed)
+  r <- ts_drive_read_result()
+  expect_identical(r$status, "invalid")
+  expect_match(r$errors[[1]], "not ready")
+  expect_match(r$errors[[1]], "bulk_obj")
+})
+
+test_that("the Step 1 binding rides the EXISTING observer, and the human path survives", {
+  # Three constraints from the instruction, asserted on the SOURCE:
+  #   * reuse the existing `mod_bulk_filter.R` observer;
+  #   * never write `shared_rv$filtered_counts` directly;
+  #   * no drive-only filtering implementation;
+  #   * the human UI path stays unchanged when the drive is disabled.
+  src <- readLines(file.path(ts_project_root(), "modules", "bulk", "mod_bulk_filter.R"),
+                   warn = FALSE, encoding = "UTF-8")
+
+  # (a) the module publishes the token for the measured id, WITH a guard.
+  pub <- grep('ts_drive_publish_token\\(.*"bulk-filter-run_filter_norm"', src)
+  expect_true(length(pub) >= 1L,
+              info = "mod_bulk_filter.R does not publish the Step 1 token")
+  expect_match(paste(src[pub[1]:min(length(src), pub[1] + 4L)], collapse = "\n"), "ready")
+
+  # (b) the observer that WRITES the state is the one the drive token reaches.
+  #     Walk back from the FIRST write site to its opening `observeEvent(`.
+  write_idx <- grep("shared_rv\\$filtered_counts\\s*<-", src)
+  expect_true(length(write_idx) >= 1L)
+  obs_idx <- rev(grep("observeEvent\\(", src[seq_len(write_idx[1])]))[1]
+  window  <- paste(src[obs_idx:write_idx[1]], collapse = "\n")
+  expect_match(window, "drive_trigger",
+               info = "the drive token does not reach the observer that writes filtered_counts")
+  #     ...and the publish happens BEFORE that observer opens, or the counter
+  #     would not exist yet when the poller looks it up.
+  expect_true(pub[1] < obs_idx)
+
+  # (c) the human click is still a trigger input. Without this the binding could
+  #     silently replace the button instead of joining it.
+  expect_match(paste(src, collapse = "\n"),
+               "reactive\\(list\\(drive_counter\\(\\), input\\$run_filter_norm\\)\\)")
+
+  # (d) the drive layer never writes the state itself.
+  core <- list.files(file.path(ts_project_root(), "R"), pattern = "[.]R$",
+                     recursive = TRUE, full.names = TRUE)
+  core_txt <- unlist(lapply(core, function(f) readLines(f, warn = FALSE, encoding = "UTF-8")))
+  expect_length(grep("shared_rv\\$filtered_counts\\s*<-", core_txt), 0L)
+})
+
+test_that("snapshot reports the module-published Step 1 state AND the loaded object", {
+  # The snapshot used to read `global_data$bulk_obj` alone, so it could not tell
+  # "Step 1 ran" from "Step 1 never ran": both answer `has_data=TRUE` with the
+  # IMPORTED dimensions. MEASURED on a live session: the snapshot reported
+  # `has_data=TRUE genes=17925 samples=18` in the same instant the DE guard
+  # refused with "no bulk object loaded". A module may now publish what IT can
+  # see, and the snapshot carries it under `modules[[module]]`.
+  .drv_local_root()
+  gd <- list(bulk_obj = list(counts = matrix(1:12, nrow = 4, ncol = 3)))
+  reg <- new.env(parent = emptyenv())
+  reg[["bulk-filter-run_filter_norm"]] <- list(
+    counter = NULL,
+    ready = function() TRUE,
+    state = function() list(
+      filtered_counts = list(n_genes = 4L, n_samples = 3L, samples = c("s1", "s2", "s3")),
+      vst_mat = list(n_genes = 4L, n_samples = 3L, samples = c("s1", "s2", "s3"))))
+  gd$drive_registry <- reg
+
+  snap <- ts_drive_snapshot(gd)
+  # The loaded object is STILL reported, unchanged — the addition is additive.
+  expect_true(snap$has_data)
+  expect_identical(snap$n_genes, 4L)
+  expect_identical(snap$n_samples, 3L)
+  # ...and now the Step 1 state is visible too.
+  expect_identical(snap$modules$bulk_filter$filtered_counts$n_genes, 4L)
+  expect_identical(snap$modules$bulk_filter$filtered_counts$samples, c("s1", "s2", "s3"))
+  expect_identical(snap$modules$bulk_filter$vst_mat$n_samples, 3L)
+  # No image data may leak into the verdict, wherever it now nests.
+  expect_false(any(grepl("base64", unlist(snap), fixed = TRUE)))
+})
+
+test_that("a broken state probe degrades the snapshot loudly, it does not kill it", {
+  # A module whose probe throws must not take the poller's beat down with it —
+  # and must not vanish silently either, or "no state" and "probe crashed"
+  # become the same answer to an agent.
+  .drv_local_root()
+  gd <- list(bulk_obj = list(counts = matrix(1:12, nrow = 4, ncol = 3)))
+  reg <- new.env(parent = emptyenv())
+  reg[["bulk-filter-run_filter_norm"]] <- list(
+    counter = NULL, ready = function() TRUE,
+    state = function() stop("boom"))
+  gd$drive_registry <- reg
+
+  snap <- ts_drive_snapshot(gd)
+  expect_true(snap$has_data)
+  expect_match(snap$modules$bulk_filter$probe_error, "boom")
+})
+
+test_that("a module that publishes no state contributes no `modules` entry", {
+  # Absence must stay distinguishable from failure: the two are reported by
+  # different fields, never by the same empty value.
+  .drv_local_root()
+  gd <- list(bulk_obj = list(counts = matrix(1:12, nrow = 4, ncol = 3)))
+  reg <- new.env(parent = emptyenv())
+  reg[["bulk-de-run_de"]] <- list(counter = NULL, ready = function() TRUE)
+  gd$drive_registry <- reg
+
+  snap <- ts_drive_snapshot(gd)
+  expect_true(snap$has_data)
+  expect_length(snap$modules, 0L)
+})

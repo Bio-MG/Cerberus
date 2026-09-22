@@ -840,8 +840,21 @@ ts_drive_read_result <- function() {
 #' @param global_data The app-wide `reactiveValues`.
 ts_drive_snapshot <- function(global_data) {
   out <- list(has_data = FALSE, object_class = NULL, n_genes = NULL,
-              n_samples = NULL, error_state = NULL)
+              n_samples = NULL, error_state = NULL, modules = list())
   if (is.null(global_data)) return(out)
+
+  # What the MODULES can see, published by them (see `state` in
+  # `ts_drive_publish_token()`). Collected BEFORE the `bulk_obj` early return,
+  # so a session that has module state but no active object still reports it.
+  #
+  # WHY THIS EXISTS — measured, not speculative. `global_data$bulk_obj` and
+  # `shared_rv$filtered_counts` are DIFFERENT slots with different lifetimes:
+  # the first is the imported dataset, the second is the output of Step 1.
+  # Reading only the first made the snapshot answer `has_data=TRUE
+  # genes=17925 samples=18` in the same instant the DE guard refused with
+  # "no bulk object loaded" — the agent could not tell "Step 1 ran" from
+  # "Step 1 never ran", because both report the IMPORTED dimensions.
+  out$modules <- ts_drive_module_states(global_data)
 
   obj <- tryCatch(global_data$bulk_obj, error = function(e) NULL)
   if (is.null(obj)) return(out)
@@ -853,6 +866,47 @@ ts_drive_snapshot <- function(global_data) {
   out$n_samples    <- tryCatch(ncol(counts), error = function(e) NULL)
   out$error_state  <- tryCatch(
     ts_error_state(NULL, class = NULL), error = function(e) NULL)
+  out
+}
+
+#' Collect the per-module state published by the modules themselves.
+#'
+#' One entry per MODULE that published a `state` probe, keyed by module name
+#' (`bulk_filter`, `bulk_de`, ...). A module publishes ONE state — if two of its
+#' buttons announce one, the last writer wins, which is why the convention is
+#' "the module's primary token carries the state".
+#'
+#' The probe is a module-side closure and MUST wrap its own reactive reads in
+#' `shiny::isolate()`: it is called from inside the poller's reactive beat, and
+#' an un-isolated read would silently enrol the module's data in the poller's
+#' dependency set (same rule as the readiness guard, spec §6).
+#'
+#' A probe that throws is reported as `probe_error` rather than omitted:
+#' "this module has no state" and "this module's probe crashed" must never be
+#' the same answer, or a broken probe becomes invisible.
+#'
+#' @param global_data The app-wide `reactiveValues`.
+#' @return Named list, possibly empty. Never NULL.
+ts_drive_module_states <- function(global_data) {
+  reg <- ts_drive_registry(global_data)
+  if (is.null(reg)) return(list())
+  out <- list()
+  for (id in ls(reg)) {
+    entry <- reg[[id]]
+    probe <- if (is.list(entry)) entry$state else NULL
+    if (!is.function(probe)) next
+    mod <- ts_drive_module_of(id)
+    if (is.na(mod)) next
+    ans <- tryCatch(probe(), error = function(e) e)
+    out[[mod]] <- if (inherits(ans, "condition")) {
+      list(probe_error = sprintf("the state probe raised: %s",
+                                 conditionMessage(ans)))
+    } else if (is.list(ans)) {
+      ans
+    } else {
+      list(probe_error = "the state probe returned neither a list nor an error")
+    }
+  }
   out
 }
 
@@ -1071,14 +1125,23 @@ ts_drive_registry <- function(global_data) {
 #'   reports what it always did. A guard is deliberately NOT validated here —
 #'   `ts_drive_ready_probe()` classifies whatever it is, and a non-function
 #'   fails closed there rather than silently disappearing at publish time.
-ts_drive_publish_token <- function(global_data, input_id, counter, ready = NULL) {
+#' @param state Optional zero-argument probe, owned by the module, returning a
+#'   LIST describing what the module can see (`shared_rv$filtered_counts`
+#'   dimensions, sample names, …). It is surfaced under
+#'   `snapshot$modules[[<module>]]` (see `ts_drive_snapshot()`), which is how an
+#'   agent tells a stage that has RUN from one that has not. Like `ready`, it is
+#'   called from the poller's beat, so the module MUST wrap its reactive reads
+#'   in `shiny::isolate()`. Omitted means "this module publishes no state", and
+#'   that absence stays distinguishable from a probe that crashes.
+ts_drive_publish_token <- function(global_data, input_id, counter, ready = NULL,
+                                   state = NULL) {
   if (!input_id %in% TS_DRIVE_BUTTONS) {
     warning(sprintf("ts_drive_publish_token(): '%s' is not in TS_DRIVE_BUTTONS — ignored.", input_id))
     return(invisible(FALSE))
   }
   reg <- ts_drive_registry(global_data)
   if (is.null(reg)) return(invisible(FALSE))
-  reg[[input_id]] <- list(counter = counter, ready = ready)
+  reg[[input_id]] <- list(counter = counter, ready = ready, state = state)
   invisible(TRUE)
 }
 
@@ -1280,6 +1343,7 @@ ts_drive_apply <- function(session, input, scn, effects = NULL) {
   if (identical(action, "run_pipeline")) {
     btn <- scn$button %||% switch(module,
       import_bulk   = "import_bulk-btn_load",
+      bulk_filter   = "bulk-filter-run_filter_norm",
       bulk_de       = "bulk-de-run_de",
       bulk_pathways = "bulk-pathways-run_pathway",
       NULL)

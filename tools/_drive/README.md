@@ -163,7 +163,7 @@ via `chromote`, app started with `tools/launch_dev_drive.R`, port 7789):
 | 3 | two consecutive `run_pipeline` both fire | ⚠️ both are **consumed and acked** (`ack_seq` 3 then 4, second not lost); the *firing* case needs a preloaded object — see below |
 | 4 | no object loaded ⇒ `invalid`, explicitly | ✅ `invalid` + `button '<id>' is bound but not ready: no bulk object loaded (shared_rv$filtered_counts is NULL)` |
 | 5 | `fileInput` is never faked | ✅ no `fileInput` id is on the allowlist; the import guard reads the WIDGET, never a path |
-| 6 | G3 not started | ✅ `import_file` / `reset_module` still return `invalid` |
+| 6 | G3 not started | ✅ `import_file` / `reset_module` still return `invalid` — **true at G2 time**; `import_file` is implemented in G3 (see the G3 sections below) |
 
 Observed refusals, per click site, on a session with nothing loaded:
 
@@ -205,6 +205,67 @@ offline suite as it stood. Each now has a durable test.
   G3 `import_file` route to put an object in memory first.
 - `import_file` and `reset_module` return **`invalid`** by design in this grade
   (spec §G3.14: not-implemented must return `invalid`, never silently no-op).
+  ⚠️ **Superseded for `import_file`** — implemented in G3, see below.
+
+## Grade G3 (part 1/2) — `import_file` on a live session
+
+**Validated on a REAL session** (port 7790, `chromote` client, dataset
+`D:/Data_science/Données/bulk/GSE164073_Eye_count_matrix.csv`, which is a
+DIRECTORY holding the counts CSV and the metadata CSV):
+
+| # | Acceptance | Result on the live session |
+|---|---|---|
+| 11 | agent loads a real matrix; `snapshot` reports it | ✅ `done` (terminal) in **3.1 s**, `has_data=TRUE`, **17925 × 18** |
+| 13 | `preserve_data=true` + `set_inputs` does not drop it | ✅ `applied`, matrix intact |
+| 14 | `reset_module` returns `invalid` | ✅ never a silent no-op |
+
+## Grade G3 (part 2/2) — Step 1 Filtering & VST, on a live session
+
+Bulk is a **staged** workflow: `import_file → global_data$bulk_obj → Step 1
+Filtering & VST → shared_rv$filtered_counts / $dds_blind / $vst_mat → design &
+contrasts → DE`. Step 1 is the ONLY producer of `shared_rv$filtered_counts` a
+scenario can reach, and every downstream panel gates on it — so before this
+milestone, `run_pipeline` on DE was **bound, correctly guarded, and
+unreachable**.
+
+**One fresh session**, `seq` 1 → 10, all `ack_seq` matched:
+
+| # | Step | Result |
+|---|---|---|
+| 1 | `import_file` | `done` 3.1 s, `has_data=TRUE`, **17925 × 18** |
+| 2 | `snapshot` BEFORE Step 1 | `modules` published = **1**; `bulk_filter$filtered_counts` = **NULL** (absence is reported, not implied) |
+| 3 | `set_inputs` Step 1 params (10 / 1 / 1) | `applied`, data preserved |
+| 4 | `run_pipeline` **`bulk_filter`** (the real button) | `done`, token fired in **1.1 s** |
+| 5 | `snapshot` | **`filtered_counts` 17925 × 18**, **`vst_mat` 17925 × 18**, 18 sample names (all unique, first: `MW1_cornea_mock_1`), imported object **still available** |
+| 6–7 | **second** Step 1, same params | `done`; **17925 × 18** unchanged (idempotent), 18 samples, object intact |
+| 8–10 | `set_inputs` `min_count=100` then Step 1 again | `done`; **`filtered_counts` 14658 × 18** — the count **DROPPED**, which is what proves `set_inputs` really reaches the filter |
+
+⚠️ **Why steps 8–10 are not decoration.** With 10 / 1 / 1 alone, a `set_inputs`
+that silently failed would be **invisible**: the widgets already default to
+10 / 1 / 1, so the run yields 17925 either way. The higher threshold is the only
+thing that distinguishes "injected" from "never arrived".
+
+⚠️ **`17925` coincides with the import's own `min_counts = 10` pre-filter**, so
+it is NOT by itself evidence that Step 1 re-filtered. The `100 → 14658` run is.
+
+**The id is `bulk-filter-run_filter_norm`, NOT `bulk-run_filter_norm`.** The
+filter is a NESTED module (`mod_bulk.R:34`, `mod_bulk.R:533`), and the id was
+MEASURED from the running application by querying the document for `*[id]` —
+the obvious source-only reading is **absent** from the DOM.
+
+### `snapshot.modules` — additive, and why it exists
+
+`has_data` / `n_genes` / `n_samples` read `global_data$bulk_obj`, which reports
+the **IMPORTED** dimensions before AND after Step 1. So the frozen fields cannot
+tell "Step 1 ran" from "Step 1 never ran", and an agent polling them would wait
+forever on a stage that had already finished. A module may now publish a `state`
+probe; the snapshot surfaces it under `modules[[module]]`. A probe that throws
+becomes `modules[[module]]$probe_error` — **never** silently omitted, so "no
+state" and "probe crashed" stay distinguishable.
+
+**Not claimed:** DE has NOT been driven. `run_pipeline` on `bulk_de` still
+requires the design/contrast inputs, which are their own milestone. A DE
+refusal immediately after `import_file` is **expected**, not a protocol bug.
 
 ### The FIRST-ARM symptom was the app's SLOW BOOT, not a lost write
 

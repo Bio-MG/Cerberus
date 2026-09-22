@@ -259,9 +259,61 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
     # exécution du Filtrage & VST (nouveau jeu de gènes).
     bc_pristine <- reactiveVal(NULL)
 
+    # ── DRIVE LIVE CONTROL (docs/DRIVE_LIVE_CONTROL_PLAN.md, G3) ─────────────
+    # Step 1 is the ONLY producer of `shared_rv$filtered_counts` a scenario can
+    # reach, and every downstream panel gates on it — so this bind is what makes
+    # DE, pathways and the rest reachable AT ALL. It is a BIND, not a second
+    # implementation: the observer below is the existing human path, and the
+    # human click is still one of its two triggers.
+    #
+    # MEASURED, live, before this existed: `run_pipeline` on `bulk_de` answered
+    # `invalid — not ready: no bulk object loaded (shared_rv$filtered_counts is
+    # NULL)` while `snapshot` answered `has_data=TRUE genes=17925 samples=18` in
+    # the SAME session. Both statements are true — `global_data$bulk_obj` is the
+    # IMPORTED dataset, `shared_rv$filtered_counts` is this stage's OUTPUT, and
+    # nothing could fill the second one.
+    #
+    # READINESS GUARD. The observer opens with `req(global_data$bulk_obj)`.
+    # Without a guard the poller would fire the token, that `req()` would abort
+    # in SILENCE, and `result.json` would report `done` for a filtering that
+    # never ran. The guard mirrors the precondition measured from the line
+    # below — it is not guessed.
+    #
+    # STATE PROBE. An agent must be able to tell "Step 1 ran" from "Step 1 did
+    # not", and `global_data$bulk_obj` cannot tell it: it reports the IMPORTED
+    # dimensions either way (17925 x 18 before AND after). So the module
+    # publishes what only IT can see. `shiny::isolate()` keeps these reads out
+    # of the poller's dependency set (reactivity is the module's business, C2).
+    # Dimensions and sample names only — never the matrices themselves.
+    drive_counter <- shiny::reactiveVal(0L)
+    drive_ready <- function() {
+      if (is.null(shiny::isolate(global_data$bulk_obj))) {
+        "no bulk object loaded (global_data$bulk_obj is NULL)"
+      } else TRUE
+    }
+    drive_state <- function() {
+      .dims <- function(m) {
+        if (is.null(m)) return(NULL)
+        list(n_genes = nrow(m), n_samples = ncol(m), samples = colnames(m))
+      }
+      list(
+        filtered_counts = .dims(shiny::isolate(shared_rv$filtered_counts)),
+        vst_mat         = .dims(shiny::isolate(shared_rv$vst_mat))
+      )
+    }
+    ts_drive_publish_token(global_data, "bulk-filter-run_filter_norm",
+                           drive_counter, ready = drive_ready, state = drive_state)
+    drive_trigger <- shiny::reactive(list(drive_counter(), input$run_filter_norm))
+
     # STEP 1 — Filtering + VST
     # =========================================================================
-    observeEvent(input$run_filter_norm, {
+    observeEvent(drive_trigger(), {
+      # A `reactive` trigger fires once at init with both values at 0. Without
+      # this line the observer would run its full body on a session where
+      # nothing was asked of it — the `req()` below happens to abort today, but
+      # that is the SAME silent-abort class the readiness guard exists to
+      # remove, so the two conditions are stated instead of relied upon.
+      req(input$run_filter_norm > 0 || shiny::isolate(drive_counter()) > 0)
       req(global_data$bulk_obj)
       # Picks up the Step-0 gene-ID-mapped matrix if one was applied
       # (mod_bulk_mapping.R), otherwise falls back to the raw import.

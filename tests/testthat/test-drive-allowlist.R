@@ -118,11 +118,22 @@ test_that("every allowlisted id declares the module its prefix implies", {
   }
 })
 
-test_that("the four bound buttons are exactly the ones the spec names", {
+test_that("the bound buttons are exactly the ones the spec names", {
+  # CHANGED DELIBERATELY, and this is the ONE place the change is visible:
+  # the population grew from FOUR to FIVE. The spec's G2 wording ("the three
+  # bulk observeEvents") was already one short of the four click sites the
+  # bulk pilot actually uses; the fifth is Step 1 — the only producer of
+  # `shared_rv$filtered_counts`, and therefore the only way `run_pipeline` can
+  # ever reach DE. Without it the DE action is bound, correctly guarded, and
+  # UNREACHABLE: measured on a live session as `invalid — not ready` while the
+  # snapshot simultaneously reported the matrix loaded (see §2 below).
+  # A pin that silently accepted a sixth would be worse than no pin, so the set
+  # stays closed and explicit.
   expect_setequal(
     TS_DRIVE_BUTTONS,
     c("import_bulk-btn_load", "bulk-de-run_de",
-      "bulk-pathways-run_pathway", "bulk-pathways-run_scores")
+      "bulk-pathways-run_pathway", "bulk-pathways-run_scores",
+      "bulk-filter-run_filter_norm")
   )
   # Every button must be in the allowlist with kind = "button", otherwise
   # run_pipeline would accept an id the injector cannot classify.
@@ -159,4 +170,60 @@ test_that("allowlist lookup refuses anything absent, including near-misses", {
   expect_false(ts_drive_allowlisted(NULL))
   expect_false(ts_drive_allowlisted(NA_character_))
   expect_null(ts_drive_allowlist_get("nothing-like-this"))
+})
+
+# =============================================================================
+# 2. The Step 1 filtering seam — the ids are MEASURED, not derived
+# =============================================================================
+# Bulk is a STAGED workflow, and Step 1 is a stage of its own:
+#   import_file -> global_data$bulk_obj -> (optional ID mapping)
+#     -> Step 1 Filtering & VST -> shared_rv$filtered_counts
+#     -> shared_rv$dds_blind -> shared_rv$vst_mat
+#     -> design & contrasts -> DE
+# Every downstream panel reads `shared_rv$filtered_counts` / `$vst_mat`, so an
+# agent that cannot fire Step 1 cannot reach DE, pathways, or anything else —
+# whatever its allowlist says about those buttons.
+
+test_that("the Step 1 seam is allowlisted under its MEASURED id, not the obvious one", {
+  # MEASURED from the RUNNING application, not from the source. A real client
+  # was connected and the DOCUMENT was asked which ids it carries:
+  #   bulk-filter-run_filter_norm  -> BUTTON, label "Lancer Filtrage & VST"
+  # The obvious source reading — `bulk-run_filter_norm` — is ABSENT from the
+  # document. Reason: the filter is a NESTED module. `mod_bulk.R:34` calls
+  # `mod_bulk_filter_ui(ns("filter"))` and `mod_bulk.R:533` calls
+  # `mod_bulk_filter_server("filter", ...)`, both INSIDE the `bulk` module, so
+  # the DOM prefix is `bulk-filter-`. Keying the allowlist on the obvious name
+  # would have produced a binding that never fires and never errors.
+  # Evidence: .workbuddy-ai/tmp/evidence/G3c_dom_probe.txt
+  expect_true(ts_drive_allowlisted("bulk-filter-run_filter_norm"))
+  expect_identical(TS_DRIVE_ALLOWLIST[["bulk-filter-run_filter_norm"]]$kind, "button")
+  expect_identical(ts_drive_module_of("bulk-filter-run_filter_norm"), "bulk_filter")
+  expect_true("bulk_filter" %in% TS_DRIVE_MODULES)
+
+  # The near-miss must stay ABSENT, so the measurement cannot be quietly
+  # "corrected" back into a silent no-op by a later reader.
+  expect_false(ts_drive_allowlisted("bulk-run_filter_norm"))
+  expect_false(ts_drive_allowlisted("filter-run_filter_norm"))
+})
+
+test_that("the three Step 1 parameters are injectable, under the same measured prefix", {
+  # Acceptance requires `set_inputs` with the REAL Step 1 parameters before the
+  # action is fired; without them the action runs on whatever the widgets
+  # happen to hold, which is not a driven scenario. Measured defaults on the
+  # live session: 10 / 1 / 1 (G3c_dom_probe.txt).
+  for (id in c("bulk-filter-min_count", "bulk-filter-min_samples",
+               "bulk-filter-min_count_per_sample")) {
+    expect_true(ts_drive_allowlisted(id), info = id)
+    expect_identical(TS_DRIVE_ALLOWLIST[[id]]$kind, "numeric", info = id)
+    expect_identical(ts_drive_module_of(id), "bulk_filter", info = id)
+  }
+})
+
+test_that("the auto-pipeline buttons are NOT allowlisted (out of this milestone)", {
+  # Explicitly out of scope: the auto-pipeline is a SECOND route to the same
+  # state, and adding it here would let a scenario bypass the staged sequence
+  # the milestone exists to make drivable. Asserted, not merely omitted, so a
+  # later addition has to delete a test rather than slip past review.
+  expect_false(ts_drive_allowlisted("bulk-btn_auto_pipeline"))
+  expect_false(ts_drive_allowlisted("bulk-ap_confirm"))
 })

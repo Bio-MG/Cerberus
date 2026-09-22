@@ -130,6 +130,37 @@ TS_DRIVE_ALLOWLIST <- list(
   "bulk-de-padj_thresh"       = list(kind = "numeric", module = "bulk_de", note = "mod_bulk_de_ui.R:50"),
   "bulk-de-heatmap_top_n"     = list(kind = "numeric", module = "bulk_de", note = "mod_bulk_de_ui.R:172"),
 
+  # ── Bulk filter — Step 1 (prefix "bulk-filter-") ───────────────────────────
+  # The STAGED workflow's first real stage, and the only producer of
+  # `shared_rv$filtered_counts` a scenario can reach:
+  #   import_file -> global_data$bulk_obj -> Step 1 Filtering & VST
+  #     -> shared_rv$filtered_counts / $dds_blind / $vst_mat
+  #     -> design & contrasts -> DE -> pathways
+  # Every downstream panel gates on that slot, so without Step 1 the DE and
+  # pathways buttons are bound, correctly guarded, and UNREACHABLE. MEASURED on
+  # a live session before this entry existed: `run_pipeline` on `bulk_de`
+  # answered `invalid — not ready: no bulk object loaded
+  # (shared_rv$filtered_counts is NULL)` while `snapshot` answered
+  # `has_data=TRUE genes=17925 samples=18` in the SAME instant. Both true: they
+  # name different slots.
+  #
+  # ⚠️ The prefix is `bulk-filter-`, NOT `bulk-`: the filter is a NESTED module
+  # (`mod_bulk.R:34` `mod_bulk_filter_ui(ns("filter"))`, `mod_bulk.R:533`
+  # `mod_bulk_filter_server("filter", ...)`, both inside the `bulk` module).
+  # MEASURED from the RUNNING application — a real client was connected and the
+  # DOCUMENT was queried for `*[id]`:
+  #   bulk-filter-run_filter_norm -> BUTTON "Lancer Filtrage & VST"
+  # The obvious source-only reading, `bulk-run_filter_norm`, is ABSENT from the
+  # document. Keying on it would have produced a binding that never fires and
+  # never errors. Evidence: .workbuddy-ai/tmp/evidence/G3c_dom_probe.txt
+  #
+  # The auto-pipeline is deliberately NOT here: it is a second route to the
+  # same state, and allowing it would let a scenario skip the staged sequence
+  # this milestone exists to make drivable. A test asserts its absence.
+  "bulk-filter-min_count"            = list(kind = "numeric", module = "bulk_filter", note = "mod_bulk_filter.R:53, default 10"),
+  "bulk-filter-min_samples"          = list(kind = "numeric", module = "bulk_filter", note = "mod_bulk_filter.R:54, default 1"),
+  "bulk-filter-min_count_per_sample" = list(kind = "numeric", module = "bulk_filter", note = "mod_bulk_filter.R:55, default 1"),
+
   # ── Bulk pathways (prefix "bulk-pathways-") ────────────────────────────────
   "bulk-pathways-enrich_mode"     = list(kind = "radio", module = "bulk_pathways", note = "ora | gsea (mod_bulk_pathways.R:6)"),
   "bulk-pathways-pathway_source"  = list(kind = "select", module = "bulk_pathways", note = "up | down | all_sig | manual (mod_bulk_pathways.R:16)"),
@@ -145,26 +176,32 @@ TS_DRIVE_ALLOWLIST <- list(
   # ── Action buttons exposed to run_pipeline (integer counters) ─────────────
   # Bound through ts_drive_bind_button(); updateActionButton() does NOT click.
   "import_bulk-btn_load"       = list(kind = "button", module = "import_bulk", note = "import confirm (mod_import_bulk.R:253)"),
+  "bulk-filter-run_filter_norm" = list(kind = "button", module = "bulk_filter", note = "Step 1 Filtering & VST (mod_bulk_filter.R:59, DOM-measured)"),
   "bulk-de-run_de"             = list(kind = "button", module = "bulk_de", note = "DE single pair (mod_bulk_de_run.R:76)"),
   "bulk-pathways-run_pathway"  = list(kind = "button", module = "bulk_pathways", note = "ORA/GSEA enrichment (mod_bulk_pathways.R:44)"),
   "bulk-pathways-run_scores"   = list(kind = "button", module = "bulk_pathways", note = "GSVA/ssGSEA scores (mod_bulk_pathways.R:89)")
 )
 
-#' The ONLY FOUR button ids ts_drive_bind_button() is allowed to instrument.
+#' The ONLY FIVE button ids ts_drive_bind_button() is allowed to instrument.
 #' Spec G2 says "the three bulk observeEvents" — measured, the bulk pipeline
-#' the G3 acceptance runs (import -> DE) plus the pathways panel touch FOUR
-#' click sites. The `run_scores` (GSVA per-sample) button is the fourth; it is
-#' kept here because the pathway panel's scoring branch is part of the frozen
-#' bulk pilot allowlist. Any further bind is visible in review.
+#' the G3 acceptance runs touches FIVE click sites. The `run_scores` (GSVA
+#' per-sample) button is the fourth, and Step 1 (`run_filter_norm`) is the
+#' fifth — added by the second G3 milestone because it is the ONLY producer of
+#' `shared_rv$filtered_counts`, and therefore the only way any downstream
+#' action can ever be reached. Any further bind is visible in review.
 TS_DRIVE_BUTTONS <- c(
   "import_bulk-btn_load",
+  "bulk-filter-run_filter_norm",
   "bulk-de-run_de",
   "bulk-pathways-run_pathway",
   "bulk-pathways-run_scores"
 )
 
-#' The three modules the v1 allowlist covers. Anything else is `invalid`.
-TS_DRIVE_MODULES <- c("import_bulk", "bulk_de", "bulk_pathways")
+#' The four modules the v1 allowlist covers. Anything else is `invalid`.
+#' `bulk_filter` is the nested Step 1 module (`bulk-filter-`), named after the
+#' same convention as `bulk_de` / `bulk_pathways`: the DOM prefix with the dash
+#' turned into an underscore.
+TS_DRIVE_MODULES <- c("import_bulk", "bulk_filter", "bulk_de", "bulk_pathways")
 
 #' Widget kinds the injector knows how to adapt (spec S5).
 #'
