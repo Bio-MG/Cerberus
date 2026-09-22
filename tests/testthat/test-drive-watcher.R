@@ -1430,39 +1430,51 @@ test_that("the freshness timeout is a dev-protocol knob, never a scenario field"
 })
 
 # -----------------------------------------------------------------------------
-# 13b. First-arm transition — the defect that only a live session had shown
+# 13b. First-arm transition — and the symptom that was NOT a lost write
 # -----------------------------------------------------------------------------
-# MEASURED LIVE (2026-09-22, G2 acceptance run): after the FIRST arm of a fresh
+# OBSERVED (2026-09-22, G2 acceptance run): after the FIRST arm of a fresh
 # session, `ready.json` could stay frozen at `armed:false, hb_n:0`, while
-# re-arming the same session made the counter advance. The cause was not the
-# arm gate — scenarios were being consumed, so the gate had latched — but the
-# write path plus its caller:
+# re-arming the same session made the counter advance.
+#
+# THE FIRST EXPLANATION WAS WRONG, and the correction is the point of this
+# header. The symptom is the app's SLOW BOOT, not a lost write:
+# `ts_drive_attach()` runs early in `server()`, and Shiny starts no reactive
+# flush for a session until `server()` RETURNS — this app's `server()` does
+# heavy init (spatial `mirai` daemons, plotly). So no protocol beat had run and
+# `ready.json` was still the file written at attach time. MEASURED on a clean
+# session, arming exactly ONCE and never re-arming: the arm was honoured after
+# **22.4 s**, `hb_n` reached 1, the handshake was fresh, and **zero** write
+# failures were logged. Arming early is not a bug: `arm.json` persists and the
+# first beat honours it.
+#
+# What the investigation DID turn up were two real, latent write-path defects
+# plus one measured stall — none of them the cause of that symptom:
 #
 #   * `ts_drive_write_json()` retried a fixed `<dest>.tmp` name and reported
 #     nothing about a failure;
 #   * the heartbeat's guard was `!inherits(wrote, "try-error")` around a
 #     function that RETURNS its payload instead of throwing, so it was ALWAYS
-#     true and the throttle advanced even when nothing had been written.
+#     true: the throttle advanced even when nothing had been written, so any
+#     failed write would have silenced the heartbeat for a whole interval and
+#     left a stale-but-plausible handshake;
+#   * a doomed rename costs ~5.1 s on this Windows host, so an 8-attempt budget
+#     parked the Shiny observer for 41.4 s in a single beat.
 #
-# A lost first write therefore silenced the heartbeat for a whole interval and
-# left a stale-but-plausible handshake — the one thing the heartbeat exists to
-# make impossible. These tests pin both halves.
-#
-# A THIRD defect was found while fixing it, by measuring instead of assuming:
-# `file.rename()` onto a destination that cannot be replaced takes **~5.1 s to
-# fail** on this Windows host, so an 8-attempt retry budget parked the Shiny
-# observer for **41.4 s** in a single beat. Hence the cheap pre-flight check
-# (one attempt instead of eight) and the wall-clock budget beside the attempt
-# cap. The first draft of the guard for the throttle was itself a wall-clock
-# race that could not discriminate — see the pure test below for why.
+# The tests below pin the parts that CAN be pinned offline. The slow boot itself
+# is Shiny semantics and cannot be: it is a live-session observation, recorded
+# in tools/_drive/README.md with its numbers.
 
 test_that("FIRST arm of a FRESH session latches armed and advances hb_n", {
-  # The regression in the exact shape the fix was specified with:
+  # The required regression, in the exact shape it was specified with:
   #   fresh session -> arm ONCE -> ready.armed = TRUE -> hb_n advances.
   #
   # A fresh root and a fresh token per test: re-arming an already-used session
-  # is precisely the workaround that hid the defect, so it must not be what the
+  # is precisely the workaround that HID the symptom, so it must not be what the
   # test does.
+  #
+  # SCOPE: offline there is no `server()` to boot, so this pins the transition
+  # itself, not the live boot delay. The live run is the one that measures the
+  # 22.4 s (tools/_drive/README.md).
   .drv_local_root()
   d <- ts_drive_attach(.drv_fake_session(new.env()), list())
 
@@ -1482,13 +1494,17 @@ test_that("FIRST arm of a FRESH session latches armed and advances hb_n", {
 })
 
 test_that("the throttle advances on SUCCESS only, never on a failed write", {
-  # THE GUARD FOR THE FIRST-ARM DEFECT, and it is deliberately PURE.
+  # THE GUARD FOR THE THROTTLE BUG, and it is deliberately PURE.
   #
   # The integration-level version of this test cannot be written honestly:
   # telling the two behaviours apart through the tick needs an interval LONGER
   # than a real rename failure — MEASURED at ~5.1 s on this host — so the test
   # would sleep ~11 s and still sit within ~2 s of both margins. Testing the
   # decision directly is exact, instant, and falsifiable.
+  #
+  # (This guards a LATENT bug: it is not what produced the first-arm symptom.
+  # See the section header. It is still worth a guard, and the live injection in
+  # tools/_drive/README.md exercises it end to end.)
   now <- 1000
   # Success -> the throttle moves, so the next beat is `interval` away.
   expect_identical(ts_drive_hb_next_at(now, hb_at = 5, wrote_ok = TRUE), 1000)

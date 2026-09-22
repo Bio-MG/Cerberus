@@ -206,27 +206,53 @@ offline suite as it stood. Each now has a durable test.
 - `import_file` and `reset_module` return **`invalid`** by design in this grade
   (spec §G3.14: not-implemented must return `invalid`, never silently no-op).
 
-### FIXED — heartbeat mirror on the FIRST arm
+### The FIRST-ARM symptom was the app's SLOW BOOT, not a lost write
 
-Measured on a fresh session: the **first** `arm.json` after session start was
-honoured (scenarios were processed) but `ready.json` was **not** rewritten, so it
-kept `armed:false, hb_n:0` and went **stale** after `hb_timeout_s`. Re-arming the
-**same** session recovered it. The suspected cause was a Windows sharing
-violation hidden by `try(..., silent = TRUE)`.
+Measured on a fresh session: the **first** `arm.json` after session start is
+honoured (scenarios are processed) but `ready.json` is **not** rewritten for a
+while, so it keeps `armed:false, hb_n:0` and goes **stale** after
+`hb_timeout_s`. Re-arming the **same** session recovers it.
 
-**The suspicion was half right, and the measurements changed the fix.** The
-`try(..., silent = TRUE)` was indeed hiding it, but not the way it looked: the
-guard was `!inherits(wrote, "try-error")` around a function that **returns** its
-payload instead of throwing, so it was **always true** and the heartbeat throttle
-advanced even when nothing had been written. A lost first write therefore
-silenced the heartbeat for a whole interval and left a stale-but-plausible
-handshake. Three defects, all now fixed:
+**The G2 write-up blamed a lost first write. That was WRONG, and the corrected
+measurement is below.** `ts_drive_attach()` runs early in `server()`, but Shiny
+does **not** start a session's reactive flush until `server()` **returns** — and
+this app's `server()` does heavy init (spatial `mirai` daemons, plotly). No
+protocol beat had run, so `ready.json` was still the file written at attach
+time. Arming early is not a bug: `arm.json` persists and the first beat honours
+it.
 
-1. **The throttle advanced on ATTEMPT, not on SUCCESS.** The rule is now the pure
-   function `ts_drive_hb_next_at(now, hb_at, wrote_ok)`; a failed write leaves
-   `hb_at` alone, so the next beat (800 ms) retries instead of waiting out the
-   interval. `hb_n` is also rolled back, so the counter the agent reads mirrors
-   what is on **disk** and stays gap-free.
+Measured on a **clean session** (fresh process, 2026-09-22), arming exactly once
+and never re-arming:
+
+| Observation | Value |
+|---|---|
+| `ready.json` appeared after | 1.0 s |
+| arm.json writes in the run | **1** |
+| delay from that single arm to `armed:true` | **22.4 s** |
+| `hb_n` after that single arm | **1** |
+| write failures logged by the app | **0** |
+| `hb_n` over the next 15 s | 1 → 2 → 2 → 3 → 4 → 5 (monotone, never restarts) |
+
+⇒ The arm was honoured; it simply waited for `server()` to finish. **A stale
+`ready.json` immediately after session start is not evidence of a lost write.**
+The `hb_n` sequence shows one repeated sample: the 3 s sampling and the 3 s
+cadence drift against each other, and **zero** write failures were logged, so no
+beat was lost.
+
+### Three REAL write-path defects, found while chasing that symptom
+
+None of these caused the symptom above — each was measured on its own — but all
+three were genuine and are now fixed:
+
+1. **The throttle advanced on ATTEMPT, not on SUCCESS.** The guard was
+   `!inherits(wrote, "try-error")` around a function that **returns** its payload
+   instead of throwing, so it was **always true**: any failed write would have
+   silenced the heartbeat for a whole interval and left a stale-but-plausible
+   handshake. The rule is now the pure function
+   `ts_drive_hb_next_at(now, hb_at, wrote_ok)`; a failed write leaves `hb_at`
+   alone, so the next beat (800 ms) retries instead of waiting out the interval.
+   `hb_n` is also rolled back, so the counter the agent reads mirrors what is on
+   **disk** and stays gap-free.
 2. **A failed write was invisible.** `ts_drive_write_json()` now records a
    **sanitized** failure (`ts_drive_last_write_error()`), exposed on the wire as
    `result.json.write_error` — a different channel, because `ready.json` is
@@ -238,6 +264,22 @@ handshake. Three defects, all now fixed:
    parked the Shiny observer for **41.4 s** inside a single beat. Two bounds now:
    a cheap **pre-flight** (`unlink()` tells us in microseconds what the rename
    would take 5.1 s to say) and a **wall-clock budget** beside the attempt cap.
+
+**The fix is validated LIVE, by deliberate injection** (not by waiting for a
+failure to happen): with a real session armed and `hb_n` climbing, `ready.json`
+was replaced by a **directory** so every write to it had to fail. Measured:
+
+| Observation | Value |
+|---|---|
+| new `[drive] ready.json write FAILED` lines | **4** (before this change: silent) |
+| first failure line | `… target exists and cannot be removed (locked or read-only)` |
+| delay from de-obstruction to repaired handshake | **1.0 s** (one beat) |
+| re-arms needed | **0** |
+| `hb_n` across the failure | 5 → 6 (no gap, no restart) |
+| `*.tmp` leftovers | none |
+
+⇒ A failed write is now loud, and the handshake repairs itself on the next beat
+instead of waiting out an interval.
 
 ### The wire-write contract (`ts_drive_write_json`)
 
@@ -256,6 +298,10 @@ One write = `payload` → **unique** `<dest>.<pid>.<n>.<tag>.tmp` → `flush` �
   stop, and only a read-back can see it. Without it, "written" means "we asked".
 - **Bounded, and loud.** Attempts ≤ 8, wall-clock ≤ 1 s, and a failure is always
   recorded — never swallowed. A failed write must be treated as *not done*.
+- **A reader can still see the file MISSING** for a moment: `unlink(dest)` then
+  `file.rename()` has a window with no destination, and Windows offers no atomic
+  replace. A reader must treat "absent" as "no handshake right now" — which is
+  what `ts_drive_ready_fresh()` already does.
 
 Note for readers of the failure messages: they pass through
 `ts_drive_badge_sanitize()`, which redacts absolute paths **and any 8+-character

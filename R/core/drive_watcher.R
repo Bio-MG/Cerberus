@@ -478,16 +478,24 @@ ts_drive_hb_interval <- function() {
 #' Advance the heartbeat throttle — the PURE rule, and the fix's real guard.
 #'
 #' The throttle exists so the poller does not rewrite `ready.json` every 800 ms;
-#' `hb_at` is the time of the last beat it counted. The whole first-arm defect
-#' reduces to one question: **is `hb_at` the last ATTEMPT or the last SUCCESS?**
+#' `hb_at` is the time of the last beat it counted. The whole question is: **is
+#' `hb_at` the last ATTEMPT or the last SUCCESS?**
 #'
-#' MEASURED (live, 2026-09-22): the caller used to advance it unconditionally,
-#' because the guard was `!inherits(wrote, "try-error")` around a function that
-#' RETURNS its payload instead of throwing — so it was always true, a first
-#' write lost to a Windows unlink/rename failure silenced the heartbeat for a
-#' whole interval, and `ready.json` stayed frozen at `armed:false, hb_n:0` until
-#' a RE-ARM forced a write. Answering "the last success" makes the next beat
-#' (800 ms) retry instead.
+#' It used to be the last attempt, and by accident rather than intent: the
+#' caller's guard was `!inherits(wrote, "try-error")` around a function that
+#' RETURNS its payload instead of throwing, so the guard was **always true**.
+#' Any failed write would therefore have silenced the heartbeat for a whole
+#' interval and left a stale-but-plausible handshake on disk. Answering "the
+#' last success" makes the next beat (800 ms) retry instead.
+#'
+#' HONEST SCOPE — this was a LATENT bug, not the cause of the first-arm symptom.
+#' The symptom (a stale `armed:false, hb_n:0` right after session start) was
+#' measured on a clean session to be the app's SLOW BOOT: `server()` does heavy
+#' init and Shiny starts no reactive flush until it returns, so no beat had run
+#' yet. The arm was honoured 22.4 s later with ZERO write failures logged. This
+#' rule is still right, and it is now exercised live by deliberately obstructing
+#' `ready.json`: the handshake repairs itself on the next beat (1.0 s) with no
+#' re-arm.
 #'
 #' Kept as a pure function, like the badge transition table, so the property is
 #' testable WITHOUT a wall-clock race — the alternative is a test that has to
@@ -1663,14 +1671,13 @@ ts_drive_attach <- function(session, input, poll_ms = 800) {
                      silent = TRUE)
         # A write counts as DONE only when the destination verifiably holds it.
         #
-        # MEASURED defect, first arm of a fresh session: the previous test was
-        # `!inherits(wrote, "try-error")`, and `ts_drive_write_ready()` RETURNS
-        # its payload instead of throwing — so `try()` never produced a
-        # `try-error`, the throttle advanced unconditionally, and a first write
-        # lost to a Windows unlink/rename failure silenced the heartbeat for a
-        # whole interval. `ready.json` then stayed frozen at
-        # `armed:false, hb_n:0` while the protocol looked healthy, and only a
-        # RE-ARM (which forces a write regardless of cadence) repaired it.
+        # The previous guard was `!inherits(wrote, "try-error")`, and
+        # `ts_drive_write_ready()` RETURNS its payload instead of throwing — so
+        # `try()` never produced a `try-error` and the throttle advanced even
+        # when nothing had been written. LATENT, not the cause of the first-arm
+        # symptom (that was the app's slow boot — see ts_drive_hb_next_at()),
+        # but a failed write would have silenced the heartbeat for a whole
+        # interval and left a stale file behind.
         #
         # Not advancing `hb_at` on failure is the whole fix at this site: the
         # next beat is 800 ms away, so the handshake repairs itself instead of
