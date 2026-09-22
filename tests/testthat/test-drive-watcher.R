@@ -31,6 +31,11 @@
   root <- file.path(tempdir(), paste0("tsdrive-", as.integer(runif(1, 1, 1e9))))
   dir.create(file.path(root, "tools", "_drive"), recursive = TRUE, showWarnings = FALSE)
   ts_drive_boot(root)
+  # A new root is a new protocol universe, so the write diagnostics must be
+  # reset with it. MEASURED: without this, the write error recorded by an
+  # earlier test leaked into the next one and made "no failure is NULL" fail —
+  # the state lives in a session-global environment, exactly like `$root`.
+  ts_drive_clear_write_error()
   root
 }
 
@@ -1422,6 +1427,246 @@ test_that("the freshness timeout is a dev-protocol knob, never a scenario field"
   scn <- .drv_write_scn
   expect_true(is.function(scn))
   expect_false("hb_timeout_s" %in% names(formals(scn)))
+})
+
+# -----------------------------------------------------------------------------
+# 13b. First-arm transition — the defect that only a live session had shown
+# -----------------------------------------------------------------------------
+# MEASURED LIVE (2026-09-22, G2 acceptance run): after the FIRST arm of a fresh
+# session, `ready.json` could stay frozen at `armed:false, hb_n:0`, while
+# re-arming the same session made the counter advance. The cause was not the
+# arm gate — scenarios were being consumed, so the gate had latched — but the
+# write path plus its caller:
+#
+#   * `ts_drive_write_json()` retried a fixed `<dest>.tmp` name and reported
+#     nothing about a failure;
+#   * the heartbeat's guard was `!inherits(wrote, "try-error")` around a
+#     function that RETURNS its payload instead of throwing, so it was ALWAYS
+#     true and the throttle advanced even when nothing had been written.
+#
+# A lost first write therefore silenced the heartbeat for a whole interval and
+# left a stale-but-plausible handshake — the one thing the heartbeat exists to
+# make impossible. These tests pin both halves.
+#
+# A THIRD defect was found while fixing it, by measuring instead of assuming:
+# `file.rename()` onto a destination that cannot be replaced takes **~5.1 s to
+# fail** on this Windows host, so an 8-attempt retry budget parked the Shiny
+# observer for **41.4 s** in a single beat. Hence the cheap pre-flight check
+# (one attempt instead of eight) and the wall-clock budget beside the attempt
+# cap. The first draft of the guard for the throttle was itself a wall-clock
+# race that could not discriminate — see the pure test below for why.
+
+test_that("FIRST arm of a FRESH session latches armed and advances hb_n", {
+  # The regression in the exact shape the fix was specified with:
+  #   fresh session -> arm ONCE -> ready.armed = TRUE -> hb_n advances.
+  #
+  # A fresh root and a fresh token per test: re-arming an already-used session
+  # is precisely the workaround that hid the defect, so it must not be what the
+  # test does.
+  .drv_local_root()
+  d <- ts_drive_attach(.drv_fake_session(new.env()), list())
+
+  h0 <- ts_drive_read_ready()
+  expect_false(isTRUE(h0$armed))
+  expect_identical(as.integer(h0$hb_n), 0L)
+
+  .drv_write_arm(d$token)              # ONE arm
+  d$on_tick(global_data = list())      # ONE beat
+
+  h1 <- ts_drive_read_ready()
+  expect_true(isTRUE(h1$armed))
+  expect_gt(as.integer(h1$hb_n), 0L)
+  # Present is not enough: the defect left a file that was readable and WRONG.
+  # It has to be a FRESH handshake.
+  expect_true(ts_drive_ready_fresh(timeout_s = 15))
+})
+
+test_that("the throttle advances on SUCCESS only, never on a failed write", {
+  # THE GUARD FOR THE FIRST-ARM DEFECT, and it is deliberately PURE.
+  #
+  # The integration-level version of this test cannot be written honestly:
+  # telling the two behaviours apart through the tick needs an interval LONGER
+  # than a real rename failure — MEASURED at ~5.1 s on this host — so the test
+  # would sleep ~11 s and still sit within ~2 s of both margins. Testing the
+  # decision directly is exact, instant, and falsifiable.
+  now <- 1000
+  # Success -> the throttle moves, so the next beat is `interval` away.
+  expect_identical(ts_drive_hb_next_at(now, hb_at = 5, wrote_ok = TRUE), 1000)
+  # Failure -> the throttle does NOT move. This is the whole fix: the next beat
+  # is 800 ms away, so the handshake repairs itself instead of waiting out the
+  # interval with a stale `armed:false, hb_n:0` on disk until someone re-arms.
+  expect_identical(ts_drive_hb_next_at(now, hb_at = 5, wrote_ok = FALSE), 5)
+  # Fail-closed: anything that is not a definite TRUE must not advance it.
+  for (bad in list(NA, NULL, "TRUE", 1)) {
+    expect_identical(ts_drive_hb_next_at(now, hb_at = 5, wrote_ok = bad), 5)
+  }
+})
+
+test_that("the tick USES the pure throttle rule — wiring, not just the rule", {
+  # The pure test above guards the RULE; by construction it cannot see whether
+  # the tick still CALLS it. A behavioural version of this test is possible but
+  # dishonest: telling the two behaviours apart through the tick needs an
+  # interval longer than a failed write (~0.56 s of retry backoff) AND a
+  # pre-arm wait longer than that, so it costs ~2.6 s and ends up within ~1 s of
+  # both margins — a guard made mostly of clock.
+  #
+  # A wiring assertion is exact instead: the old bug was literally the line
+  # `cursor$hb_at <- now_num` (advance on ATTEMPT), and restoring it reddens
+  # this immediately. MEASURED — the pure test alone did NOT redden when the
+  # call site was reverted, which is exactly the hole this closes.
+  src <- readLines(file.path(ts_project_root(), "R", "core", "drive_watcher.R"),
+                   warn = FALSE, encoding = "UTF-8")
+  expect_true(any(grepl("ts_drive_hb_next_at(now_num, cursor$hb_at, wrote_ok)",
+                        src, fixed = TRUE)))
+  expect_false(any(grepl("cursor$hb_at <- now_num", src, fixed = TRUE)))
+})
+
+test_that("a failed ready.json write is recorded and repairs on the next beat", {
+  # The INTEGRATION half: the pure rule above must actually be WIRED into the
+  # tick, and a lost write must be loud rather than silent.
+  #
+  # A DIRECTORY at the destination is the portable way to make the destination
+  # unreplaceable, which is what a locked destination does on Windows.
+  .drv_local_root()
+  d <- ts_drive_attach(.drv_fake_session(new.env()), list())
+  expect_true(file.exists(ts_drive_path("ready.json")))
+
+  old <- options(ts.drive.hb_interval = 0.001)
+  on.exit(options(old), add = TRUE)
+
+  ts_drive_clear_write_error()
+  unlink(ts_drive_path("ready.json"))
+  dir.create(ts_drive_path("ready.json"))   # lock the destination
+
+  .drv_write_arm(d$token)
+  t0 <- Sys.time()
+  d$on_tick(global_data = list())
+  beat_s <- as.numeric(Sys.time() - t0, units = "secs")
+
+  # 1. The failure is RECORDED, never swallowed.
+  err <- ts_drive_last_write_error()
+  expect_false(is.null(err))
+  expect_identical(err$file, "ready.json")
+  # 2. The PRE-FLIGHT fired, so the doomed rename was never issued: the message
+  #    names the locked target rather than a rename failure. Deterministic, no
+  #    clock involved — and it is the whole reason the beat below is cheap.
+  #    MEASURED without it: each rename costs ~5.1 s and the 8-attempt budget
+  #    parks the Shiny observer for 41.4 s.
+  expect_true(grepl("cannot be removed", err$message, fixed = TRUE))
+  expect_gte(err$attempts, 1L)
+  expect_lte(err$attempts, TS_DRIVE_WRITE_ATTEMPTS)
+  # 3. And the beat is BOUNDED IN TIME. Measured 0.65 s here against 41.4 s
+  #    before the pre-flight; the ceiling is deliberately generous so a loaded
+  #    machine cannot make this flaky, while the stall it guards against would
+  #    still trip it four times over.
+  expect_lt(beat_s, 10)
+
+  # 3. Clear the obstruction: the very next beat repairs the handshake, with no
+  #    re-arm and no waiting out an interval.
+  unlink(ts_drive_path("ready.json"), recursive = TRUE)
+  d$on_tick(global_data = list())
+
+  h <- ts_drive_read_ready()
+  expect_true(isTRUE(h$armed))
+  expect_gt(as.integer(h$hb_n), 0L)
+  # A successful write clears the banner: "no error" cannot be a stale flag.
+  expect_null(ts_drive_last_write_error())
+})
+
+test_that("a write that cannot land fails LOUDLY after a bounded budget", {
+  .drv_local_root()
+  # A destination whose PARENT does not exist fails at the write stage in
+  # microseconds, so the retry budget itself becomes observable: every attempt
+  # is spent, and quickly. (A directory AT the destination is stopped by the
+  # pre-flight after one attempt — asserted in the test above.)
+  dest <- file.path(ts_drive_path(), "no-such-subdir", "scenario.json")
+  ts_drive_clear_write_error()
+
+  expect_false(ts_drive_write_json(list(a = 1), dest))
+
+  err <- ts_drive_last_write_error()
+  expect_false(is.null(err))                                 # never silent
+  # The budget is bounded AND spent: a write that cannot land must give up,
+  # not spin, and the attempt count must be reportable.
+  expect_identical(err$attempts, TS_DRIVE_WRITE_ATTEMPTS)
+  expect_identical(err$file, "scenario.json")
+
+  # No temporary file of ANY name survives. A stale tmp is exactly what makes
+  # the next writer collide, so the cleanup is part of the retry contract.
+  expect_identical(list.files(ts_drive_path(), pattern = "\\.tmp$"), character(0))
+})
+
+test_that("the writer derives a UNIQUE temporary name per attempt", {
+  # A STATIC assertion, deliberately: the property is not observable at runtime,
+  # because the helper always cleans its tmp up — a fixed name and a unique one
+  # leave the same directory behind. What a fixed name breaks is CONCURRENCY: a
+  # leftover tmp from a killed process, or a second tab writing the same
+  # destination, makes two writers fight over one name, and the loser's rename
+  # then fails against a file the winner already moved.
+  #
+  # Restoring `paste0(path, ".tmp")` reddens this, which is the only
+  # falsification available for the property — so the assertion is worth its
+  # brittleness rather than being an unbacked claim.
+  src <- readLines(file.path(ts_project_root(), "R", "core", "drive_watcher.R"),
+                   warn = FALSE, encoding = "UTF-8")
+  expect_false(any(grepl('paste0(path, ".tmp")', src, fixed = TRUE)))
+  expect_true(any(grepl("ts_drive_tmp_name", src, fixed = TRUE)))
+
+  # And the name must actually VARY, not merely look unique.
+  .drv_local_root()
+  a <- ts_drive_tmp_name(ts_drive_path("x.json"))
+  b <- ts_drive_tmp_name(ts_drive_path("x.json"))
+  expect_false(identical(a, b))
+  expect_true(grepl("\\.tmp$", a))
+  expect_identical(dirname(a), dirname(ts_drive_path("x.json")))
+})
+
+test_that("the recorded write error is SANITIZED and cleared by a success", {
+  .drv_local_root()
+  expect_null(ts_drive_last_write_error())     # "no failure" is NULL, not ""
+
+  # The value is reachable from the wire (result.json) and from the console
+  # log, so it must not carry an absolute path — reusing the badge sanitizer
+  # rather than growing a second redactor that could drift from the first.
+  ts_drive_note_write_error(file.path("C:", "somewhere", "deep", "ready.json"),
+                            paste0("rename failed for ",
+                                   file.path("C:", "Users", "someone", "ready.json")),
+                            8L)
+  err <- ts_drive_last_write_error()
+  expect_identical(err$file, "ready.json")                 # basename only
+  expect_false(grepl("Users", err$message, fixed = TRUE))
+  expect_false(grepl("C:", err$message, fixed = TRUE))
+  expect_true(grepl("<path>", err$message, fixed = TRUE))
+  expect_lte(nchar(err$message), 80L)
+
+  # A later success clears it.
+  ts_drive_clear_write_error()
+  expect_true(ts_drive_write_json(list(a = 1), ts_drive_path("here.json")))
+  expect_null(ts_drive_last_write_error())
+})
+
+test_that("result.json carries the sanitized write error on a different channel", {
+  # `ready.json` is itself a file that can fail to be written, so the error
+  # cannot be reported there — it has to travel on ANOTHER channel. result.json
+  # is that channel.
+  .drv_local_root()
+  dest <- ts_drive_path("scenario.json")
+  dir.create(dest)
+  ts_drive_clear_write_error()
+  expect_false(ts_drive_write_json(list(a = 1), dest))
+
+  ts_drive_write_result(1L, "done", "bulk_de", armed = TRUE)
+  res <- ts_drive_read_result()
+  expect_false(is.null(res$write_error))
+  expect_identical(res$write_error$file, "scenario.json")
+
+  # With no failure the field is PRESENT and null, so a client can tell
+  # "nothing failed" from "this build does not report failures".
+  unlink(dest, recursive = TRUE)
+  ts_drive_clear_write_error()
+  ts_drive_write_result(2L, "done", "bulk_de", armed = TRUE)
+  expect_true("write_error" %in% names(ts_drive_read_result()))
+  expect_null(ts_drive_read_result()$write_error)
 })
 
 # =============================================================================

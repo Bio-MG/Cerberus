@@ -35,6 +35,16 @@
 .ts_drive_state <- new.env(parent = emptyenv())
 .ts_drive_state$root <- NULL
 
+# Write diagnostics, populated by ts_drive_write_json() on FAILURE only.
+#
+# `NULL` therefore means "no write has failed", which is distinguishable from
+# "a write failed and nobody looked". Deliberately a plain environment and not
+# a `reactiveVal`: `R/` must stay free of reactivity (C2), and the poller must
+# be able to record a failure without a reactive context.
+.ts_drive_state$write_error <- NULL
+# Monotonic counter, used to make every temporary write name unique.
+.ts_drive_state$write_attempts <- 0L
+
 #' Record the app root once, at source time.
 #'
 #' app.R runs with the project root as working directory (renv activates at
@@ -85,9 +95,176 @@ ts_drive_read_json <- function(path) {
   )
 }
 
+#' Hard cap on the number of attempts for one wire write.
+#'
+#' MEASURED, not guessed: an antivirus/indexer (or a concurrent reader) can hold
+#' the just-written temporary file for a few milliseconds, so a single attempt is
+#' not enough. Eight attempts with a linearly growing backoff span ~0.56 s, which
+#' is far below the 15 s heartbeat timeout while still being a ceiling — a write
+#' that cannot land must FAIL, not spin forever.
+TS_DRIVE_WRITE_ATTEMPTS <- 8L
+
+#' Wall-clock ceiling for the whole retry loop, in seconds.
+#'
+#' The attempt cap alone is NOT a bound on time, and that was MEASURED the hard
+#' way: `file.rename()` onto an existing destination takes **~5.1 s to fail** on
+#' this Windows host, so an 8-attempt budget spent **41.4 s** inside a single
+#' protocol beat — inside the Shiny observer, where it freezes the app. The
+#' budget makes the worst case one attempt; the cheap pre-flight check in
+#' `ts_drive_write_attempt()` normally removes even that.
+TS_DRIVE_WRITE_BUDGET_S <- 1.0
+
+#' Backoff between write attempts, in seconds (multiplied by the attempt index).
+TS_DRIVE_WRITE_BACKOFF_S <- 0.02
+
+#' Record a sanitized write failure.
+#'
+#' Sanitized because this value is reachable from the wire (`result.json`) and
+#' from the console log: an absolute path or a session token must not travel
+#' with it. Reuses the badge sanitizer rather than growing a second redactor
+#' that could drift from the first.
+#'
+#' @param path Destination that failed.
+#' @param message Raw failure message (sanitized here, never stored raw).
+#' @param attempts Number of attempts spent.
+ts_drive_note_write_error <- function(path, message, attempts) {
+  .ts_drive_state$write_error <- list(
+    at       = ts_drive_now_iso(),
+    file     = basename(path),
+    message  = ts_drive_badge_sanitize(message),
+    attempts = as.integer(attempts)
+  )
+  invisible(.ts_drive_state$write_error)
+}
+
+#' Forget the last write failure. Called on the first SUCCESS.
+ts_drive_clear_write_error <- function() {
+  .ts_drive_state$write_error <- NULL
+  invisible(NULL)
+}
+
+#' Sanitized description of the last FAILED wire write, or `NULL` when the
+#' session has had no write failure.
+#'
+#' This is the accessor the fix is required to expose: without it a failed
+#' `ready.json` write is indistinguishable from an idle session, which is how
+#' the first-arm defect stayed invisible.
+ts_drive_last_write_error <- function() {
+  .ts_drive_state$write_error
+}
+
+#' Unique temporary name for one write attempt.
+#'
+#' The name is unique PER ATTEMPT (pid + monotonic counter + random tag) rather
+#' than the fixed `<dest>.tmp` used by the first version. A fixed name is shared
+#' by every writer of that destination, so a leftover tmp from a killed process
+#' — or a second tab writing the same file — makes two writers fight over one
+#' name, and the loser's rename fails against a file the winner already moved.
+#' Uniqueness removes the collision by construction instead of retrying into it.
+ts_drive_tmp_name <- function(path) {
+  .ts_drive_state$write_attempts <- .ts_drive_state$write_attempts + 1L
+  tag <- paste(sample(c(letters, 0:9), 6L, replace = TRUE), collapse = "")
+  sprintf("%s.%d.%d.%s.tmp", path, Sys.getpid(), .ts_drive_state$write_attempts, tag)
+}
+
+#' Normalise text for the read-back comparison.
+#'
+#' `writeLines()` terminates every line; `readLines()` drops the terminator and
+#' any trailing empty line. Comparing the raw strings would therefore report a
+#' mismatch on a perfectly good write, so both sides are normalised the same way.
+ts_drive_norm_text <- function(x) {
+  paste(strsplit(gsub("\r\n", "\n", as.character(x)), "\n", fixed = TRUE)[[1]],
+        collapse = "\n")
+}
+
+#' One write attempt: unique tmp -> close -> unlink dest -> rename -> read back.
+#'
+#' Split out of `ts_drive_write_json()` so the retry loop has a single, testable
+#' unit and the read-back verification has exactly one home.
+#'
+#' @param txt Serialized payload.
+#' @param path Destination.
+#' @param tmp Unique temporary path for THIS attempt.
+#' @return list(ok = logical, error = character or NULL).
+ts_drive_write_attempt <- function(txt, path, tmp) {
+  # 1. Write to the temporary name.
+  ok <- tryCatch({
+    con <- file(tmp, open = "wb")
+    # Close BEFORE the rename: on Windows the rename fails with "le processus
+    # ne peut pas accéder au fichier car ce fichier est utilisé par un autre
+    # processus" while the handle is open, and an `on.exit(close(con))` runs
+    # AFTER the rename (the first version did exactly that and every write
+    # failed silently).
+    writeLines(txt, con = con, useBytes = TRUE)
+    flush(con)
+    close(con)
+    TRUE
+  }, error = function(e) {
+    try(close(con), silent = TRUE)
+    conditionMessage(e)
+  })
+  if (!isTRUE(ok)) {
+    return(list(ok = FALSE, error = sprintf("write failed: %s", ok)))
+  }
+
+  # 2. The destination must be gone first: `file.rename()` does not overwrite an
+  #    existing file on Windows, whereas POSIX would.
+  #
+  #    PRE-FLIGHT, and it is not an optimisation. MEASURED: `file.rename()` onto
+  #    a destination that cannot be replaced (a directory, a read-only file, a
+  #    file held open) spends **~5.1 s** before reporting failure — 41.4 s for
+  #    the full 8-attempt budget, inside the Shiny observer. `unlink()` tells us
+  #    the same thing in microseconds, so the doomed rename is never issued.
+  if (file.exists(path)) {
+    removed <- suppressWarnings(try(unlink(path), silent = TRUE))
+    if (!identical(removed, 0L) && file.exists(path)) {
+      return(list(ok = FALSE,
+                  error = "target exists and cannot be removed (locked or read-only)"))
+    }
+  }
+  reason <- NULL
+  # The rename is still wrapped because on Windows it reports failure as a
+  # WARNING, not as an error. That is not cosmetic: testthat 3e promotes a
+  # warning to a failure, and the warning text carries the only useful
+  # diagnostic this path can produce ("Accès refusé"). It is therefore CAPTURED
+  # into the recorded error rather than muffled and forgotten.
+  renamed <- withCallingHandlers(
+    tryCatch(file.rename(tmp, path), error = function(e) FALSE),
+    warning = function(w) {
+      reason <<- conditionMessage(w)
+      invokeRestart("muffleWarning")
+    }
+  )
+  if (!isTRUE(renamed)) {
+    return(list(ok = FALSE,
+                error = sprintf("rename failed: %s",
+                                if (is.null(reason)) {
+                                  "destination locked or not overwritable"
+                                } else {
+                                  reason
+                                })))
+  }
+
+  # 3. VERIFY the destination by reading it back.
+  #
+  # A rename that reports success while the destination holds someone else's
+  # bytes is precisely the silent failure this change exists to stop, and only
+  # a read-back can see it. Without this step "written" means "we asked".
+  back <- tryCatch(readLines(path, warn = FALSE), error = function(e) NULL)
+  if (is.null(back)) {
+    return(list(ok = FALSE, error = "read-back failed after rename"))
+  }
+  if (!identical(ts_drive_norm_text(txt),
+                 ts_drive_norm_text(paste(back, collapse = "\n")))) {
+    return(list(ok = FALSE, error = "read-back differs after rename"))
+  }
+  list(ok = TRUE, error = NULL)
+}
+
 #' Write one JSON file atomically (spec §2.3, S8).
 #'
-#' Full payload -> `<dest>.tmp` -> unlink dest -> `file.rename`.
+#' Full payload -> unique `<dest>.<pid>.<n>.<tag>.tmp` -> close -> unlink dest
+#' -> `file.rename` -> read back.
 #'
 #' Two Windows rules, both measured (a first version got this wrong and every
 #' write silently failed):
@@ -100,46 +277,64 @@ ts_drive_read_json <- function(path) {
 #'  2. `unlink()` the destination first: `file.rename()` does not overwrite an
 #'     existing file on Windows, whereas POSIX would.
 #'
-#' @return TRUE when the destination holds the new payload.
-ts_drive_write_json <- function(obj, path) {
+#' A failure is NEVER silent: the attempt budget is bounded, the failure is
+#' recorded (sanitized) by `ts_drive_note_write_error()`, and the caller can ask
+#' for it through `ts_drive_last_write_error()`. The caller must then decline to
+#' treat the write as done — see the heartbeat in `ts_drive_attach()`.
+#'
+#' @param obj Object to serialize.
+#' @param path Destination.
+#' @param attempts Hard cap on attempts (default 8).
+#' @param budget_s Wall-clock ceiling for the whole loop (default 1 s).
+#' @return TRUE when the destination verifiably holds the new payload.
+ts_drive_write_json <- function(obj, path, attempts = TS_DRIVE_WRITE_ATTEMPTS,
+                                budget_s = TS_DRIVE_WRITE_BUDGET_S) {
   ts_drive_ensure_dir()
-  tmp <- paste0(path, ".tmp")
   txt <- tryCatch(
     jsonlite::toJSON(obj, auto_unbox = TRUE, null = "null", pretty = TRUE),
     error = function(e) NULL
   )
   if (is.null(txt)) {
-    try(unlink(tmp), silent = TRUE)
+    ts_drive_note_write_error(path, "payload could not be encoded to JSON", 0L)
     return(FALSE)
   }
 
-  ok <- tryCatch({
-    con <- file(tmp, open = "wb")
-    # Close BEFORE returning, so the handle is gone when rename() runs below.
-    writeLines(txt, con = con, useBytes = TRUE)
-    flush(con)
-    close(con)
-    TRUE
-  }, error = function(e) {
-    try(close(con), silent = TRUE)
-    FALSE
-  })
-  if (!isTRUE(ok)) {
-    try(unlink(tmp), silent = TRUE)
-    return(FALSE)
+  n <- suppressWarnings(as.integer(attempts))
+  if (length(n) != 1L || is.na(n) || n < 1L) n <- TS_DRIVE_WRITE_ATTEMPTS
+  budget <- suppressWarnings(as.numeric(budget_s))
+  if (length(budget) != 1L || is.na(budget) || budget < 0) {
+    budget <- TS_DRIVE_WRITE_BUDGET_S
   }
 
-  if (file.exists(path)) try(unlink(path), silent = TRUE)
-  if (isTRUE(file.rename(tmp, path))) return(TRUE)
-
-  # Last resort: some antivirus / indexer can still hold the freshly written
-  # tmp for a few milliseconds. Retry briefly rather than losing the handshake.
-  for (i in seq_len(5L)) {
-    Sys.sleep(0.05)
-    if (file.exists(path)) try(unlink(path), silent = TRUE)
-    if (isTRUE(file.rename(tmp, path))) return(TRUE)
+  t0 <- as.numeric(Sys.time())
+  spent <- 0L
+  last <- NULL
+  # TWO bounds, because an attempt cap is not a bound on TIME: MEASURED, a
+  # single doomed `file.rename()` costs ~5.1 s on this host, so 8 attempts spent
+  # 41.4 s inside one protocol beat. The loop therefore stops as soon as the
+  # wall-clock budget is exhausted, but always makes at least ONE attempt —
+  # otherwise the budget could suppress the write entirely.
+  for (i in seq_len(n)) {
+    tmp <- ts_drive_tmp_name(path)
+    res <- ts_drive_write_attempt(txt, path, tmp)
+    spent <- spent + 1L
+    # A failed attempt must not leave its tmp behind: a stale tmp is exactly
+    # what makes a later writer collide, so cleanup is part of the retry
+    # contract and not an afterthought. Wrapped because `unlink()` warns (not
+    # errors) when it cannot remove.
+    if (file.exists(tmp)) suppressWarnings(try(unlink(tmp), silent = TRUE))
+    if (isTRUE(res$ok)) {
+      ts_drive_clear_write_error()
+      return(TRUE)
+    }
+    last <- res$error
+    if (i < n && (as.numeric(Sys.time()) - t0) < budget) {
+      Sys.sleep(TS_DRIVE_WRITE_BACKOFF_S * i)
+    } else {
+      break
+    }
   }
-  try(unlink(tmp), silent = TRUE)
+  ts_drive_note_write_error(path, last, spent)
   FALSE
 }
 
@@ -278,6 +473,33 @@ ts_drive_hb_interval <- function() {
   n <- suppressWarnings(as.numeric(v))
   if (length(n) != 1L || is.na(n) || n <= 0) return(3)
   n
+}
+
+#' Advance the heartbeat throttle — the PURE rule, and the fix's real guard.
+#'
+#' The throttle exists so the poller does not rewrite `ready.json` every 800 ms;
+#' `hb_at` is the time of the last beat it counted. The whole first-arm defect
+#' reduces to one question: **is `hb_at` the last ATTEMPT or the last SUCCESS?**
+#'
+#' MEASURED (live, 2026-09-22): the caller used to advance it unconditionally,
+#' because the guard was `!inherits(wrote, "try-error")` around a function that
+#' RETURNS its payload instead of throwing — so it was always true, a first
+#' write lost to a Windows unlink/rename failure silenced the heartbeat for a
+#' whole interval, and `ready.json` stayed frozen at `armed:false, hb_n:0` until
+#' a RE-ARM forced a write. Answering "the last success" makes the next beat
+#' (800 ms) retry instead.
+#'
+#' Kept as a pure function, like the badge transition table, so the property is
+#' testable WITHOUT a wall-clock race — the alternative is a test that has to
+#' sleep longer than a real rename failure (5.1 s, measured) to tell the two
+#' behaviours apart.
+#'
+#' @param now Current time, numeric.
+#' @param hb_at Throttle timestamp from the previous beat.
+#' @param wrote_ok Did the write VERIFIABLY land?
+#' @return The throttle timestamp for the next beat.
+ts_drive_hb_next_at <- function(now, hb_at, wrote_ok) {
+  if (isTRUE(wrote_ok)) as.numeric(now) else hb_at
 }
 
 #' How old is the handshake, in seconds? `Inf` when unreadable.
@@ -562,7 +784,16 @@ ts_drive_write_result <- function(seq, status, active_module, armed,
     preserve_data = isTRUE(preserve_data),
     errors        = as.list(errors),
     warnings      = as.list(warnings),
-    snapshot      = snapshot
+    snapshot      = snapshot,
+    # Sanitized diagnostics for the last FAILED wire write, or NULL.
+    #
+    # This is how a write failure becomes visible: `ready.json` is itself a
+    # file that can fail to be written, so the error cannot be reported there
+    # — it has to travel on a DIFFERENT channel. `result.json` is that channel
+    # (and `ts_drive_last_write_error()` is the in-process accessor). Captured
+    # BEFORE the write below, so the value survives even when this very write
+    # is the one that fails.
+    write_error   = ts_drive_last_write_error()
   )
   ts_drive_write_json(payload, ts_drive_path("result.json"))
   invisible(payload)
@@ -1304,8 +1535,17 @@ ts_drive_attach <- function(session, input, poll_ms = 800) {
   # `started_at` is fixed for the whole session and `hb_n` starts at 0; both are
   # handed to every later rewrite so neither can drift.
   started_at <- ts_drive_now_iso()
-  ts_drive_write_ready(session, token, armed = FALSE, started_at = started_at,
-                       hb_n = 0L)
+  boot_ready <- ts_drive_write_ready(session, token, armed = FALSE,
+                                     started_at = started_at, hb_n = 0L)
+  # The FIRST write of a session is the one the agent needs to find the token,
+  # so its failure is reported rather than assumed away. It used to be a bare
+  # call whose result was discarded: a session whose handshake never landed
+  # looked exactly like a session nobody had armed yet.
+  if (!isTRUE(attr(boot_ready, "written"))) {
+    boot_err <- ts_drive_last_write_error()
+    message(sprintf("[drive] ready.json write FAILED at attach: %s",
+                    if (is.null(boot_err)) "unknown" else boot_err$message))
+  }
 
   # One console line (not stop(), not a modal) so a human/agent log can copy
   # the token straight out of the R console.
@@ -1421,7 +1661,35 @@ ts_drive_attach <- function(session, input, poll_ms = 800) {
                                           hb_n = cursor$hb_n,
                                           started_at = started_at),
                      silent = TRUE)
-        if (!inherits(wrote, "try-error")) cursor$hb_at <- now_num
+        # A write counts as DONE only when the destination verifiably holds it.
+        #
+        # MEASURED defect, first arm of a fresh session: the previous test was
+        # `!inherits(wrote, "try-error")`, and `ts_drive_write_ready()` RETURNS
+        # its payload instead of throwing — so `try()` never produced a
+        # `try-error`, the throttle advanced unconditionally, and a first write
+        # lost to a Windows unlink/rename failure silenced the heartbeat for a
+        # whole interval. `ready.json` then stayed frozen at
+        # `armed:false, hb_n:0` while the protocol looked healthy, and only a
+        # RE-ARM (which forces a write regardless of cadence) repaired it.
+        #
+        # Not advancing `hb_at` on failure is the whole fix at this site: the
+        # next beat is 800 ms away, so the handshake repairs itself instead of
+        # waiting out the interval — and the failure is reported, never
+        # swallowed.
+        wrote_ok <- !inherits(wrote, "try-error") && isTRUE(attr(wrote, "written"))
+        # The decision itself lives in a pure function so it can be tested
+        # without racing the clock; see ts_drive_hb_next_at() for the measured
+        # reason a failed write must NOT advance the throttle.
+        cursor$hb_at <- ts_drive_hb_next_at(now_num, cursor$hb_at, wrote_ok)
+        if (!isTRUE(wrote_ok)) {
+          # Roll the counter back: `hb_n` mirrors what is ON DISK, so a beat
+          # that never landed must not consume a number. This keeps the
+          # sequence the agent reads gap-free (0,1,2,...) instead of skipping.
+          if (cursor$armed && cursor$hb_n > 0L) cursor$hb_n <- cursor$hb_n - 1L
+          hb_err <- ts_drive_last_write_error()
+          message(sprintf("[drive] ready.json write FAILED (retrying next beat): %s",
+                          if (is.null(hb_err)) "unknown" else hb_err$message))
+        }
         if (transition) {
           message(sprintf("[drive] %s", if (cursor$armed) "armed" else "disarmed"))
         }

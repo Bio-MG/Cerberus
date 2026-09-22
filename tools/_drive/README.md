@@ -206,17 +206,60 @@ offline suite as it stood. Each now has a durable test.
 - `import_file` and `reset_module` return **`invalid`** by design in this grade
   (spec §G3.14: not-implemented must return `invalid`, never silently no-op).
 
-### Known observation — heartbeat mirror on the FIRST arm
+### FIXED — heartbeat mirror on the FIRST arm
 
-Measured on a fresh session: the **first** `arm.json` after session start is
-honoured (scenarios are processed) but `ready.json` is **not** rewritten, so it
-keeps `armed:false, hb_n:0` and goes **stale** after `hb_timeout_s`. Re-arming
-the **same** session recovers it (`armed:true`, `hb_n` climbing, fresh again).
-No `*.tmp` file is left behind either way. The likely cause is a Windows
-sharing violation on `unlink()`/`file.rename()` of a just-created file, made
-invisible by `try(..., silent = TRUE)` around the heartbeat write — the same
-class of silent failure as defect 1 above. Reported, **not fixed here**: it is
-G0/G1 territory, which is frozen, and it is out of G2's scope.
+Measured on a fresh session: the **first** `arm.json` after session start was
+honoured (scenarios were processed) but `ready.json` was **not** rewritten, so it
+kept `armed:false, hb_n:0` and went **stale** after `hb_timeout_s`. Re-arming the
+**same** session recovered it. The suspected cause was a Windows sharing
+violation hidden by `try(..., silent = TRUE)`.
+
+**The suspicion was half right, and the measurements changed the fix.** The
+`try(..., silent = TRUE)` was indeed hiding it, but not the way it looked: the
+guard was `!inherits(wrote, "try-error")` around a function that **returns** its
+payload instead of throwing, so it was **always true** and the heartbeat throttle
+advanced even when nothing had been written. A lost first write therefore
+silenced the heartbeat for a whole interval and left a stale-but-plausible
+handshake. Three defects, all now fixed:
+
+1. **The throttle advanced on ATTEMPT, not on SUCCESS.** The rule is now the pure
+   function `ts_drive_hb_next_at(now, hb_at, wrote_ok)`; a failed write leaves
+   `hb_at` alone, so the next beat (800 ms) retries instead of waiting out the
+   interval. `hb_n` is also rolled back, so the counter the agent reads mirrors
+   what is on **disk** and stays gap-free.
+2. **A failed write was invisible.** `ts_drive_write_json()` now records a
+   **sanitized** failure (`ts_drive_last_write_error()`), exposed on the wire as
+   `result.json.write_error` — a different channel, because `ready.json` is
+   itself a file that can fail to be written. The session-start write is checked
+   too, and every failure is logged rather than swallowed.
+3. **A doomed write stalled the app for 41.4 s.** MEASURED: `file.rename()` onto
+   a destination that cannot be replaced (a directory, a read-only file, a file
+   held open) takes **~5.1 s to fail** on this host, so an 8-attempt budget
+   parked the Shiny observer for **41.4 s** inside a single beat. Two bounds now:
+   a cheap **pre-flight** (`unlink()` tells us in microseconds what the rename
+   would take 5.1 s to say) and a **wall-clock budget** beside the attempt cap.
+
+### The wire-write contract (`ts_drive_write_json`)
+
+One write = `payload` → **unique** `<dest>.<pid>.<n>.<tag>.tmp` → `flush` →
+**close** → `unlink(dest)` → `file.rename` → **read back and compare**.
+
+- **Unique tmp per attempt**, never the fixed `<dest>.tmp`: a fixed name is
+  shared by every writer of that destination, so a leftover tmp from a killed
+  process (or a second tab) makes two writers fight over one name and the loser's
+  rename fails against a file the winner already moved.
+- **Close before rename.** On Windows the rename fails with "utilisé par un autre
+  processus" while the handle is open; an `on.exit(close(con))` runs *after* the
+  rename (the first version did exactly that and every write failed silently).
+- **Read-back verification.** A rename that reports success while the
+  destination holds someone else's bytes is the silent failure this exists to
+  stop, and only a read-back can see it. Without it, "written" means "we asked".
+- **Bounded, and loud.** Attempts ≤ 8, wall-clock ≤ 1 s, and a failure is always
+  recorded — never swallowed. A failed write must be treated as *not done*.
+
+Note for readers of the failure messages: they pass through
+`ts_drive_badge_sanitize()`, which redacts absolute paths **and any 8+-character
+alphanumeric run** (its token heuristic). Messages are worded to survive it.
 
 ### Where the evidence lives (read this before citing a result)
 
