@@ -2476,13 +2476,189 @@ test_that("a broken state probe degrades the snapshot loudly, it does not kill i
 test_that("a module that publishes no state contributes no `modules` entry", {
   # Absence must stay distinguishable from failure: the two are reported by
   # different fields, never by the same empty value.
+  #
+  # The fixture used to be `bulk-de-run_de`. It moved to the import button when
+  # the DE token gained a state probe (G3, third milestone): the mechanism under
+  # test is unchanged, but leaving a module there that DOES publish a state
+  # would have made the test's own example stale — it would keep passing while
+  # illustrating the opposite of the truth.
   .drv_local_root()
   gd <- list(bulk_obj = list(counts = matrix(1:12, nrow = 4, ncol = 3)))
   reg <- new.env(parent = emptyenv())
-  reg[["bulk-de-run_de"]] <- list(counter = NULL, ready = function() TRUE)
+  reg[["import_bulk-btn_load"]] <- list(counter = NULL, ready = function() TRUE)
   gd$drive_registry <- reg
 
   snap <- ts_drive_snapshot(gd)
   expect_true(snap$has_data)
   expect_length(snap$modules, 0L)
+})
+
+
+# =============================================================================
+# 18. The DE action (G3, third milestone) — the CONTRAST becomes observable
+# =============================================================================
+# Step 1 made `shared_rv$filtered_counts` reachable. DE is the NEXT stage, and
+# it carries the same observability problem one level deeper: `result.json`
+# says `done` as soon as the TOKEN moved, which means only that the module's
+# `observeEvent` was triggered — never that a contrast exists. With
+# `filtered_counts` present and no contrast registered, an agent trusting
+# `done` would report a DE analysis that never happened. That is the same
+# silent-seam class as §12, one stage further down the staged workflow.
+#
+# The probe is a closure inside `moduleServer()`, so a test cannot CALL it.
+# What a test CAN pin is the source contract (the probe exists, is wired to the
+# token, isolates every read, and returns counts under a NAMED convention) plus
+# the snapshot mechanism that surfaces it. The live acceptance is what proves
+# the numbers.
+
+# The probe lives between `drive_state <- function()` and its closing brace.
+# Returns `character(0)` when the probe is absent, so the caller's assertions
+# fail rather than error — a RED that says "the probe is missing" is worth more
+# than one that says "the helper crashed".
+.drv_de_probe_region <- function() {
+  src <- readLines(file.path(ts_project_root(), "modules", "bulk_de", "mod_bulk_de_run.R"),
+                   warn = FALSE, encoding = "UTF-8")
+  start <- grep("^\\s*drive_state <- function\\(\\)", src)
+  if (length(start) != 1L) return(character(0))
+  closer <- grep("^  \\}$", src)
+  end <- closer[closer > start[1]]
+  if (length(end) == 0L) return(character(0))
+  src[start[1]:end[1]]
+}
+
+test_that("the DE token publishes a state probe, and every read in it is isolated", {
+  src    <- readLines(file.path(ts_project_root(), "modules", "bulk_de", "mod_bulk_de_run.R"),
+                      warn = FALSE, encoding = "UTF-8")
+  region <- .drv_de_probe_region()
+  expect_true(length(region) > 0L,
+              info = "mod_bulk_de_run.R defines no `drive_state` probe")
+  # Comments must not be able to satisfy a code rule.
+  code <- sub("#.*$", "", region)
+
+  # (a) the probe is actually WIRED to the token — a probe that is defined but
+  #     never published leaves the agent exactly where it started.
+  pub <- grep('ts_drive_publish_token\\(.*"bulk-de-run_de"', src)
+  expect_length(pub, 1L)
+  expect_match(paste(src[pub:min(length(src), pub + 2L)], collapse = "\n"),
+               "state = drive_state")
+
+  # (b) spec §6: the probe runs inside the POLLER's reactive beat, so an
+  #     un-isolated read would enrol the DE result in the poller's dependency
+  #     set. EQUAL COUNTS is the rule — one bare read is enough to break it,
+  #     which a "does it contain isolate()?" check would never notice.
+  expect_true(length(grep("shared_rv\\$", code)) >= 1L,
+              info = "the probe reads no shared state — it cannot report the contrast")
+  expect_identical(length(grep("shared_rv\\$", code)),
+                   length(grep("isolate\\(shared_rv\\$", code)),
+                   info = "a reactive read in the DE state probe is not isolate()-guarded")
+})
+
+test_that("the DE state reports COUNTS under a named convention, never the table", {
+  region <- .drv_de_probe_region()
+  joined <- paste(sub("#.*$", "", region), collapse = "\n")
+
+  for (k in c("n_contrasts", "active_contrast", "n_genes", "n_padj_finite",
+              "n_significant", "convention", "bypass")) {
+    expect_match(joined, k, fixed = TRUE,
+                 info = sprintf("the DE state probe does not report `%s`", k))
+  }
+
+  # The significant-gene count must be SELF-DESCRIBING. The panel's thresholds
+  # (`lfc_thresh`, `padj_thresh`) are INPUTS, so a probe that borrowed them
+  # would describe the last click rather than the state — and the agent could
+  # not tell which convention the number was computed under. The convention is
+  # therefore fixed and NAMED in the payload.
+  expect_match(joined, "padj < 0\\.05",
+               info = "the significance convention is applied but never named")
+  expect_match(joined, "log2FoldChange")
+
+  # Counts only: returning the result frame would push a per-gene table through
+  # the poller's write path on every beat — the same class of mistake as
+  # handing back a `renderPlot`'s base64.
+  expect_false(grepl("=\\s*res\\s*[,)]", joined),
+               info = "the DE state probe returns the result table itself")
+})
+
+test_that("run_pipeline reaches the DE action through its measured module", {
+  # The reachability leg, mirrored from §17 for the filter: the scenario names
+  # `bulk_de` and the protocol must resolve the module to its click site.
+  .drv_local_root()
+  .drv_write_arm("tok")
+  seen <- character(0)
+  effects <- function(input_id = NULL, mode = "bump", module = NULL, request = NULL) {
+    if (identical(mode, "tokens")) {
+      return(list("bulk-de-run_de" = list(counter = NULL, ready = function() TRUE)))
+    }
+    seen <<- c(seen, input_id)
+    TRUE
+  }
+  .drv_write_scn(61L, action = "run_pipeline", module = "bulk_de", session_token = "tok")
+  res <- ts_drive_tick(NULL, NULL, NULL, "tok", 0L, FALSE, effects = effects)
+  expect_true(res$consumed)
+  expect_identical(ts_drive_read_result()$status, "done")
+  expect_identical(seen, "bulk-de-run_de")
+})
+
+test_that("snapshot carries the DE state, and 0 contrasts differs from never having run", {
+  .drv_local_root()
+  gd <- list(bulk_obj = list(counts = matrix(1:12, nrow = 4, ncol = 3)))
+
+  # (a) a DE module that HAS registered one contrast.
+  reg <- new.env(parent = emptyenv())
+  reg[["bulk-de-run_de"]] <- list(
+    counter = NULL, ready = function() TRUE,
+    state = function() list(
+      n_contrasts = 1L, active_contrast = "CoV2_vs_mock", n_genes = 17925L,
+      n_padj_finite = 15000L, n_significant = 812L,
+      convention = "padj < 0.05 & |log2FoldChange| > 1", bypass = FALSE))
+  gd$drive_registry <- reg
+  snap <- ts_drive_snapshot(gd)
+  expect_identical(snap$modules$bulk_de$n_contrasts, 1L)
+  expect_identical(snap$modules$bulk_de$active_contrast, "CoV2_vs_mock")
+  expect_identical(snap$modules$bulk_de$n_significant, 812L)
+
+  # (b) a DE module that is BOUND and READY but has never produced a contrast.
+  #     This answer must not look like (a) — and must not look like "no DE
+  #     module at all" either. It is the exact state an agent lands in after a
+  #     `run_pipeline` whose `set_inputs` silently did not take.
+  reg2 <- new.env(parent = emptyenv())
+  reg2[["bulk-de-run_de"]] <- list(
+    counter = NULL, ready = function() TRUE,
+    state = function() list(n_contrasts = 0L, active_contrast = NULL,
+                            n_genes = NULL, n_padj_finite = NULL,
+                            n_significant = NULL, bypass = FALSE))
+  gd$drive_registry <- reg2
+  snap2 <- ts_drive_snapshot(gd)
+  expect_true("bulk_de" %in% names(snap2$modules))
+  expect_identical(snap2$modules$bulk_de$n_contrasts, 0L)
+  expect_null(snap2$modules$bulk_de$active_contrast)
+  expect_null(snap2$modules$bulk_de$n_genes)
+
+  # ...and neither of those is the same as the key being ABSENT.
+  gd$drive_registry <- new.env(parent = emptyenv())
+  expect_length(ts_drive_snapshot(gd)$modules, 0L)
+})
+
+test_that("the free-text contrast name stays NOT drivable, so the pair is self-checking", {
+  # `bulk-de-contrast_name` is deliberately ABSENT from the allowlist. Left
+  # empty, the module names the contrast `group_target_vs_group_ref`, so the
+  # NAME encodes the pair that was actually used — and that name is the only
+  # self-check a scenario has that its ref/target injection TOOK.
+  #
+  # MEASURED live (2026-09-22), and the measurement is why this matters: the
+  # driver injected the pair INVERTED (ref = CoV2, target = mock), against a
+  # module default of ref = lvls[1] = "mock", target = lvls[2] = "CoV2". The
+  # contrast came back named `mock_vs_CoV2` — the inverted name — which is what
+  # proves both selects took. A free-text `contrast_name` would let a scenario
+  # write any label it liked over that evidence.
+  #
+  # (An earlier version of this comment claimed the value is "ignored by the
+  # client" when it is not among the choices. That was WRONG and is corrected
+  # here: a live readback of the select's own `.value` showed the injected pair,
+  # and the contrast name confirmed it end to end.)
+  expect_false("bulk-de-contrast_name" %in% names(TS_DRIVE_ALLOWLIST))
+  expect_true(all(c("bulk-de-condition_col", "bulk-de-group_ref",
+                    "bulk-de-group_target", "bulk-de-de_engine") %in%
+                    names(TS_DRIVE_ALLOWLIST)),
+              info = "the design/contrast inputs must stay drivable")
 })

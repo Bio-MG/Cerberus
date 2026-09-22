@@ -38,8 +38,51 @@
       "no bulk object loaded (shared_rv$filtered_counts is NULL)"
     } else TRUE
   }
+  # STATE PROBE (G3, third milestone) — see `state` in ts_drive_publish_token().
+  #
+  # `status: done` means only that the token MOVED, i.e. that this module's
+  # observeEvent was TRIGGERED. It does not mean a contrast exists. The observer
+  # below opens with `req(shared_rv$filtered_counts, input$condition_col,
+  # input$group_ref, input$group_target, input$de_engine)`; when the design or
+  # contrast injection has not taken, that `req()` aborts in SILENCE and the
+  # agent is told `done` for an analysis that never ran. The probe below makes
+  # "a contrast exists" OBSERVABLE instead of inferred.
+  #
+  # MEASURED live (2026-09-22, DESeq2, 17 925 genes x 18 samples): the token
+  # answered `done` in 2.1 s, and the contrast was first observable 852.7 s
+  # later. Fourteen minutes of that window look exactly like a run that never
+  # started — unless the state is published, which is why it is.
+  #
+  # COUNTS ONLY, and every read isolate()-guarded: this runs inside the poller's
+  # reactive beat (spec §6), so a bare read would enrol the DE result in the
+  # poller's dependency set. Nothing here may ever return the result frame.
+  #
+  # `n_significant` is computed under a FIXED, NAMED convention rather than the
+  # panel's thresholds: those are INPUTS, so a probe that borrowed them would
+  # describe the last click instead of the state.
+  drive_state <- function() {
+    contrasts <- shiny::isolate(shared_rv$contrasts)
+    active    <- shiny::isolate(shared_rv$active_contrast)
+    res <- if (!is.null(contrasts) && !is.null(active)) contrasts[[active]] else NULL
+    out <- list(
+      n_contrasts     = length(contrasts),
+      active_contrast = active,
+      n_genes         = NULL,
+      n_padj_finite   = NULL,
+      n_significant   = NULL,
+      convention      = "padj < 0.05 & |log2FoldChange| > 1",
+      bypass          = !is.null(shiny::isolate(shared_rv$de_bypass))
+    )
+    if (!is.null(res)) {
+      out$n_genes       <- nrow(res)
+      out$n_padj_finite <- sum(is.finite(res$padj))
+      out$n_significant <- sum(res$padj < 0.05 & abs(res$log2FoldChange) > 1,
+                               na.rm = TRUE)
+    }
+    out
+  }
   ts_drive_publish_token(global_data, "bulk-de-run_de", drive_counter,
-                         ready = drive_ready)
+                         ready = drive_ready, state = drive_state)
   drive_trigger <- shiny::reactive(list(drive_counter(), input$run_de))
 
   .tr <- function(key) {
