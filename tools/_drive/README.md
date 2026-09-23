@@ -342,6 +342,59 @@ was replaced by a **directory** so every write to it had to fail. Measured:
 ⇒ A failed write is now loud, and the handshake repairs itself on the next beat
 instead of waiting out an interval.
 
+### A FOURTH write-path defect — the handler closed a connection it did not own
+
+Found 2026-09-23 (`b455da0`), by accident and only because the **full** suite was
+re-measured. It is the most expensive of the four: it did not merely go unnoticed,
+it **destroyed the instrument that would have noticed it**.
+
+`ts_drive_write_attempt()`'s error handler ran `close(con)` **unguarded**. When
+`file(tmp, open = "wb")` itself **throws** — the missing-parent destination the
+writer tests already exercise — its own `con` was **never assigned**, so R
+resolved `con` **lexically**, up through the writer's enclosing environments, and
+closed an unrelated connection that merely shared the name.
+
+**The victim was `tools/run_full_suite.R` itself**, which keeps its results
+connection in a global called `con`. One failed write closed it, the next
+`writeLines()` raised `invalid connection`, and the suite **aborted at file 56 of
+137**. Measured, in a single-process reproduction of the harness call:
+
+| Observation | Value |
+|---|---|
+| `showConnections()` before the drive test file | **4** (stdin, stdout, stderr, **and the caller's own**) |
+| `showConnections()` after | **3** — the caller's slot is **gone** |
+| `trace("close.connection")` stack | `test_that("a write that cannot land…")` → `ts_drive_write_json` → `ts_drive_write_attempt` → **the error handler** → `try(close(con))` |
+| the drive test file's own verdict | **570 pass / 0 fail** — green throughout |
+
+**Dating.** The handler came from `db0785e` (this protocol); the test that
+**triggers the throw** came from `448209b` (the heartbeat fix). So **no full suite
+reached a BILAN between `448209b` and `b455da0`**, while four G3 milestones were
+declared green on the strength of RED→GREEN tests, a falsification, a clean guard
+and a **filtered** drive suite at `820/820`.
+
+⚠️ **Why the filtered suite could not see it.** It holds no long-lived
+connection — so there is **no victim**, and therefore **no symptom**. Green, on a
+population that was not the one breaking. Same shape as "`C9` only measures a
+NAME", transposed from the guard to the harness.
+
+**Fix.** `con <- NULL` is initialised in the attempt's own frame before the
+opening, and the handler is guarded (`if (!is.null(con))`). The rule it encodes:
+**the writer may only close what the writer opened.** Pinned by the test
+"a failed write never closes a connection it does not own", which places a
+connection named `con` in `globalenv()` on purpose — the only scope the writer's
+lexical chain can reach, R being **lexically** scoped (a caller's *local* `con` is
+invisible to it) — and restores any pre-existing binding rather than dropping it.
+`isOpen()` is wrapped in `tryCatch`: it **throws** on a closed connection instead
+of answering `FALSE`, so an unguarded call reports the defect as an opaque error
+rather than as the assertion it is.
+
+**Measured.** RED `fail=1 pass=571` (exactly the new assertion) → GREEN
+`fail=0 pass=572`. Falsified: restoring the original handler reddens exactly that
+assertion again and the caller's connection is lost; the fix was restored
+byte-identically. Full suite, first **complete** run since `448209b`: **137/137
+files**, `BILAN: failed=1 passed=7614 error=0 skipped=1` (24m 25s) — the single
+remaining failure being a separate frozen-contract drift from `358a2be`.
+
 ### The wire-write contract (`ts_drive_write_json`)
 
 One write = `payload` → **unique** `<dest>.<pid>.<n>.<tag>.tmp` → `flush` →
