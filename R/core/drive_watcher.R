@@ -187,6 +187,19 @@ ts_drive_norm_text <- function(x) {
 #' @param tmp Unique temporary path for THIS attempt.
 #' @return list(ok = logical, error = character or NULL).
 ts_drive_write_attempt <- function(txt, path, tmp) {
+  # `con` is initialised in THIS frame, before the attempt. That is not
+  # cosmetic. MEASURED 2026-09-23: when `file(tmp, open = "wb")` ITSELF throws
+  # (an unwritable destination — the missing-parent case the tests exercise),
+  # the local `con` is never assigned, so the handler's `close(con)` resolved
+  # LEXICALLY, up through the writer's enclosing environments, and closed an
+  # unrelated connection that merely shared the name. The victim was real:
+  # `tools/run_full_suite.R` keeps its results connection in a global called
+  # `con`, so one failed write closed it, the next `writeLines()` raised
+  # "invalid connection", and the suite aborted at file 56 of 137 — while the
+  # drive test file itself reported 570 passing assertions. Initialising here
+  # makes the handler find a NULL it OWNS instead of a stranger's handle.
+  # The rule this encodes: the writer may only close what the writer opened.
+  con <- NULL
   # 1. Write to the temporary name.
   ok <- tryCatch({
     con <- file(tmp, open = "wb")
@@ -200,7 +213,7 @@ ts_drive_write_attempt <- function(txt, path, tmp) {
     close(con)
     TRUE
   }, error = function(e) {
-    try(close(con), silent = TRUE)
+    if (!is.null(con)) try(close(con), silent = TRUE)
     conditionMessage(e)
   })
   if (!isTRUE(ok)) {

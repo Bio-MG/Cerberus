@@ -1620,6 +1620,49 @@ test_that("a write that cannot land fails LOUDLY after a bounded budget", {
   expect_identical(list.files(ts_drive_path(), pattern = "\\.tmp$"), character(0))
 })
 
+test_that("a failed write never closes a connection it does not own", {
+  # MEASURED 2026-09-23. `ts_drive_write_attempt()`'s error handler ran
+  # `close(con)` even when its OWN `con` had never been assigned — which is
+  # exactly what happens when `file(tmp, open = "wb")` itself throws, i.e. the
+  # missing-parent destination used by the test just above. R then resolves
+  # `con` LEXICALLY, up the writer's enclosing environments, and closes an
+  # unrelated connection that merely shares the name.
+  #
+  # The victim is not hypothetical. `tools/run_full_suite.R` keeps its results
+  # connection in a global called `con`; one failed write closed it, so the next
+  # `writeLines()` raised "invalid connection" and the suite aborted at file 56
+  # of 137 — while THIS file reported 570 passing assertions. An isolated
+  # green cannot see it: no long-lived connection, no victim.
+  #
+  # So the contract asserted here is OWNERSHIP: the writer may only close what
+  # the writer opened.
+  .drv_local_root()
+  foreign <- file(file.path(tempdir(), "tsdrive-foreign-con.txt"), open = "wt")
+
+  # Placed in globalenv ON PURPOSE: that is where the real harness keeps its
+  # connection, and it is the only scope the writer's lexical chain can reach
+  # (R is lexically scoped, so a caller's local `con` is invisible to it).
+  # Any previous binding is restored, never dropped: a test must not steal the
+  # harness's own connection.
+  had_con <- exists("con", envir = globalenv(), inherits = FALSE)
+  if (had_con) prev_con <- get("con", envir = globalenv(), inherits = FALSE)
+  assign("con", foreign, envir = globalenv())
+  on.exit({
+    if (had_con) assign("con", prev_con, envir = globalenv()) else
+      rm("con", envir = globalenv())
+    try(close(foreign), silent = TRUE)
+  }, add = TRUE)
+
+  dest <- file.path(ts_drive_path(), "no-such-subdir", "scenario.json")
+  expect_false(ts_drive_write_json(list(a = 1), dest))
+
+  # `isOpen()` THROWS on a closed connection rather than answering FALSE, so it
+  # is wrapped: an unguarded call would report this defect as an opaque error
+  # instead of as the assertion it is.
+  still_open <- tryCatch(isOpen(foreign), error = function(e) FALSE)
+  expect_true(still_open)
+})
+
 test_that("the writer derives a UNIQUE temporary name per attempt", {
   # A STATIC assertion, deliberately: the property is not observable at runtime,
   # because the helper always cleans its tmp up — a fixed name and a unique one
