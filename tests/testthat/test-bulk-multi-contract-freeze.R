@@ -229,10 +229,24 @@ test_that("import module registers optionally via the pure API, import never blo
   imp <- .ts_read("modules/import/mod_import_bulk.R")
   expect_match(imp, "multi_label", fixed = TRUE)
   expect_match(imp, ".register_multi_dataset", fixed = TRUE)
-  # Exactement 2 points d'appel (matrice fusionnée + one file per sample).
+  # Exactement 3 points d'appel — et ce chiffre est un CONTRAT, pas une
+  # photographie d'humeur : matrice fusionnée (widget), one file per sample
+  # (widget), et import PILOTÉ PAR L'AGENT (`import_file`, G3 — commit 358a2be).
+  #
+  # Le troisième a été RE-FIGÉ délibérément le 2026-09-23. Il n'est pas
+  # cosmétique : sans lui, un jeu chargé par l'agent n'entrerait pas dans le
+  # conteneur multi-jeux et n'aurait donc pas accès à la comparaison MD-2, alors
+  # que le MÊME import déclenché par le widget l'a. Cette divergence silencieuse
+  # entre deux chemins d'entrée est exactement ce que l'extraction de
+  # `assemble_bulk_obj()` existe pour empêcher (358a2be).
+  #
+  # Le contrat avait donc DÉRIVÉ le 2026-09-22 sans que personne puisse le lire :
+  # depuis 448209b la suite complète s'arrêtait au fichier 56/137, si bien que
+  # ce fichier-ci n'a jamais atteint un BILAN. Corrigé par b455da0 ; première
+  # mesure complète : 137/137, ce test vert.
   calls <- length(gregexpr(".register_multi_dataset(global_data$bulk_obj)",
                            imp, fixed = TRUE)[[1L]])
-  expect_identical(calls, 2L)
+  expect_identical(calls, 3L)
   expect_match(imp, 'producer = "import"', fixed = TRUE)
   # L'échec d'enregistrement est une ALERTE, pas une interruption : le corps
   # du helper ne contient aucun stop() (l'import ne doit jamais être bloqué).
