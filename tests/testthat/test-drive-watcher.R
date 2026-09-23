@@ -36,6 +36,10 @@
   # earlier test leaked into the next one and made "no failure is NULL" fail —
   # the state lives in a session-global environment, exactly like `$root`.
   ts_drive_clear_write_error()
+  # Same reasoning, same environment, same leak: an in-flight JOB left behind by
+  # an earlier test would make the next `run_pipeline` refuse with "another job
+  # is already running" — a failure that would point at the wrong test.
+  ts_drive_job_clear()
   root
 }
 
@@ -127,6 +131,49 @@ test_that("a malformed ready.json reads as NULL instead of throwing", {
   .drv_local_root()
   writeLines("{ this is not json", ts_drive_path("ready.json"))
   expect_silent(expect_null(ts_drive_read_ready()))
+})
+
+test_that("ready.json PUBLISHES the visibility mode instead of always saying unknown", {
+  # TWO supported modes share ONE IPC contract: the same ready/arm/scenario/
+  # result files, the same session-selection and heartbeat rules, the same
+  # passive badge. Only the CLIENT's visibility differs —
+  #   Mode 1 headless : launch.browser = FALSE, real httpuv + a real chromote
+  #                     client, no visible window (reproducible unattended runs)
+  #   Mode 2 visible  : RStudio Viewer or a visible localhost tab
+  # — and an agent that cannot read which one it is looking at has to GUESS,
+  # which is how a visible run gets mistaken for a headless one.
+  #
+  # The field already existed and was hardcoded "unknown" (`drive_watcher.R`
+  # `viewer = "unknown"`): present in every payload, carrying nothing.
+  .drv_local_root()
+  old <- options(ts.drive.viewer = NULL)
+  on.exit(options(old), add = TRUE)
+
+  # 1. A DECLARED mode wins — the launcher knows what it asked for.
+  options(ts.drive.viewer = "headless")
+  ts_drive_write_ready(list(), "tokview1", armed = FALSE)
+  expect_identical(as.character(ts_drive_read_ready()$viewer), "headless")
+
+  options(ts.drive.viewer = "visible")
+  ts_drive_write_ready(list(), "tokview2", armed = FALSE)
+  expect_identical(as.character(ts_drive_read_ready()$viewer), "visible")
+
+  # 2. A declaration that is NOT a supported mode is reported as "unknown" —
+  #    never silently coerced into a mode that would mislead the agent.
+  options(ts.drive.viewer = "rstudio")
+  ts_drive_write_ready(list(), "tokview3", armed = FALSE)
+  expect_identical(as.character(ts_drive_read_ready()$viewer), "unknown")
+
+  # 3. Undeclared: derived from `interactive()` — the SAME gate that decides
+  #    whether a dev badge can ever render, so the two cannot disagree about
+  #    whether a human is present. Under `Rscript` that is FALSE.
+  options(ts.drive.viewer = NULL)
+  ts_drive_write_ready(list(), "tokview4", armed = FALSE)
+  expect_identical(as.character(ts_drive_read_ready()$viewer),
+                   if (interactive()) "visible" else "headless")
+
+  # 4. The vocabulary is CLOSED and published, so the agent may branch on it.
+  expect_identical(sort(TS_DRIVE_VIEWERS), c("headless", "unknown", "visible"))
 })
 
 # =============================================================================
@@ -2704,4 +2751,459 @@ test_that("the free-text contrast name stays NOT drivable, so the pair is self-c
                     "bulk-de-group_target", "bulk-de-de_engine") %in%
                     names(TS_DRIVE_ALLOWLIST)),
               info = "the design/contrast inputs must stay drivable")
+})
+
+# =============================================================================
+# JOB LIFECYCLE — the contract an agent polls (spec §5)
+# =============================================================================
+# Contract A: accepted -> running -> done/error, for a job DECLARED long.
+# Contract B: accepted -> invalid, when a job is already in flight.
+#
+# WHY THESE TESTS EXIST. `run_pipeline` used to answer `done` for every module,
+# and `done` is TERMINAL. MEASURED live (2026-09-22, DESeq2, 17 925 genes x 18
+# samples): the token answered `done` in 2.1 s while the contrast first became
+# observable 852.7 s later — an agent was told, in 2.1 s, that a fourteen-minute
+# job had finished. `running` existed in the enum, in the badge states and in
+# the badge transition table, and nothing produced it.
+
+# An `effects` callback whose registry DECLARES `bulk-de-run_de` long, i.e. the
+# shape the real DE module publishes after this change.
+.drv_long_effects <- function(long = TRUE) {
+  function(id, mode = NULL, module = NULL) {
+    if (identical(mode, "tokens")) {
+      return(list("bulk-de-run_de" = list(counter = NULL, ready = NULL,
+                                          state = NULL, long = long)))
+    }
+    if (is.null(id)) return(FALSE)
+    TRUE
+  }
+}
+
+test_that("CONTRACT A: a DECLARED long job answers `running`, and the agent keeps polling", {
+  .drv_local_root()
+  .drv_write_arm("tok")
+  .drv_write_scn(21L, action = "run_pipeline", module = "bulk_de",
+                 session_token = "tok")
+  res <- ts_drive_tick(NULL, NULL, NULL, "tok", 0, FALSE,
+                       effects = .drv_long_effects())
+
+  expect_identical(res$status, "running")
+  # NOT terminal — the whole point. An agent that switches on
+  # `ts_drive_status_terminal()` must KEEP POLLING rather than conclude that a
+  # fourteen-minute job finished in 2.1 s.
+  expect_false(ts_drive_status_terminal("running"))
+  # ...and it is on the WIRE, not merely a colour on screen. That is what "not
+  # badge-only" means: `ts_drive_badge_state_for("running")` already mapped it,
+  # so the badge needed no change — the producer was what was missing.
+  r <- ts_drive_read_result()
+  expect_identical(r$status, "running")
+  expect_identical(r$ack_seq, 21L)
+  # The job is RECORDED, so a completion can be matched back to its seq and a
+  # second job can be refused.
+  expect_true(ts_drive_job_busy())
+  expect_identical(ts_drive_job_state()$seq, 21)
+  expect_identical(ts_drive_job_state()$button, "bulk-de-run_de")
+  expect_identical(ts_drive_job_state()$module, "bulk_de")
+})
+
+test_that("CONTRACT A: an UNDECLARED button keeps the documented `done` semantics", {
+  # The change must not silently promote every module into a job that has to be
+  # closed: an undeclared button still means "the token moved" (spec §2.3), and
+  # `bulk_pathways` is the live example.
+  .drv_local_root()
+  .drv_write_arm("tok")
+  .drv_write_scn(23L, action = "run_pipeline", module = "bulk_pathways",
+                 session_token = "tok")
+  effects <- function(id, mode = NULL, module = NULL) {
+    if (identical(mode, "tokens")) {
+      return(list("bulk-pathways-run_pathway" = list(counter = NULL,
+                                                     ready = NULL, state = NULL)))
+    }
+    TRUE
+  }
+  res <- ts_drive_tick(NULL, NULL, NULL, "tok", 0, FALSE, effects = effects)
+  expect_identical(res$status, "done")
+  expect_identical(ts_drive_read_result()$status, "done")
+  expect_false(ts_drive_job_busy())
+})
+
+test_that("CONTRACT A: the MODULE declares the job over, and the NEXT beat writes the terminal", {
+  .drv_local_root()
+  .drv_write_arm("tok")
+  .drv_write_scn(22L, action = "run_pipeline", module = "bulk_de",
+                 session_token = "tok")
+  ts_drive_tick(NULL, NULL, NULL, "tok", 0, FALSE, effects = .drv_long_effects())
+  expect_identical(ts_drive_read_result()$status, "running")
+
+  # The module finishes and DECLARES. Nothing is written yet: the declaration is
+  # only RECORDED, so `result.json` keeps exactly one writer.
+  expect_true(ts_drive_job_finish("bulk-de-run_de", status = "done"))
+  expect_identical(ts_drive_read_result()$status, "running")
+  expect_false(is.null(ts_drive_job_pending()))
+
+  # The next beat publishes it, against the DISPATCHED seq.
+  res2 <- ts_drive_tick(NULL, NULL, NULL, "tok", 22, TRUE,
+                        effects = .drv_long_effects())
+  expect_identical(res2$status, "done")
+  r <- ts_drive_read_result()
+  expect_identical(r$status, "done")
+  expect_identical(r$ack_seq, 22L)
+  expect_false(ts_drive_job_busy())
+})
+
+test_that("CONTRACT A: a FAILED job reports `error` and carries the cause", {
+  .drv_local_root()
+  .drv_write_arm("tok")
+  .drv_write_scn(24L, action = "run_pipeline", module = "bulk_de",
+                 session_token = "tok")
+  ts_drive_tick(NULL, NULL, NULL, "tok", 0, FALSE, effects = .drv_long_effects())
+  expect_true(ts_drive_job_finish("bulk-de-run_de", status = "error",
+                                  error = "the DE computation raised"))
+  ts_drive_tick(NULL, NULL, NULL, "tok", 24, TRUE, effects = .drv_long_effects())
+  r <- ts_drive_read_result()
+  expect_identical(r$status, "error")
+  expect_true(any(grepl("DE computation raised", unlist(r$errors))))
+})
+
+test_that("CONTRACT B: a second run_pipeline while a job is in flight is REFUSED, not queued", {
+  .drv_local_root()
+  .drv_write_arm("tok")
+  .drv_write_scn(31L, action = "run_pipeline", module = "bulk_de",
+                 session_token = "tok")
+  ts_drive_tick(NULL, NULL, NULL, "tok", 0, FALSE, effects = .drv_long_effects())
+  expect_identical(ts_drive_read_result()$status, "running")
+
+  # A second job arrives while the first is still in flight.
+  .drv_write_scn(32L, action = "run_pipeline", module = "bulk_de",
+                 session_token = "tok")
+  res <- ts_drive_tick(NULL, NULL, NULL, "tok", 31, TRUE,
+                       effects = .drv_long_effects())
+  expect_identical(res$status, "invalid")
+  r <- ts_drive_read_result()
+  expect_identical(r$status, "invalid")
+  expect_true(any(grepl("another job is already running", unlist(r$errors))))
+  # The job in flight is UNTOUCHED: a refusal must not evict the work the agent
+  # is waiting on.
+  expect_true(ts_drive_job_busy())
+  expect_identical(ts_drive_job_state()$seq, 31)
+})
+
+test_that("a job declaration is REFUSED unless it is the job in flight AND terminal", {
+  .drv_local_root()
+  # Nothing in flight: there is no job to close.
+  expect_false(ts_drive_job_finish("bulk-de-run_de", status = "done"))
+
+  ts_drive_job_begin(7, "bulk_de", "run_pipeline", "bulk-de-run_de")
+
+  # A DIFFERENT button: two tabs, or a stale observer, must not be able to close
+  # someone else's job. `ts_drive_job_finish()` matches on the button id alone,
+  # so this is the only thing standing between a late callback and a false
+  # terminal.
+  expect_false(ts_drive_job_finish("bulk-filter-run_filter_norm", status = "done"))
+
+  # NON-terminal statuses. A module declaring its own job "still running" would
+  # leave the agent polling for a completion that can never be written — the
+  # exact failure this mechanism exists to remove.
+  expect_false(ts_drive_job_finish("bulk-de-run_de", status = "running"))
+  expect_false(ts_drive_job_finish("bulk-de-run_de", status = "applied"))
+  # A status outside the frozen enum.
+  expect_false(ts_drive_job_finish("bulk-de-run_de", status = "finished"))
+  # None of those touched the pending slot.
+  expect_null(ts_drive_job_pending())
+
+  expect_true(ts_drive_job_finish("bulk-de-run_de", status = "done"))
+  expect_identical(ts_drive_job_pending()$status, "done")
+})
+
+test_that("a failed terminal WRITE keeps the job pending, so the next beat retries", {
+  # The heartbeat's discipline, applied to the terminal: a write that did not
+  # land must not be treated as delivered, or the agent loses the completion
+  # for good. `result.json` is made un-writable by pointing the root at a path
+  # whose parent is a FILE.
+  root <- file.path(tempdir(), paste0("tsdrive-blocked-", as.integer(runif(1, 1, 1e9))))
+  dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  blocker <- file.path(root, "tools")
+  writeLines("not a directory", blocker)   # a FILE where `tools/` must be
+  ts_drive_boot(root)
+  ts_drive_clear_write_error()
+  ts_drive_job_clear()
+
+  ts_drive_job_begin(41, "bulk_de", "run_pipeline", "bulk-de-run_de")
+  expect_true(ts_drive_job_finish("bulk-de-run_de", status = "done"))
+  res <- ts_drive_tick(NULL, NULL, NULL, "tok", 0, TRUE, effects = NULL)
+
+  # The job is STILL pending, and still in flight: nothing was lost.
+  expect_false(is.null(ts_drive_job_pending()))
+  expect_true(ts_drive_job_busy())
+  expect_false(isTRUE(res$consumed))
+
+  # Cleanup, so the next test starts from a healthy root.
+  unlink(root, recursive = TRUE)
+  .drv_local_root()
+})
+
+# =============================================================================
+# PERFORMANCE INVARIANTS (spec §4)
+# =============================================================================
+# "The watcher and badge must: remain lightweight; never inspect Seurat objects
+# or matrices; never run a pipeline; never invalidate heavy reactives; never
+# block the Shiny event loop."
+#
+# Asserted on the PARSE TREE rather than on the text, and that distinction is
+# LOAD-BEARING — MEASURED: a naive grep over these two files hits `limma` (x2),
+# `gsva` and `Seurat`, and every one of them is a FALSE red. Two are frozen
+# DATA (allowlist `note` strings naming widget choices: "deseq2 | edger | limma"
+# and "ssgsea | gsva | plage | zscore"), one is a COMMENT quoting spec S6.
+# `getParseData()` keeps COMMENT and STR_CONST apart from
+# SYMBOL_FUNCTION_CALL, so the assertion can be about what the code DOES
+# without maintaining a whitelist of innocent prose.
+
+# Absolute, through the same `ts_project_root()` the rest of the suite uses:
+# `testthat::test_file()` runs from `tests/testthat/`, so a bare relative path
+# would resolve to a file that does not exist and the scan would report zero
+# calls — passing for the worst possible reason.
+.drv_files <- function() {
+  file.path(ts_project_root(),
+            c("R/core/drive_watcher.R", "R/core/drive_allowlist.R"))
+}
+
+.drv_calls <- function(path) {
+  expect_true(file.exists(path), info = path)
+  pd <- utils::getParseData(parse(path, keep.source = TRUE))
+  list(parse = pd, calls = unique(pd$text[pd$token == "SYMBOL_FUNCTION_CALL"]))
+}
+
+test_that("the drive layer CALLS no pipeline, no Seurat accessor and no matrix coercion", {
+  forbidden <- c(
+    # pipeline entry points and engines
+    "run_bulk_de_dispatch", "build_dds", "run_deseq", "DESeq", "edgeR",
+    # Seurat / assay accessors
+    "assay", "GetAssayData", "CreateSeuratObject", "NormalizeData",
+    "FindVariableFeatures",
+    # matrix coercion
+    "as.matrix",
+    # the async layer itself: the watcher OBSERVES work, it never STARTS it
+    "run_job", "ExtendedTask", "mirai", "future"
+  )
+  for (f in .drv_files()) {
+    hit <- intersect(.drv_calls(f)$calls, forbidden)
+    expect_true(length(hit) == 0L,
+                info = sprintf("%s calls %s", f, paste(hit, collapse = ", ")))
+  }
+
+  # POSITIVE CONTROL — a scan that cannot FIND what it forbids asserts nothing.
+  # MEASURED: `R/bulk/bulk_helpers.R` calls `run_bulk_de_dispatch` three times
+  # and `DESeq` once. Without this, an empty result above would be equally
+  # consistent with "the drive layer is clean" and "the scanner is blind", and
+  # a blind scanner is precisely the C9 failure this repo already measured once.
+  control <- .drv_calls(file.path(ts_project_root(), "R/bulk/bulk_helpers.R"))$calls
+  expect_true("run_bulk_de_dispatch" %in% control)
+  expect_true("DESeq" %in% control)
+
+  # The tolerance is PINNED, not incidental. These three strings ARE present in
+  # the files; asserting they are never CALLS means a future edit that turned
+  # one into a call is caught, instead of being silently covered by a blanket
+  # "we know about those" comment.
+  for (f in .drv_files()) {
+    pd <- .drv_calls(f)$parse
+    for (w in c("limma", "gsva", "Seurat")) {
+      expect_length(pd$text[pd$token == "SYMBOL_FUNCTION_CALL" & pd$text == w], 0L)
+    }
+  }
+})
+
+test_that("a module that DECLARES a drive job has only ADDITIVE on.exit() calls", {
+  # MEASURED reason, and it was live: `on.exit()` without `add = TRUE` REPLACES
+  # every expression already pending. The DE observer registers its drive job
+  # declaration at the top — before the first `req()`, so that every exit path
+  # reports — and then, ~90 lines later, opens a Progress bar with a bare
+  # `on.exit(p$close())`. That bare call silently discarded the declaration: the
+  # job would have stayed `running` forever and the agent would have polled a
+  # completion that could never be written. Nothing errors, nothing warns, the
+  # wire simply stops telling the truth — the silent-seam failure class this
+  # repo keeps finding, and the reason this is a TEST rather than a comment.
+  #
+  # Scoped to modules that CALL `ts_drive_job_finish()`, because that is exactly
+  # where a replaced expression becomes a protocol lie. The 29 pre-existing bare
+  # `on.exit(p$close())` elsewhere in `modules/` are a separate, older concern;
+  # this test neither blesses nor claims to have fixed them.
+  #
+  # Checked on the PARSE TREE, not by line and not by text span. Two FALSE reds
+  # were measured before this shape was settled:
+  #   * a LINE-based scan reports the declaration itself as bare, because it is
+  #     a multi-line call and `add = TRUE` sits on a later line;
+  #   * a SPAN-based text scan is no better — MEASURED, the parent `expr` of the
+  #     DE declaration spans line 178 alone while the call actually ends on line
+  #     187, so the text read back is just `on.exit(ts_drive_job_finish(`.
+  # Walking the tree instead: an `add = TRUE` argument is a `SYMBOL_SUB` node
+  # named "add" that has the `on.exit()` call among its ANCESTORS.
+  decls <- character(0)
+  for (f in list.files(file.path(ts_project_root(), "modules"),
+                       pattern = "\\.R$", recursive = TRUE, full.names = TRUE)) {
+    src <- readLines(f, warn = FALSE)
+    pd <- tryCatch(utils::getParseData(parse(text = src, keep.source = TRUE)),
+                   error = function(e) NULL)
+    if (is.null(pd)) next
+    if (!any(pd$token == "SYMBOL_FUNCTION_CALL" & pd$text == "ts_drive_job_finish")) next
+    decls <- c(decls, f)
+
+    on_ids <- pd$id[pd$token == "SYMBOL_FUNCTION_CALL" & pd$text == "on.exit"]
+    expect_gt(length(on_ids), 0L)
+
+    parents <- stats::setNames(pd$parent, as.character(pd$id))
+    ancestors <- function(node) {
+      chain <- integer(0); cur <- node
+      while (!is.na(cur) && cur != 0) {
+        chain <- c(chain, cur)
+        cur <- parents[[as.character(cur)]]
+        if (is.null(cur)) break
+      }
+      chain
+    }
+    # The CALL node is an ANCESTOR of the `on.exit` token — not its parent: R
+    # nests the function part in its own `expr`, so the call sits one level
+    # higher. A named argument's parent IS that same call node, which is what
+    # makes this comparison exact. (Measured against the real tree: the parent
+    # of the token spans line 178 alone while the call spans 178..187.)
+    add_parents <- pd$parent[pd$token == "SYMBOL_SUB" & pd$text == "add"]
+
+    for (o in on_ids) {
+      chain <- ancestors(o)
+      expect_true(any(add_parents %in% chain),
+                  info = sprintf("%s:%d a bare on.exit() would DISCARD the drive job declaration",
+                                 basename(f), pd$line1[pd$id == o]))
+    }
+  }
+  # A test that finds no file to check passes VACUOUSLY, which is the failure
+  # mode a scoped invariant is most likely to have.
+  expect_gt(length(decls), 0L)
+  expect_true(any(grepl("mod_bulk_de_run\\.R$", decls)))
+})
+
+test_that("the watcher and the badge own no reactive and run no unbounded loop", {
+  # C2 already forbids Shiny's reactive factories in `R/`. This pins the other
+  # half of the same promise: the watcher must not SPIN. An unbounded loop
+  # inside the poller's beat would block the event loop exactly as a
+  # synchronous pipeline does — and it would do it on EVERY beat.
+  forbidden <- c("reactiveVal", "reactiveValues", "reactive",
+                 "observe", "observeEvent", "invalidateLater",
+                 "while", "repeat")
+  for (f in .drv_files()) {
+    hit <- intersect(.drv_calls(f)$calls, forbidden)
+    expect_true(length(hit) == 0L,
+                info = sprintf("%s calls %s", f, paste(hit, collapse = ", ")))
+  }
+})
+
+test_that("the only blocking primitive is the bounded write backoff, and its bound is NAMED", {
+  # MEASURED reason this bound exists: a single doomed `file.rename()` costs
+  # ~5.1 s on this host, so an 8-attempt loop spent 41.4 s inside ONE protocol
+  # beat — inside the Shiny observer, where it freezes the app. The budget makes
+  # the worst case one attempt. The invariant is therefore not "zero blocking"
+  # (a bounded retry is deliberately allowed) but "blocking bounded by a NAMED,
+  # finite, small constant".
+  hits <- list()
+  for (f in .drv_files()) {
+    pd <- .drv_calls(f)$parse
+    sl <- pd[pd$token == "SYMBOL_FUNCTION_CALL" & pd$text == "Sys.sleep", ]
+    if (nrow(sl) > 0L) hits[[f]] <- sl$line1
+  }
+  expect_length(hits, 1L)
+  # Named by BASENAME: `.drv_files()` yields absolute paths, and comparing one
+  # of those against a relative literal would fail for a reason that has
+  # nothing to do with the invariant.
+  expect_match(names(hits), "drive_watcher\\.R$")
+
+  expect_true(is.numeric(TS_DRIVE_WRITE_BUDGET_S) &&
+                length(TS_DRIVE_WRITE_BUDGET_S) == 1L)
+  expect_true(is.finite(TS_DRIVE_WRITE_BUDGET_S))
+  expect_gt(TS_DRIVE_WRITE_BUDGET_S, 0)
+  expect_lte(TS_DRIVE_WRITE_BUDGET_S, 5)
+  expect_true(is.finite(TS_DRIVE_WRITE_BACKOFF_S))
+  expect_lte(TS_DRIVE_WRITE_BACKOFF_S, 0.25)
+  # Worst case the loop can SLEEP: the backoff is multiplied by the attempt
+  # index, so n attempts sleep at most backoff * (n - 1). Asserted as a NUMBER
+  # rather than a shape, because the shape is what a later edit would change.
+  expect_lte(TS_DRIVE_WRITE_BACKOFF_S * (TS_DRIVE_WRITE_ATTEMPTS - 1L), 1)
+})
+
+test_that("the liveness window is FAR shorter than a MEASURED long job, and that gap is documented", {
+  # A KNOWN, MEASURED GAP, pinned rather than hidden. The DE job blocks the
+  # event loop for 852.7 s (measured live 2026-09-22) while the agent-side
+  # liveness gate rejects a handshake older than 15 s — so during a long job
+  # `ready.json` goes stale and the session LOOKS dead.
+  #
+  # The protocol's answer is NOT to widen the timeout: that would blunt the gate
+  # for the failure it exists to catch (a scenario applied to a dead session).
+  # The answer is `running` on `result.json`, which is the proof of life the
+  # heartbeat cannot give while the loop is blocked. This test exists so the gap
+  # cannot be closed by quietly raising the default, which would LOOK like a fix
+  # and be a regression of the gate.
+  old <- options(ts.drive.hb_timeout = NULL)
+  on.exit(options(old), add = TRUE)
+  Sys.unsetenv("TRANSCRIPTO_DEV_DRIVE_HB_TIMEOUT")
+
+  expect_identical(ts_drive_hb_timeout(), 15)
+  # The ratio is the point: the job outlives the liveness window by ~57x.
+  expect_gt(852.7, ts_drive_hb_timeout())
+})
+
+test_that("the badge NAMES what ran: a DECLARED action/module is never redacted", {
+  # MEASURED live (2026-09-23, Mode 2 visible run): the badge read
+  # `drive: done · seq 2 · bulk_de · <redacted> · 0.1s` for a `snapshot`. The
+  # token heuristic redacts any bare 8+-char alphanumeric run, and "snapshot"
+  # is exactly 8 characters. MEASURED blast radius: 5 of the 6 frozen actions
+  # and 3 of the 4 frozen modules — the badge could not name the thing it
+  # exists to name, except where a name happened to be short enough.
+  #
+  # Nothing in the suite could see it. The existing badge test asserts the
+  # VIEW's field whitelist and the display gate's FORMALS, which are about
+  # which fields travel, never about what they contain. A whitelist test is not
+  # a content test — the same blindness as C9 measuring a file NAME.
+  base <- ts_drive_badge_model()
+
+  for (a in TS_DRIVE_ACTIONS) {
+    v <- ts_drive_badge_view(utils::modifyList(base, list(state = "done", action = a)))
+    expect_identical(v$action, a,
+                     info = sprintf("action '%s' must survive the badge", a))
+  }
+  for (m in TS_DRIVE_MODULES) {
+    v <- ts_drive_badge_view(utils::modifyList(base, list(state = "done", module = m)))
+    expect_identical(v$module, m,
+                     info = sprintf("module '%s' must survive the badge", m))
+  }
+
+  # POSITIVE CONTROL: the collision is REAL, not hypothetical. At least one
+  # declared identifier IS token-shaped, so the `known` passthrough is doing
+  # load-bearing work — without it, these labels redact. A test whose fix could
+  # be deleted without any assertion moving would prove nothing.
+  would_redact <- vapply(
+    TS_DRIVE_ACTIONS,
+    function(x) grepl("<redacted>", ts_drive_badge_sanitize(x), fixed = TRUE),
+    logical(1)
+  )
+  expect_true(any(would_redact))
+
+  # THE SECURITY PROPERTY MUST NOT REGRESS. `known` is a WHITELIST, so an
+  # undeclared identifier still goes through every rule below it — and a
+  # token-shaped one is redacted. (Note what this does NOT claim: the token
+  # rule fires on an 8+-char ALPHANUMERIC RUN, so an undeclared value like
+  # `not_a_real_action` — `not`/`a`/`real`/`action`, longest run 6 — is NOT
+  # redacted by it. That is the pre-existing rule behaving as written, and
+  # saying otherwise would be the kind of over-claim this repo keeps catching.)
+  tok <- "suwuyn5z"
+  v <- ts_drive_badge_view(utils::modifyList(base, list(
+    state  = "error",
+    action = "zzundeclaredzz",
+    module = "yyundeclaredyy",
+    error  = sprintf("token %s leaked", tok)
+  )))
+  expect_identical(v$action, "<redacted>")
+  expect_identical(v$module, "<redacted>")
+  expect_match(v$error, "<redacted>")
+  expect_false(grepl(tok, v$error, fixed = TRUE))
+  # And the redaction itself still works on the raw value.
+  expect_identical(ts_drive_badge_sanitize(tok), "<redacted>")
+  # `error` is the one field with NO `known` set, so it keeps every rule.
+  expect_match(ts_drive_badge_sanitize("C:/Users/x/secret/token.txt"), "<path>")
 })

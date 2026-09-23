@@ -81,8 +81,17 @@
     }
     out
   }
+  # LONG JOB (drive job contract, spec §5). This button is DECLARED long, so
+  # `run_pipeline` answers `running` at dispatch instead of `done`, and this
+  # module owes the protocol a terminal status through
+  # `ts_drive_job_finish()` — see the observer below.
+  #
+  # The declaration is a MEASUREMENT, not a guess: MEASURED live 2026-09-22
+  # (DESeq2, 17 925 genes x 18 samples), the token answered `done` in 2.1 s and
+  # the contrast first became observable 852.7 s later. `done` is terminal, so
+  # an agent was told in 2.1 s that a fourteen-minute job had finished.
   ts_drive_publish_token(global_data, "bulk-de-run_de", drive_counter,
-                         ready = drive_ready, state = drive_state)
+                         ready = drive_ready, state = drive_state, long = TRUE)
   drive_trigger <- shiny::reactive(list(drive_counter(), input$run_de))
 
   .tr <- function(key) {
@@ -139,6 +148,45 @@
   # STEP 2 — Differential Expression (single pair)
   # =========================================================================
   observeEvent(drive_trigger(), {
+    # ── DECLARE THE JOB OVER (drive job contract, spec §5) ──────────────────
+    # This is the TERMINAL PRODUCER that `long = TRUE` commits the module to.
+    # It is registered BEFORE the first `req()`, so every path out of this
+    # observer reports something: the early `req()` abort and the four
+    # design-guard `return()`s all leave `job_outcome` at "refused", the
+    # successful path sets "ok", and the computation's own catch sets "failed".
+    # `on.exit()` is used rather than a call per exit path precisely so that a
+    # guard ADDED LATER cannot forget to close the job.
+    #
+    # `job_outcome` is the MEASUREMENT of what happened, never a guess, and it
+    # maps onto the FROZEN status enum instead of inventing a second one:
+    #   ok      -> done     the contrast was registered
+    #   failed  -> error    the computation raised
+    #   refused -> invalid  a guard bailed; nothing ran, which is not a failure
+    #                       (same reasoning as `invalid` elsewhere: a refusal
+    #                       must not teach the operator to ignore a red badge)
+    #
+    # REGISTERED ONLY WHEN A DRIVE JOB IS ACTUALLY IN FLIGHT for this button.
+    # `ts_drive_job_finish()` matches on the button id alone, so an
+    # unconditional `on.exit()` would let a HUMAN clicking the same button close
+    # a job the agent started. For a blocking job that is unreachable — the
+    # event loop is frozen, so no click can be processed — but the guard is
+    # written rather than relied upon, because the async conversion will make
+    # that window real.
+    job_outcome <- "refused"
+    if (isTRUE(ts_drive_job_busy()) &&
+        identical(ts_drive_job_state()$button, "bulk-de-run_de")) {
+      on.exit(ts_drive_job_finish(
+        "bulk-de-run_de",
+        status = switch(job_outcome,
+                        ok     = "done",
+                        failed = "error",
+                        "invalid"),
+        error = if (identical(job_outcome, "failed")) {
+          "the DE computation raised — see the app notification"
+        } else NULL
+      ), add = TRUE)
+    }
+
     req(input$run_de > 0 || shiny::isolate(drive_counter()) > 0)
     req(shared_rv$filtered_counts, input$condition_col, input$group_ref, input$group_target,
         input$de_engine)
@@ -210,7 +258,14 @@
     }
     fixed_disp <- if (bypass) (input$no_rep_bcv %||% 0.4)^2 else NULL
 
-    p <- shiny::Progress$new(); on.exit(p$close())
+    # `add = TRUE` is LOAD-BEARING, not style. A bare `on.exit()` REPLACES every
+    # expression already pending, so this line silently discarded the drive job
+    # declaration registered at the top of the observer above — the job would
+    # have stayed `running` forever, and the agent would have polled a
+    # completion that could never be written. Exactly the silent-seam failure
+    # this repo keeps finding: nothing errors, nothing warns, the wire just
+    # stops telling the truth.
+    p <- shiny::Progress$new(); on.exit(p$close(), add = TRUE)
     p$set(message = .tr("Analyse différentielle..."), value = 0.2)
 
     tryCatch({
@@ -288,7 +343,13 @@
           type = "warning", duration = 18)
       }
 
+      # Last statement of the body, so it is reached only when the model was
+      # fitted AND the contrast registered — the measurement the job
+      # declaration above reports as `done`.
+      job_outcome <- "ok"
+
     }, error = function(e) {
+      job_outcome <- "failed"
       showNotification(paste(.tr("Erreur DE:"), e$message), type = "error", duration = 10)
     })
   })
@@ -323,7 +384,14 @@
     if (length(intersect(a, b)) > 0) { showNotification(.tr("❌ Même échantillon dans les 2 groupes."), type = "error", duration = 6); return() }
     if (length(a) == 0 || length(b) == 0) { showNotification(.tr("❌ Sélectionnez au moins 1 échantillon / groupe."), type = "error", duration = 6); return() }
 
-    p <- shiny::Progress$new(); on.exit(p$close())
+    # `add = TRUE` is LOAD-BEARING, not style. A bare `on.exit()` REPLACES every
+    # expression already pending, so this line silently discarded the drive job
+    # declaration registered at the top of the observer above — the job would
+    # have stayed `running` forever, and the agent would have polled a
+    # completion that could never be written. Exactly the silent-seam failure
+    # this repo keeps finding: nothing errors, nothing warns, the wire just
+    # stops telling the truth.
+    p <- shiny::Progress$new(); on.exit(p$close(), add = TRUE)
     p$set(message = .tr("Analyse ad-hoc..."), value = 0.2)
     tryCatch({
       counts_sub <- shared_rv$filtered_counts[, c(a, b), drop = FALSE]

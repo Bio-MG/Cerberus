@@ -587,7 +587,7 @@ ts_drive_badge_next <- function(event, status = NULL) {
 #' first line feed is dropped (R conditions carry multi-line bodies), absolute
 #' paths are replaced by their basename, and anything shaped like a path or a
 #' 8-char alphanumeric token is redacted.
-ts_drive_badge_sanitize <- function(msg, max_chars = 80L) {
+ts_drive_badge_sanitize <- function(msg, max_chars = 80L, known = NULL) {
   if (is.null(msg) || length(msg) == 0L) return("")
   s <- as.character(msg)[1]
   # `NA` and empty are both reachable: a model field defaults to "" and an R
@@ -596,6 +596,24 @@ ts_drive_badge_sanitize <- function(msg, max_chars = 80L) {
   if (is.na(s) || !nzchar(s)) return("")
   s <- strsplit(s, "\n", fixed = TRUE)[[1]][1]
   if (is.na(s) || !nzchar(s)) return("")
+  # A DECLARED identifier is not free text, and must come back VERBATIM.
+  #
+  # MEASURED live (2026-09-23, Mode 2 visible run): the badge read
+  # `drive: done · seq 2 · bulk_de · <redacted> · 0.1s` for a `snapshot`. The
+  # token heuristic below redacts any bare 8+-char alphanumeric run, and
+  # "snapshot" is exactly 8 characters — so the badge redacted the very label
+  # it exists to show. The blast radius is 5 of the 6 frozen actions
+  # (`set_inputs`, `run_pipeline`, `import_file`, `snapshot`, `reset_module`;
+  # only `noop` survives) and 3 of the 4 frozen modules (`bulk_filter`,
+  # `import_bulk`, `bulk_pathways`; only `bulk_de` survives, at 7 chars).
+  #
+  # Returning a member of a FROZEN set verbatim is safe by construction: the
+  # protocol already validated it against `TS_DRIVE_ACTIONS` / `TS_DRIVE_MODULES`
+  # (4 and 6 members), so it cannot carry a token. Everything that is NOT a
+  # declared member still goes through every rule below — including the token
+  # heuristic, which is where the security property actually lives (free-form
+  # `error` text).
+  if (length(known) > 0L && s %in% known) return(s)
   s <- gsub("\\s+", " ", s)
   # Windows and POSIX absolute paths -> basename only.
   s <- gsub("([A-Za-z]:[\\\\/]|[\\\\/])[^ ]*[\\\\/]([^ \\\\/]+)", "<path>", s, perl = TRUE)
@@ -627,8 +645,15 @@ ts_drive_badge_view <- function(model) {
     visible = TRUE,
     state   = state,
     ack_seq = suppressWarnings(as.integer(model$ack_seq %||% 0L)),
-    module  = ts_drive_badge_sanitize(ts_drive_badge_chr(model$module), 24L),
-    action  = ts_drive_badge_sanitize(ts_drive_badge_chr(model$action), 24L),
+    # `known` names the FROZEN set each label must belong to. A declared member
+    # comes back verbatim; anything else is free text and is sanitized in full.
+    # `error` deliberately gets NO `known` set: it is the one free-form field,
+    # so it keeps every redaction rule — that is where a leaked token would
+    # actually travel.
+    module  = ts_drive_badge_sanitize(ts_drive_badge_chr(model$module), 24L,
+                                      known = TS_DRIVE_MODULES),
+    action  = ts_drive_badge_sanitize(ts_drive_badge_chr(model$action), 24L,
+                                      known = TS_DRIVE_ACTIONS),
     elapsed = if (length(el) != 1L || is.na(el) || el < 0) "" else sprintf("%.1fs", el),
     error   = ts_drive_badge_sanitize(ts_drive_badge_chr(model$error), 80L)
   )

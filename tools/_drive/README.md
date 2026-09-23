@@ -81,6 +81,43 @@ log. The projection is a **whitelist**, so a newly added field cannot leak by
 accident. `invalid` and `ignored` deliberately stay on `armed`: a refused
 payload is not an app failure, and red must keep meaning red.
 
+### A defect this badge had: it redacted its own labels
+
+`ts_drive_badge_sanitize()` redacts absolute paths **and any 8+-character
+alphanumeric run** (its token heuristic). MEASURED (2026-09-23): `"snapshot"` is
+**exactly 8 characters**, so the badge rendered
+`drive: done · seq 2 · bulk_de · <redacted> · 0.1s` — and the blast radius was
+**5 of 6 actions and 3 of 4 modules**. The projection was right; the *labels*
+were what its own heuristic caught.
+
+Fixed with a `known` set: a member of a FROZEN set (`TS_DRIVE_MODULES`,
+`TS_DRIVE_ACTIONS`) is returned **verbatim**, *before* the path/token rules.
+Deliberately **not** applied to `error` — that is the one free-form field, and
+the one place where a leaked token would actually travel. Verified live after
+the fix: `drive: done · seq 2 · bulk_filter · snapshot · 0.1s`.
+
+## Performance contract — what the watcher and the badge may NOT do
+
+A visible browser is acceptable for development and is **not** optimised
+prematurely: the cost that matters is the biological computation, not a passive
+badge or a low-frequency watcher. What the drive layer may not do is *add* to it.
+Every clause below is pinned by a test, and each scan carries a **positive
+control** (a file that DOES call a pipeline) so a green result means "the
+invariant holds", not "the scan looked at nothing".
+
+| Clause | How it is enforced |
+|---|---|
+| never inspect a Seurat object or a matrix | scan of `R/core/drive_*.R`: no `Seurat::`, no `as.matrix(`, no `@meta.data`, no `GetAssayData` |
+| never run a pipeline | same scan: no `run_bulk_*`, no `DESeq`, no `limma`, no `gsva` |
+| never invalidate heavy reactives | no `reactiveVal(` / `reactiveValues(` outside the state layer (convention C2), no `observe(` / `observeEvent(` in `R/` |
+| never block the Shiny event loop | the only blocking primitive is the **bounded** write backoff, and its bound is a NAMED constant (`TS_DRIVE_WRITE_ATTEMPTS`, `TS_DRIVE_WRITE_BUDGET_S`) |
+| no unbounded loop | the watcher runs one `invalidateLater()` beat; no `while (TRUE)`, no `repeat` |
+| long computations use the existing async layer | the module declares `long = TRUE`; the job contract (above) is what makes it **observable** — the async migration itself is the module's business |
+
+⚠️ A naive `grep` for these words is **not** the test, and would be wrong three
+times over: two hits are frozen `note` strings and one is a comment quoting the
+spec. The invariant is checked on the **parse tree**, at call level.
+
 ## Minimal agent loop
 
 1. Wait for a `ready.json` that is **fresh** (see the heartbeat rules above). A
@@ -106,19 +143,177 @@ payload is not an app failure, and red must keep meaning red.
    restarting the app.
 7. Disarm by removing `arm.json`.
 
-## Launching a drive-enabled session
+## Long jobs — the job-state contract
+
+A `run_pipeline` whose module declares the job **long** must not be left as a
+badge-only state. The contract is explicit and testable, and it comes in two
+shapes:
+
+- **A. `accepted -> running -> done | error`** — the job is declared `long`, so
+  the tick answers **`running`** immediately (the token has moved; the analysis
+  has **not** finished) and `result.json` carries that `running` **on the wire**.
+  The module then DECLARES the outcome when its own observer ends, and the
+  **next** tick writes the terminal.
+- **B. `accepted -> invalid`** — a second `run_pipeline` while a job is already
+  in flight is **REFUSED, not queued**, and the message names the module, `seq`
+  and start time of the job in flight.
+
+`running` is a real producer, not a badge transition: the badge table already
+mapped `running`; the producer was what was missing.
+
+| Symbol | Role |
+|---|---|
+| `ts_drive_job_state()` / `ts_drive_job_busy()` | the in-flight job, or `NULL` |
+| `ts_drive_job_begin(seq, module, action, button)` | the TICK records a dispatch |
+| `ts_drive_job_finish(button, status, error)` | the MODULE declares the terminal |
+| `ts_drive_job_clear()` | forget it, once the terminal is ON THE WIRE |
+| `ts_drive_entry_long(entry)` | a module's `long = TRUE` declaration; **fails CLOSED** |
+
+Rules that keep it honest:
+
+- **The declaration must be the job in flight AND terminal.** A `button` that is
+  not the one in flight is refused (two tabs must not close each other's job),
+  and a non-terminal status (`applied` / `running`) is refused — a module
+  declaring its own job "still running" would leave an agent polling for a
+  completion that will never be written.
+- **Only the module can declare.** The watcher may not run a pipeline, so it may
+  not guess that one finished.
+- **The terminal is resolved BEFORE the arm gate**, and consumes nothing else, so
+  a queued scenario cannot overwrite `result.json` in the same beat.
+- **A failed terminal WRITE keeps the job pending**, so the next beat retries
+  instead of losing the outcome.
+- An **undeclared** button keeps the documented `done` semantics ("the token
+  moved"), unchanged.
+
+### RESIDUAL — measured, and deliberately not masked
+
+The long computation is still **synchronous**, so it blocks the Shiny event loop
+for its whole duration. No tick runs meanwhile, so `ready.json`'s heartbeat
+stalls and `ts_drive_ready_fresh()` (default 15 s) goes **FALSE** for the rest of
+the job. `result.json` carrying `running` is therefore **also** the proof of life
+the heartbeat cannot give during that window: it is what separates "alive and
+busy" from "dead".
+
+**Consequence for an agent, and it is not optional:** for a long job, do **not**
+re-read a static `result.json` forever — it changes only when a scenario is
+consumed, so a loop that re-reads it is *guaranteed* to time out. Issue a
+**fresh `snapshot` scenario per poll** and read the field you care about from the
+answer. Restoring the heartbeat needs the computation itself to stop blocking,
+i.e. to go through the existing asynchronous layer (`run_job()`,
+`R/core/jobs.R`) — a change to the **module**, not to this protocol.
+
+MEASURED, and it is why the contract exists: `bulk_de` on the real dataset
+answered `done` in **2.1 s**, and the contrast was first observable **852.7 s**
+later. Without a published `running` state, that whole 14-minute window is
+indistinguishable from a run that never started — the observer's opening
+`req(...)` aborts in **silence**.
+
+## Two visibility modes, ONE protocol
+
+The protocol has exactly **two supported visibility modes**. They differ on a
+**single axis** — whether a browser window is visible — and share *everything*
+else: the same `ready.json`, `arm.json`, `scenario.json` and `result.json`, the
+same session-selection and heartbeat rules, the same passive badge. **There is
+deliberately no visible-mode protocol.** Only the client's visibility changes;
+the IPC contract is identical.
+
+| | Mode 1 — `headless` (default) | Mode 2 — `visible` |
+|---|---|---|
+| `launch.browser` | `FALSE` | `TRUE` |
+| Client | a real httpuv server + a real chromote client | RStudio Viewer, or a visible localhost Chrome/Edge tab |
+| Window | none | visible |
+| `ready.json.viewer` | `"headless"` | `"visible"` |
+| Use | reproducible automated tests, long unattended runs | interactive development, human-in-the-loop |
+
+`ready.json`'s `viewer` field is the **only** thing that differs on the wire, and
+it is PUBLISHED so an agent never has to guess whether a human is watching. The
+resolution order is **declared beats derived, derived beats guessing**:
+
+1. `getOption("ts.drive.viewer")`, then
+2. `TRANSCRIPTO_DEV_DRIVE_VIEWER` (set by the launcher), then
+3. `interactive()` — TRUE → `"visible"`, FALSE → `"headless"`.
+
+A declaration outside `TS_DRIVE_VIEWERS` (`headless`, `visible`, `unknown`) is
+reported as `"unknown"`, **never coerced**: telling an agent "headless" while a
+human is watching would be worse than telling it nothing. The field is **not**
+readable from a scenario payload — a scenario that could relabel its own session
+would make the field worthless.
+
+### Launching a drive-enabled session
 
 ```bash
-Rscript tools/launch_dev_drive.R
+Rscript tools/launch_dev_drive.R              # Mode 1 "headless" (default)
+Rscript tools/launch_dev_drive.R --visible    # Mode 2 "visible"
+Rscript tools/launch_dev_drive.R --print      # prepare env, do NOT start
 ```
 
-This sets `TRANSCRIPTO_DEV_DRIVE=1` for that process only (never committed to
-`.Renviron`), which enables the wildcard arm token `"*"`. Start it, then open
-the Viewer or the `http://127.0.0.1:<port>` tab.
+Unknown flags, and `--headless` together with `--visible`, are rejected with
+`stop()` rather than ignored: a silently mis-parsed mode is a session whose
+`viewer` field lies.
+
+The launcher sets, **for that process only** (never in a committed `.Renviron`):
+
+- `TRANSCRIPTO_DEV_DRIVE=1` — enables the wildcard arm token `"*"`;
+- `TRANSCRIPTO_DEV_DRIVE_VIEWER=<mode>` — declares the visibility mode;
+- the heartbeat knobs, published in `ready.json` so the agent reads them rather
+  than hardcoding;
+- `options(ts.drive.interactive = TRUE)` — **the arm gate**. See below.
 
 RStudio's **Run App** button does **not** go through this script, so the
 wildcard is unavailable there: arm with the real token printed on the console
-(`session_token=...`). That safer default is why the console line exists.
+(`session_token=...`). That safer default is why the console line exists. Run
+App is nevertheless a supported **Mode 2** session: nobody declared the mode, so
+`ts_drive_viewer()` derives it from `interactive()` — TRUE there — and
+`ready.json` still reports `viewer: "visible"`.
+
+### ⚠️ Opening a visible tab ROTATES the token — never reuse an old one
+
+A new tab creates a **new session**, and the last connected session wins: it
+**rewrites `ready.json` with a new `session_token`**. So the agent must:
+
+1. launch with `launch.browser = TRUE`;
+2. let the Viewer/tab open and **connect**;
+3. **re-read the FRESH `ready.json`** — the handshake is written from `server()`,
+   and Shiny creates a session only when a client connects, so a `ready.json`
+   read *before* the tab existed describes a different (or no) session;
+4. arm with the token from **that** read.
+
+Arming with a stale token is **refused**, and the refusal is indistinguishable
+from "nobody armed me" — the exact silent seam this rule closes. The rule is not
+"read `ready.json` once": it is **read it again after every new client**.
+
+### The arm gate must be OPEN, or the launcher produces an INERT app
+
+`ts_drive_interactive()` is `isTRUE(interactive())` unless overridden, and
+**`Rscript` is never interactive**. MEASURED (2026-09-23): without the launcher's
+`options(ts.drive.interactive = TRUE)`, the poller's observer returned on its
+**first statement**, so `invalidateLater()` was never called and the arm gate
+answered "non-interactive session" to every request. The app listened on
+127.0.0.1:7067 and logged **no** `session_token=` — perfectly healthy-looking,
+permanently inert, and with nothing in the log saying why. An agent sees a
+handshake frozen at attach time and cannot tell it from a dead session.
+
+The gate is set in the **launcher**, not in `app.R`, for the same reason as
+`TRANSCRIPTO_DEV_DRIVE=1`: it exists to keep PRODUCTION inert, and production
+never runs this script.
+
+### Mode 2 smoke acceptance — 8 steps, PASSED
+
+Run on a real `--visible` session (`launch.browser = TRUE`, real localhost tab):
+
+| # | Step | Result |
+|---|---|---|
+| 1 | launch with `launch.browser = TRUE` | ✅ port up, no `--headless` |
+| 2 | open the Viewer / localhost tab | ✅ real client connected |
+| 3 | read the FRESH `ready.json` | ✅ `viewer: "visible"`, `session_token: "suwuyn5z"` |
+| 4 | badge visible after arming | ✅ DOM `ts-drive-badge-armed`, text `drive: armed`; `hb_n` climbed 1 → 11 |
+| 5 | run `noop` and `snapshot` | ✅ `done` (~2 s); the snapshot carried the full `modules.bulk_de` / `modules.bulk_filter` payload |
+| 6 | the SAME session is controlled, without reload | ✅ session marker `p-nafpibzqhs` unchanged **and** token unchanged |
+| 7 | close the visible tab | ✅ `ready.json` deleted within ~1 s |
+| 8 | heartbeat / session invalidation | ✅ file gone ⇒ no live client; a later arm is refused |
+
+Step 6 is the load-bearing one: marker *and* token both surviving proves the
+scenario was applied to the tab that was already open, i.e. **no reload**.
 
 ## Two hard limits
 
@@ -508,6 +703,15 @@ a panel in an inactive tab — `innerText` returns `""` for `display:none`.
   evidence artefacts under `.workbuddy-ai/tmp/evidence/`. These are **working
   notes**, not part of the deliverable — a claim sourced only from them is not
   independently reproducible.
+
+⚠️ **The harness client is not part of the contract.** The earlier grades above
+record a `chromote` client; the Mode 2 smoke acceptance (2026-09-23) used a
+**zero-dependency Node CDP driver** instead, because `chromote` 0.5.1 failed
+deterministically on this host (`error_no_available_port`, then "processx
+supervisor was not ready after 5 seconds", 4/4 attempts). The protocol is
+indifferent to *which* client connects — `ready.json` appears when a client
+CONNECTS — so a change of driver is not a change of protocol. Do not read a
+grade's client as a property of the protocol.
 
 The **live-session acceptance run is a one-shot observation**: it depends on a
 real browser, a real httpuv session and a human or agent driving the files. The

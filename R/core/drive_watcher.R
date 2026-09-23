@@ -44,6 +44,9 @@
 .ts_drive_state$write_error <- NULL
 # Monotonic counter, used to make every temporary write name unique.
 .ts_drive_state$write_attempts <- 0L
+# The in-flight job, or NULL. See the "Job lifecycle" section for why this
+# exists and what an agent may conclude from it.
+.ts_drive_state$job <- NULL
 
 #' Record the app root once, at source time.
 #'
@@ -372,6 +375,44 @@ ts_drive_new_token <- function() {
 # ready.json — app -> agent
 # =============================================================================
 
+#' The closed vocabulary of client-visibility modes.
+#'
+#' TWO supported modes share ONE IPC contract (spec §4): the same `ready.json`,
+#' `arm.json`, `scenario.json` and `result.json`, the same session-selection and
+#' heartbeat rules, the same passive badge. Only the CLIENT's visibility differs,
+#' which is why this is the only field that may:
+#'
+#'   - `headless` — `launch.browser = FALSE`, a real httpuv server plus a real
+#'     chromote client, no visible window: reproducible unattended runs.
+#'   - `visible`  — RStudio Viewer or a visible localhost Chrome/Edge tab.
+#'   - `unknown`  — nobody declared it, and `interactive()` could not decide.
+#'
+#' A declaration outside this set is reported as `unknown`, NEVER coerced:
+#' telling an agent "headless" while a human is watching would be worse than
+#' telling it nothing.
+TS_DRIVE_VIEWERS <- c("headless", "visible", "unknown")
+
+#' Which visibility mode is this session running under?
+#'
+#' Declared wins over derived, and the derived value uses the SAME gate that
+#' decides whether a dev badge can ever render (`ts_drive_interactive()`), so the
+#' two can never disagree about whether a human is present. Under `Rscript` that
+#' gate is FALSE, i.e. `headless` — which is exactly the Mode 1 launch.
+#'
+#' `tools/launch_dev_drive.R` is the only supported way to DECLARE it.
+#' Deliberately NOT readable from a scenario payload: this is a property of the
+#' session, not of a request, and a scenario that could relabel itself would make
+#' the field worthless to an agent deciding whether a human is watching.
+ts_drive_viewer <- function() {
+  v <- getOption("ts.drive.viewer", NULL)
+  if (is.null(v)) v <- Sys.getenv("TRANSCRIPTO_DEV_DRIVE_VIEWER", "")
+  if (is.character(v) && length(v) == 1L && nzchar(v)) {
+    v <- tolower(trimws(v))
+    return(if (v %in% TS_DRIVE_VIEWERS) v else "unknown")
+  }
+  if (isTRUE(interactive())) "visible" else "headless"
+}
+
 #' Write `ready.json` for this session.
 #'
 #' Last connected session wins: several tabs/sessions overwrite the same file,
@@ -440,7 +481,10 @@ ts_drive_write_ready <- function(session, token, armed = FALSE, last_seq = 0L, h
     port          = port,
     root          = ts_drive_root(),
     session_token = token,
-    viewer        = "unknown",
+    # WHICH of the two supported visibility modes this session is running
+    # under. Was hardcoded "unknown" — present in every payload, carrying
+    # nothing. See TS_DRIVE_VIEWERS.
+    viewer        = ts_drive_viewer(),
     last_seq      = as.integer(last_seq),
     started_at    = started,
     hb_at         = ts_drive_now_iso(),
@@ -830,7 +874,14 @@ ts_drive_write_result <- function(seq, status, active_module, armed,
     # is the one that fails.
     write_error   = ts_drive_last_write_error()
   )
-  ts_drive_write_json(payload, ts_drive_path("result.json"))
+  ok <- ts_drive_write_json(payload, ts_drive_path("result.json"))
+  # Whether the payload VERIFIABLY landed, carried as an attribute rather than
+  # as the return value: every existing caller reads the payload, and the job
+  # lifecycle is the one caller that must not clear a pending terminal status
+  # on a write that failed. `ts_drive_write_json()` already MEASURES this, so
+  # the attribute forwards its verdict instead of re-deriving one. Same
+  # convention as `ts_drive_write_ready()`.
+  attr(payload, "written") <- isTRUE(ok)
   invisible(payload)
 }
 
@@ -984,6 +1035,18 @@ ts_drive_entry_counter <- function(entry) {
   if (is.function(entry)) return(entry)
   if (is.list(entry)) return(entry$counter)
   NULL
+}
+
+#' Does one registry entry DECLARE a long job? (see `long` in
+#' `ts_drive_publish_token()`.)
+#'
+#' Fails CLOSED on anything unexpected: a bare counter, a legacy record written
+#' before `long` existed, `NULL`, or a non-logical all answer `FALSE`, so an
+#' undeclared button keeps the documented `done` semantics rather than being
+#' silently promoted into a job that must be closed.
+ts_drive_entry_long <- function(entry) {
+  if (!is.list(entry)) return(FALSE)
+  isTRUE(entry$long)
 }
 
 #' Ask one registry entry's readiness guard, and classify the answer.
@@ -1146,15 +1209,23 @@ ts_drive_registry <- function(global_data) {
 #'   called from the poller's beat, so the module MUST wrap its reactive reads
 #'   in `shiny::isolate()`. Omitted means "this module publishes no state", and
 #'   that absence stays distinguishable from a probe that crashes.
+#' @param long Does firing this button start a job that OUTLIVES the reactive
+#'   flush? Default `FALSE`, which keeps `run_pipeline`'s documented meaning
+#'   ("the token moved", spec §2.3). A module that declares `TRUE` takes on the
+#'   matching duty: `run_pipeline` answers `running` at dispatch, and the module
+#'   must close the loop with `ts_drive_job_finish()` or the agent polls a job
+#'   that never reports. Declared by the MODULE because only the module knows
+#'   its own cost — the DE module cites its 852.7 s measurement.
 ts_drive_publish_token <- function(global_data, input_id, counter, ready = NULL,
-                                   state = NULL) {
+                                   state = NULL, long = FALSE) {
   if (!input_id %in% TS_DRIVE_BUTTONS) {
     warning(sprintf("ts_drive_publish_token(): '%s' is not in TS_DRIVE_BUTTONS — ignored.", input_id))
     return(invisible(FALSE))
   }
   reg <- ts_drive_registry(global_data)
   if (is.null(reg)) return(invisible(FALSE))
-  reg[[input_id]] <- list(counter = counter, ready = ready, state = state)
+  reg[[input_id]] <- list(counter = counter, ready = ready, state = state,
+                          long = isTRUE(long))
   invisible(TRUE)
 }
 
@@ -1366,6 +1437,23 @@ ts_drive_apply <- function(session, input, scn, effects = NULL) {
                   active_module = module, nav = nav))
     }
 
+    # CONTRACT B — ONE job at a time (spec §5). A second `run_pipeline` while a
+    # job is in flight is REFUSED, not queued: a queue would let an agent pile
+    # up work it can never observe, and the module's own `observeEvent` would
+    # run the second one on top of the first's state. `invalid` is the honest
+    # status — nothing ran, and the message names the job that blocks.
+    #
+    # Checked BEFORE the readiness probe so the two refusals stay distinct: a
+    # busy session is ready, it is simply occupied.
+    if (ts_drive_job_busy()) {
+      job <- ts_drive_job_state()
+      errors <- c(errors, sprintf(
+        "another job is already running (module '%s', seq %s, started %s) — wait for result.json to reach a terminal status",
+        job$module, job$seq, job$started_at))
+      return(list(status = "invalid", errors = errors, warnings = warnings,
+                  active_module = module, nav = nav))
+    }
+
     # ASK BEFORE FIRING. The owning module is the only side that can know
     # whether its button would do anything (see TS_DRIVE_READY), and the
     # refusal has to happen HERE — before the counter moves — or the module's
@@ -1374,7 +1462,8 @@ ts_drive_apply <- function(session, input, scn, effects = NULL) {
     # the "not bound" branch below, so the two failures stay distinguishable:
     #   not bound  -> the WIRING is missing (the G0/G1 live finding)
     #   not ready  -> the wiring is there and the module refused (no object)
-    probe <- ts_drive_ready_probe(ts_drive_tokens_for(module, effects)[[btn]])
+    entry <- ts_drive_tokens_for(module, effects)[[btn]]
+    probe <- ts_drive_ready_probe(entry)
     if (probe$verdict %in% c("not-ready", "probe-failed")) {
       errors <- c(errors, ts_drive_ready_refusal(btn, probe))
       return(list(status = "invalid", errors = errors, warnings = warnings,
@@ -1388,6 +1477,26 @@ ts_drive_apply <- function(session, input, scn, effects = NULL) {
       return(list(status = "invalid", errors = errors, warnings = warnings,
                   active_module = module, nav = nav))
     }
+
+    # CONTRACT A — a job DECLARED long is `running`, not `done`.
+    #
+    # The declaration is the MODULE's, through `long = TRUE` on
+    # `ts_drive_publish_token()`, because only the module knows its own cost.
+    # It is a declaration and not a guess: the DE module cites the 852.7 s
+    # measurement that justifies it.
+    #
+    # `done` here would be TERMINAL for the seq and is written before the work
+    # starts (see the block comment above `ts_drive_job_state()`), so a long
+    # job answering `done` tells an agent to stop polling for a result that
+    # does not exist yet. `running` is non-terminal, so the agent keeps
+    # polling — and it is ALSO the proof of life while the synchronous job
+    # blocks the event loop and the heartbeat stalls.
+    if (isTRUE(ts_drive_entry_long(entry))) {
+      ts_drive_job_begin(scn$seq, module, action, btn)
+      return(list(status = "running", errors = character(0), warnings = warnings,
+                  active_module = module, nav = nav))
+    }
+
     # What `done` means here, precisely: the token moved, so the module's
     # `observeEvent` HAS BEEN TRIGGERED. It has not necessarily finished. The
     # counter is set from inside the poller's own observer, and Shiny runs the
@@ -1395,6 +1504,10 @@ ts_drive_apply <- function(session, input, scn, effects = NULL) {
     # tick returns. So `done` is terminal for the SEQ (nothing more will be
     # written for it), never a claim that the pipeline completed; the
     # pipeline's own outcome is read through the following `snapshot`.
+    #
+    # That is only honest while the work is SHORT enough to finish within the
+    # flush's tail. A module whose job outlives it must declare `long = TRUE`
+    # and close the loop with `ts_drive_job_finish()`.
     return(list(status = "done", errors = character(0), warnings = warnings,
                 active_module = module, nav = nav))
   }
@@ -1521,6 +1634,44 @@ ts_drive_tick <- function(session, input, global_data, token, last_seq = 0,
               error = NULL, nav = NULL, status = NULL, module = NULL,
               action = NULL, elapsed_s = NULL)
   out$armed <- tryCatch(ts_drive_arm_state(token)$armed, error = function(e) FALSE)
+
+  # ── A job that FINISHED outranks every other concern this beat ────────────
+  # Resolved BEFORE the arm gate and before `scenario.json` is even read, and
+  # the beat then consumes NOTHING else. Both matter:
+  #
+  #   * before the arm gate, because a job dispatched while armed must still be
+  #     reported if the session was disarmed while it ran — the agent is owed
+  #     the terminal status of work it started;
+  #   * consuming nothing else, because a queued scenario resolved in the SAME
+  #     beat would overwrite `result.json` with its own outcome, and the
+  #     terminal status would be lost before the agent could ever read it.
+  #
+  # A FAILED write keeps the job pending, so the next beat retries — the same
+  # discipline as the heartbeat, which does not advance its throttle on a write
+  # that did not land.
+  pend <- ts_drive_job_pending()
+  if (!is.null(pend)) {
+    job <- ts_drive_job_state()
+    wrote <- ts_drive_write_result(
+      job$seq, pend$status, job$module, out$armed,
+      errors   = if (identical(pend$status, "error")) pend$error else character(0),
+      snapshot = ts_drive_snapshot(global_data)
+    )
+    if (isTRUE(attr(wrote, "written"))) {
+      message(sprintf("[drive] job seq=%s module=%s finished status=%s elapsed=%.1fs",
+                      job$seq, job$module, pend$status, pend$elapsed_s))
+      ts_drive_job_clear()
+      out$consumed  <- TRUE
+      out$status    <- pend$status
+      out$module    <- job$module
+      out$action    <- job$action
+      out$elapsed_s <- pend$elapsed_s
+    } else {
+      message(sprintf("[drive] terminal write for seq=%s FAILED — retrying next beat",
+                      job$seq))
+    }
+    return(out)
+  }
 
   if (!isTRUE(out$armed)) return(out)
 
@@ -1655,6 +1806,129 @@ ts_drive_badge_advance <- function(model, event, status = NULL, ack_seq = NULL,
 ts_drive_badge_visible <- function(enabled, interactive, selected, armed, state) {
   isTRUE(enabled) && isTRUE(interactive) && isTRUE(selected) && isTRUE(armed) &&
     nzchar(ts_drive_badge_chr(state)) && !identical(ts_drive_badge_chr(state), "off")
+}
+
+
+# =============================================================================
+# Job lifecycle — what an agent polls while work is in flight (spec §5)
+# =============================================================================
+# WHY THIS EXISTS, and it was MEASURED rather than reasoned.
+#
+# `run_pipeline` used to answer `done` for every module, and `done` is TERMINAL
+# (`ts_drive_status_terminal()`). For the DE module that answer is written
+# BEFORE the work starts: this tick moves the button counter and returns, and
+# Shiny runs the module's `observeEvent` on the next step of the SAME flush.
+# MEASURED live 2026-09-22 (DESeq2, 17 925 genes x 18 samples): the token
+# answered `done` in 2.1 s, and the contrast first became observable 852.7 s
+# later. An agent that switches on the terminal status was therefore told, in
+# 2.1 s, that a fourteen-minute job had FINISHED.
+#
+# `running` already existed in `TS_DRIVE_STATUSES`, in `TS_DRIVE_BADGE_STATES`
+# and in the badge transition table — `ts_drive_badge_state_for("running")`
+# maps it — but NOTHING ever produced it. The badge was built for this signal
+# and the producer was missing; that is the whole of what "badge-only" meant.
+#
+# THE CONTRACT AN AGENT MAY NOW RELY ON:
+#
+#   accepted -> running -> done/error     (contract A, a job DECLARED long)
+#   accepted -> invalid                   (contract B, a job already in flight)
+#
+# `running` is written to `result.json` at DISPATCH, so it travels the wire and
+# is not merely a colour on screen. The terminal status is written when the
+# MODULE DECLARES the job over — a measurement by the only side that knows,
+# never an inference from a state fingerprint or a timer. Until a module
+# declares itself long, `run_pipeline` keeps its documented meaning ("the token
+# moved", spec §2.3) and answers `done` as before.
+#
+# RESIDUAL — MEASURED, AND DELIBERATELY NOT MASKED. The long computation is
+# still SYNCHRONOUS, so it blocks the Shiny event loop for its whole duration.
+# No tick runs meanwhile, so `ready.json`'s heartbeat stalls and
+# `ts_drive_ready_fresh()` — the agent-side liveness gate, default 15 s — goes
+# FALSE for the rest of the job. `result.json` carrying `running` is therefore
+# ALSO the proof of life the heartbeat cannot give during that window: it is
+# what separates "alive and busy" from "dead". Restoring the heartbeat needs
+# the computation itself to stop blocking, i.e. to go through the existing
+# asynchronous layer (`run_job()`, R/core/jobs.R) — a change to the MODULE, not
+# to this protocol.
+
+#' The in-flight job, or `NULL`.
+#'
+#' Process-wide, like `.ts_drive_state$write_error`, and for the same reason:
+#' the protocol admits ONE driven session per process (`ready.json` names it),
+#' so a session-scoped registry would only add a way for two tabs to disagree.
+ts_drive_job_state <- function() {
+  .ts_drive_state$job
+}
+
+#' Is a job in flight right now?
+ts_drive_job_busy <- function() {
+  !is.null(.ts_drive_state$job)
+}
+
+#' The terminal status a module declared and that is not yet on the wire.
+ts_drive_job_pending <- function() {
+  .ts_drive_state$job$pending
+}
+
+#' Record a job the tick has just DISPATCHED.
+#'
+#' @param seq Scenario sequence the job answers for.
+#' @param module,action,button Where the job was fired from.
+ts_drive_job_begin <- function(seq, module, action, button) {
+  .ts_drive_state$job <- list(
+    seq        = suppressWarnings(as.numeric(seq)),
+    module     = as.character(module),
+    action     = as.character(action),
+    button     = as.character(button),
+    started_at = ts_drive_now_iso(),
+    started    = as.numeric(Sys.time()),
+    pending    = NULL
+  )
+  invisible(.ts_drive_state$job)
+}
+
+#' A module DECLARES its job over.
+#'
+#' This is the terminal producer. It is called by the MODULE — the only side
+#' that can know the work has stopped — and never by the watcher, which may not
+#' run a pipeline and therefore may not guess that one finished.
+#'
+#' The declaration is only RECORDED here; the write happens on the next tick,
+#' so `result.json` keeps exactly one writer. A declaration whose `button` is
+#' not the one in flight is REFUSED rather than applied: two tabs, or a stale
+#' observer, must not be able to close someone else's job.
+#'
+#' @param button The bound button id the job was dispatched from.
+#' @param status Terminal status. Must be one of `TS_DRIVE_STATUSES` AND
+#'   terminal by `ts_drive_status_terminal()` — `applied`/`running` are refused,
+#'   because a module declaring its own job "still running" would leave an agent
+#'   polling for a completion that will never be written.
+#' @param error Optional message, carried only for `error`.
+#' @return `TRUE` when the declaration was accepted.
+ts_drive_job_finish <- function(button, status = "done", error = NULL) {
+  job <- .ts_drive_state$job
+  if (is.null(job)) return(invisible(FALSE))
+  if (!identical(as.character(button), job$button)) return(invisible(FALSE))
+  st <- as.character(status)
+  if (length(st) != 1L || is.na(st) || !st %in% TS_DRIVE_STATUSES) {
+    return(invisible(FALSE))
+  }
+  if (!isTRUE(ts_drive_status_terminal(st))) return(invisible(FALSE))
+  .ts_drive_state$job$pending <- list(
+    status    = st,
+    error     = if (identical(st, "error")) {
+      as.character(error %||% "the job failed")
+    } else NULL,
+    ended_at  = ts_drive_now_iso(),
+    elapsed_s = as.numeric(Sys.time()) - job$started
+  )
+  invisible(TRUE)
+}
+
+#' Forget the in-flight job. Called once its terminal status is ON THE WIRE.
+ts_drive_job_clear <- function() {
+  .ts_drive_state$job <- NULL
+  invisible(NULL)
 }
 
 
