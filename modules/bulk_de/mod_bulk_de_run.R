@@ -152,12 +152,12 @@
     # This is the TERMINAL PRODUCER that `long = TRUE` commits the module to.
     # It is registered BEFORE the first `req()`, so every path out of this
     # observer reports something: the early `req()` abort and the four
-    # design-guard `return()`s all leave `job_outcome` at "refused", the
+    # design-guard `return()`s all leave `job_state$outcome` at "refused", the
     # successful path sets "ok", and the computation's own catch sets "failed".
     # `on.exit()` is used rather than a call per exit path precisely so that a
     # guard ADDED LATER cannot forget to close the job.
     #
-    # `job_outcome` is the MEASUREMENT of what happened, never a guess, and it
+    # `job_state$outcome` is the MEASUREMENT of what happened, never a guess, and it
     # maps onto the FROZEN status enum instead of inventing a second one:
     #   ok      -> done     the contrast was registered
     #   failed  -> error    the computation raised
@@ -172,17 +172,30 @@
     # event loop is frozen, so no click can be processed — but the guard is
     # written rather than relied upon, because the async conversion will make
     # that window real.
-    job_outcome <- "refused"
+    # A MUTABLE CELL, NOT A LOCAL BINDING — and that distinction is the whole
+    # reason this line is an environment.
+    #
+    # `<-` inside the `error = function(e)` handler below binds to the HANDLER's
+    # frame, because a handler is a CLOSURE. A plain `job_outcome <- "failed"`
+    # there left THIS frame at "refused", so the `on.exit()` published
+    # `invalid` — "a guard bailed, nothing ran" — for a DE that had actually
+    # RAISED, with `error = NULL` and no trace on the wire. Measured 2026-09-24
+    # (STATUS.md §2do.4): the operator is invited to ignore a red badge, and a
+    # real execution error is hidden. An environment has REFERENCE semantics,
+    # so the handler's write IS the one the exit path reads.
+    job_state <- new.env(parent = emptyenv())
+    job_state$outcome <- "refused"
+    job_state$error   <- NULL
     if (isTRUE(ts_drive_job_busy()) &&
         identical(ts_drive_job_state()$button, "bulk-de-run_de")) {
       on.exit(ts_drive_job_finish(
         "bulk-de-run_de",
-        status = switch(job_outcome,
+        status = switch(job_state$outcome,
                         ok     = "done",
                         failed = "error",
                         "invalid"),
-        error = if (identical(job_outcome, "failed")) {
-          "the DE computation raised — see the app notification"
+        error = if (identical(job_state$outcome, "failed")) {
+          job_state$error %||% "the DE computation raised"
         } else NULL
       ), add = TRUE)
     }
@@ -346,10 +359,19 @@
       # Last statement of the body, so it is reached only when the model was
       # fitted AND the contrast registered — the measurement the job
       # declaration above reports as `done`.
-      job_outcome <- "ok"
+      job_state$outcome <- "ok"
 
     }, error = function(e) {
-      job_outcome <- "failed"
+      # Written into the CELL. This handler is a closure, so a local assignment
+      # here would never reach the `on.exit()` above — which is exactly the
+      # defect this line replaces.
+      job_state$outcome <- "failed"
+      # The ONLY free field of the job contract, and the one that crosses the
+      # badge into the UI: it must be sanitized, because an R condition message
+      # can carry an absolute path or a token. Same 200-char budget as
+      # `bulk_pathways`. The engine is named so the message stays actionable.
+      job_state$error <- ts_drive_badge_sanitize(
+        paste0("DE failed (", input$de_engine, "): ", conditionMessage(e)), 200L)
       showNotification(paste(.tr("Erreur DE:"), e$message), type = "error", duration = 10)
     })
   })
