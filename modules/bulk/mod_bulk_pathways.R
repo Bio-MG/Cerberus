@@ -162,10 +162,130 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
         "Step 1 has not produced a VST matrix (shared_rv$vst_mat is NULL)"
       } else TRUE
     }
+
+    # ── STATE PUBLISHER (jalon « pathway state observability », 2026-09-24) ──
+    # 🔴 LE DÉFAUT QUE CE PROBE EXISTE POUR TUER, mesuré en session VIVANTE :
+    # `run_pipeline` sur `bulk-pathways-run_pathway` répond `done` AUSSI BIEN
+    # quand l'enrichissement a produit 2 voies que quand l'observateur sort par
+    # son garde silencieux des `< 10` gènes (l. ~471, `return()` nu). `done` est
+    # HONNÊTE sur ce qu'il mesure — « le token a bougé » (spec §2.3) — et MUET
+    # sur ce qui compte. Preuve de la cécité : au même instant `result.json`
+    # portait `status="done"` et `snapshot$modules` ne contenait AUCUNE entrée
+    # `bulk_pathways`, alors que le DOM portait la vérité (`✓ 2 pathways…`).
+    #
+    # Un `done` de PROTOCOLE n'est pas un `done` de MÉTIER. Ce probe publie le
+    # second, par la couture EXISTANTE (`state =`, cf. `bulk_filter`/`bulk_de`).
+    #
+    # ⚠️ CASSETTE, pas lecture de l'objet vivant. Les deux sorties qui comptent
+    # ne se distinguent PAS sur `shared_rv$pathway_results` : le garde `< 10`
+    # gènes laisse le slot INCHANGÉ (`return()` nu). Sans enregistreur, « a
+    # tourné, trop peu de gènes » et « n'a jamais tourné » rendent le même
+    # `NULL`. L'enregistreur est donc le plus petit témoin honnête.
+    #
+    # ⚠️ `running` N'A PAS DE PRODUCTEUR ICI, et n'en aura pas : le job est
+    # SYNCHRONE, donc aucun tick ne tourne pendant qu'il s'exécute. Un drapeau
+    # posé dans le corps de l'observateur serait INOBSERVABLE — un `running`
+    # sans producteur est un MENSONGE, pas une observabilité. Le producteur est
+    # le poller lui-même : `long = TRUE` fait écrire `running` au dispatch. Ce
+    # probe se contente donc de LIRE l'état du job, il ne l'invente pas.
+    #
+    # ⚠️ Un ENVIRONNEMENT et non une liste : écrit depuis les observateurs et lu
+    # depuis le probe, il doit avoir une sémantique de RÉFÉRENCE (une liste
+    # serait copiée à chaque écriture, donc l'écriture serait perdue).
+    drive_last <- local({
+      d <- new.env(parent = emptyenv())
+      d$action    <- NA_character_
+      d$status    <- NA_character_
+      d$n_results <- NA_integer_
+      d$error     <- ""
+      d$elapsed_s <- NA_real_
+      d$started   <- NULL
+      d$seq       <- NULL
+      d
+    })
+
+    # Enregistre une issue RÉSOLUE. `started` est posé par l'observateur, pas
+    # ici : la durée doit mesurer le TRAVAIL, pas le temps écoulé depuis le
+    # dernier appel réussi. Ne JAMAIS y écrire `running` — voir plus haut.
+    drive_record <- function(action, status, n_results = NA_integer_, error = "") {
+      drive_last$action    <- action
+      drive_last$status    <- status
+      drive_last$n_results <- n_results
+      drive_last$error     <- error
+      drive_last$elapsed_s <- if (is.null(drive_last$started)) {
+        NA_real_
+      } else {
+        as.numeric(Sys.time()) - drive_last$started
+      }
+      invisible(NULL)
+    }
+
+    # STATE PROBE (G3) — cf. `state` dans `ts_drive_publish_token()`.
+    # Scalaire UNIQUEMENT : jamais la matrice de voies, jamais un tracé, jamais
+    # la table biologique, jamais un log. Chaque lecture partagée est
+    # isolate()-gardée : ce probe tourne dans le battement réactif du poller
+    # (spec §6), donc une lecture nue enrôlerait les données du module dans son
+    # jeu de dépendances.
+    drive_state <- function() {
+      out <- list(
+        module    = "bulk_pathways",
+        action    = NA_character_,
+        seq       = NA_integer_,
+        status    = "not_ready",
+        elapsed_s = NULL,
+        n_results = NULL,
+        error     = ""
+      )
+      # 1) Un job en vol est le SEUL producteur de `running` (cf. plus haut).
+      job <- ts_drive_job_state()
+      if (!is.null(job)) {
+        btn <- if (is.null(job$button)) "" else as.character(job$button)[1]
+        out$action <- if (nzchar(btn)) sub("^bulk-pathways-", "", btn) else NA_character_
+        out$seq    <- if (is.null(job$seq)) NA_integer_ else as.integer(job$seq)
+        out$status <- "running"
+        if (!is.null(job$started)) {
+          out$elapsed_s <- round(as.numeric(Sys.time()) - job$started, 1L)
+        }
+        return(out)
+      }
+      # 2) Aucun objet de travail ⇒ `not_ready`, que l'objet n'ait jamais existé
+      #    ou qu'il ait disparu. Un statut RÉSOLU ne survit pas à sa disparition :
+      #    le module ne peut plus ni rejouer ni défendre ce résultat, donc il ne
+      #    doit pas le présenter comme `done`. Les DEUX lectures sont isolées.
+      ready <- !is.null(shiny::isolate(shared_rv$filtered_counts)) ||
+               !is.null(shiny::isolate(shared_rv$vst_mat))
+      st <- drive_last$status
+      if (!isTRUE(ready) || is.null(st) || length(st) != 1L || is.na(st)) {
+        return(out)
+      }
+      # 3) Issue RÉSOLUE, telle que l'enregistreur l'a MESURÉE. Liste
+      #    RECONSTRUITE : `out$champ <- NULL` SUPPRIMERAIT le champ (mesuré), et
+      #    le contrat de champs est fermé.
+      return(list(
+        module    = "bulk_pathways",
+        action    = drive_last$action,
+        seq       = if (is.null(drive_last$seq)) NA_integer_ else
+                    as.integer(drive_last$seq),
+        status    = as.character(st),
+        elapsed_s = if (is.null(drive_last$elapsed_s) ||
+                        is.na(drive_last$elapsed_s)) NULL else
+                    round(as.numeric(drive_last$elapsed_s), 1L),
+        n_results = if (is.null(drive_last$n_results) ||
+                        is.na(drive_last$n_results)) NULL else
+                    as.integer(drive_last$n_results),
+        # Le seul champ LIBRE du contrat : il traverse le caviardage du badge
+        # (un token ne doit pas fuir dans l'UI), et `known` ne lui est JAMAIS
+        # appliqué — c'est là que vit la propriété de sécurité.
+        error     = if (identical(as.character(st), "error")) {
+          ts_drive_badge_sanitize(drive_last$error, 200L)
+        } else ""
+      ))
+    }
+
     ts_drive_publish_token(global_data, "bulk-pathways-run_pathway", drive_counter_pathway,
-                           ready = ready_pathway)
+                           ready = ready_pathway, state = drive_state, long = TRUE)
     ts_drive_publish_token(global_data, "bulk-pathways-run_scores",  drive_counter_scores,
-                           ready = ready_scores)
+                           ready = ready_scores, state = drive_state, long = TRUE)
     drive_trigger_pathway <- shiny::reactive(list(drive_counter_pathway(), input$run_pathway))
     drive_trigger_scores  <- shiny::reactive(list(drive_counter_scores(),  input$run_scores))
 
@@ -284,8 +404,28 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
     })
 
     observeEvent(drive_trigger_scores(), {
+      # ── DECLARE THE JOB OVER (drive job contract, spec §5) ────────────────
+      # Même contrat que l'observateur d'enrichissement ci-dessus : ce jeton est
+      # DÉCLARÉ long (le calcul GSVA/ssGSEA est synchrone et long), donc il doit
+      # fermer son job sur TOUTE sortie, sinon le contrat B refuserait à jamais
+      # le `run_pipeline` suivant et le module deviendrait impilotable — la
+      # panne silencieuse la plus coûteuse.
+      outcome <- new.env(parent = emptyenv())
+      outcome$v <- "refused"
+      if (isTRUE(ts_drive_job_busy()) &&
+          identical(ts_drive_job_state()$button, "bulk-pathways-run_scores")) {
+        on.exit(ts_drive_job_finish("bulk-pathways-run_scores",
+          status = switch(outcome$v, ok = "done", failed = "error", "invalid"),
+          error = if (identical(outcome$v, "failed")) {
+            "the per-sample scoring raised — see the app notification"
+          } else NULL
+        ), add = TRUE)
+      }
+
       req(input$run_scores > 0 || shiny::isolate(drive_counter_scores()) > 0)
       req(shared_rv$vst_mat)
+      drive_last$seq     <- ts_drive_job_state()$seq
+      drive_last$started <- as.numeric(Sys.time())
       # PLOT-S6b — la source décide : jeux NATIFS (aucun fichier à fournir) ou
       # .gmt fourni. Les deux rendent la même forme (nom -> gènes), donc tout
       # l'aval (compute_pathway_scores, exports, vues) est inchangé.
@@ -294,12 +434,14 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
         if (is.null(input$scores_gmt) || is.null(input$scores_gmt$datapath)) {
           showNotification(.tr("\u26a0\ufe0f Fournissez un fichier .gmt (jeux de gènes)."),
                            type = "warning", duration = 5)
+          drive_record("run_scores", "not_ready")
           return()
         }
         sets <- tryCatch(bulk_parse_gmt(input$scores_gmt$datapath), error = function(e) e)
         if (inherits(sets, "error")) {
           showNotification(paste(.tr("Erreur GMT:"), conditionMessage(sets)),
                            type = "error", duration = 8)
+          drive_record("run_scores", "error", error = conditionMessage(sets))
           return()
         }
       } else {
@@ -308,11 +450,14 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
         if (inherits(sets, "error")) {
           showNotification(paste(.tr("Erreur jeux de gènes :"), conditionMessage(sets)),
                            type = "error", duration = 8)
+          drive_record("run_scores", "error", error = conditionMessage(sets))
           return()
         }
       }
       scores_sets_rv(sets)
-      p <- shiny::Progress$new(); on.exit(p$close())
+      # `add = TRUE` est PORTEUR : un `on.exit()` nu effacerait la déclaration
+      # de job posée en tête d'observateur (cf. le commentaire long ci-dessus).
+      p <- shiny::Progress$new(); on.exit(p$close(), add = TRUE)
       p$set(message = .tr("Scores de voies par échantillon..."), value = 0.2)
       tryCatch({
         res <- compute_pathway_scores(
@@ -337,10 +482,20 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
         showNotification(.t_fmt(.tr("\u2713 {n} voies scorées (ssGSEA/GSVA) sur {m} échantillons."),
                                  n = nrow(res$scores), m = ncol(res$scores)), type = "message")
         nav_select(id = "pathways_tabs", selected = "tab_scores", session = session)
+        # `empty` reste distinct de `done` : tous les jeux de gènes peuvent être
+        # rejetés (recouvrement < seuil), et « 0 voie » n'est pas « N voies ».
+        if (nrow(res$scores) == 0L) {
+          drive_record("run_scores", "empty", 0L)
+        } else {
+          drive_record("run_scores", "done", nrow(res$scores))
+        }
+        outcome$v <- "ok"
       }, error = function(e) {
         showNotification(paste(.tr("Erreur scores:"), conditionMessage(e)),
                          type = "error", duration = 8)
         shared_rv$pathway_scores <- NULL
+        drive_record("run_scores", "error", error = conditionMessage(e))
+        outcome$v <- "failed"
       })
     })
 
@@ -425,13 +580,56 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
 
     # ── Enrichment (ORA + GSEA) — strings translated ─────────────────────
     observeEvent(drive_trigger_pathway(), {
+      # ── DECLARE THE JOB OVER (drive job contract, spec §5) ────────────────
+      # Producer TERMINAL que `long = TRUE` engage. Enregistré AVANT le premier
+      # `req()` pour que TOUTE sortie rapporte quelque chose : l'abandon d'un
+      # `req()`, le garde GSEA sans DE et le garde `< 10` gènes laissent
+      # `outcome$v` à "refused" -> `invalid` (un refus n'est PAS un échec, même
+      # raisonnement qu'ailleurs : un refus ne doit pas apprendre à ignorer un
+      # badge rouge) ; le chemin nominal pose "ok" -> `done` ; le `catch` de la
+      # computation pose "failed" -> `error`.
+      #
+      # ⚠️ `outcome` est un ENVIRONNEMENT, pas une variable locale. MESURÉ
+      # (2026-09-24) : un `job_outcome <- "failed"` écrit DANS un handler
+      # `error = function(e) …` se lie à la frame DU HANDLER et ne remonte
+      # JAMAIS — la sonde a rendu `refused` sur un `stop()` réel. C'est le motif
+      # exact de `mod_bulk_de_run.R` (l. 352), qui annonce donc `invalid` là où
+      # la DE a levé. Une cellule d'environnement a une sémantique de RÉFÉRENCE
+      # et traverse la frontière de closure.
+      outcome <- new.env(parent = emptyenv())
+      outcome$v <- "refused"
+      # `add = TRUE` est PORTEUR, pas du style : un `on.exit()` nu REMPLACE
+      # toute expression en attente, donc il effacerait cette déclaration — le
+      # job resterait `running` à jamais et l'agent sonderait une complétion
+      # qui ne serait jamais écrite.
+      if (isTRUE(ts_drive_job_busy()) &&
+          identical(ts_drive_job_state()$button, "bulk-pathways-run_pathway")) {
+        on.exit(ts_drive_job_finish("bulk-pathways-run_pathway",
+          status = switch(outcome$v, ok = "done", failed = "error", "invalid"),
+          error = if (identical(outcome$v, "failed")) {
+            "the pathway enrichment raised — see the app notification"
+          } else NULL
+        ), add = TRUE)
+      }
+
       req(input$run_pathway > 0 || shiny::isolate(drive_counter_pathway()) > 0)
       req(shared_rv$filtered_counts)
-      p <- shiny::Progress$new(); on.exit(p$close())
+      # `seq` appartient au PROTOCOLE, pas au module : il n'est lisible que tant
+      # que le job est en vol. Capturé ici pour que l'issue résolue reste
+      # corrélable à la commande qui l'a demandée.
+      drive_last$seq     <- ts_drive_job_state()$seq
+      drive_last$started <- as.numeric(Sys.time())
+      p <- shiny::Progress$new(); on.exit(p$close(), add = TRUE)
 
       if (input$enrich_mode == "gsea") {
         res_de <- .active_de_results()
-        if (is.null(res_de)) { showNotification(.tr("\u26a0\ufe0f Lancez d'abord l'\u00e9tape 2 (Analyse Diff\u00e9rentielle)."), type = "warning"); return() }
+        if (is.null(res_de)) {
+          showNotification(.tr("\u26a0\ufe0f Lancez d'abord l'\u00e9tape 2 (Analyse Diff\u00e9rentielle)."), type = "warning")
+          # Refus : rien n'a tourné. `not_ready` est la réponse honnête — le
+          # module ne peut pas produire de résultat faute d'amont.
+          drive_record("run_pathway", "not_ready")
+          return()
+        }
         p$set(message = .tr("GSEA en cours..."), value = 0.3)
         tryCatch({
           res <- run_gsea_enrichment(res_de, organism = input$pathway_org,
@@ -439,15 +637,22 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
                                      p_adjust_method = input$pathway_padj_method %||% TS_PADJ_METHOD_DEFAULT)
           if (nrow(res) == 0) {
             showNotification(.tr("\u2139\ufe0f Aucun pathway enrichi trouv\u00e9 (GSEA)."), type = "warning")
-            shared_rv$pathway_results <- NULL; return()
+            shared_rv$pathway_results <- NULL
+            # `empty` et non `done` : l'analyse a TOURNÉ et n'a rien trouvé.
+            drive_record("run_pathway", "empty", 0L)
+            return()
           }
           shared_rv$pathway_results <- res
           showNotification(.t_fmt(.tr("\u2705 {n} pathways enrichis (GSEA)"), n = nrow(res)), type = "message")
           shared_rv$active_tab <- "tab_pathway"
+          drive_record("run_pathway", "done", nrow(res))
+          outcome$v <- "ok"
         }, error = function(e) {
           showNotification(.t_fmt(.tr("\u274c Erreur GSEA: {msg}"), msg = as.character(e$message)[1]),
                            type = "error", duration = 8)
           shared_rv$pathway_results <- NULL
+          drive_record("run_pathway", "error", error = as.character(e$message)[1])
+          outcome$v <- "failed"
         })
         return()
       }
@@ -455,7 +660,11 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
       genes_to_test <- NULL
       if (input$pathway_source %in% c("up","down","all_sig")) {
         res <- .active_de_results()
-        if (is.null(res)) { showNotification(.tr("\u26a0\ufe0f Lancez d'abord l'\u00e9tape 2 (Analyse Diff\u00e9rentielle)."), type = "warning"); return() }
+        if (is.null(res)) {
+          showNotification(.tr("\u26a0\ufe0f Lancez d'abord l'\u00e9tape 2 (Analyse Diff\u00e9rentielle)."), type = "warning")
+          drive_record("run_pathway", "not_ready")
+          return()
+        }
         sig <- res$padj < (shared_rv$padj_thresh %||% 0.05) &
                abs(res$log2FoldChange) > (shared_rv$lfc_thresh %||% 1)
         sig[is.na(sig)] <- FALSE
@@ -471,6 +680,11 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
       if (length(genes_to_test) < 10) {
         showNotification(.t_fmt(.tr("\u26a0\ufe0f Trop peu de g\u00e8nes ({n}). Minimum 10 requis."), n = length(genes_to_test)),
                          type = "warning", duration = 5)
+        # 🔴 LE GARDE SILENCIEUX QUE CE JALON REND VISIBLE. Avant lui, cette
+        # sortie et un enrichissement réussi de 2 voies rendaient le MÊME
+        # `done` de protocole, et `shared_rv$pathway_results` restait INCHANGÉ
+        # (d'où la cassette : l'objet vivant ne peut pas les distinguer).
+        drive_record("run_pathway", "empty", 0L)
         return()
       }
 
@@ -481,15 +695,21 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
                                       p_adjust_method = input$pathway_padj_method %||% TS_PADJ_METHOD_DEFAULT)
         if (nrow(res) == 0) {
           showNotification(.tr("\u2139\ufe0f Aucun pathway enrichi trouv\u00e9."), type = "warning")
-          shared_rv$pathway_results <- NULL; return()
+          shared_rv$pathway_results <- NULL
+          drive_record("run_pathway", "empty", 0L)
+          return()
         }
         shared_rv$pathway_results <- res
         showNotification(.t_fmt(.tr("\u2705 {n} pathways enrichis"), n = nrow(res)), type = "message")
         shared_rv$active_tab <- "tab_pathway"
+        drive_record("run_pathway", "done", nrow(res))
+        outcome$v <- "ok"
       }, error = function(e) {
         showNotification(.t_fmt(.tr("\u274c Erreur pathway: {msg}"), msg = as.character(e$message)[1]),
                          type = "error", duration = 6)
         shared_rv$pathway_results <- NULL
+        drive_record("run_pathway", "error", error = as.character(e$message)[1])
+        outcome$v <- "failed"
       })
     })
 
