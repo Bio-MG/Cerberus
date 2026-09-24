@@ -220,18 +220,92 @@
       out$provenance_available <- !is.null(res$provenance) &&
         !is.null(res$provenance$analysis_id)
       out$identity_checked <- TRUE
-      out$identity_ok <- tryCatch({
-        s <- communication_result_is_stale(res, sc_obj)
-        if (is.na(s)) NA else !s
-      }, error = function(e) NA)
+      collection <- state_get(shared_rv, "communication_collection")
+      active_sample <- state_get(shared_rv, "active_communication_sample")
+      collection_error <- NULL
+      liana <- tryCatch(
+        if (!is.null(collection)) {
+          assert_liana_collection(collection, sc_obj)
+          list(
+            manifest = liana_collection_sample_manifest(collection),
+            condition_summary = liana_collection_condition_summary(collection),
+            by_sample = build_liana_collection_table(collection)
+          )
+        } else NULL,
+        error = function(e) {
+          collection_error <<- conditionMessage(e)
+          NULL
+        }
+      )
+      if (!is.null(collection_error)) {
+        out$extras$collection_error <- as.character(collection_error)
+      }
+      out$identity_ok <- if (!is.null(collection_error)) {
+        FALSE
+      } else if (!is.null(liana) &&
+                 !is.null(collection$object_identity$fingerprint)) {
+        TRUE
+      } else {
+        tryCatch({
+          s <- communication_result_is_stale(res, sc_obj)
+          if (is.na(s)) NA else !s
+        }, error = function(e) NA)
+      }
       inp <- res$input_summary %||% NULL
-      out$summary <- .report_kv_df(c(
+      rank_value <- function(field) {
+        if (!field %in% colnames(res$canonical_table)) return(NA_character_)
+        values <- unique(as.character(res$canonical_table[[field]]))
+        values <- values[!is.na(values) & nzchar(values)]
+        if (length(values)) values[[1L]] else NA_character_
+      }
+      summary_values <- c(
         statut = as.character(res$status %||% NA_character_),
         methode_source = as.character(res$source_method %||% NA_character_),
         n_lignes_entree = if (!is.null(inp)) inp$n_rows_input else NULL,
         n_lignes_canoniques = if (!is.null(inp)) inp$n_rows_canonical else NULL,
-        colonne_identite = as.character(res$identity_column %||% NA_character_)
-      ))
+        colonne_identite = as.character(res$identity_column %||% NA_character_),
+        direction_rang = rank_value("rank_direction"),
+        aggregation_rang = rank_value("rank_aggregation_mode")
+      )
+      if (!is.null(liana)) {
+        active_text <- if (length(active_sample) == 1L) {
+          as.character(active_sample)
+        } else {
+          NA_character_
+        }
+        active_valid <- length(active_sample) == 1L &&
+          !is.na(active_sample) && nzchar(as.character(active_sample)) &&
+          as.character(active_sample) %in% liana$manifest$sample_key
+        summary_values <- c(
+          summary_values,
+          n_echantillons = nrow(liana$manifest),
+          n_conditions = nrow(liana$condition_summary),
+          methode_liana = as.character(collection$method %||% NA_character_),
+          ressource_liana = as.character(collection$resource %||% NA_character_),
+          n_echantillon_actif = as.integer(active_valid),
+          echantillon_actif = active_text
+        )
+        manifest_ids <- if ("analysis_id" %in% colnames(liana$manifest)) {
+          as.character(liana$manifest$analysis_id)
+        } else {
+          character(0)
+        }
+        sample_result_ids <- unlist(lapply(collection$results, function(result) {
+          as.character(result$analysis_id %||% character(0))
+        }), use.names = FALSE) %||% character(0)
+        ids <- unique(c(
+          as.character(collection$analysis_id %||% character(0)),
+          manifest_ids,
+          sample_result_ids,
+          as.character(res$analysis_id %||% character(0))
+        ))
+        out$analysis_ids <- unique(ids[!is.na(ids) & nzchar(ids)])
+        out$extras$sample_manifest <- liana$manifest
+        out$extras$condition_summary <- liana$condition_summary
+        out$extras$by_sample <- liana$by_sample
+        if (!isTRUE(active_valid)) out$identity_ok <- FALSE
+      }
+      out$summary <- .report_kv_df(summary_values)
       out$extras$canonical_table <- res$canonical_table
     }
     return(out)

@@ -89,7 +89,7 @@ communication_views_public_api <- function() {
     sp <- strsplit(k, "\r", fixed = TRUE)[[1L]]
     sub <- table[table$sender_node == sp[1L] & table$receiver_node == sp[2L], ]
     sc <- sub$score[!is.na(sub$score)]
-    data.frame(
+    out <- data.frame(
       sender_node = sp[1L], receiver_node = sp[2L],
       n_interactions = nrow(sub),
       mean_score = if (length(sc)) mean(sc) else NA_real_,
@@ -97,6 +97,13 @@ communication_views_public_api <- function() {
       n_with_score = length(sc),
       stringsAsFactors = FALSE
     )
+    if ("rank" %in% colnames(sub)) {
+      rk <- suppressWarnings(as.numeric(sub$rank))
+      rk <- rk[is.finite(rk)]
+      out$mean_rank <- if (length(rk)) mean(rk) else NA_real_
+      out$best_rank <- if (length(rk)) min(rk) else NA_real_
+    }
+    out
   }))
 }
 
@@ -114,6 +121,15 @@ communication_views_public_api <- function() {
 
 # Sous-titre commun : type de score + methode source (garde-fou d'echelle).
 .communication_score_caption <- function(communication_result) {
+  if ("rank" %in% colnames(communication_result$canonical_table)) {
+    return(sprintf(
+      paste0("Source : %s — rang importe, rang 1 = meilleur ",
+             "(echelle de la source ; non comparable entre modes). ",
+             "P-values importees, non re-inferrees. Association ",
+             "ligand-receptor = aucune causalite."),
+      communication_result$source_method %||% NA_character_
+    ))
+  }
   sprintf(
     paste0("Source : %s — score importe, echelle de la source ",
            "(non comparable entre sources). P-values importees, non ",
@@ -148,8 +164,20 @@ communication_apply_filters <- function(communication_result,
   r <- assert_communication_result(
     communication_result, context = "filtres communication"
   )
+  rank_max_raw <- filters$rank_max %||% NA_real_
+  if (length(rank_max_raw) != 1L) {
+    .views_stop("communication_apply_filters() : rank_max doit etre un scalaire.")
+  }
+  rank_max <- suppressWarnings(as.numeric(rank_max_raw))
+  if (is.na(rank_max) && !is.na(rank_max_raw)) {
+    .views_stop("communication_apply_filters() : rank_max doit etre numerique.")
+  }
+  if (!is.na(rank_max) && rank_max < 0) {
+    .views_stop("communication_apply_filters() : rank_max doit etre positif ou nul.")
+  }
   f <- list(
     score_min = filters$score_min %||% NA_real_,
+    rank_max = rank_max,
     p_value_max = filters$p_value_max %||% NA_real_,
     pathways = as.character(filters$pathways %||% character(0)),
     senders = as.character(filters$senders %||% character(0)),
@@ -160,11 +188,42 @@ communication_apply_filters <- function(communication_result,
   table <- .communication_node_keys(r$canonical_table)
   n_before <- nrow(table)
   keep <- rep(TRUE, n_before)
+  score_values <- table$score
+  score_available <- any(!is.na(score_values))
+  rank_available <- "rank" %in% colnames(table)
+  score_requested <- !is.na(f$score_min)
+  rank_requested <- !is.na(f$rank_max)
 
-  if (!is.na(f$score_min)) {
-    keep <- keep & !is.na(table$score) & table$score >= f$score_min
+  if (score_requested && rank_requested) {
+    .views_stop(paste0(
+      "communication_apply_filters() : score_min et rank_max sont incompatibles ",
+      "sur une meme selection ; un rang n'est pas un score."
+    ))
   }
-  dropped_score <- sum(keep == FALSE)
+  if (rank_requested && !rank_available) {
+    .views_stop(paste0(
+      "communication_apply_filters() : rank_max demande mais aucune colonne ",
+      "rank n'est presente dans le resultat."
+    ))
+  }
+  if (score_requested && rank_available && !score_available) {
+    .views_stop(paste0(
+      "communication_apply_filters() : score_min demande mais le resultat ",
+      "ne contient aucune valeur de score ; un rang n'est pas un score."
+    ))
+  }
+
+  if (score_requested) {
+    keep <- keep & !is.na(score_values) & score_values >= f$score_min
+  }
+  dropped_score <- sum(!keep)
+  dropped_rank <- 0L
+  if (rank_requested) {
+    rank_values <- suppressWarnings(as.numeric(table$rank))
+    keep2 <- is.finite(rank_values) & rank_values <= f$rank_max
+    dropped_rank <- sum(keep & !keep2)
+    keep <- keep & keep2
+  }
   if (!is.na(f$p_value_max)) {
     keep2 <- !is.na(table$p_value) & table$p_value <= f$p_value_max
     dropped_p <- sum(keep & !keep2)
@@ -194,12 +253,14 @@ communication_apply_filters <- function(communication_result,
   table <- table[keep, , drop = FALSE]
 
   description <- sprintf(
-    paste0("score_min=%s ; p_value_max=%s ; pathways=[%s] ; senders=[%s] ; ",
-           "receivers=[%s] ; include_self=%s"),
+    paste0("score_min=%s ; rank_max=%s ; p_value_max=%s ; pathways=[%s] ; ",
+           "senders=[%s] ; receivers=[%s] ; include_self=%s ; dropped_rank=%s"),
     ifelse(is.na(f$score_min), "NA", format(f$score_min)),
+    ifelse(is.na(f$rank_max), "NA", format(f$rank_max)),
     ifelse(is.na(f$p_value_max), "NA", format(f$p_value_max)),
     paste(f$pathways, collapse = ","), paste(f$senders, collapse = ","),
-    paste(f$receivers, collapse = ","), as.character(f$include_self)
+    paste(f$receivers, collapse = ","), as.character(f$include_self),
+    as.character(dropped_rank)
   )
 
   list(
@@ -209,6 +270,7 @@ communication_apply_filters <- function(communication_result,
       n_before = as.integer(n_before),
       n_after = as.integer(nrow(table)),
       dropped_score = as.integer(dropped_score),
+      dropped_rank = as.integer(dropped_rank),
       dropped_p_value = as.integer(dropped_p),
       dropped_pathway = as.integer(dropped_pw),
       dropped_sender = as.integer(dropped_s),
@@ -251,13 +313,15 @@ plot_communication_dotplot <- function(communication_result, filtered_table = NU
   }
 
   agg <- .communication_agg_pairs(table)
+  has_rank <- "mean_rank" %in% colnames(agg) &&
+    any(is.finite(agg$mean_rank))
   has_score <- any(!is.na(agg$mean_score))
 
   p <- ggplot2::ggplot(
     agg,
     ggplot2::aes(x = receiver_node, y = sender_node,
                  size = n_interactions,
-                 colour = if (has_score) mean_score else n_interactions)
+                 colour = if (has_rank) mean_rank else if (has_score) mean_score else n_interactions)
   ) +
     ggplot2::geom_point(alpha = 0.9) +
     ggplot2::scale_size(range = c(2, 9), name = "Nb interactions") +
@@ -269,13 +333,21 @@ plot_communication_dotplot <- function(communication_result, filtered_table = NU
       subtitle = sprintf(
         paste0("%s — %d interaction(s) affichee(s). %s"),
         subtitle_base, sum(agg$n_interactions),
-        if (has_score)
+        if (has_rank)
+          "Couleur : rang moyen importe par paire (1 = meilleur)."
+        else if (has_score)
           "Couleur : score moyen importe par paire."
         else
           "Aucun score dans la selection : l'effectif seule est affiche."
       )
     )
-  if (has_score) {
+  if (has_rank) {
+    p <- p + ggplot2::scale_colour_gradient(
+      low = "#E8F1FA", high = "#2166AC",
+      trans = scales::reverse_trans(),
+      name = "rang moyen (1 = meilleur)"
+    )
+  } else if (has_score) {
     p <- p + ggplot2::scale_colour_gradient(
       low = "#E8F1FA", high = "#2166AC", name = "Score moyen importe"
     )
@@ -394,8 +466,10 @@ plot_communication_circle <- function(communication_result, filtered_table = NUL
   }
 
   agg <- .communication_agg_pairs(edges_table)
+  has_rank <- "mean_rank" %in% colnames(agg) &&
+    any(is.finite(agg$mean_rank))
   has_score <- any(!is.na(agg$sum_score))
-  agg$weight <- if (has_score) agg$sum_score else agg$n_interactions
+  agg$weight <- if (has_rank) agg$n_interactions else if (has_score) agg$sum_score else agg$n_interactions
 
   nodes <- sort(unique(c(agg$sender_node, agg$receiver_node)))
   n_nodes <- length(nodes)
@@ -449,7 +523,7 @@ plot_communication_circle <- function(communication_result, filtered_table = NUL
       ggplot2::aes(x = x * 1.18, y = y * 1.18, label = node),
       size = 3.4
     ) +
-    ggplot2::scale_linewidth(range = c(0.2, 2.4), name = if (has_score) "Poids (score importe)" else "Nb interactions") +
+    ggplot2::scale_linewidth(range = c(0.2, 2.4), name = if (has_rank) "Nb interactions" else if (has_score) "Poids (score importe)" else "Nb interactions") +
     ggplot2::scale_alpha(range = c(0.25, 0.9), guide = "none") +
     ggplot2::scale_size(range = c(3, 9), guide = "none") +
     ggplot2::coord_fixed() +
@@ -458,8 +532,11 @@ plot_communication_circle <- function(communication_result, filtered_table = NUL
       title = "Reseau sender-receiver (resultats importes)",
       subtitle = sprintf(
         paste0("%s — %d arete(s) ; %d auto-interaction(s) non dessinees. ",
-               "Vue descriptive : aucune causalite."),
-        subtitle_base, nrow(agg), n_self
+               "Vue descriptive : aucune causalite.%s"),
+        subtitle_base, nrow(agg), n_self,
+        if (has_rank)
+          " Poids : nombre d'interactions ; rang 1 = meilleur, jamais somme des rangs."
+        else ""
       )
     )
 }
@@ -484,13 +561,37 @@ build_communication_centrality <- function(communication_result,
     if (is.null(filtered_table)) r$canonical_table else filtered_table
   )
   nodes <- sort(unique(c(table$sender_node, table$receiver_node)))
+  has_rank <- "rank" %in% colnames(table)
+  if (length(nodes) == 0L) {
+    out <- data.frame(
+      node = character(),
+      n_out_interactions = integer(),
+      n_in_interactions = integer(),
+      out_partners = integer(),
+      in_partners = integer(),
+      out_score_total = numeric(),
+      in_score_total = numeric(),
+      total_interactions = integer(),
+      stringsAsFactors = FALSE
+    )
+    if (has_rank) {
+      out$out_best_rank <- numeric()
+      out$out_median_rank <- numeric()
+      out$in_best_rank <- numeric()
+      out$in_median_rank <- numeric()
+    }
+    out$analysis_id <- rep(r$analysis_id %||% NA_character_, nrow(out))
+    out$source_method <- rep(r$source_method %||% NA_character_, nrow(out))
+    out$identity_column <- rep(r$identity_column %||% NA_character_, nrow(out))
+    return(out)
+  }
 
   out <- do.call(rbind, lapply(nodes, function(nd) {
     s_rows <- table[table$sender_node == nd, ]
     r_rows <- table[table$receiver_node == nd, ]
     s_sc <- s_rows$score[!is.na(s_rows$score)]
     r_sc <- r_rows$score[!is.na(r_rows$score)]
-    data.frame(
+    out_row <- data.frame(
       node = nd,
       n_out_interactions = nrow(s_rows),
       n_in_interactions = nrow(r_rows),
@@ -500,6 +601,17 @@ build_communication_centrality <- function(communication_result,
       in_score_total = if (length(r_sc)) sum(r_sc) else NA_real_,
       stringsAsFactors = FALSE
     )
+    if (has_rank) {
+      s_rk <- suppressWarnings(as.numeric(s_rows$rank))
+      r_rk <- suppressWarnings(as.numeric(r_rows$rank))
+      s_rk <- s_rk[is.finite(s_rk)]
+      r_rk <- r_rk[is.finite(r_rk)]
+      out_row$out_best_rank <- if (length(s_rk)) min(s_rk) else NA_real_
+      out_row$out_median_rank <- if (length(s_rk)) stats::median(s_rk) else NA_real_
+      out_row$in_best_rank <- if (length(r_rk)) min(r_rk) else NA_real_
+      out_row$in_median_rank <- if (length(r_rk)) stats::median(r_rk) else NA_real_
+    }
+    out_row
   }))
   out$total_interactions <- out$n_out_interactions + out$n_in_interactions
   out <- out[order(-out$total_interactions), , drop = FALSE]
@@ -536,9 +648,11 @@ build_communication_filter_provenance <- function(communication_result,
     method = paste0("explore_", r$source_method %||% "unknown"),
     parameters = list(
       applied_filters = filter_summary$description,
+      rank_max = filter_summary$filters$rank_max %||% NA_real_,
       n_rows_before = filter_summary$summary$n_before %||% NA_integer_,
       n_rows_after = filter_summary$summary$n_after %||% NA_integer_,
       dropped_score = filter_summary$summary$dropped_score %||% NA_integer_,
+      dropped_rank = filter_summary$summary$dropped_rank %||% NA_integer_,
       dropped_p_value = filter_summary$summary$dropped_p_value %||% NA_integer_,
       dropped_pathway = filter_summary$summary$dropped_pathway %||% NA_integer_,
       dropped_sender = filter_summary$summary$dropped_sender %||% NA_integer_,

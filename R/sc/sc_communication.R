@@ -1262,7 +1262,7 @@ communication_import_qc <- function(canonical_table) {
   n_rank_missing <- 0L
   if (nrow(table) && "rank" %in% colnames(table)) {
     r <- table$rank
-    n_rank_bad <- sum(!is.na(r) & (r < 0 | r > nrow(table)))
+    n_rank_bad <- sum(!is.na(r) & (r < 0 | r > n_before))
     n_rank_missing <- sum(is.na(r))
   }
 

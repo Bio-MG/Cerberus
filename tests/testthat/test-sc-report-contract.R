@@ -10,6 +10,7 @@
 
 source_project_file("R/sc/sc_velocity.R")            # empreinte v2 + staleness velocity
 source_project_file("R/sc/sc_communication.R")       # staleness communication
+source_project_file("R/sc/sc_communication_engine.R")
 source_project_file("R/sc/sc_abundance_design.R")    # design DA (finalizer)
 source_project_file("R/sc/sc_abundance_milo.R")      # staleness milo
 source_project_file("R/sc/sc_abundance_sccoda.R")    # staleness scCODA
@@ -34,6 +35,75 @@ source_project_file("R/reports/report_bundle.R")
   parsed <- parse_cellchat_import(.comm_cellchat_tab(),
                                   source_file = "cellchat_export.csv")
   .comm_import_and_finalize(parsed, seurat_obj = seurat_obj)
+}
+
+.rep_liana_obj <- function() {
+  samples <- c("C01", "C02", "T01", "T02", "T03")
+  conditions <- c("CONTROL", "CONTROL", "TREATMENT", "TREATMENT", "TREATMENT")
+  cells <- unlist(lapply(samples, function(sample) paste0(sample, "_", 1:2)),
+                  use.names = FALSE)
+  counts <- Matrix::Matrix(
+    matrix(seq_len(20L * length(cells)) %% 7L, nrow = 20L,
+           dimnames = list(paste0("G", 1:20), cells)),
+    sparse = TRUE
+  )
+  data <- log1p(counts)
+  obj <- suppressWarnings(SeuratObject::CreateSeuratObject(
+    counts = counts,
+    meta.data = data.frame(
+      cell_type = rep(c("A", "B"), length.out = length(cells)),
+      sample_id = rep(samples, each = 2L),
+      condition = rep(conditions, each = 2L),
+      row.names = cells
+    )
+  ))
+  obj[["RNA"]]$data <- data
+  obj
+}
+
+.rep_liana_collection_fixture <- function() {
+  counter <- new.env(parent = emptyenv())
+  counter$calls <- 0L
+  backend <- list(run = function(sce, ...) {
+    counter$calls <- counter$calls + 1L
+    data.frame(
+      source = c("A", "B"),
+      target = c("B", "A"),
+      ligand.complex = c("L1", "L2"),
+      ligand = c("L1", "L2"),
+      receptor.complex = c("R1", "R2"),
+      receptor = c("R1", "R2"),
+      edge_specificity = c(0.8, 0.6),
+      stringsAsFactors = FALSE
+    )
+  })
+  obj <- .rep_liana_obj()
+  collection <- run_liana_by_sample(
+    obj,
+    sample_col = "sample_id",
+    condition_col = "condition",
+    idents_col = "cell_type",
+    method = "natmi",
+    resource = "Consensus",
+    seed = 17L,
+    min_cells = 1L,
+    backend = backend
+  )
+  counter$calls <- 0L
+  list(obj = obj, collection = collection, counter = counter)
+}
+
+.rep_liana_shared <- function(fixture, active_sample) {
+  shared_rv <- create_sc_shared_state()
+  active_result <- liana_collection_active(fixture$collection, active_sample)
+  for (result in fixture$collection$results) {
+    provenance_append(shared_rv, result$provenance)
+  }
+  provenance_append(shared_rv, fixture$collection$provenance)
+  shared_rv$communication_result <- active_result
+  shared_rv$communication_collection <- fixture$collection
+  shared_rv$active_communication_sample <- active_sample
+  shared_rv
 }
 
 .rep_design_canonical <- function(seurat_obj) {
@@ -217,6 +287,207 @@ test_that("full project collects valid verdicts with traceable analysis ids", {
   expect_match(txt, "sc-milo-test", fixed = TRUE)
   expect_match(txt, "aucune analyse ré-exécutée", ignore.case = TRUE)
   unlink(html_path)
+})
+
+test_that("a valid LIANA collection is summarised read-only with unique complete analysis ids", {
+  fixture <- .rep_liana_collection_fixture()
+  active_sample <- "TREATMENT::T03"
+  shared_rv <- .rep_liana_shared(fixture, active_sample)
+  collection_before <- state_get(shared_rv, "communication_collection")
+  result_before <- state_get(shared_rv, "communication_result")
+  active_before <- state_get(shared_rv, "active_communication_sample")
+  provenance_before <- shiny::isolate(shared_rv$provenance)
+
+  ri <- collect_consolidated_report_input(fixture$obj, shared_rv)
+  entry <- ri$analyses$communication
+  summary_value <- function(field) {
+    value <- entry$summary$valeur[entry$summary$champ == field]
+    if (length(value) == 1L) value else NA_character_
+  }
+  expected_ids <- unique(c(
+    fixture$collection$analysis_id,
+    vapply(fixture$collection$results,
+           function(result) result$analysis_id, character(1L))
+  ))
+
+  expect_true(entry$present)
+  expect_identical(summary_value("n_echantillons"), "5")
+  expect_identical(summary_value("n_conditions"), "2")
+  expect_identical(summary_value("methode_liana"), "natmi")
+  expect_identical(summary_value("ressource_liana"), "Consensus")
+  expect_identical(summary_value("n_echantillon_actif"), "1")
+  expect_identical(summary_value("echantillon_actif"), active_sample)
+  expect_setequal(entry$analysis_ids, expected_ids)
+  expect_identical(anyDuplicated(entry$analysis_ids), 0L)
+  expect_identical(entry$extras$sample_manifest,
+                   fixture$collection$sample_manifest)
+  expect_identical(entry$extras$condition_summary,
+                   fixture$collection$condition_summary)
+  expect_identical(entry$extras$by_sample,
+                   build_liana_collection_table(fixture$collection))
+  expect_identical(fixture$counter$calls, 0L)
+  expect_identical(state_get(shared_rv, "communication_collection"),
+                   collection_before)
+  expect_identical(state_get(shared_rv, "communication_result"), result_before)
+  expect_identical(state_get(shared_rv, "active_communication_sample"),
+                   active_before)
+  expect_identical(shiny::isolate(shared_rv$provenance), provenance_before)
+
+  validation <- validate_consolidated_report_input(ri)
+  expect_identical(validation$verdicts$communication$state, "valid")
+})
+
+test_that("LIANA collection summary, descriptive tables and bundle files are rendered and exported", {
+  fixture <- .rep_liana_collection_fixture()
+  active_sample <- "TREATMENT::T03"
+  shared_rv <- .rep_liana_shared(fixture, active_sample)
+  ri <- collect_consolidated_report_input(fixture$obj, shared_rv)
+  validation <- validate_consolidated_report_input(ri)
+  html_path <- tempfile("rep_liana_", fileext = ".html")
+  on.exit(unlink(html_path), add = TRUE)
+  write_consolidated_report_html(ri, validation, html_path)
+  html <- .rep_html_text(html_path)
+
+  expect_match(html, "Communication cellulaire</h3>", fixed = TRUE)
+  expect_false(grepl("Communication cellulaire (import)", html, fixed = TRUE))
+  expect_match(html, "Manifeste des échantillons", fixed = TRUE)
+  expect_match(html, "Résumé descriptif des conditions", fixed = TRUE)
+  expect_match(html, "Interactions canoniques par échantillon", fixed = TRUE)
+  expect_match(html, "l'échantillon biologique est l'unité de réplication",
+               fixed = TRUE)
+  expect_match(html, "les cellules ne sont pas des réplicats", fixed = TRUE)
+  expect_match(html, "Aucun test entre conditions ni conclusion causale",
+               fixed = TRUE)
+
+  bundle_dir <- tempfile("bundle_liana_")
+  on.exit(unlink(bundle_dir, recursive = TRUE), add = TRUE)
+  bundle <- build_report_bundle(bundle_dir, ri, validation)
+  expected_files <- c(
+    "communication_canonical.csv",
+    "communication_sample_manifest.csv",
+    "communication_condition_summary.csv",
+    "communication_by_sample.csv"
+  )
+  expect_true(all(file.exists(file.path(
+    bundle_dir, "tables", expected_files
+  ))))
+  expect_true(all(file.exists(file.path(bundle_dir, bundle$files))))
+  bundle_manifest <- utils::read.csv(
+    file.path(bundle_dir, "manifest_sections.csv"),
+    check.names = FALSE
+  )
+  communication_rows <- bundle_manifest[bundle_manifest$section == "communication", ]
+  expect_true(all(nzchar(communication_rows$analysis_ids)))
+  expect_true(any(grepl("sc-communication-liana", communication_rows$analysis_ids)))
+  expect_identical(fixture$counter$calls, 0L)
+
+  manifest <- utils::read.csv(file.path(
+    bundle_dir, "tables", "communication_sample_manifest.csv"
+  ), check.names = FALSE)
+  conditions <- utils::read.csv(file.path(
+    bundle_dir, "tables", "communication_condition_summary.csv"
+  ), check.names = FALSE)
+  by_sample <- utils::read.csv(file.path(
+    bundle_dir, "tables", "communication_by_sample.csv"
+  ), check.names = FALSE)
+  active <- utils::read.csv(file.path(
+    bundle_dir, "tables", "communication_canonical.csv"
+  ), check.names = FALSE)
+  expect_identical(nrow(manifest), 5L)
+  expect_identical(nrow(conditions), 2L)
+  expect_identical(nrow(by_sample), 10L)
+  expect_true(all(c("sample_id", "condition", "sample_key") %in%
+                    colnames(by_sample)))
+  expect_identical(nrow(active), 2L)
+  expect_identical(unique(active$sample_id), "T03")
+})
+
+test_that("a stale active sample invalidates a valid collection verdict", {
+  fixture <- .rep_liana_collection_fixture()
+  shared_rv <- .rep_liana_shared(fixture, "CONTROL::C01")
+  shared_rv$active_communication_sample <- "TREATMENT::missing"
+  ri <- collect_consolidated_report_input(fixture$obj, shared_rv)
+  expect_false(ri$analyses$communication$identity_ok)
+  expect_identical(
+    validate_consolidated_report_input(ri)$verdicts$communication$state,
+    "stale"
+  )
+})
+
+test_that("an invalid LIANA collection falls back to the existing active result without rerun", {
+  fixture <- .rep_liana_collection_fixture()
+  active_sample <- "CONTROL::C01"
+  shared_rv <- .rep_liana_shared(fixture, active_sample)
+  active_result <- state_get(shared_rv, "communication_result")
+  invalid_collection <- fixture$collection
+  invalid_collection$sample_manifest$sample_key[[2L]] <-
+    invalid_collection$sample_manifest$sample_key[[1L]]
+  shared_rv$communication_collection <- invalid_collection
+
+  ri <- collect_consolidated_report_input(fixture$obj, shared_rv)
+  entry <- ri$analyses$communication
+  expect_identical(entry$analysis_ids, active_result$analysis_id)
+  expect_identical(entry$extras$canonical_table,
+                   active_result$canonical_table)
+  expect_false("n_echantillons" %in% entry$summary$champ)
+  expect_null(entry$extras$sample_manifest)
+  expect_null(entry$extras$condition_summary)
+  expect_null(entry$extras$by_sample)
+  expect_match(entry$extras$collection_error, "echantillons", fixed = TRUE)
+  expect_identical(fixture$counter$calls, 0L)
+})
+
+test_that("imported rank direction and aggregation mode are exposed by the report", {
+  obj <- .rep_stub_obj()
+  parsed <- parse_liana_import(.comm_liana_tab(), "mean_rank", "specificity")
+  result <- .comm_import_and_finalize(parsed, seurat_obj = obj)
+  shared_rv <- create_sc_shared_state()
+  shared_rv$communication_result <- result
+  entry <- collect_consolidated_report_input(obj, shared_rv)$analyses$communication
+  values <- setNames(entry$summary$valeur, entry$summary$champ)
+  expect_identical(values[["direction_rang"]], "lower_is_better")
+  expect_identical(values[["aggregation_rang"]], "specificity")
+})
+
+test_that("legacy communication remains unchanged when no LIANA collection exists", {
+  obj <- .rep_stub_obj()
+  result <- .rep_communication_canonical(obj)
+  shared_rv <- create_sc_shared_state()
+  shared_rv$communication_result <- result
+  ri <- collect_consolidated_report_input(obj, shared_rv)
+  entry <- ri$analyses$communication
+  expected_summary <- .report_kv_df(c(
+    statut = result$status,
+    methode_source = result$source_method,
+    n_lignes_entree = result$input_summary$n_rows_input,
+     n_lignes_canoniques = result$input_summary$n_rows_canonical,
+     colonne_identite = result$identity_column,
+     direction_rang = "",
+     aggregation_rang = ""
+  ))
+
+  expect_identical(entry$summary, expected_summary)
+  expect_identical(entry$analysis_ids, result$analysis_id)
+  expect_named(entry$extras, "canonical_table")
+  expect_identical(entry$extras$canonical_table, result$canonical_table)
+  validation <- validate_consolidated_report_input(ri)
+  html_path <- tempfile("rep_legacy_communication_", fileext = ".html")
+  bundle_dir <- tempfile("bundle_legacy_communication_")
+  on.exit(unlink(c(html_path, bundle_dir), recursive = TRUE), add = TRUE)
+  write_consolidated_report_html(ri, validation, html_path)
+  html <- .rep_html_text(html_path)
+  expect_match(html, "Communication cellulaire</h3>", fixed = TRUE)
+  expect_false(grepl("Manifeste des échantillons", html, fixed = TRUE))
+  expect_false(grepl("Résumé descriptif des conditions", html,
+                     fixed = TRUE))
+  bundle <- build_report_bundle(bundle_dir, ri, validation)
+  expect_true(file.exists(file.path(bundle_dir, "tables",
+                                    "communication_canonical.csv")))
+  expect_false(any(c(
+    "communication_sample_manifest.csv",
+    "communication_condition_summary.csv",
+    "communication_by_sample.csv"
+  ) %in% basename(bundle$files)))
 })
 
 # ── 4. Obsolete : l'objet courant a change depuis le calcul ─────────────────

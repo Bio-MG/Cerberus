@@ -139,6 +139,21 @@ test_that("export tracé : paramètres et traçabilité par ligne", {
   expect_true(all(ex$n_permutations == 5L))
 })
 
+test_that("spatial inputs honor the active cell scope with a NULL fallback", {
+  src <- paste(readLines(
+    file.path(ts_project_root(), "modules/sc/mod_sc_communication_spatial.R"),
+    warn = FALSE
+  ), collapse = "\n")
+  expect_true(grepl("meta <- meta[rownames(meta) %in%",
+                    src, fixed = TRUE))
+  expect_true(grepl("coords <- coords[as.character(coords$id) %in%",
+                    src, fixed = TRUE))
+  expect_true(grepl("em <- em[rownames(em) %in%", src, fixed = TRUE))
+  positions <- gregexpr("if (!is.null(comm_state$context_cells))", src,
+                        fixed = TRUE)[[1L]]
+  expect_identical(sum(positions > 0L), 3L)
+})
+
 test_that("erreurs d'entrée : messages français et états structurés", {
   r <- .ccx_result()
   expect_error(

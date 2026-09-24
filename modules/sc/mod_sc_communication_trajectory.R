@@ -101,6 +101,9 @@ mod_sc_communication_trajectory_server <- function(id, comm_state, global_data, 
     .lineage_vector <- function() {
       obj <- global_data$sc_obj
       meta <- obj@meta.data
+      if (!is.null(comm_state$context_cells)) {
+        meta <- meta[rownames(meta) %in% as.character(comm_state$context_cells), , drop = FALSE]
+      }
       lin_cols <- grep("^pseudotime_slingshot_", colnames(meta), value = TRUE)
       if (!length(lin_cols)) return(NULL)
       vals <- meta[, lin_cols, drop = FALSE]
@@ -119,7 +122,11 @@ mod_sc_communication_trajectory_server <- function(id, comm_state, global_data, 
       obj <- global_data$sc_obj
       col <- comm_state$result$identity_column %||% NA_character_
       if (is.null(obj) || is.na(col) || !col %in% colnames(obj@meta.data)) return(NULL)
-      setNames(as.character(obj@meta.data[[col]]), rownames(obj@meta.data))
+      meta <- obj@meta.data
+      if (!is.null(comm_state$context_cells)) {
+        meta <- meta[rownames(meta) %in% as.character(comm_state$context_cells), , drop = FALSE]
+      }
+      setNames(as.character(meta[[col]]), rownames(meta))
     }
 
     observeEvent(input$trj_compute, {
@@ -130,6 +137,9 @@ mod_sc_communication_trajectory_server <- function(id, comm_state, global_data, 
           stop("Choisissez d'abord une colonne de pseudo-temps (lancez d'abord Trajectoire 8.4).", call. = FALSE)
         }
         meta <- global_data$sc_obj@meta.data
+        if (!is.null(comm_state$context_cells)) {
+          meta <- meta[rownames(meta) %in% as.character(comm_state$context_cells), , drop = FALSE]
+        }
         pt <- setNames(as.numeric(meta[[col]]), rownames(meta))
         idents <- .identities()
         if (is.null(idents)) {
@@ -147,6 +157,9 @@ mod_sc_communication_trajectory_server <- function(id, comm_state, global_data, 
         expr <- communication_fetch_expression_matrix(
           global_data$sc_obj, genes = genes_needed, assay = input$trj_assay %||% "RNA"
         )
+        if (!is.null(comm_state$context_cells)) {
+          expr <- expr[, colnames(expr) %in% as.character(comm_state$context_cells), drop = FALSE]
+        }
         ctx <- build_communication_trajectory_context(
           comm_state$result,
           expression_matrix = expr,

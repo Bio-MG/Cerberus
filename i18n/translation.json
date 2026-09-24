@@ -10336,6 +10336,126 @@
     {
       "fr": "Mode exploratoire sans réplicat",
       "en": "Exploratory no-replicate mode"
+    },
+    {
+      "fr": "Communication cellule-cellule — import de resultats externes (CellChat / CellPhoneDB / LIANA) ou calcul CellChat / LIANA dans l'application. ",
+      "en": "Cell-cell communication — import external results (CellChat / CellPhoneDB / LIANA) or compute CellChat / LIANA in the app. "
+    },
+    {
+      "fr": "Calculer dans l'application (LIANA)",
+      "en": "Compute in the app (LIANA)"
+    },
+    {
+      "fr": "LIANA natif : les résultats sont calculés par échantillon biologique.",
+      "en": "Native LIANA: results are computed for each biological sample."
+    },
+    {
+      "fr": "Colonne d'echantillon (LIANA)",
+      "en": "Sample column (LIANA)"
+    },
+    {
+      "fr": "Colonne de condition (LIANA)",
+      "en": "Condition column (LIANA)"
+    },
+    {
+      "fr": "La colonne d'identites utilise le selecteur commun.",
+      "en": "The identity column uses the common selector."
+    },
+    {
+      "fr": "Methode LIANA",
+      "en": "LIANA method"
+    },
+    {
+      "fr": "Ressource LIANA",
+      "en": "LIANA resource"
+    },
+    {
+      "fr": "Graine LIANA",
+      "en": "LIANA seed"
+    },
+    {
+      "fr": "Cellules minimum par echantillon",
+      "en": "Minimum cells per sample"
+    },
+    {
+      "fr": "La graine et le minimum de cellules sont des paramètres du calcul et sont conservés dans la provenance.",
+      "en": "The seed and minimum cell count are computation parameters and are preserved in the provenance."
+    },
+    {
+      "fr": "Lancer le calcul LIANA",
+      "en": "Run LIANA computation"
+    },
+    {
+      "fr": "Echantillon actif (LIANA)",
+      "en": "Active sample (LIANA)"
+    },
+    {
+      "fr": "Exporter manifeste des echantillons (CSV)",
+      "en": "Export sample manifest (CSV)"
+    },
+    {
+      "fr": "Exporter resume des conditions (CSV)",
+      "en": "Export condition summary (CSV)"
+    },
+    {
+      "fr": "Rang maximum (importé)",
+      "en": "Maximum rank (imported)"
+    },
+    {
+      "fr": "%d interaction(s) affichée(s) sur %d — retirées : score %d, rang %d, p-value %d, pathway %d, sender %d, receiver %d, auto %d",
+      "en": "%d interaction(s) displayed out of %d — removed: score %d, rank %d, p-value %d, pathway %d, sender %d, receiver %d, self %d"
+    },
+    {
+      "fr": "Aucune collection LIANA.",
+      "en": "No LIANA collection."
+    },
+    {
+      "fr": "Collection LIANA : statut {status} — {n} echantillon(s), {c} condition(s).",
+      "en": "LIANA collection: status {status} — {n} sample(s), {c} condition(s)."
+    },
+    {
+      "fr": "Calcul LIANA par echantillon en cours...",
+      "en": "Running LIANA by sample..."
+    },
+    {
+      "fr": "Choisissez d'abord la colonne de metadonnees Seurat decrivant les identites des populations.",
+      "en": "First choose the Seurat metadata column describing population identities."
+    },
+    {
+      "fr": "Choisissez la colonne d'echantillon LIANA.",
+      "en": "Choose the LIANA sample column."
+    },
+    {
+      "fr": "Choisissez la colonne de condition LIANA.",
+      "en": "Choose the LIANA condition column."
+    },
+    {
+      "fr": "Le moteur LIANA natif n'est pas disponible : installez les paquets requis.",
+      "en": "The native LIANA engine is unavailable: install the required packages."
+    },
+    {
+      "fr": "La collection LIANA ne contient aucun echantillon.",
+      "en": "The LIANA collection contains no sample."
+    },
+    {
+      "fr": "Calcul LIANA termine.",
+      "en": "LIANA computation finished."
+    },
+    {
+      "fr": "Echantillon actif absent de la collection LIANA.",
+      "en": "Active sample is absent from the LIANA collection."
+    },
+    {
+      "fr": "Erreur calcul LIANA :",
+      "en": "LIANA computation error:"
+    },
+    {
+      "fr": "Source d'import inconnue : %s.",
+      "en": "Unknown import source: %s."
+    },
+    {
+      "fr": "Les sources natives ne sont pas importables : utilisez « Lancer le calcul CellChat » ou « Lancer le calcul LIANA ».",
+      "en": "Native sources cannot be imported: use “Run CellChat computation” or “Run LIANA computation”."
     }
   ]
 }

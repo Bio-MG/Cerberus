@@ -210,6 +210,16 @@ test_that("QC counts out-of-range and missing ranks without correcting them", {
   q2 <- communication_import_qc(h2$table)
   expect_identical(q2$counts$n_rank_missing, 1L)
   expect_true(any(grepl("jamais imputes", q2$warnings)))
+
+  tab3 <- .comm_liana_tab()
+  parsed3 <- parse_liana_import(tab3, "mean_rank", "specificity")
+  harm3 <- harmonize_communication_identities(parsed3$table, .comm_identities,
+                                               "cell_type")
+  with_blank <- rbind(harm3$table, harm3$table[1L, , drop = FALSE])
+  with_blank$rank <- c(1, 2, 3, 4, 5)
+  with_blank$sender[nrow(with_blank)] <- NA_character_
+  q3 <- communication_import_qc(with_blank)
+  expect_identical(q3$counts$n_rank_out_of_range, 0L)
 })
 
 test_that("aggregate_rank imported as p_value passes the p-value range QC", {

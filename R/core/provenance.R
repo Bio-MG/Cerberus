@@ -30,7 +30,8 @@ if (!exists("state_get", envir = globalenv(), mode = "function") ||
 # puisque seuls les packages presents figurent dans le manifeste).
 .provenance_pkg_candidates <- c(
   "Seurat", "SeuratObject", "DESeq2", "edgeR", "limma",
-  "clusterProfiler", "slingshot", "scran", "BPCells", "mirai", "digest"
+  "clusterProfiler", "slingshot", "scran", "BPCells", "mirai", "digest",
+  "liana", "OmnipathR"
 )
 
 #' Collecter les versions logicielles (R + packages installes parmi les cles)
@@ -39,8 +40,13 @@ if (!exists("state_get", envir = globalenv(), mode = "function") ||
 .provenance_versions <- function() {
   v <- c(R = paste0(R.version$major, ".", R.version$minor))
   for (pkg in .provenance_pkg_candidates) {
-    if (requireNamespace(pkg, quietly = TRUE)) {
-      v[pkg] <- as.character(utils::packageVersion(pkg))
+    path <- tryCatch(find.package(pkg, quiet = TRUE), error = function(e) character(0))
+    if (length(path) == 1L && nzchar(path)) {
+      version <- tryCatch(
+        as.character(utils::packageVersion(pkg)),
+        error = function(e) NA_character_
+      )
+      if (!is.na(version)) v[pkg] <- version
     }
   }
   v

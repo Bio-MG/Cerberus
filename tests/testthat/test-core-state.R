@@ -21,12 +21,15 @@ test_that("create_sc_shared_state preserves every documented SC shared field", {
       "pathway_db", "selected_genes", "active_tab", "report_viz_list",
       "traj_reduction", "traj_method", "traj_genes", "max_cells_heavy",
       "sc_palette", "sc_manual_colors", "sc_manual_gradient",
-      "sc_manual_volcano_colors")
+      "sc_manual_volcano_colors", "communication_result",
+      "communication_collection", "active_communication_sample")
   )
   for (f in c("markers_data", "correlated_genes", "corr_target_gene",
               "pathway_results", "pathway_db", "active_tab",
               "traj_reduction", "traj_method", "sc_manual_colors",
-              "sc_manual_gradient", "sc_manual_volcano_colors")) {
+               "sc_manual_gradient", "sc_manual_volcano_colors",
+               "communication_result", "communication_collection",
+               "active_communication_sample")) {
     expect_null(state_get(s, f), info = f)
   }
   expect_identical(state_get(s, "selected_genes"), character(0))

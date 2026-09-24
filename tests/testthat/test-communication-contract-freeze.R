@@ -167,6 +167,9 @@ test_that("communication module defines exactly its three orchestration function
   expect_false(grepl("::run", src, fixed = TRUE))
   expect_match(src, "run_cellchat(", fixed = TRUE)
   expect_match(src, "cellchat_engine_available(", fixed = TRUE)
+  expect_match(src, "run_liana_by_sample(", fixed = TRUE)
+  expect_match(src, "liana_engine_available(", fixed = TRUE)
+  expect_false(grepl("liana::", src, fixed = TRUE))
   # Le nom de la base n'apparait que dans des LIBELLES utilisateur (les deux
   # choix d'espece) — jamais dans du code.
   expect_identical(
@@ -325,6 +328,9 @@ test_that("contract document is in sync with the frozen code", {
   expect_match(doc, "is_external_consensus", fixed = TRUE)
   expect_match(doc, "lower_is_better", fixed = TRUE)
   expect_match(doc, "aggregate_rank", fixed = TRUE)
+  expect_match(doc, "LIANA_ENGINE_CONTRACT.md", fixed = TRUE)
+  expect_match(doc, "rank_max", fixed = TRUE)
+  expect_match(doc, "liana_engine", fixed = TRUE)
   for (f in communication_rank_fields()) {
     expect_match(doc, paste0("`", f, "`"), fixed = TRUE,
                  info = paste("champ de mesure absent du document :", f))

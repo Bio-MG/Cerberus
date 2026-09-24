@@ -26,6 +26,8 @@ params:
   qc_snapshot: NULL
   velocity_result: NULL
   communication_result: NULL
+  communication_collection: NULL
+  active_communication_sample: NULL
   da_design_result: NULL
   da_milo_result: NULL
   da_sccoda_result: NULL
@@ -430,18 +432,27 @@ cat("\n\n*Aucune re-exécution dans ce rapport : les flèches et visualisations 
 
 ---
 
-```{r communication_section, eval="communication" %in% sections && !is.null(params$communication_result), results='asis'}
+```{r communication_section, eval="communication" %in% sections && (!is.null(params$communication_result) || !is.null(params$communication_collection)), results='asis'}
 cat(paste0("# ", tr("Communication cellulaire"), "\n\n"))
 ```
-```{r communication_summary, eval="communication" %in% sections && !is.null(params$communication_result), results='asis'}
+```{r communication_summary, eval="communication" %in% sections && (!is.null(params$communication_result) || !is.null(params$communication_collection)), results='asis'}
 cr <- params$communication_result
-inp <- cr$input_summary %||% list()
-cat(sprintf("- **Méthode source :** %s (un seul résultat = une seule méthode — jamais de comparaison inter-sources)\n",
-            cr$source_method %||% "inconnue"))
-cat(sprintf("- **Lignes d'entrée :** %s | **Lignes canoniques :** %s\n",
-            inp$n_rows_input %||% "—", inp$n_rows_canonical %||% "—"))
-cat(sprintf("- **Colonne d'identité :** %s | **analysis_id :** %s\n",
-            cr$identity_column %||% "—", paste(cr$analysis_id %||% "—", collapse = ", ")))
+cc <- params$communication_collection %||% NULL
+if (!is.null(cr)) {
+  inp <- cr$input_summary %||% list()
+  cat(sprintf("- **Méthode source :** %s (un seul résultat = une seule méthode — jamais de comparaison inter-sources)\n",
+              cr$source_method %||% "inconnue"))
+  cat(sprintf("- **Lignes d'entrée :** %s | **Lignes canoniques :** %s\n",
+              inp$n_rows_input %||% "—", inp$n_rows_canonical %||% "—"))
+  cat(sprintf("- **Colonne d'identité :** %s | **analysis_id :** %s\n",
+              cr$identity_column %||% "—", paste(cr$analysis_id %||% "—", collapse = ", ")))
+}
+if (!is.null(cc)) {
+  cat(sprintf("- **Collection LIANA :** %s échantillon(s), %s condition(s), échantillon actif : %s\n",
+              nrow(cc$sample_manifest), nrow(cc$condition_summary),
+              params$active_communication_sample %||% "—"))
+  cat("- **Unité biologique :** l'échantillon ; les cellules ne sont pas des réplicats. Aucun test entre conditions ni conclusion causale.\n")
+}
 ```
 ```{r communication_table_html, eval="communication" %in% sections && !is.null(params$communication_result) && is.data.frame(params$communication_result$canonical_table) && knitr::is_html_output(), results='asis'}
 cat(paste0("\n\n## ", tr("Table canonique (extrait)"), "\n\n"))
@@ -451,6 +462,22 @@ DT::datatable(utils::head(params$communication_result$canonical_table, 100),
 ```{r communication_table_pdf, eval="communication" %in% sections && !is.null(params$communication_result) && is.data.frame(params$communication_result$canonical_table) && !knitr::is_html_output(), results='asis'}
 cat(paste0("\n\n## ", tr("Table canonique (extrait)"), "\n\n"))
 knitr::kable(utils::head(params$communication_result$canonical_table, 20))
+```
+
+```{r communication_collection_html, eval="communication" %in% sections && !is.null(params$communication_collection) && knitr::is_html_output(), results='asis'}
+cc <- params$communication_collection
+cat(paste0("\n\n## ", tr("Manifeste des échantillons"), "\n\n"))
+DT::datatable(cc$sample_manifest, rownames = FALSE, options = list(pageLength = 10, scrollX = TRUE, dom = "t"))
+cat(paste0("\n\n## ", tr("Résumé descriptif des conditions"), "\n\n"))
+DT::datatable(cc$condition_summary, rownames = FALSE, options = list(pageLength = 10, scrollX = TRUE, dom = "t"))
+```
+
+```{r communication_collection_pdf, eval="communication" %in% sections && !is.null(params$communication_collection) && !knitr::is_html_output(), results='asis'}
+cc <- params$communication_collection
+cat(paste0("\n\n## ", tr("Manifeste des échantillons"), "\n\n"))
+knitr::kable(cc$sample_manifest)
+cat(paste0("\n\n## ", tr("Résumé descriptif des conditions"), "\n\n"))
+knitr::kable(cc$condition_summary)
 ```
 
 ---

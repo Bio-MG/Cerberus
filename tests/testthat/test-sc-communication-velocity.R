@@ -118,6 +118,18 @@ test_that("export tracé : traçabilité et paramètres par ligne", {
   expect_true(all(ex$min_overlap == 0.8))
 })
 
+test_that("velocity identities honor the active cell scope and retain the full result", {
+  src <- paste(readLines(
+    file.path(ts_project_root(), "modules/sc/mod_sc_communication_velocity.R"),
+    warn = FALSE
+  ), collapse = "\n")
+  expect_true(grepl("meta <- meta[rownames(meta) %in%",
+                    src, fixed = TRUE))
+  expect_true(grepl("if (!is.null(comm_state$context_cells))",
+                    src, fixed = TRUE))
+  expect_true(grepl("velocity_result  = vr", src, fixed = TRUE))
+})
+
 test_that("erreurs d'entrée : messages français et états structurés", {
   r <- .ccx_result()
   vr <- .ccx_velocity_result()

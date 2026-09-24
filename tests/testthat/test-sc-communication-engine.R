@@ -71,9 +71,11 @@ source_project_file("R/sc/sc_communication_engine.R")
 test_that("the public API surface is EXACTLY the frozen list", {
   top <- .cc_eng_top_level(.cc_eng_path)
   public <- setdiff(top, grep("^\\.", top, value = TRUE))
-  expect_setequal(public, cellchat_engine_public_api())
-  expect_false(anyDuplicated(cellchat_engine_public_api()) > 0)
+  expected <- c(cellchat_engine_public_api(), liana_engine_public_api())
+  expect_setequal(public, expected)
+  expect_false(anyDuplicated(expected) > 0)
   expect_identical(cellchat_engine_public_api(), sort(cellchat_engine_public_api()))
+  expect_identical(liana_engine_public_api(), sort(liana_engine_public_api()))
 })
 
 test_that("every internal helper stays dot-prefixed", {
@@ -82,7 +84,10 @@ test_that("every internal helper stays dot-prefixed", {
   expect_true(length(internals) > 0)
   expect_true(all(grepl("^\\.", internals)))
   expect_setequal(
-    setdiff(.cc_eng_top_level(.cc_eng_path), cellchat_engine_public_api()),
+    setdiff(
+      .cc_eng_top_level(.cc_eng_path),
+      c(cellchat_engine_public_api(), liana_engine_public_api())
+    ),
     internals
   )
 })

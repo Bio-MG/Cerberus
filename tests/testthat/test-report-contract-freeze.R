@@ -103,6 +103,39 @@ test_that("the global domain bulk_multi_comparison reads global_data additively"
                      perl = TRUE))
 })
 
+test_that("LIANA report integration reads the collection and never executes analysis", {
+  src_col <- .rep_report_src("R/reports/report_collector.R")
+  expect_match(src_col, 'state_get(shared_rv, "communication_collection")',
+               fixed = TRUE)
+  expect_match(src_col, 'state_get(shared_rv, "active_communication_sample")',
+               fixed = TRUE)
+  expect_match(src_col, "assert_liana_collection(collection, sc_obj)",
+               fixed = TRUE)
+  expect_match(src_col, "build_liana_collection_table(collection)", fixed = TRUE)
+  expect_false(grepl("run_liana\\(|run_liana_by_sample\\(", src_col))
+  expect_false(grepl("communication_collection\\s*<-|active_communication_sample\\s*<-",
+                     src_col, perl = TRUE))
+  expect_false(grepl("run_liana\\(|run_liana_by_sample\\(",
+                     .rep_report_src("R/reports/report_render.R")))
+  expect_false(grepl("run_liana\\(|run_liana_by_sample\\(",
+                     .rep_report_src("R/reports/report_bundle.R")))
+})
+
+test_that("render and bundle expose the three LIANA tables without changing source neutrality", {
+  src_render <- .rep_report_src("R/reports/report_render.R")
+  expect_match(src_render, 'communication = "Communication cellulaire"',
+               fixed = TRUE)
+  expect_match(src_render, "l'échantillon biologique est ", fixed = TRUE)
+  expect_match(src_render, "les cellules ne sont pas des réplicats", fixed = TRUE)
+  src_bundle <- .rep_report_src("R/reports/report_bundle.R")
+  for (file in c("communication_canonical.csv",
+                 "communication_sample_manifest.csv",
+                 "communication_condition_summary.csv",
+                 "communication_by_sample.csv")) {
+    expect_match(src_bundle, file, fixed = TRUE)
+  }
+})
+
 # ── Garde-fous scientifiques figés ──────────────────────────────────────────
 test_that("the collector REUSES the v2 fingerprint and never re-implements it", {
   src <- .rep_report_src("R/reports/report_collector.R")
@@ -195,6 +228,14 @@ test_that("the contract document stays in sync with the frozen surface", {
   expect_match(doc, "bulk_multi_comparison", fixed = TRUE)
   expect_match(doc, "global_data$bulk_multi_comparison", fixed = TRUE)
   expect_match(doc, "12 domaines figés", fixed = TRUE)
+  expect_match(doc, "communication_collection", fixed = TRUE)
+  expect_match(doc, "active_communication_sample", fixed = TRUE)
+  expect_match(doc, "communication_sample_manifest.csv", fixed = TRUE)
+  expect_match(doc, "communication_condition_summary.csv", fixed = TRUE)
+  expect_match(doc, "communication_by_sample.csv", fixed = TRUE)
+  expect_match(doc, "l'échantillon biologique est l'unité de réplication",
+               fixed = TRUE)
+  expect_match(doc, "7 états **figés**", fixed = TRUE)
   # Les 7 etats de validation sont documentes
   for (st in consolidated_report_validation_states()) {
     expect_match(doc, paste0("`", st, "`"), fixed = TRUE)

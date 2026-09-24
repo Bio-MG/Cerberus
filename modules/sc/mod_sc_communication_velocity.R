@@ -69,7 +69,11 @@ mod_sc_communication_velocity_server <- function(id, comm_state, global_data, sh
       obj <- global_data$sc_obj
       col <- comm_state$result$identity_column %||% NA_character_
       if (is.null(obj) || is.na(col) || !col %in% colnames(obj@meta.data)) return(NULL)
-      setNames(as.character(obj@meta.data[[col]]), rownames(obj@meta.data))
+      meta <- obj@meta.data
+      if (!is.null(comm_state$context_cells)) {
+        meta <- meta[rownames(meta) %in% as.character(comm_state$context_cells), , drop = FALSE]
+      }
+      setNames(as.character(meta[[col]]), rownames(meta))
     }
 
     observeEvent(input$vel_compute, {

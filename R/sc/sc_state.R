@@ -30,7 +30,9 @@ if (!exists("create_sc_shared_state", envir = .GlobalEnv)) {
       active_tab = NULL, report_viz_list = list(), traj_reduction = NULL,
       traj_method = NULL, traj_genes = character(0), max_cells_heavy = Inf,
       sc_palette = "default", sc_manual_colors = NULL,
-      sc_manual_gradient = NULL, sc_manual_volcano_colors = NULL
+      sc_manual_gradient = NULL, sc_manual_volcano_colors = NULL,
+      communication_result = NULL, communication_collection = NULL,
+      active_communication_sample = NULL
     )
   }
 }

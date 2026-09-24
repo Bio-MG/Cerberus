@@ -8,6 +8,14 @@
 # Aucune donnee biologique reelle ; fixtures deterministes.
 # =============================================================================
 
+.comm_rank_views_result <- function() {
+  tab <- .comm_liana_tab()
+  tab$source <- c("CD4 T", "CD4 T", "CD4 T", "B")
+  tab$target <- c("B", "B", "B", "B")
+  tab$mean_rank <- c(1, 3, NA_real_, Inf)
+  .comm_liana_result(tab = tab)
+}
+
 # ── Route objet CellChat : extraction sans recalcul ─────────────────────────
 test_that("Fixture O1 - real net$prob shape [source, target, interaction] is parsed", {
   parsed <- parse_cellchat_object(.comm_cellchat_object_real(),
@@ -225,6 +233,16 @@ test_that("Fixture C1 - centrality sums and degrees match the table", {
   expect_true(all(diff(cen$total_interactions) <= 0))
 })
 
+test_that("centrality returns a typed empty table for an empty filtered selection", {
+  r <- .comm_result_big()
+  filtered <- communication_apply_filters(r, list(senders = "__none__"))$table
+  centrality <- build_communication_centrality(r, filtered)
+  expect_s3_class(centrality, "data.frame")
+  expect_identical(nrow(centrality), 0L)
+  expect_true(all(c("node", "total_interactions", "analysis_id") %in%
+                    colnames(centrality)))
+})
+
 # ── Provenance des filtres + export filtre ──────────────────────────────────
 test_that("Fixture P1 - filter provenance entry is produced with frozen parameters", {
   r <- .comm_result_big()
@@ -256,4 +274,124 @@ test_that("Fixture P2 - filtered export carries filters and analysis_id on every
   expect_true(all(df$analysis_id == "sc-communication-import"))
   expect_true(all(df$applied_filters == fs$description))
   expect_match(fs$description, "senders=[CD4 T]", fixed = TRUE)
+})
+
+test_that("rank filtering retains finite best-first ranks and counts missing ranks", {
+  r <- .comm_rank_views_result()
+  fs <- communication_apply_filters(r, list(rank_max = 3))
+  expect_identical(fs$table$rank, c(1, 3))
+  expect_identical(fs$summary$dropped_rank, 2L)
+  expect_match(fs$description, "rank_max=3", fixed = TRUE)
+  expect_match(fs$description, "dropped_rank=2", fixed = TRUE)
+  expect_identical(communication_apply_filters(r)$summary$dropped_rank, 0L)
+
+  r_zero <- r
+  r_zero$canonical_table$rank[1L] <- 0
+  zero <- communication_apply_filters(r_zero, list(rank_max = 0))
+  expect_identical(zero$summary$n_after, 1L)
+  expect_error(
+    communication_apply_filters(r, list(rank_max = -1)),
+    class = "communication_import_error"
+  )
+  expect_error(
+    communication_apply_filters(.comm_result_big(), list(rank_max = 2)),
+    class = "communication_import_error"
+  )
+  expect_error(
+    communication_apply_filters(r, list(score_min = 0.5)),
+    class = "communication_import_error"
+  )
+  expect_error(
+    communication_apply_filters(r, list(score_min = 0.5, rank_max = 3)),
+    class = "communication_import_error"
+  )
+})
+
+test_that("rank dotplot uses mean rank with a reversed labelled scale", {
+  r <- .comm_rank_views_result()
+  fs <- communication_apply_filters(r, list(rank_max = 3))
+  p <- plot_communication_dotplot(r, fs$table)
+  expect_true(all(c("mean_rank", "best_rank") %in% colnames(p$data)))
+  expect_false("score" %in% colnames(p$data))
+  expect_true(all(is.na(p$data$mean_score)))
+  expect_identical(p$data$mean_rank, 2)
+  expect_identical(p$data$best_rank, 1)
+  scale_colour <- p$scales$get_scales("colour")
+  expect_match(scale_colour$name, "rang moyen (1 = meilleur)", fixed = TRUE)
+  expect_true(inherits(scale_colour$trans, "transform"))
+  expect_true(is.function(scale_colour$trans$transform))
+  expect_gt(scale_colour$trans$transform(1), scale_colour$trans$transform(3))
+  expect_match(p$labels$subtitle, "rang 1 = meilleur", fixed = TRUE)
+  expect_s3_class(ggplot2::ggplot_build(p), "ggplot_built")
+})
+
+test_that("views fall back explicitly when every imported rank is missing", {
+  r <- .comm_rank_views_result()
+  r$canonical_table$rank <- NA_real_
+  p <- plot_communication_dotplot(r, r$canonical_table)
+  expect_s3_class(p, "ggplot")
+  expect_match(p$labels$subtitle, "Aucun score dans la selection", fixed = TRUE)
+  circle <- plot_communication_circle(r, r$canonical_table)
+  expect_s3_class(circle, "ggplot")
+  expect_true(all(circle$layers[[1L]]$data$weight == circle$layers[[1L]]$data$weight[1L]))
+})
+
+test_that("rank circle weights interactions and states rank semantics", {
+  r <- .comm_rank_views_result()
+  fs <- communication_apply_filters(r, list(rank_max = 3))
+  p <- plot_communication_circle(r, fs$table)
+  expect_match(p$labels$subtitle, "nombre d'interactions", fixed = TRUE)
+  expect_match(p$labels$subtitle, "rang 1 = meilleur", fixed = TRUE)
+  expect_match(p$labels$subtitle, "jamais somme des rangs", fixed = TRUE)
+  edge_data <- p$layers[[1L]]$data
+  expect_true(all(edge_data$weight == 2))
+})
+
+test_that("rank centrality reports best and median rank without summing ranks", {
+  r <- .comm_rank_views_result()
+  fs <- communication_apply_filters(r, list(rank_max = 3))
+  cen <- build_communication_centrality(r, fs$table)
+  expect_true(all(c("out_best_rank", "out_median_rank", "in_best_rank", "in_median_rank") %in%
+                    colnames(cen)))
+  cd4 <- cen[cen$node == "CD4 T", ]
+  b <- cen[cen$node == "B", ]
+  expect_identical(cd4$n_out_interactions, 2L)
+  expect_identical(cd4$out_best_rank, 1)
+  expect_identical(cd4$out_median_rank, 2)
+  expect_identical(b$n_in_interactions, 2L)
+  expect_identical(b$in_best_rank, 1)
+  expect_identical(b$in_median_rank, 2)
+  expect_true(all(is.na(cen$out_score_total)))
+  expect_true(all(is.na(cen$in_score_total)))
+  expect_false("out_rank_total" %in% colnames(cen))
+  expect_true(all(diff(cen$total_interactions) <= 0))
+})
+
+test_that("rank provenance records threshold and dropped rank", {
+  r <- .comm_rank_views_result()
+  fs <- communication_apply_filters(r, list(rank_max = 3))
+  entry <- build_communication_filter_provenance(r, fs)
+  expect_equal(entry$parameters$rank_max, 3)
+  expect_identical(entry$parameters$dropped_rank, 2L)
+  expect_match(as.character(entry$parameters$applied_filters), "rank_max=3", fixed = TRUE)
+  expect_match(as.character(entry$parameters$applied_filters), "dropped_rank=2", fixed = TRUE)
+})
+
+test_that("score-source views and centrality remain non-regressive", {
+  r <- .comm_result_big()
+  fs <- communication_apply_filters(r, list(score_min = 0.5))
+  p <- plot_communication_dotplot(r, fs$table)
+  expect_false(any(c("mean_rank", "best_rank") %in% colnames(p$data)))
+  expect_match(p$scales$get_scales("colour")$name, "Score moyen importe", fixed = TRUE)
+  expect_true(all(is.finite(p$data$mean_score)))
+  pc <- plot_communication_circle(r, fs$table)
+  expected_weight <- sum(fs$table$score[fs$table$sender_node == "CD4 T" &
+                                           fs$table$receiver_node == "B"])
+  expect_true(any(abs(pc$layers[[1L]]$data$weight - expected_weight) < 1e-8))
+  cen <- build_communication_centrality(r, fs$table)
+  expect_false(any(grepl("rank", colnames(cen), fixed = TRUE)))
+  cd4 <- cen[cen$node == "CD4 T", ]
+  expect_identical(cd4$out_score_total,
+                   sum(fs$table$score[fs$table$sender_node == "CD4 T"]))
+  expect_true(all(diff(cen$total_interactions) <= 0))
 })

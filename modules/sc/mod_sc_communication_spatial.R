@@ -115,7 +115,11 @@ mod_sc_communication_spatial_server <- function(id, comm_state, global_data, sha
       obj <- global_data$sc_obj
       col <- comm_state$result$identity_column %||% NA_character_
       if (is.null(obj) || is.na(col) || !col %in% colnames(obj@meta.data)) return(NULL)
-      setNames(as.character(obj@meta.data[[col]]), rownames(obj@meta.data))
+      meta <- obj@meta.data
+      if (!is.null(comm_state$context_cells)) {
+        meta <- meta[rownames(meta) %in% as.character(comm_state$context_cells), , drop = FALSE]
+      }
+      setNames(as.character(meta[[col]]), rownames(meta))
     }
 
     .coordinates <- function() {
@@ -125,7 +129,12 @@ mod_sc_communication_spatial_server <- function(id, comm_state, global_data, sha
         if (is.null(coords) || !all(c("id", "x", "y") %in% names(coords))) {
           stop("Aucune coordonnée id/x/y disponible dans le bundle spatial courant.", call. = FALSE)
         }
-        coords[, c("id", "x", "y"), drop = FALSE]
+        coords <- coords[, c("id", "x", "y"), drop = FALSE]
+        if (!is.null(comm_state$context_cells)) {
+          coords <- coords[as.character(coords$id) %in%
+                            as.character(comm_state$context_cells), , drop = FALSE]
+        }
+        coords
       } else {
         obj <- global_data$sc_obj
         red <- input$spc_reduction
@@ -133,6 +142,9 @@ mod_sc_communication_spatial_server <- function(id, comm_state, global_data, sha
           stop("Choisissez d'abord une réduction 2D.", call. = FALSE)
         }
         em <- SeuratObject::Embeddings(obj, red)[, 1:2, drop = FALSE]
+        if (!is.null(comm_state$context_cells)) {
+          em <- em[rownames(em) %in% as.character(comm_state$context_cells), , drop = FALSE]
+        }
         colnames(em) <- c("x", "y")
         as.data.frame(em)
       }
@@ -245,27 +257,27 @@ mod_sc_communication_spatial_server <- function(id, comm_state, global_data, sha
           ctx <- spc_ctx()
           req(ctx)
           .guard_stale()
-          ts_export_plot(file, plot_fn(), width = 8, height = 6, dpi = 300)
+          ts_export_plot(file, plot_fn(ctx), width = 8, height = 6, dpi = 300)
         }
       )
     }
-    .fig_download("dl_spc_edges_png", "communication_spatial_edges", function() {
+    .fig_download("dl_spc_edges_png", "communication_spatial_edges", function(ctx) {
       pr <- .selected_pair(); req(pr)
-      plot_communication_spatial_edges(ctx(), pr$sender, pr$receiver,
+      plot_communication_spatial_edges(ctx, pr$sender, pr$receiver,
                                        coordinates = .coordinates(),
                                        cell_identities = .identities())
     })
-    .fig_download("dl_spc_edges_pdf", "communication_spatial_edges", function() {
+    .fig_download("dl_spc_edges_pdf", "communication_spatial_edges", function(ctx) {
       pr <- .selected_pair(); req(pr)
-      plot_communication_spatial_edges(ctx(), pr$sender, pr$receiver,
+      plot_communication_spatial_edges(ctx, pr$sender, pr$receiver,
                                        coordinates = .coordinates(),
                                        cell_identities = .identities())
     })
-    .fig_download("dl_spc_dist_png", "communication_spatial_distances", function() {
-      plot_communication_spatial_distance_summary(ctx())
+    .fig_download("dl_spc_dist_png", "communication_spatial_distances", function(ctx) {
+      plot_communication_spatial_distance_summary(ctx)
     })
-    .fig_download("dl_spc_dist_pdf", "communication_spatial_distances", function() {
-      plot_communication_spatial_distance_summary(ctx())
+    .fig_download("dl_spc_dist_pdf", "communication_spatial_distances", function(ctx) {
+      plot_communication_spatial_distance_summary(ctx)
     })
 
     invisible(NULL)

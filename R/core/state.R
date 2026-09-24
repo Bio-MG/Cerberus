@@ -64,7 +64,10 @@ create_sc_shared_state <- function() {
     sc_palette = "default",
     sc_manual_colors = NULL,
     sc_manual_gradient = NULL,
-    sc_manual_volcano_colors = NULL
+    sc_manual_volcano_colors = NULL,
+    communication_result = NULL,
+    communication_collection = NULL,
+    active_communication_sample = NULL
   )
 }
 

@@ -25,7 +25,7 @@ mod_sc_communication_ui <- function(id) {
   tagList(
     div(class = "alert alert-light",
         style = "font-size:0.9em;border-left:3px solid #2980B9;",
-        i18n$t("Communication cellule-cellule — import de resultats externes (CellChat / CellPhoneDB / LIANA) ou calcul CellChat dans l'application. "),
+         i18n$t("Communication cellule-cellule — import de resultats externes (CellChat / CellPhoneDB / LIANA) ou calcul CellChat / LIANA dans l'application. "),
         i18n$t("Aucun score recompose. Les scores de sources differentes ne sont pas comparables.")),
 
     # Le moteur natif (CC-5) n'est pas un repli mais la voie NORMALE : il est
@@ -36,12 +36,13 @@ mod_sc_communication_ui <- function(id) {
     # d'accord — garde test-sc-communication-engine-ui.R.
     radioButtons(ns("comm_source"), i18n$t("Source des resultats"),
                  choices = setNames(
-                   c("cellchat_engine", "cellchat", "cellchat_object", "cellphonedb", "liana"),
+                   c("cellchat_engine", "cellchat", "cellchat_object", "cellphonedb", "liana", "liana_engine"),
                    c(.tr_plain("Calculer dans l'application (CellChat)"),
                      .tr_plain("CellChat (table exportee)"),
                      .tr_plain("Objet CellChat (.rds, resultats deja calcules)"),
                      .tr_plain("CellPhoneDB (means.txt)"),
-                     .tr_plain("LIANA (rangs agreges)"))),
+                     .tr_plain("LIANA (rangs agreges)"),
+                     .tr_plain("Calculer dans l'application (LIANA)"))),
                  selected = "cellchat_engine"),
 
     conditionalPanel(
@@ -112,6 +113,35 @@ mod_sc_communication_ui <- function(id) {
           i18n$t("Les p-values viennent d'une permutation : la graine est un parametre du calcul, elle est tracee dans la provenance. Plus de permutations = calcul plus long."))
     ),
 
+    conditionalPanel(
+      condition = "input.comm_source == 'liana_engine'", ns = ns,
+      div(class = "small text-muted mb-2",
+          i18n$t("LIANA natif : les résultats sont calculés par échantillon biologique.")),
+      selectInput(ns("comm_liana_sample_col"), i18n$t("Colonne d'echantillon (LIANA)"),
+                  choices = character(0), selected = character(0), width = "100%"),
+      selectInput(ns("comm_liana_condition_col"), i18n$t("Colonne de condition (LIANA)"),
+                  choices = character(0), selected = character(0), width = "100%"),
+      div(class = "small text-muted mb-2",
+          i18n$t("La colonne d'identites utilise le selecteur commun.")),
+      selectInput(ns("comm_liana_method"), i18n$t("Methode LIANA"),
+                  choices = setNames(TS_LIANA_METHOD_DEFAULT, TS_LIANA_METHOD_DEFAULT),
+                  selected = TS_LIANA_METHOD_DEFAULT, width = "100%"),
+      selectInput(ns("comm_liana_resource"), i18n$t("Ressource LIANA"),
+                  choices = setNames(TS_LIANA_RESOURCE_DEFAULT, TS_LIANA_RESOURCE_DEFAULT),
+                  selected = TS_LIANA_RESOURCE_DEFAULT, width = "100%"),
+      numericInput(ns("comm_liana_seed"), i18n$t("Graine LIANA"),
+                   value = TS_LIANA_SEED_DEFAULT, min = 1, step = 1, width = "100%"),
+      numericInput(ns("comm_liana_min_cells"), i18n$t("Cellules minimum par echantillon"),
+                   value = TS_LIANA_MIN_CELLS_DEFAULT, min = 1, step = 1, width = "100%"),
+      div(class = "small text-muted mb-2",
+          i18n$t("La graine et le minimum de cellules sont des paramètres du calcul et sont conservés dans la provenance.")),
+      actionButton(ns("comm_compute_liana"), i18n$t("Lancer le calcul LIANA"),
+                   class = "btn-primary w-100", icon = icon("cogs")),
+      selectInput(ns("comm_active_sample"), i18n$t("Echantillon actif (LIANA)"),
+                  choices = character(0), width = "100%"),
+      div(class = "small text-muted mt-1", textOutput(ns("comm_collection_status")))
+    ),
+
     hr(),
     selectInput(ns("comm_identity_column"),
                 i18n$t("Colonne d'identites cellulaires (Seurat)"),
@@ -121,7 +151,7 @@ mod_sc_communication_ui <- function(id) {
     # Le bouton d'import n'a pas de sens pour la source « calcul dans
     # l'application » : il lancerait la branche import sur une entree absente.
     conditionalPanel(
-      condition = "input.comm_source != 'cellchat_engine'", ns = ns,
+      condition = "input.comm_source == 'cellchat' || input.comm_source == 'cellchat_object' || input.comm_source == 'cellphonedb' || input.comm_source == 'liana'", ns = ns,
       actionButton(ns("comm_import"), i18n$t("Importer et valider"),
                    class = "btn-primary w-100", icon = icon("check"))
     ),
@@ -136,6 +166,8 @@ mod_sc_communication_ui <- function(id) {
     downloadButton(ns("dl_comm_filtered"), i18n$t("Exporter table filtree (CSV)"), class = "btn-sm btn-info w-100 mt-1"),
     downloadButton(ns("dl_comm_mapping"), i18n$t("Exporter harmonisation identites (CSV)"), class = "btn-sm btn-info w-100 mt-1"),
     downloadButton(ns("dl_comm_summary"), i18n$t("Exporter resume d'import (CSV)"), class = "btn-sm btn-info w-100 mt-1"),
+    downloadButton(ns("dl_comm_liana_manifest"), i18n$t("Exporter manifeste des echantillons (CSV)"), class = "btn-sm btn-info w-100 mt-1"),
+    downloadButton(ns("dl_comm_liana_condition_summary"), i18n$t("Exporter resume des conditions (CSV)"), class = "btn-sm btn-info w-100 mt-1"),
     downloadButton(ns("dl_comm_centrality"), i18n$t("Exporter centralite (CSV)"), class = "btn-sm btn-info w-100 mt-1"),
     downloadButton(ns("dl_comm_rds"), i18n$t("Exporter resultat valide (RDS)"), class = "btn-sm btn-info w-100 mt-1")
   )
@@ -157,6 +189,9 @@ mod_sc_communication_output_ui <- function(id) {
           column(6, selectizeInput(ns("comm_f_pathways"), i18n$t("Pathways"),
                                    choices = character(0), multiple = TRUE,
                                    options = list(placeholder = .tr_plain("Tous"))))),
+        fluidRow(
+          column(3, numericInput(ns("comm_f_rank_max"), i18n$t("Rang maximum (importé)"),
+                                 value = NA, min = 0, width = "100%"))),
         fluidRow(
           column(4, selectizeInput(ns("comm_f_senders"), i18n$t("Senders"),
                                    choices = character(0), multiple = TRUE,
@@ -246,10 +281,28 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
         ggplot2::theme_void()
     }
 
-    comm_state <- reactiveValues(result = NULL, object_fingerprint = NULL)
+    comm_state <- reactiveValues(
+      result = NULL,
+      object_fingerprint = NULL,
+      collection = NULL,
+      active_sample = NULL,
+      context_cells = NULL
+    )
     comm_status_rv <- reactiveVal(.tr("En attente d'import de resultats de communication..."))
 
     output$comm_status <- renderText({ comm_status_rv() })
+
+    output$comm_collection_status <- renderText({
+      collection <- comm_state$collection
+      if (is.null(collection)) return(.tr("Aucune collection LIANA."))
+      manifest <- liana_collection_sample_manifest(collection)
+      conditions <- liana_collection_condition_summary(collection)
+      .t_fmt(
+        .tr("Collection LIANA : statut {status} — {n} echantillon(s), {c} condition(s)."),
+        status = as.character(collection$status %||% NA_character_),
+        n = nrow(manifest), c = nrow(conditions)
+      )
+    })
 
     # ── Lecture CSV/TSV explicite (check.names = FALSE : les colonnes de
     # paires CellPhoneDB "A|B" ne doivent jamais etre mangles en "A.B") ────
@@ -285,18 +338,24 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
     # resultat (aucun import ne survit a un changement d'objet — resultat
     # perime par construction) + resynchronisation des choix de colonne.
     observeEvent(global_data$sc_obj, {
-      comm_state$result <- NULL
-      comm_state$object_fingerprint <- NULL
+      .clear_result_state()
       comm_status_rv(.tr("Objet Seurat modifie : reimportez la table de communication."))
+      updateSelectInput(session, "comm_identity_column", choices = character(0),
+                        selected = character(0))
+      updateSelectInput(session, "comm_liana_sample_col", choices = character(0),
+                        selected = character(0))
+      updateSelectInput(session, "comm_liana_condition_col", choices = character(0),
+                        selected = character(0))
       obj <- global_data$sc_obj
-      if (is.null(obj)) {
-        updateSelectInput(session, "comm_identity_column", choices = character(0))
-        return()
-      }
+      if (is.null(obj)) return()
       meta_cols <- colnames(obj@meta.data)
       updateSelectInput(session, "comm_identity_column",
                         choices = meta_cols,
                         selected = if ("seurat_clusters" %in% meta_cols) "seurat_clusters" else meta_cols[1])
+      updateSelectInput(session, "comm_liana_sample_col", choices = meta_cols,
+                        selected = character(0))
+      updateSelectInput(session, "comm_liana_condition_col", choices = meta_cols,
+                        selected = character(0))
     }, ignoreInit = TRUE)
 
     # ── Colonnes de rang LIANA : proposees depuis l'en-tete du fichier ─────
@@ -317,14 +376,58 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
                         selected = character(0))
     }, ignoreInit = TRUE)
 
+    .view_object <- function() {
+      if (is.null(comm_state$collection)) global_data$sc_obj else NULL
+    }
+
+    .liana_ui_stop <- function(state, message) {
+      stop(errorCondition(
+        paste0("Moteur LIANA — ", message),
+        class = c("liana_engine_error", "error", "condition"),
+        state = state
+      ))
+    }
+
+    .import_ui_stop <- function(state, message) {
+      stop(errorCondition(
+        paste0("Import communication — ", message),
+        class = c("communication_import_error", "error", "condition"),
+        state = state
+      ))
+    }
+
+    .clear_result_state <- function() {
+      comm_state$result <- NULL
+      comm_state$object_fingerprint <- NULL
+      comm_state$collection <- NULL
+      comm_state$active_sample <- NULL
+      comm_state$context_cells <- NULL
+      shared_rv$communication_result <- NULL
+      shared_rv$communication_collection <- NULL
+      shared_rv$active_communication_sample <- NULL
+      updateNumericInput(session, "comm_f_score_min", value = NA)
+      updateNumericInput(session, "comm_f_pmax", value = NA)
+      updateNumericInput(session, "comm_f_rank_max", value = NA)
+      updateSelectizeInput(session, "comm_f_pathways", choices = character(0),
+                           selected = character(0))
+      updateSelectizeInput(session, "comm_f_senders", choices = character(0),
+                           selected = character(0))
+      updateSelectizeInput(session, "comm_f_receivers", choices = character(0),
+                           selected = character(0))
+      updateSelectInput(session, "comm_active_sample", choices = character(0),
+                        selected = character(0))
+      invisible(NULL)
+    }
+
     # ── Filtres reactifs (operation d'affichage uniquement) ────────────────
     .num_filter <- function(x) {
-      if (is.null(x) || is.na(x)) NA_real_ else as.numeric(x)
+      if (is.null(x) || length(x) != 1L || is.na(x)) NA_real_ else as.numeric(x)
     }
     comm_filtered <- reactive({
       req(comm_state$result)
       communication_apply_filters(comm_state$result, list(
         score_min    = .num_filter(input$comm_f_score_min),
+        rank_max     = .num_filter(input$comm_f_rank_max),
         p_value_max  = .num_filter(input$comm_f_pmax),
         pathways     = input$comm_f_pathways %||% character(0),
         senders      = input$comm_f_senders %||% character(0),
@@ -337,9 +440,10 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       req(comm_state$result)
       fs <- comm_filtered()$summary
       sprintf(
-        .tr("%d interaction(s) affichée(s) sur %d — retirées : score %d, p-value %d, pathway %d, sender %d, receiver %d, auto %d"),
-        fs$n_after, fs$n_before, fs$dropped_score, fs$dropped_p_value,
-        fs$dropped_pathway, fs$dropped_sender, fs$dropped_receiver, fs$dropped_self
+        .tr("%d interaction(s) affichée(s) sur %d — retirées : score %d, rang %d, p-value %d, pathway %d, sender %d, receiver %d, auto %d"),
+        fs$n_after, fs$n_before, fs$dropped_score, fs$dropped_rank,
+        fs$dropped_p_value, fs$dropped_pathway, fs$dropped_sender,
+        fs$dropped_receiver, fs$dropped_self
       )
     })
 
@@ -347,21 +451,46 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
     # Path A, calcul = Path B). Factorise parce que la regle des deux voies
     # exige que les deux chemins deposent le resultat au MEME endroit — sinon
     # elles divergeraient, et une divergence est un bug.
-    .store_result <- function(canonical, obj) {
+    .store_result <- function(canonical, obj, append_provenance = TRUE,
+                              collection = NULL, active_sample = NULL) {
+      context_cells <- NULL
+      if (!is.null(collection) && length(active_sample) == 1L &&
+          !is.na(active_sample) && nzchar(as.character(active_sample))) {
+        manifest <- liana_collection_sample_manifest(collection)
+        sample_index <- which(as.character(manifest$sample_key) ==
+                              as.character(active_sample))
+        if (length(sample_index) == 1L) {
+          sample_id <- as.character(manifest$sample_id[[sample_index]])
+          sample_col <- as.character(collection$sample_col)
+          meta <- obj@meta.data
+          if (length(sample_col) == 1L && !is.na(sample_col) &&
+              sample_col %in% colnames(meta)) {
+            context_cells <- rownames(meta)[
+              trimws(as.character(meta[[sample_col]])) == sample_id
+            ]
+          }
+          used_cells <- canonical$engine$cells_used_ids
+          if (length(used_cells)) context_cells <- as.character(used_cells)
+        }
+      }
+      if (!is.null(collection) && length(active_sample) == 1L &&
+          !is.na(active_sample) && nzchar(as.character(active_sample))) {
+        collection$active_sample_key <- as.character(active_sample)
+      }
       comm_state$result <- canonical
       comm_state$object_fingerprint <- velocity_object_fingerprint(obj)
-
-      # Stage 17 (4F) : exposition ADDITIVE du resultat canonique au rapport
-      # consolide (lecture seule ; comm_state reste la reference du panel
-      # 8b — aucun changement de comportement du panneau).
+      comm_state$collection <- collection
+      comm_state$active_sample <- active_sample
+      comm_state$context_cells <- context_cells
       shared_rv$communication_result <- canonical
-
-      provenance_append(shared_rv, canonical$provenance)
-
-      # Filtres : reset a chaque nouveau resultat (les anciens choix ne sont
-      # plus garantis valides sur une nouvelle source).
+      shared_rv$communication_collection <- collection
+      shared_rv$active_communication_sample <- active_sample
+      if (isTRUE(append_provenance)) {
+        provenance_append(shared_rv, canonical$provenance)
+      }
       updateNumericInput(session, "comm_f_score_min", value = NA)
       updateNumericInput(session, "comm_f_pmax", value = NA)
+      updateNumericInput(session, "comm_f_rank_max", value = NA)
       t0 <- canonical$canonical_table
       sender_nodes <- ifelse(!is.na(t0$sender_mapped), t0$sender_mapped, t0$sender)
       receiver_nodes <- ifelse(!is.na(t0$receiver_mapped), t0$receiver_mapped, t0$receiver)
@@ -380,30 +509,26 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
     observeEvent(input$comm_import, {
       req(global_data$sc_obj)
       tryCatch({
+        src <- input$comm_source %||% "cellchat_engine"
+        if (identical(src, "cellchat_engine") || identical(src, "liana_engine")) {
+           .import_ui_stop(
+             "invalid_schema",
+             .tr("Les sources natives ne sont pas importables : utilisez « Lancer le calcul CellChat » ou « Lancer le calcul LIANA ».")
+           )
+        }
         # CHRYSALIS 2E : garde d'entree explicite (message FR dans le canal
         # d'erreur au lieu d'un req() silencieux).
         obj <- assert_seurat(global_data$sc_obj, context = "communication import")
 
         identity_col <- input$comm_identity_column
         if (is.null(identity_col) || !nzchar(identity_col)) {
-          stop("Choisissez d'abord la colonne de metadonnees Seurat decrivant les identites des populations.", call. = FALSE)
+           .import_ui_stop(
+             "invalid_input",
+             "Choisissez d'abord la colonne de metadonnees Seurat decrivant les identites des populations."
+           )
         }
         assert_metadata_column(obj, identity_col, context = "communication import")
 
-        # Le repli doit valoir le defaut DECLARE de l'UI (cellchat_engine) :
-        # sinon un input absent ferait silencieusement retomber la branche
-        # import sur CellChat table (req() muet) au lieu d'aiguiller vers le
-        # bouton de calcul. Garde : test-sc-communication-engine-ui.R.
-        src <- input$comm_source %||% "cellchat_engine"
-        # Garde : la source « calcul dans l'application » n'a aucun fichier a
-        # importer. Sans ce filtre elle tomberait dans la branche finale
-        # (LIANA) et exigerait un fichier qui n'existe pas — message absurde.
-        if (identical(src, "cellchat_engine")) {
-          stop(paste0(
-            "La source « Calculer dans l'application » n'a aucun fichier a ",
-            "importer : utilisez le bouton « Lancer le calcul CellChat »."
-          ), call. = FALSE)
-        }
         warnings_all <- character(0)
 
         if (identical(src, "cellchat")) {
@@ -426,26 +551,32 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
             files$pvalues <- input$comm_cpdb_pvalues$name
           }
           parsed <- parse_cellphonedb_import(means, pvals, source_file = input$comm_cpdb_means$name)
-        } else {
+        } else if (identical(src, "liana")) {
           # ── LIANA (CCC 7-8 route (b)) : import de RANGS produits hors de
           # l'app. Les deux choix ci-dessous sont EXIGES — ni le mode
           # d'agregation ni la colonne de rang ne sont deductibles du fichier,
           # et un defaut implicite produirait un artefact d'analyse.
           req(input$comm_liana_file)
           if (is.null(input$comm_liana_mode) || !nzchar(input$comm_liana_mode)) {
-            stop(paste0(
-              "Choisissez le mode d'agregation LIANA (specificite ou magnitude) : ",
-              "les deux repondent a des questions differentes et ne sont pas ",
-              "comparables entre elles."
-            ), call. = FALSE)
+             .import_ui_stop(
+               "invalid_input",
+               paste0(
+                 "Choisissez le mode d'agregation LIANA (specificite ou magnitude) : ",
+                 "les deux repondent a des questions differentes et ne sont pas ",
+                 "comparables entre elles."
+               )
+             )
           }
           rank_col <- input$comm_liana_rank
           if (is.null(rank_col) || !nzchar(rank_col)) {
-            stop(paste0(
-              "Choisissez la colonne de rang LIANA a importer (mean_rank, ",
-              "aggregate_rank ou {methode}.rank) — la route (b) importe des ",
-              "rangs : sans rang, il n'y a pas de mesure."
-            ), call. = FALSE)
+             .import_ui_stop(
+               "invalid_input",
+               paste0(
+                 "Choisissez la colonne de rang LIANA a importer (mean_rank, ",
+                 "aggregate_rank ou {methode}.rank) — la route (b) importe des ",
+                 "rangs : sans rang, il n'y a pas de mesure."
+               )
+             )
           }
           liana_tab <- .read_table_auto(input$comm_liana_file$datapath)
           parsed <- parse_liana_import(
@@ -454,6 +585,11 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
             source_file = input$comm_liana_file$name
           )
           files <- list(table = input$comm_liana_file$name)
+        } else {
+           .import_ui_stop(
+             "invalid_schema",
+             sprintf(.tr("Source d'import inconnue : %s."), as.character(src)[1L])
+           )
         }
         warnings_all <- c(warnings_all, parsed$warnings)
 
@@ -470,7 +606,10 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
         warnings_all <- c(warnings_all, qcr$warnings)
 
         if (nrow(qcr$table) == 0L) {
-          stop("Toutes les lignes ont ete supprimees au QC (sender/receiver/ligand/receptor vides) : aucun resultat canonique produit.", call. = FALSE)
+           .import_ui_stop(
+             "invalid_input",
+             "Toutes les lignes ont ete supprimees au QC (sender/receiver/ligand/receptor vides) : aucun resultat canonique produit."
+           )
         }
 
         # Resultat canonique — contrat documente dans
@@ -515,15 +654,17 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
         comm_status_rv(paste0("[", .status_label(canonical$status), "]\n", msg))
         showNotification(.tr("Import communication valide."), type = "message", duration = 4)
 
-      }, error = function(e) {
-        comm_state$result <- NULL
-        comm_state$object_fingerprint <- NULL
-        comm_status_rv(paste(.tr("Erreur import communication :"), conditionMessage(e)))
-        showNotification(
-          paste(.tr("Erreur import communication :"), conditionMessage(e)),
-          type = "error", duration = 10
-        )
-      })
+       }, error = function(e) {
+         .clear_result_state()
+         st <- communication_error_state(e)
+         detail <- if (is.na(st)) conditionMessage(e) else
+           paste0(conditionMessage(e), " [etat : ", st, "]")
+         comm_status_rv(paste(.tr("Erreur import communication :"), detail))
+         showNotification(
+           paste(.tr("Erreur import communication :"), detail),
+           type = "error", duration = 10
+         )
+       })
     })
 
     # ── CC-5 : calcul CellChat DANS l'application (Path B) ──────────────────
@@ -537,27 +678,44 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
 
         identity_col <- input$comm_identity_column
         if (is.null(identity_col) || !nzchar(identity_col)) {
-          stop("Choisissez d'abord la colonne de metadonnees Seurat decrivant les identites des populations.", call. = FALSE)
+          stop(errorCondition(
+            "Choisissez d'abord la colonne de metadonnees Seurat decrivant les identites des populations.",
+            class = c("cellchat_engine_error", "error", "condition"),
+            state = "invalid_input"
+          ))
         }
-        assert_metadata_column(obj, identity_col, context = "communication engine")
+        if (!identity_col %in% colnames(obj@meta.data)) {
+          stop(errorCondition(
+            sprintf("Colonne d'identites absente : %s.", identity_col),
+            class = c("cellchat_engine_error", "error", "condition"),
+            state = "invalid_input"
+          ))
+        }
 
         species <- input$comm_engine_species
         if (is.null(species) || !nzchar(species)) {
-          stop(paste0("Choisissez l'espece : la base ligand-recepteur en ",
-                      "decoule et ne se devine pas a partir des donnees."),
-               call. = FALSE)
+          stop(errorCondition(
+            paste0("Choisissez l'espece : la base ligand-recepteur en ",
+                   "decoule et ne se devine pas a partir des donnees."),
+            class = c("cellchat_engine_error", "error", "condition"),
+            state = "invalid_input"
+          ))
         }
 
         # Dependance PARESSeUSE : l'absence de CellChat est un etat PREVU. On
         # garde la main sur le texte (avec le remede) plutot que de laisser
         # l'erreur du moteur arriver telle quelle dans la notification.
         if (!cellchat_engine_available()) {
-          stop(paste0(
-            "Le package 'CellChat' n'est pas installe : le calcul dans ",
-            "l'application est impossible. Il est distribue uniquement sur ",
-            "GitHub — remotes::install_github(\"jinworks/CellChat\"). L'import ",
-            "de resultats externes reste disponible sans cette dependance."
-          ), call. = FALSE)
+          stop(errorCondition(
+            paste0(
+              "Le package 'CellChat' n'est pas installe : le calcul dans ",
+              "l'application est impossible. Il est distribue uniquement sur ",
+              "GitHub — remotes::install_github(\"jinworks/CellChat\"). L'import ",
+              "de resultats externes reste disponible sans cette dependance."
+            ),
+            class = c("cellchat_engine_error", "error", "condition"),
+            state = "missing_dependency"
+          ))
         }
 
         cc_input <- build_cellchat_input(obj, group_by = identity_col,
@@ -587,8 +745,7 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
         showNotification(.tr("Calcul CellChat termine."), type = "message", duration = 4)
 
       }, error = function(e) {
-        comm_state$result <- NULL
-        comm_state$object_fingerprint <- NULL
+        .clear_result_state()
         # Les erreurs du moteur sont CLASSEES (6 etats) : on affiche l'etat EN
         # PLUS du texte — « no_interactions » ou « invalid_parameters » ne se
         # devinent pas dans un message generique.
@@ -600,6 +757,123 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
                          type = "error", duration = 10)
       })
     })
+
+    observeEvent(input$comm_compute_liana, {
+      req(global_data$sc_obj)
+      tryCatch({
+        obj <- assert_seurat(global_data$sc_obj, context = "moteur LIANA")
+
+        identity_col <- input$comm_identity_column
+        if (is.null(identity_col) || !nzchar(identity_col)) {
+          .liana_ui_stop(
+            "invalid_input",
+            .tr("Choisissez d'abord la colonne de metadonnees Seurat decrivant les identites des populations.")
+          )
+        }
+        if (!identity_col %in% colnames(obj@meta.data)) {
+          .liana_ui_stop("invalid_input", sprintf("Colonne d'identites absente : %s.", identity_col))
+        }
+
+        sample_col <- input$comm_liana_sample_col
+        if (is.null(sample_col) || !nzchar(sample_col)) {
+          .liana_ui_stop("invalid_input", .tr("Choisissez la colonne d'echantillon LIANA."))
+        }
+        if (!sample_col %in% colnames(obj@meta.data)) {
+          .liana_ui_stop("invalid_input", sprintf("Colonne d'echantillon absente : %s.", sample_col))
+        }
+
+        condition_col <- input$comm_liana_condition_col
+        if (is.null(condition_col) || !nzchar(condition_col)) {
+          .liana_ui_stop("invalid_input", .tr("Choisissez la colonne de condition LIANA."))
+        }
+        if (!condition_col %in% colnames(obj@meta.data)) {
+          .liana_ui_stop("invalid_input", sprintf("Colonne de condition absente : %s.", condition_col))
+        }
+
+        if (!liana_engine_available()) {
+          stop(errorCondition(
+            .tr("Le moteur LIANA natif n'est pas disponible : installez les paquets requis."),
+            class = c("liana_engine_error", "error", "condition"),
+            state = "missing_dependency"
+          ))
+        }
+
+        method <- input$comm_liana_method %||% TS_LIANA_METHOD_DEFAULT
+        resource <- input$comm_liana_resource %||% TS_LIANA_RESOURCE_DEFAULT
+        collection <- withProgress(
+          message = .tr("Calcul LIANA par echantillon en cours..."),
+          value = 0,
+          {
+            run_liana_by_sample(
+              obj,
+              sample_col = sample_col,
+              condition_col = condition_col,
+              idents_col = identity_col,
+              method = method,
+              resource = resource,
+              seed = as.integer(input$comm_liana_seed),
+              min_cells = as.integer(input$comm_liana_min_cells),
+              on_progress = function(msg) incProgress(0, detail = msg)
+            )
+          }
+        )
+
+        manifest <- liana_collection_sample_manifest(collection)
+        keys <- as.character(manifest$sample_key)
+        if (!length(keys)) {
+          .liana_ui_stop("no_interactions", .tr("La collection LIANA ne contient aucun echantillon."))
+        }
+        first_key <- keys[[1L]]
+        first_result <- liana_collection_active(collection, first_key)
+        .store_result(first_result, obj, collection = collection,
+                      active_sample = first_key)
+        if (length(keys) > 1L) {
+          for (key in keys[-1L]) {
+            sample_result <- liana_collection_active(collection, key)
+            provenance_append(shared_rv, sample_result$provenance)
+          }
+        }
+        provenance_append(shared_rv, collection$provenance)
+
+        updateSelectInput(session, "comm_active_sample", choices = keys,
+                          selected = first_key)
+        condition_summary <- liana_collection_condition_summary(collection)
+        msg <- .t_fmt(
+          .tr("Collection LIANA : statut {status} — {n} echantillon(s), {c} condition(s)."),
+          status = as.character(collection$status %||% NA_character_),
+          n = length(keys), c = nrow(condition_summary)
+        )
+        comm_status_rv(paste0("[", as.character(collection$status %||% NA_character_), "]\n", msg))
+        showNotification(.tr("Calcul LIANA termine."), type = "message", duration = 4)
+      }, error = function(e) {
+        .clear_result_state()
+        st <- liana_engine_error_state(e)
+        detail <- if (is.na(st)) conditionMessage(e) else
+          paste0(conditionMessage(e), " [etat : ", st, "]")
+        comm_status_rv(paste(.tr("Erreur calcul LIANA :"), detail))
+        showNotification(paste(.tr("Erreur calcul LIANA :"), detail),
+                         type = "error", duration = 10)
+      })
+    })
+
+    observeEvent(input$comm_active_sample, {
+      req(global_data$sc_obj, comm_state$collection, input$comm_active_sample)
+      key <- as.character(input$comm_active_sample)
+      tryCatch({
+        keys <- as.character(liana_collection_sample_manifest(comm_state$collection)$sample_key)
+        if (!key %in% keys) {
+          stop(.tr("Echantillon actif absent de la collection LIANA."), call. = FALSE)
+        }
+        active_result <- liana_collection_active(comm_state$collection, key)
+        .store_result(active_result, global_data$sc_obj,
+                      append_provenance = FALSE,
+                      collection = comm_state$collection,
+                      active_sample = key)
+        comm_status_rv(.t_fmt(.tr("Echantillon actif : {name}"), name = key))
+      }, error = function(e) {
+        showNotification(conditionMessage(e), type = "error", duration = 8)
+      })
+    }, ignoreInit = TRUE)
 
     # ── Vues (consommatrices pures du resultat canonique) ──────────────────
     output$comm_table <- DT::renderDataTable({
@@ -628,7 +902,7 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       .check_fingerprint()
       tryCatch(
         plot_communication_dotplot(comm_state$result, comm_filtered()$table,
-                                   seurat_obj = global_data$sc_obj),
+                                   seurat_obj = .view_object()),
         error = function(e) .error_plot(e)
       )
     })
@@ -638,7 +912,7 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       .check_fingerprint()
       tryCatch(
         plot_communication_pathway_heatmap(comm_state$result, comm_filtered()$table,
-                                           seurat_obj = global_data$sc_obj),
+                                           seurat_obj = .view_object()),
         error = function(e) .error_plot(e)
       )
     })
@@ -648,7 +922,7 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       .check_fingerprint()
       tryCatch(
         plot_communication_circle(comm_state$result, comm_filtered()$table,
-                                  seurat_obj = global_data$sc_obj),
+                                  seurat_obj = .view_object()),
         error = function(e) .error_plot(e)
       )
     })
@@ -775,42 +1049,42 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       filename = function() communication_export_filename(comm_state$result, "communication_dotplot", "png"),
       content = function(file) .export_figure(function() {
         plot_communication_dotplot(comm_state$result, comm_filtered()$table,
-                                   seurat_obj = global_data$sc_obj)
+                                   seurat_obj = .view_object())
       }, file)
     )
     output$dl_comm_dotplot_pdf <- downloadHandler(
       filename = function() communication_export_filename(comm_state$result, "communication_dotplot", "pdf"),
       content = function(file) .export_figure(function() {
         plot_communication_dotplot(comm_state$result, comm_filtered()$table,
-                                   seurat_obj = global_data$sc_obj)
+                                   seurat_obj = .view_object())
       }, file)
     )
     output$dl_comm_heatmap_png <- downloadHandler(
       filename = function() communication_export_filename(comm_state$result, "communication_pathway_heatmap", "png"),
       content = function(file) .export_figure(function() {
         plot_communication_pathway_heatmap(comm_state$result, comm_filtered()$table,
-                                           seurat_obj = global_data$sc_obj)
+                                           seurat_obj = .view_object())
       }, file)
     )
     output$dl_comm_heatmap_pdf <- downloadHandler(
       filename = function() communication_export_filename(comm_state$result, "communication_pathway_heatmap", "pdf"),
       content = function(file) .export_figure(function() {
         plot_communication_pathway_heatmap(comm_state$result, comm_filtered()$table,
-                                           seurat_obj = global_data$sc_obj)
+                                           seurat_obj = .view_object())
       }, file)
     )
     output$dl_comm_circle_png <- downloadHandler(
       filename = function() communication_export_filename(comm_state$result, "communication_circle_network", "png"),
       content = function(file) .export_figure(function() {
         plot_communication_circle(comm_state$result, comm_filtered()$table,
-                                  seurat_obj = global_data$sc_obj)
+                                  seurat_obj = .view_object())
       }, file)
     )
     output$dl_comm_circle_pdf <- downloadHandler(
       filename = function() communication_export_filename(comm_state$result, "communication_circle_network", "pdf"),
       content = function(file) .export_figure(function() {
         plot_communication_circle(comm_state$result, comm_filtered()$table,
-                                  seurat_obj = global_data$sc_obj)
+                                  seurat_obj = .view_object())
       }, file)
     )
 
@@ -834,14 +1108,43 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       }
     )
 
-    output$dl_comm_rds <- downloadHandler(
-      filename = function() communication_export_filename(comm_state$result, "communication_result", "rds"),
+    output$dl_comm_liana_manifest <- downloadHandler(
+      filename = function() communication_export_filename(comm_state$result, "liana_sample_manifest", "csv"),
       content = function(file) {
-        req(comm_state$result)
+        req(comm_state$collection)
         .check_fingerprint()
-        saveRDS(comm_state$result, file)
+        utils::write.csv(liana_collection_sample_manifest(comm_state$collection),
+                         file, row.names = FALSE)
       }
     )
+
+    output$dl_comm_liana_condition_summary <- downloadHandler(
+      filename = function() communication_export_filename(comm_state$result, "liana_condition_summary", "csv"),
+      content = function(file) {
+        req(comm_state$collection)
+        .check_fingerprint()
+        utils::write.csv(liana_collection_condition_summary(comm_state$collection),
+                         file, row.names = FALSE)
+      }
+    )
+
+    output$dl_comm_rds <- downloadHandler(
+      filename = function() communication_export_filename(comm_state$result, "communication_result", "rds"),
+       content = function(file) {
+         req(comm_state$result)
+         .check_fingerprint()
+         payload <- comm_state$result
+         if (!is.null(comm_state$collection)) {
+           payload <- list(
+             type = "liana_collection",
+             collection = comm_state$collection,
+             active_sample = comm_state$active_sample,
+             active_result = comm_state$result
+           )
+         }
+         saveRDS(payload, file)
+       }
+     )
 
     # ── Contextes V1.x (roadmap CCC avancée) : sous-modules montés dans le
     # panneau existant — consommateurs du résultat canonique (comm_state est

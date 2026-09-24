@@ -187,6 +187,22 @@ test_that("erreurs d'entrée : messages français et états structurés", {
   expect_identical(e2$state, "invalid_identity_mapping")
 })
 
+test_that("trajectory inputs honor the active cell scope with a NULL fallback", {
+  src <- paste(readLines(
+    file.path(ts_project_root(), "modules/sc/mod_sc_communication_trajectory.R"),
+    warn = FALSE
+  ), collapse = "\n")
+  expect_true(grepl("meta <- meta[rownames(meta) %in%",
+                    src, fixed = TRUE))
+  expect_true(grepl("pt <- setNames(as.numeric(meta[[col]]), rownames(meta))",
+                    src, fixed = TRUE))
+  expect_true(grepl("expr <- expr[, colnames(expr) %in%",
+                    src, fixed = TRUE))
+  positions <- gregexpr("if (!is.null(comm_state$context_cells))", src,
+                        fixed = TRUE)[[1L]]
+  expect_identical(sum(positions > 0L), 4L)
+})
+
 test_that("communication_fetch_expression_matrix : extraction bornée aux gènes", {
   skip_if_not_installed("SeuratObject")
   skip_if_not_installed("Seurat")

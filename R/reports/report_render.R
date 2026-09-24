@@ -36,7 +36,7 @@
   pathways      = "Enrichissement de pathways",
   trajectory    = "Trajectoire / pseudotemps",
   velocity      = "RNA velocity",
-  communication = "Communication cellulaire (import)",
+  communication = "Communication cellulaire",
   da_design     = "Abondance différentielle — design expérimental",
   da_milo       = "Abondance différentielle — Milo (voisinages)",
   da_sccoda     = "Abondance différentielle — scCODA (composition)",
@@ -186,14 +186,46 @@ build_consolidated_report_html <- function(report_input, validation) {
   analysis_blocks <- lapply(validation$verdicts, function(v) {
     ids <- if (length(v$analysis_ids))
       paste(v$analysis_ids, collapse = ", ") else "—"
+    communication <- report_input$analyses$communication
+    has_liana <- identical(v$section, "communication") &&
+      !identical(v$state, "blocked") && isTRUE(communication$present) &&
+      is.data.frame(communication$extras$sample_manifest) &&
+      is.data.frame(communication$extras$condition_summary) &&
+      is.data.frame(communication$extras$by_sample)
+    liana_note <- if (has_liana) {
+      tg$p(
+        class = "note",
+        paste0(
+          "Tableaux descriptifs uniquement : l'échantillon biologique est ",
+          "l'unité de réplication ; les cellules ne sont pas des réplicats. ",
+          "Aucun test entre conditions ni conclusion causale n'est effectué."
+        )
+      )
+    } else {
+      NULL
+    }
+    liana_tables <- if (has_liana && isTRUE(report_input$options$include_tables)) {
+      tl(
+        tg$h4("Manifeste des échantillons"),
+        .report_html_table(communication$extras$sample_manifest),
+        tg$h4("Résumé descriptif des conditions"),
+        .report_html_table(communication$extras$condition_summary),
+        tg$h4("Interactions canoniques par échantillon"),
+        .report_html_table(communication$extras$by_sample)
+      )
+    } else {
+      NULL
+    }
     tl(
       tg$h3(.report_domain_labels[[v$section]] %||% v$section),
       .report_banner(v$state, v$label),
       if (length(v$identity_note)) tg$p(class = "note", v$identity_note) else NULL,
       tg$p(tg$strong("analysis_id : "), tg$span(class = "ids", ids)),
-      if (isTRUE(report_input$options$include_tables))
-        .report_html_table(v$summary, caption = "Résumé descriptif (aucune re-analyse)")
-      else NULL
+       if (isTRUE(report_input$options$include_tables))
+         .report_html_table(v$summary, caption = "Résumé descriptif (aucune re-analyse)")
+       else NULL,
+       liana_note,
+       liana_tables
     )
   })
   analyses_section <- tl(tg$h2("3. Analyses"), analysis_blocks)

@@ -70,8 +70,19 @@ consolidated_report_export_filename <- function(kind, ext) {
         "resultats DE pseudobulk")
   if (state_of("pathways") != "absent")
     add("pathways.csv", A$pathways$extras$table, "pathways", "table pathways")
-  add("communication_canonical.csv",
-      A$communication$extras$canonical_table, "communication", "table canonique")
+  if (!state_of("communication") %in% c("absent", "blocked")) {
+    add("communication_canonical.csv",
+        A$communication$extras$canonical_table, "communication", "table canonique")
+    add("communication_sample_manifest.csv",
+        A$communication$extras$sample_manifest, "communication",
+        "manifeste des echantillons")
+    add("communication_condition_summary.csv",
+        A$communication$extras$condition_summary, "communication",
+        "resume descriptif des conditions")
+    add("communication_by_sample.csv",
+        A$communication$extras$by_sample, "communication",
+        "table canonique par echantillon")
+  }
   add("da_design_conditions.csv", A$da_design$extras$condition_summary,
       "da_design", "resume conditions")
   add("da_design_samples.csv", A$da_design$extras$sample_summary,
@@ -169,9 +180,10 @@ build_report_bundle <- function(bundle_dir, report_input, validation) {
     utils::write.csv(t$df, file.path(bundle_dir, rel), row.names = FALSE,
                      fileEncoding = "UTF-8")
     written <<- c(written, rel)
-    data.frame(section = t$section, fichier = rel, etat = "export",
-               analysis_ids = paste(t$section, collapse = ","),
-               contenu = t$contenu, stringsAsFactors = FALSE)
+     ids <- validation$verdicts[[t$section]]$analysis_ids %||% character(0)
+     data.frame(section = t$section, fichier = rel, etat = "export",
+                analysis_ids = paste(ids, collapse = ","),
+                contenu = t$contenu, stringsAsFactors = FALSE)
   })
 
   # 3. Provenance consolidee

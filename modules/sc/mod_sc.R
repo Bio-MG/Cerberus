@@ -665,6 +665,8 @@ mod_sc_server <- function(id, global_data) {
           # rapport Rmd — restitues TELS QUELS (tables, aucune re-execution).
           velocity_result      = state_get(shared_rv, "velocity_result"),
           communication_result = state_get(shared_rv, "communication_result"),
+          communication_collection = state_get(shared_rv, "communication_collection"),
+          active_communication_sample = state_get(shared_rv, "active_communication_sample"),
           da_design_result     = state_get(shared_rv, "da_design_result"),
           da_milo_result       = state_get(shared_rv, "da_milo_result"),
           da_sccoda_result     = state_get(shared_rv, "da_sccoda_result"),
