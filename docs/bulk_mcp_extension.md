@@ -59,13 +59,17 @@ frozen set without a product decision. Those candidates are marked *blocked* in 
 
 ## 3. Candidate ranking (recommended order)
 
-| Rank | Literal button | Module | Why it ranks here |
-|---|---|---|---|
-| 1 | `bulk-pattern-run_pattern` | `bulk_pattern` | Descriptive, pure-R contract, cheap, deterministic (seed frozen). One blocker: the group column. |
-| 2 | `bulk-signatures-run_signatures` | `bulk_signatures` | Fully numeric frozen set, offline resources for the 3 built-in sources. One blocker: the `rds_local` file path. |
-| 3 | `bulk-network-run_network` | `bulk_network` | Entirely numeric frozen set, offline Reactome (no network access needed → headless-friendly). Needs DE + `vst_mat`. |
-| 4 | `bulk-wgcna-run_wgcna_power` then `bulk-wgcna-run_wgcna_modules` | `bulk_wgcna` | Two dependent steps + dynamic trait selection. Last, and only as a **pair**. |
-| — | `bulk-mapping-run_mapping` | `bulk_mapping` | Technically the cheapest, but it **mutates** the working matrix (`counts_mapped` + `mapping_applied`, with an `undo`). See §4. |
+| Rank | Literal button | Module | Why it ranks here | Phase C ready? |
+|---|---|---|---|---|
+| 1 | `bulk-pattern-run_pattern` | `bulk_pattern` | Descriptive, pure-R contract, cheap, deterministic (seed frozen). | **No** — `group_column` is a required argument of `run_pattern_clustering()` and must name a metadata column; it is session-derived, not a parameter (§4.1) |
+| 2 | `bulk-signatures-run_signatures` | `bulk_signatures` | Fully static frozen set, offline resources, needs only `vst_mat`. | **Yes** — §6 |
+| 3 | `bulk-network-run_network` | `bulk_network` | Entirely numeric frozen set, offline Reactome (no network access needed → headless-friendly). Needs DE + `vst_mat`. | No — depends on a DE contrast, and the heaviest build of the three |
+| 4 | `bulk-wgcna-run_wgcna_power` then `bulk-wgcna-run_wgcna_modules` | `bulk_wgcna` | Two dependent steps + dynamic trait selection. Last, and only as a **pair**. | No — dynamic traits, two steps |
+| — | `bulk-mapping-run_mapping` | `bulk_mapping` | Technically the cheapest, but it **mutates** the working matrix (`counts_mapped` + `mapping_applied`, with an `undo`). See §4. | No — state-mutating, see §4.5 |
+
+Rank is by **cost to expose**. Readiness is a separate axis, and the two do not
+agree: the cheapest candidate is the one that cannot be frozen, so Phase C takes
+rank 2.
 
 ---
 
@@ -171,5 +175,90 @@ list(
 
 - No Bulk code, no allowlist entry, no MCP tool, no test, no config constant is added here.
 - No new dependency, and no change to any frozen `BULK_*_CONTRACT.md`.
-- No decision on the three dynamic-input blockers (§4.1, §4.2, §4.4) — they need a product call.
+- No decision on the dynamic-input blockers of §4.1 and §4.4 — they need a product call.
+  The file-path blocker of §4.2 is resolved by construction in §6, not by a decision.
 - `renv.lock` is untouched.
+
+---
+
+## 6. Phase C candidate
+
+**DESIGN ONLY.** This section proposes the next action. Nothing in it is
+implemented: no code, no allowlist entry, no drive action, no test change, no new
+dependency. `run_pipeline` still covers 8 modules / 9 buttons and the MCP
+inventory is still 7 tools.
+
+### 6.1 Chosen action
+
+| Item | Value |
+|---|---|
+| Literal button ID | `bulk-signatures-run_signatures` |
+| Allowlist module key | `bulk_signatures` |
+| Input prefix | `bulk-signatures-` — `mod_bulk_signatures_server("signatures", …)` is a **nested** module (`modules/bulk/mod_bulk.R:536`), so the prefix is never `bulk-` |
+| UI label (unchanged) | "Lancer Scores de signatures" |
+| Prerequisites | `shared_rv$vst_mat` only. No DE contrast, no second analysis step. |
+
+**There is no single R entry point.** The human action is a two-call composition
+inside `observeEvent(input$run_signatures, …)` (`modules/bulk/mod_bulk_signatures.R:122-174`):
+
+1. `bulk_load_signatures(resource = "hallmark", organism = "human")` — `R/bulk/bulk_signatures.R:69`
+2. `bulk_score_signatures(shared_rv$vst_mat, sets, method = "ssgsea", min_size = 10L, max_size = 500L)` — `R/bulk/bulk_signatures.R:169`
+
+So Phase C would add exactly **one** thin wrapper (for example
+`run_signature_scores()`) that both the DOM button and the drive action call, and
+that returns `list(ok, n_results)`. That wrapper is the only new domain code, and
+it is out of scope for this step.
+
+### 6.2 Frozen input set
+
+| Input | Type | Frozen value | Read from |
+|---|---|---|---|
+| `sig_resource` | character, enum | `"hallmark"` | `selectInput`, `selected = "hallmark"` (`mod_bulk_signatures.R:19`) |
+| `sig_organism` | character, enum | `"human"` | `selectInput`, first choice (`mod_bulk_signatures.R:34`) |
+| `sig_method` | character, enum | `"ssgsea"` | `selectInput`, `selected = "ssgsea"` (`mod_bulk_signatures.R:38`) |
+| `sig_min_size` | numeric, step 1 | `10L` | `numericInput`, `TS_BULK_GSVA_MIN_SIZE` (`config/thresholds.R:30`) |
+| `sig_max_size` | numeric, step 1 | `500L` | `numericInput`, `TS_BULK_GSVA_MAX_SIZE` (`config/thresholds.R:31`) |
+
+Five inputs, all static, all read from the widget defaults rather than invented.
+
+### 6.3 Constraints
+
+1. **`sig_rds` must never be frozen.** It is a `fileInput` path. A drive caller
+   must not be able to hand a filesystem path to an action, so freezing
+   `sig_resource` to a built-in resource excludes `rds_local` by construction.
+   Re-enabling it is a protocol violation, not a missing feature.
+2. **Availability gate before the job, not during it.**
+   `bulk_signature_resources()` returns `available`, which reflects *locally
+   installed packages only*; when a resource is unavailable,
+   `bulk_load_signatures()` raises a classed `bulk_signatures_error` with
+   `state = "missing_dependency"` and states that nothing is downloaded. The
+   readiness probe must therefore test `available` for the frozen resource and
+   publish `not_ready` with the missing packages. Measured on the current host:
+   `msigdbr` TRUE (so `hallmark` is available), `progeny` FALSE, `dorothea`
+   FALSE, `decoupleR` FALSE. Hence the frozen value is `hallmark`, and the other
+   enum values are host-dependent, never silently substituted.
+3. **`ulm_decoupleR` is excluded** (needs `decoupleR`, absent here). `gsva` is
+   installed but is not the declared default, so `ssgsea` stays frozen.
+4. **Readiness must not rely on the DOM toggle.** The button is disabled with
+   `shinyjs::toggleState()` when `vst_mat` is missing; a drive probe reads the
+   state itself and reports `not_ready` naming Step 1
+   (`bulk-filter-run_filter_norm`) as the prerequisite.
+5. **Truthfulness of the result.** `n_results` is `nrow(res$scores)`
+   (signatures scored); the module's own notification reports the same count
+   against `ncol(res$scores)` samples. An empty score table publishes `empty`,
+   not `done`; a load or score failure publishes `error` with `n_results = 0L`,
+   which is the Phase B rule and is already an invariant (§5 of
+   `docs/mcp_propagation.md`).
+6. **The state write is additive.** The action sets `bo$pathways$signatures`,
+   calls `bulk_ensure_provenance()` and re-assigns `global_data$bulk_obj`. Counts
+   are untouched, so no later step changes numerically — this is precisely what
+   separates it from `bulk-mapping` (§4.5). A long job must still be declared and
+   closed, and a declared `TS_BULK_SIGNATURES_TIMEOUT_S` is needed.
+7. **Unchanged protocol surface.** No DOM binding, `set_inputs` stays refused for
+   `bulk_signatures`, MCP inventory stays at 7 tools.
+
+### 6.4 Not decided here
+
+The two open product questions of §4.1 (`bulk_pattern`'s group column) and §4.4
+(`bulk_wgcna`'s traits) remain open. Phase C does not decide them, does not
+implement the wrapper, and does not touch the allowlist.

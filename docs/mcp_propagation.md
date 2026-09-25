@@ -22,35 +22,58 @@ The exclusion set is therefore `renv/`, `python_env_sccoda/`, `.git/`, `QC/`,
 named `full_suite_results.txt`, `.RData`, `.RDataTmp`, or `.Rhistory` at any
 included level. `tools/_drive/` is excluded because it is the live IPC channel.
 
-| Anchor | Fingerprint | Entries | Meaning |
+| State | Fingerprint | Entries | Meaning |
 |---|---|---:|---|
-| Post-housekeeping v2 baseline | `044e3944ea7358d3697c7238d59b53059cbfb1d623c9b651afcfab0cff149494` | 436 | Pre-work state before the single SC button propagation |
-| Post–single-SC-button v2 baseline | `e2a04cde4bd562bd53dcef64e58a3adf26123ad4e8062237bedafb4c88115d15` | 438 | State after the single SC button propagation |
+| **pre-Phase A** — post-housekeeping v2 baseline | `044e3944ea7358d3697c7238d59b53059cbfb1d623c9b651afcfab0cff149494` | 436 | Clean baseline before any SC button propagation |
+| **post-Phase A** — after the first SC button | `e2a04cde4bd562bd53dcef64e58a3adf26123ad4e8062237bedafb4c88115d15` | 438 | After the `sc-annotation-run_annot` propagation |
+| **post-Phase A** — final | `674afd5bfe1bf13325567b6531c08d5103fd162fb87be921595ed6a9143dcae8` | 438 | Phase A end state, after the maxcells / isolation pass. Recorded during Phase A; not re-measured since. |
+| **post-Phase B** — baseline (v2) | `9b82d3d6abd1f56e9ad6da6792947606070fb18b9ca5cefd997dfb9ab9ad96cd` | 441 | Commit `3897228`. `run_pipeline` covers **8 modules / 9 buttons**, the SC drive wrappers publish `n_results = 0L` on error, and `docs/bulk_mcp_extension.md` is part of the record. |
 
-These are the two v2 anchors surrounding the previously completed propagation.
-The documentation refresh and any later code change necessarily produce a new
-live-tree fingerprint; the two values above remain the accepted anchors for the
-states they describe.
+The post-Phase B row is the first anchor whose **content** is committed: every
+tracked file it covers is exactly the content of `3897228`. The three earlier
+values remain the accepted anchors for the states they describe; they are not
+comparable with the post-Phase B value except as "before" and "after".
 
-### 1.1 Post–second-SC-button measurement (not an accepted anchor)
+### 1.1 How the post-Phase B value was taken, and what is in the population
 
-| Measurement | Fingerprint | Entries | Composition |
+Measured on the working tree immediately after commit `3897228`, with the
+algorithm of §1 verbatim. Composition of the 441 entries, relative to the 438 of
+the post-Phase A state:
+
+- `+1` `docs/bulk_mcp_extension.md` (the Phase B design note).
+- `+2` files owned by a concurrent agent's commits, not by this propagation:
+  `tests/testthat/test-mod-bulk-de-run.R` and
+  `tests/testthat/test-sc-communication-liana-engine.R`.
+- `0` from Phase B's code, which modified existing files only.
+
+The tree was **not quiescent** when the value was taken: the uncommitted Spatial
+pipeline work, `renv.lock`, `archive/` and
+`tests/testthat/test-mcp-spatial-local.R` are in the population as well, and
+`HEAD` had moved `b3cbe11 → 9cb1a06` earlier in the same window. A quiescent
+tree would report a smaller, different number; the value above is therefore
+reproducible only for this exact working-tree state.
+
+A fingerprint cannot include its own recording: this file is itself a manifest
+member, so writing the value changes it. Two intermediate measurements of the
+same 441-entry population, taken while this file was being edited, were
+`9685302cd3739fd50d6904eb05b756f0899801057502c9d478e274c29be1acaa` and
+`b8016637eddac47ef7588d3adb3ba38a288310d7797a8654a2a7572db63e16e9`. Re-measure to
+compare trees; never compare against a number written inside one of them.
+
+### 1.2 A reproducible post-Phase B anchor
+
+The live-tree value above cannot be reproduced from the commit, because the
+population it hashes also contains the foreign working-tree files. Applying the
+same algorithm to the **committed content only** removes that dependency, and
+the result is immutable: `git archive` of a commit always yields the same bytes.
+
+| Anchor | Fingerprint | Entries | How to reproduce |
 |---|---|---:|---|
-| After `sc_markers` propagation + the Bulk design note | `b8016637eddac47ef7588d3adb3ba38a288310d7797a8654a2a7572db63e16e9` | 441 | 438 at the post-Phase-A state, `+1` this note, `+2` files owned by a concurrent agent's commits (`tests/testthat/test-mod-bulk-de-run.R`, `tests/testthat/test-sc-communication-liana-engine.R`) |
+| **post-Phase B** — commit `3897228`, tracked content only | `7b5adf06864eb682d4575ee784f974dd375d6d1cddbfeac2299f20ac2430d1fc` | 327 | `git archive --format=zip -o c.zip 3897228`, unzip, run the §1 algorithm in the extracted root |
 
-This value is **recorded, not accepted**: the tree was not quiescent when it was
-taken (`HEAD` moved `b3cbe11 → 9cb1a06` during the same window, and a concurrent
-agent had modified two of the files this propagation also touches,
-`config/defaults.R` and `modules/sc/mod_sc.R`). Re-measure after the tree is
-quiescent before treating any number here as an anchor.
-
-The value above was measured **immediately before this row was written**, and the
-predecessor measurement of the same tree with this file not yet edited was
-`9685302cd3739fd50d6904eb05b756f0899801057502c9d478e274c29be1acaa` (same 441
-entries). A fingerprint cannot include its own recording: any edit to a manifest
-member invalidates the number it reports. That is inherent to the algorithm, not a
-defect — re-measure to compare trees, never to compare against a number written
-inside one of them.
+327 entries, not 329: `renv/activate.R` and `renv/settings.json` are pruned by the
+algorithm, exactly as in the live-tree run. This is the value to compare against
+when checking whether a later commit changed anything the propagation owns.
 
 
 ## 2. Scope summary
@@ -65,16 +88,16 @@ Tasks 1–3 covered, at a high level:
 - **Task 3:** minimal Spatial MCP propagation, including its single owned
   button, readiness refusal, fixed navigation, and sanitized diagnostics.
 
-The subsequent single-SC propagation added the `sc-pipeline-run_auto_pipeline`
-drive action. It calls `run_sc_auto_pipeline()` with a frozen, declared input
-set, publishes a long-job state, and reports per-step outcomes using only the
-existing five-state vocabulary. The human modal button was not bound as a drive
-action.
+The `sc-pipeline-run_auto_pipeline` drive action was already part of the
+pre-Phase A baseline. It calls `run_sc_auto_pipeline()` with a frozen, declared
+input set, publishes a long-job state, and reports per-step outcomes using only
+the existing five-state vocabulary. The human modal button was not bound as a
+drive action.
 
-## 3. Current MCP inventory at the v2 anchor
+## 3. MCP inventory, per state
 
-The MCP inventory contains **7 tools** and did not gain a tool during the
-propagation:
+The MCP inventory contains **7 tools** and never gained a tool during any of the
+propagation steps:
 
 | Tool | Nature |
 |---|---|
@@ -86,8 +109,15 @@ propagation:
 | `transcripto_drive_wait` | bounded observation |
 | `transcripto_drive_set_armed` | arm/disarm, `arm.json` only |
 
-At the post–single-SC-button v2 anchor, `run_pipeline` covers **6 modules / 7
-buttons**:
+`run_pipeline` coverage grew by exactly one module and one button per phase:
+
+| State | Modules / buttons | Delta |
+|---|---|---|
+| **pre-Phase A** — `044e3944`, 436 entries | **6 / 7** | baseline table below |
+| **post-Phase A** — `e2a04cde`, 438 entries | **7 / 8** | `+ sc_annotation` → `sc-annotation-run_annot` |
+| **post-Phase B** — `9b82d3d6`, 441 entries, commit `3897228` | **8 / 9** | `+ sc_markers` → `sc-markers-run_markers` |
+
+The pre-Phase A baseline table:
 
 | Module | Drivable button |
 |---|---|
@@ -99,29 +129,29 @@ buttons**:
 | `spatial_pipeline` | `spatial-pipeline-btn_run_all` |
 | `sc_pipeline` | `sc-pipeline-run_auto_pipeline` |
 
-`set_inputs` is refused for `spatial_pipeline` and `sc_pipeline`: their inputs
-are frozen at the action boundary and are not a settable Shiny-input surface.
-The single-SC action also remains outside the `set_inputs` tool.
+`set_inputs` is refused for every module except `import_bulk`: their inputs are
+frozen at the action boundary and are not a settable Shiny-input surface. The
+refusal covers `spatial_pipeline`, `sc_pipeline`, `sc_annotation` and
+`sc_markers`, and it is unchanged by Phase B.
 
-## 4. Additional SC actions after the v2 anchor
+## 4. The two added SC actions (Phase A, then Phase B)
 
-The live tree now adds exactly one action beyond the v2 anchor in each of the
-two accepted propagation steps:
+Phase A and Phase B each added exactly one action, with the frozen input set
+declared at the action boundary:
 
-| Module | Drivable button | Frozen inputs |
-|---|---|---|
-| `sc_annotation` | `sc-annotation-run_annot` | `ref_singler = "hpca"`, `label_level = "main"`, `maxcells = 50000L` |
-| `sc_markers` | `sc-markers-run_markers` | `marker_test = "wilcox"`, `marker_min_pct = 0.10`, `marker_logfc = 0.25`, `group_col = "seurat_clusters"`, `max_per_group = 5000L`, `only_pos = TRUE`, `verbose = FALSE` |
+| Phase | Module | Drivable button | Frozen inputs |
+|---|---|---|---|
+| A | `sc_annotation` | `sc-annotation-run_annot` | `ref_singler = "hpca"`, `label_level = "main"`, `maxcells = 50000L` |
+| B | `sc_markers` | `sc-markers-run_markers` | `marker_test = "wilcox"`, `marker_min_pct = 0.10`, `marker_logfc = 0.25`, `group_col = "seurat_clusters"`, `max_per_group = 5000L`, `only_pos = TRUE`, `verbose = FALSE` |
 
 Both call their corresponding R action through a published drive token, do not
 bind the DOM button, and publish a long-job state with the existing five-state
-step vocabulary. `set_inputs` is refused for `sc_annotation` and `sc_markers` as
-well.
+step vocabulary.
 
-Accordingly, the current live mapping is **8 modules / 9 buttons**: the seven
-buttons in the v2 anchor table plus `sc-annotation-run_annot` and
-`sc-markers-run_markers`. The MCP inventory remains **7 tools**. No Bulk code is
-changed by this SC propagation; the separate Bulk extension note is design-only.
+The **post-Phase B** mapping is therefore **8 modules / 9 buttons**: the seven
+buttons of the pre-Phase A table plus the two rows above. The MCP inventory
+remains **7 tools**. No Bulk code is changed by either phase; the Bulk extension
+note is design-only.
 
 ## 5. Invariants
 
