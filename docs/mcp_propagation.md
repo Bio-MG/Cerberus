@@ -75,6 +75,40 @@ the result is immutable: `git archive` of a commit always yields the same bytes.
 algorithm, exactly as in the live-tree run. This is the value to compare against
 when checking whether a later commit changed anything the propagation owns.
 
+### 1.3 Post–Phase C (live tree)
+
+| Measurement | Fingerprint | Entries | Composition |
+|---|---|---:|---|
+| After the `bulk-signatures-run_signatures` drive action | `cc53ad5e7aea8c4abbfeffc6037693f3b62ebe2098aaaede19736b665d46ee6e` | 442 | 441 at the post-Phase B state, `+1` `tests/testthat/test-mod-bulk-signatures-drive.R`, and 4 modified files (`R/core/drive_allowlist.R`, `R/core/drive_watcher.R`, `modules/bulk/mod_bulk_signatures.R` and two tests) |
+
+The tree now includes the `bulk-signatures-run_signatures` drive action:
+`run_pipeline` covers **9 modules / 10 buttons** and the MCP inventory remains at
+**7 tools**. The same caveat as §1.1 applies — the population still contains the
+uncommitted Spatial work, `renv.lock`, `archive/` and
+`tests/testthat/test-mcp-spatial-local.R`, and `HEAD` had not been committed for
+Phase C when this was measured. A commit-scoped anchor should be added with the
+Phase C commit; the value above is reproducible only for this working-tree state.
+
+Two facts measured while implementing it, both of which changed the code:
+
+- **The job status vocabulary is NARROWER than the view vocabulary.**
+  `ts_drive_job_set_pending()` accepts only `done` / `error` / `invalid` /
+  `timeout` / `session_lost`. An empty signature result therefore closes the job
+  as `done` while the published view reports `empty`; passing `"empty"` would
+  have been refused, leaving the job `running` until its timeout.
+- **`scripts/mcp_server.R` keeps its OWN `setdiff()` list of modules that refuse
+  `set_inputs`.** Adding an allowlist module without adding it there would have
+  left the new action settable from a remote caller — the one failure direction
+  that matters. The two lists (this one and the guard in
+  `ts_drive_apply_scenario()`) are not mechanically tied together; the only
+  automated check that they agree is `test-mcp-sc-local.R`.
+
+Also measured, and deliberately NOT added: no `TS_BULK_SIGNATURES_TIMEOUT_S`.
+Both existing Bulk long jobs (`bulk-pathways-run_pathway`,
+`bulk-pathways-run_scores`) publish with `long = TRUE` and no `timeout_s`, so the
+poller's default ceiling applies. This supersedes §6.3.6 of
+`docs/bulk_mcp_extension.md`, which assumed a declared constant was needed.
+
 
 ## 2. Scope summary
 
@@ -116,6 +150,7 @@ propagation steps:
 | **pre-Phase A** — `044e3944`, 436 entries | **6 / 7** | baseline table below |
 | **post-Phase A** — `e2a04cde`, 438 entries | **7 / 8** | `+ sc_annotation` → `sc-annotation-run_annot` |
 | **post-Phase B** — `9b82d3d6`, 441 entries, commit `3897228` | **8 / 9** | `+ sc_markers` → `sc-markers-run_markers` |
+| **post-Phase C** — `cc53ad5e`, 442 entries (§1.3, uncommitted) | **9 / 10** | `+ bulk_signatures` → `bulk-signatures-run_signatures` |
 
 The pre-Phase A baseline table:
 
@@ -131,8 +166,9 @@ The pre-Phase A baseline table:
 
 `set_inputs` is refused for every module except `import_bulk`: their inputs are
 frozen at the action boundary and are not a settable Shiny-input surface. The
-refusal covers `spatial_pipeline`, `sc_pipeline`, `sc_annotation` and
-`sc_markers`, and it is unchanged by Phase B.
+refusal covers `spatial_pipeline`, `sc_pipeline`, `sc_annotation`,
+`sc_markers` and, since Phase C, `bulk_signatures` — where it also keeps the
+`fileInput` path `sig_rds` out of reach of a remote caller.
 
 ## 4. The two added SC actions (Phase A, then Phase B)
 
@@ -149,9 +185,25 @@ bind the DOM button, and publish a long-job state with the existing five-state
 step vocabulary.
 
 The **post-Phase B** mapping is therefore **8 modules / 9 buttons**: the seven
-buttons of the pre-Phase A table plus the two rows above. The MCP inventory
-remains **7 tools**. No Bulk code is changed by either phase; the Bulk extension
-note is design-only.
+buttons of the pre-Phase A table plus the two rows above.
+
+### 4.1 The first Bulk action outside import/filter/DE/pathway (Phase C)
+
+| Module | Drivable button | Frozen inputs |
+|---|---|---|
+| `bulk_signatures` | `bulk-signatures-run_signatures` | `sig_resource = "hallmark"`, `sig_organism = "human"`, `sig_method = "ssgsea"`, `sig_min_size = TS_BULK_GSVA_MIN_SIZE` (10), `sig_max_size = TS_BULK_GSVA_MAX_SIZE` (500) |
+
+`run_signatures()` composes `bulk_load_signatures()` then
+`bulk_score_signatures()` — the same two calls, in the same order, as the human
+observer — after an availability pre-check on
+`bulk_signature_resources()$available`, which is local-only: an unavailable
+resource is refused with `state = "missing_dependency"` BEFORE a job is
+declared. `sig_rds` is a `fileInput` path and is deliberately absent from the
+frozen set, so it cannot be injected. `R/bulk/bulk_signatures.R` is **untouched**:
+its exported surface is frozen by `test-bulk-signatures-contract-freeze.R`, which
+would reject a new public name, so the wrapper is private to the module. The
+**post-Phase C** mapping is **9 modules / 10 buttons**. The MCP inventory remains
+**7 tools**, and no Bulk button's behaviour changed.
 
 ## 5. Invariants
 

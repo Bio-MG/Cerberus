@@ -8,6 +8,203 @@
 # PERMANENCE dans l'UI et porté par le résultat + chaque export.
 # =============================================================================
 
+# =============================================================================
+# MCP drive action `bulk-signatures-run_signatures` (Phase C).
+#
+# WHY HERE AND NOT IN R/bulk/bulk_signatures.R: that file's exported surface is
+# FROZEN by tests/testthat/test-bulk-signatures-contract-freeze.R, which asserts
+# that every non-dot top-level name equals `bulk_signatures_public_api()` plus the
+# disclaimer. A wrapper added there would be a contract change; the private,
+# dot-prefixed helpers below keep it out, and match the SC precedent where
+# `run_annot()` / `run_markers()` also live in the module layer.
+#
+# The thin wrapper composes the two existing R/ calls in the SAME order the human
+# observer uses (mod_bulk_signatures.R:122-174) and adds nothing else: no new
+# statistical method, no new default, no new dependency.
+# =============================================================================
+
+.BULK_SIGNATURES_DRIVE_MODULE <- "bulk_signatures"
+.BULK_SIGNATURES_DRIVE_BUTTON <- "bulk-signatures-run_signatures"
+
+#' Closed step vocabulary for this action. A step that ran and produced nothing
+#' is `ran` with `status = "empty"`, never `error`.
+.BULK_SIG_DRIVE_STEP_STATES <- c("skipped", "running", "ran", "ignored", "error")
+
+#' Frozen input set for the drive action.
+#'
+#' Every value is read from a widget default or a declared config constant, and
+#' NONE of them is session-derived, so the same five values are valid for any
+#' dataset. `sig_rds` is deliberately ABSENT: it is a `fileInput` PATH, and a
+#' drive caller must never be able to hand a filesystem path to an action.
+.bulk_signatures_drive_inputs <- function() {
+  list(
+    sig_resource = "hallmark",
+    sig_organism = "human",
+    sig_method   = "ssgsea",
+    sig_min_size = TS_BULK_GSVA_MIN_SIZE,
+    sig_max_size = TS_BULK_GSVA_MAX_SIZE
+  )
+}
+
+#' Local availability of a signature resource, or FALSE plus what it would need.
+#'
+#' `bulk_signature_resources()$available` reflects LOCALLY installed packages
+#' only, and no resource is ever downloaded, so an unavailable resource must be
+#' refused BEFORE a job is declared rather than discovered mid-run.
+.bulk_signatures_resource_check <- function(resource) {
+  res <- tryCatch(bulk_signature_resources(), error = function(e) NULL)
+  if (is.null(res) || !is.data.frame(res)) {
+    return(list(ok = FALSE, requires = ""))
+  }
+  row <- res[res$resource == resource, , drop = FALSE]
+  if (nrow(row) != 1L) return(list(ok = FALSE, requires = ""))
+  list(ok = isTRUE(row$available[1L]), requires = as.character(row$requires[1L]))
+}
+
+#' Thin wrapper: availability pre-check, then load, then score.
+#'
+#' @return list(ok, n_results, scores, resource, method) where `n_results` counts
+#'   SCORED SIGNATURES (rows of `scores`). Errors are the domain's classed
+#'   `bulk_signatures_error` with a `state`, and never carry a filesystem path.
+run_signatures <- function(vst_mat, inputs = .bulk_signatures_drive_inputs()) {
+  if (!is.list(inputs)) inputs <- .bulk_signatures_drive_inputs()
+  fail <- function(state, message) {
+    stop(errorCondition(message, class = "bulk_signatures_error", state = state))
+  }
+  resource <- as.character(inputs$sig_resource)[1L]
+  method   <- as.character(inputs$sig_method)[1L]
+  if (is.na(resource) || !nzchar(resource)) {
+    fail("invalid_input", "bulk signatures: empty resource.")
+  }
+  if (is.na(method) || !nzchar(method)) {
+    fail("invalid_input", "bulk signatures: empty scoring method.")
+  }
+  # A path-bearing input is refused by CONSTRUCTION, and the refusal never echoes
+  # the value it refuses, so a caller cannot leak a local path into a log.
+  if (identical(resource, "rds_local") || !is.null(inputs$sig_rds)) {
+    fail("invalid_input",
+         "bulk signatures: a local .rds path is not an accepted input; the frozen resource is 'hallmark'.")
+  }
+  check <- .bulk_signatures_resource_check(resource)
+  if (!isTRUE(check$ok)) {
+    fail("missing_dependency", sprintf(
+      "bulk signatures: resource '%s' is not available locally (requires: %s); nothing is downloaded.",
+      resource, check$requires))
+  }
+  if (is.null(vst_mat) || !is.matrix(vst_mat) || !is.numeric(vst_mat) ||
+      nrow(vst_mat) < 1L || ncol(vst_mat) < 1L) {
+    fail("invalid_input",
+         "bulk signatures: the expression matrix is missing or is not a numeric matrix.")
+  }
+  sets <- bulk_load_signatures(resource, organism = as.character(inputs$sig_organism)[1L])
+  res  <- bulk_score_signatures(vst_mat, sets, method = method,
+                                min_size = inputs$sig_min_size,
+                                max_size = inputs$sig_max_size)
+  scores <- res$scores
+  list(ok = TRUE, n_results = as.integer(nrow(scores)), scores = scores,
+       resource = resource, method = method)
+}
+
+.bulk_signatures_drive_view <- function(status, elapsed_s = 0, seq = 0L,
+                                        n_results = 0L, has_data = FALSE,
+                                        ready = FALSE, step = NULL) {
+  step <- if (is.null(step)) "skipped" else as.character(step)
+  if (length(step) != 1L || is.na(step) || !step %in% .BULK_SIG_DRIVE_STEP_STATES) {
+    step <- "error"
+  }
+  list(
+    module = .BULK_SIGNATURES_DRIVE_MODULE,
+    action = "run_pipeline",
+    status = as.character(status),
+    elapsed_s = as.numeric(elapsed_s),
+    seq = as.integer(seq),
+    n_results = as.integer(n_results),
+    has_data = isTRUE(has_data),
+    ready = isTRUE(ready),
+    steps = list(signatures = step)
+  )
+}
+
+#' Readiness, in the same order as the human path: a dataset, then Step 1's VST
+#' matrix, then the local availability of the FROZEN resource. Returning the
+#' reason (not FALSE) is what lets the poller report `not_ready` instead of
+#' dispatching a job that must fail.
+.bulk_signatures_drive_ready <- function(shared_rv, global_data) {
+  if (is.null(tryCatch(shiny::isolate(global_data$bulk_obj), error = function(e) NULL))) {
+    return("no bulk object loaded (global_data$bulk_obj is NULL)")
+  }
+  if (is.null(tryCatch(shiny::isolate(shared_rv$vst_mat), error = function(e) NULL))) {
+    return("Step 1 has not produced a VST matrix (shared_rv$vst_mat is NULL)")
+  }
+  resource <- .bulk_signatures_drive_inputs()$sig_resource
+  check <- .bulk_signatures_resource_check(resource)
+  if (!isTRUE(check$ok)) {
+    return(sprintf("resource '%s' is not available locally (requires: %s); nothing is downloaded",
+                   resource, check$requires))
+  }
+  TRUE
+}
+
+#' State probe. `n_results` is the count of signatures the LAST successful run
+#' left in `signature_scores`; `shiny::isolate()` keeps these reads out of the
+#' poller's dependency set.
+.bulk_signatures_drive_state <- function(shared_rv, global_data, run_state,
+                                         last_step = NULL) {
+  job <- tryCatch(ts_drive_job_state(), error = function(e) NULL)
+  pending <- tryCatch(ts_drive_job_pending(), error = function(e) NULL)
+  ready <- isTRUE(.bulk_signatures_drive_ready(shared_rv, global_data))
+  obj <- tryCatch(shiny::isolate(global_data$bulk_obj), error = function(e) NULL)
+  sc <- tryCatch(shiny::isolate(shared_rv$signature_scores), error = function(e) NULL)
+  n_results <- if (is.matrix(sc) || is.data.frame(sc)) nrow(sc) else 0L
+  current <- if (is.function(run_state)) {
+    shiny::isolate(run_state())
+  } else {
+    as.character(run_state)
+  }
+  if (length(current) != 1L || is.na(current)) current <- "idle"
+  .bulk_signatures_drive_view(
+    status = if (ready) current else "not_ready",
+    elapsed_s = if (is.null(pending)) 0 else as.numeric(pending$elapsed_s),
+    seq = if (is.null(job)) 0L else as.integer(job$seq),
+    n_results = n_results,
+    has_data = !is.null(obj),
+    ready = ready,
+    step = last_step
+  )
+}
+
+#' Runs the wrapper and publishes the result the way the human path does, then
+#' reports the terminal state. A failure publishes NO result count, so a stale
+#' table can never be read next to an error.
+.bulk_signatures_run_drive <- function(global_data, shared_rv, close_job) {
+  res <- tryCatch(
+    run_signatures(shiny::isolate(shared_rv$vst_mat), .bulk_signatures_drive_inputs()),
+    error = function(e) e
+  )
+  if (inherits(res, "condition")) {
+    close_job("error", conditionMessage(res))
+    return(list(status = "error", n_results = 0L, step = "error"))
+  }
+  shared_rv$signature_scores <- res$scores
+  bo <- global_data$bulk_obj
+  if (is.list(bo)) {
+    if (!is.list(bo$pathways)) bo$pathways <- list()
+    bo$pathways$signatures <- res$scores
+    global_data$bulk_obj <- bulk_ensure_provenance(bo)
+  }
+  n_results <- as.integer(res$n_results %||% 0L)
+  if (length(n_results) != 1L || is.na(n_results) || n_results < 0L) n_results <- 0L
+  # 🔴 THE JOB VOCABULARY IS NARROWER THAN THE VIEW VOCABULARY.
+  # `ts_drive_job_set_pending()` accepts only done / error / invalid / timeout /
+  # session_lost, and REFUSES anything else. So an empty result closes the job as
+  # `done` — the work COMPLETED, it produced nothing — while the published view
+  # reports `empty`. Passing "empty" here would be refused, the job would stay
+  # `running` until its timeout, and the agent would read a hang as a slow run.
+  close_job("done", NULL)
+  list(status = if (n_results == 0L) "empty" else "done",
+       n_results = n_results, step = "ran")
+}
+
 mod_bulk_signatures_ui <- function(id) {
   ns <- NS(id)
   tagList(
@@ -133,7 +330,13 @@ mod_bulk_signatures_server <- function(id, global_data, shared_rv) {
           bulk_load_signatures("rds_local", rds_path = input$sig_rds$datapath),
           error = function(e) e)
       } else {
-        p <- shiny::Progress$new(); on.exit(p$close())
+        # ⚠️ `add = TRUE` is LOAD-BEARING in this file since Phase C: this module
+        # now declares a drive job, and test-drive-watcher.R refuses any file that
+        # calls `ts_drive_job_finish()` and also carries a BARE `on.exit()`, because
+        # a bare call REPLACES the registered expressions and would discard the job
+        # declaration. It was already `add = TRUE` on the second registration; the
+        # first one now matches.
+        p <- shiny::Progress$new(); on.exit(p$close(), add = TRUE)
         p$set(message = .tr("Chargement de la ressource..."), value = 0.1)
         sets <- tryCatch(
           bulk_load_signatures(resource, organism = input$sig_organism %||% "human"),
@@ -172,6 +375,68 @@ mod_bulk_signatures_server <- function(id, global_data, shared_rv) {
         shared_rv$signature_scores <- NULL
       })
     })
+
+    # ── DRIVE (MCP) — bulk-signatures-run_signatures ────────────────────────
+    # The human observer above is NOT re-wired and NOT duplicated: the drive
+    # action calls `run_signatures()`, which composes the same two R/ calls in
+    # the same order, and then applies the same two writes. `sig_drive_counter`
+    # is the only trigger, so no `input$` is read here — that is what makes a
+    # FROZEN input set possible at all.
+    sig_drive_counter <- shiny::reactiveVal(0L)
+    sig_drive_run_state <- shiny::reactiveVal("idle")
+    sig_drive_last_step <- new.env(parent = emptyenv())
+    sig_drive_last_step$value <- NULL
+    sig_drive_job <- new.env(parent = emptyenv())
+    sig_drive_job$id <- NULL
+
+    sig_drive_ready <- function() {
+      .bulk_signatures_drive_ready(shared_rv, global_data)
+    }
+    sig_drive_state <- function() {
+      .bulk_signatures_drive_state(shared_rv, global_data,
+                                   sig_drive_run_state,
+                                   sig_drive_last_step$value)
+    }
+
+    # `long = TRUE` is what gives `running` a real producer: the job is
+    # SYNCHRONOUS, so no tick runs during it and a flag set inside the observer
+    # would be unobservable. The two existing Bulk long jobs (run_pathway,
+    # run_scores) declare no `timeout_s` either, so the poller's default ceiling
+    # applies here as well — adding one would be a new, unmeasured default.
+    #
+    # 🔴 THE BUTTON ID IS A LITERAL HERE, not the constant: test-drive-watcher.R
+    # greps every TS_DRIVE_BUTTONS entry as a quoted literal next to a
+    # `ts_drive_publish_token(` call, and that shared check is what proves each
+    # allowlist entry is really wired. A constant would make the wiring
+    # invisible to it. `expect_identical(.BULK_SIGNATURES_DRIVE_BUTTON,
+    # TS_DRIVE_BULK_SIGNATURES_BUTTON)` keeps the two from drifting.
+    ts_drive_publish_token(global_data, "bulk-signatures-run_signatures",
+      sig_drive_counter, ready = sig_drive_ready,
+      state = sig_drive_state, long = TRUE)
+
+    close_sig_drive_job <- function(status, error = NULL) {
+      if (is.null(sig_drive_job$id)) return(invisible(FALSE))
+      job <- tryCatch(ts_drive_job_state(), error = function(e) NULL)
+      if (is.null(job) || !identical(job$job_id, sig_drive_job$id)) {
+        return(invisible(FALSE))
+      }
+      ts_drive_job_finish(.BULK_SIGNATURES_DRIVE_BUTTON, status = status,
+                          error = error, job_id = sig_drive_job$id)
+    }
+
+    observeEvent(sig_drive_counter(), {
+      if (!isTRUE(sig_drive_ready())) return()
+      sig_drive_job$id <- NULL
+      job <- tryCatch(ts_drive_job_state(), error = function(e) NULL)
+      if (!is.null(job) && isTRUE(ts_drive_job_busy()) &&
+          identical(job$button, .BULK_SIGNATURES_DRIVE_BUTTON)) {
+        sig_drive_job$id <- job$job_id
+      }
+      sig_drive_run_state("running")
+      res <- .bulk_signatures_run_drive(global_data, shared_rv, close_sig_drive_job)
+      sig_drive_last_step$value <- res$step
+      sig_drive_run_state(res$status)
+    }, ignoreInit = TRUE)
 
     output$sig_heatmap <- renderPlot({
       global_data$language

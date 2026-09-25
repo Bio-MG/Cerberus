@@ -116,6 +116,20 @@ TS_DRIVE_SC_MARKERS_TOP_TAB <- "tab_sc"
 TS_DRIVE_SC_MARKERS_PANELS <- "4_markers"
 TS_DRIVE_SC_MARKERS_ACCORDION_IDS <- c("sc-acc_workflow", "sc-acc_analyse")
 
+# --- Bulk signatures (measured in modules/bulk/mod_bulk_signatures.R) --------
+# The tenth action, and the FIRST Bulk action outside the import/filter/DE/pathway
+# chain. Its prerequisite is Step 1 only (`shared_rv$vst_mat`), so it needs no
+# contrast; the nested module server id is "signatures", hence the `bulk-signatures-`
+# prefix and NEVER `bulk-`.
+#
+# ⚠️ DECLARED HERE, ABOVE TS_DRIVE_ALLOWLIST, not next to the button list: the
+# allowlist is an eagerly evaluated `list()` and its entries name this module, so a
+# definition placed further down would make sourcing fail with "object not found".
+TS_DRIVE_BULK_SIGNATURES_BUTTON <- "bulk-signatures-run_signatures"
+TS_DRIVE_BULK_SIGNATURES_MODULE <- "bulk_signatures"
+TS_DRIVE_BULK_SIGNATURES_TOP_TAB <- "tab_bulk"
+TS_DRIVE_BULK_SIGNATURES_PANELS <- "panel_signatures"
+
 # --- The allowlist (frozen data) --------------------------------------------
 #
 # `kind` is the ONLY thing the injector switches on — it decides which
@@ -218,11 +232,16 @@ TS_DRIVE_ALLOWLIST <- list(
   "spatial-pipeline-btn_run_all" = list(kind = "button", module = "spatial_pipeline", note = "pipeline complet (mod_spatial_pipeline.R, DOM-measured)")
 )
 
-# The SC entries are APPENDED rather than written inline because `list(NAME = )`
-# takes a LITERAL name: writing `TS_DRIVE_SC_BUTTON = ...` would create an entry
-# called "TS_DRIVE_SC_BUTTON" — a key with no dash, which the consistency check
-# below refuses at source() time. `setNames()` keeps the constant the single
-# source of truth for each id.
+# The SC and Bulk-signature entries are APPENDED rather than written inline
+# because `list(NAME = )` takes a LITERAL name: writing `TS_DRIVE_SC_BUTTON = ...`
+# would create an entry called "TS_DRIVE_SC_BUTTON" — a key with no dash, which the
+# consistency check below refuses at source() time. `setNames()` keeps the constant
+# the single source of truth for each id.
+#
+# ⚠️ THE TWO VECTORS MUST STAY THE SAME LENGTH. `setNames()` names what is there,
+# so adding an entry without adding its id leaves that entry named NA, and the
+# source-time check then reports both "NA: entry must declare kind and module" and
+# "bound button is missing from the allowlist". Two symptoms, one missing id.
 TS_DRIVE_ALLOWLIST <- c(
   TS_DRIVE_ALLOWLIST,
   stats::setNames(
@@ -236,34 +255,42 @@ TS_DRIVE_ALLOWLIST <- c(
       list(kind = "button", module = TS_DRIVE_SC_ANNOTATION_MODULE,
            note = "SingleR annotation via run_annot() with frozen .sc_annot_drive_inputs(); the DOM button is not exposed"),
       list(kind = "button", module = TS_DRIVE_SC_MARKERS_MODULE,
-           note = "FindAllMarkers via run_markers() with frozen .sc_markers_drive_inputs(); the DOM button is not exposed")
+           note = "FindAllMarkers via run_markers() with frozen .sc_markers_drive_inputs(); the DOM button is not exposed"),
+      list(kind = "button", module = TS_DRIVE_BULK_SIGNATURES_MODULE,
+           note = paste("signature scoring via run_signatures() with frozen",
+                        ".bulk_signatures_drive_inputs(); `sig_rds` (a fileInput",
+                        "path) is deliberately absent. The DOM button is not",
+                        "exposed"))
     ),
     c(TS_DRIVE_SC_BUTTON, TS_DRIVE_SC_ANNOTATION_BUTTON,
-      TS_DRIVE_SC_MARKERS_BUTTON)
+      TS_DRIVE_SC_MARKERS_BUTTON, TS_DRIVE_BULK_SIGNATURES_BUTTON)
   )
 )
 
-#' The ONLY NINE button ids ts_drive_bind_button() is allowed to instrument.
-#' The eighth and ninth are the SC annotation and marker actions; both are
-#' dispatched by counters and are not DOM bindings.
+#' The ONLY TEN button ids ts_drive_bind_button() is allowed to instrument.
+#' The eighth and ninth are the SC annotation and marker actions, the tenth is the
+#' Bulk signature scoring action; all three are dispatched by counters and are not
+#' DOM bindings.
 TS_DRIVE_BUTTONS <- c(
   "import_bulk-btn_load",
   "bulk-filter-run_filter_norm",
   "bulk-de-run_de",
   "bulk-pathways-run_pathway",
   "bulk-pathways-run_scores",
+  TS_DRIVE_BULK_SIGNATURES_BUTTON,
   "spatial-pipeline-btn_run_all",
   TS_DRIVE_SC_BUTTON,
   TS_DRIVE_SC_ANNOTATION_BUTTON,
   TS_DRIVE_SC_MARKERS_BUTTON
 )
 
-#' The eight modules the allowlist covers. Anything else is `invalid`.
+#' The nine modules the allowlist covers. Anything else is `invalid`.
 #' `bulk_filter` is the nested Step 1 module (`bulk-filter-`), named after the
-#' same convention as `bulk_de` / `bulk_pathways`: the DOM prefix with the dash
-#' turned into an underscore. The SC action modules follow it for the same
-#' reason; the parent module `sc` is deliberately NOT a member.
+#' same convention as `bulk_de` / `bulk_pathways` / `bulk_signatures`: the DOM
+#' prefix with the dash turned into an underscore. The SC action modules follow it
+#' for the same reason; the parent module `sc` is deliberately NOT a member.
 TS_DRIVE_MODULES <- c("import_bulk", "bulk_filter", "bulk_de", "bulk_pathways",
+                      TS_DRIVE_BULK_SIGNATURES_MODULE,
                       "spatial_pipeline", TS_DRIVE_SC_MODULE,
                       TS_DRIVE_SC_ANNOTATION_MODULE, TS_DRIVE_SC_MARKERS_MODULE)
 
@@ -358,6 +385,11 @@ ts_drive_allowlist_problems <- function(allowlist = TS_DRIVE_ALLOWLIST,
         !identical(e$module, TS_DRIVE_SC_MARKERS_MODULE)) {
       problems <- c(problems, sprintf("%s: must declare module '%s'",
                                       id, TS_DRIVE_SC_MARKERS_MODULE))
+    }
+    if (identical(id, TS_DRIVE_BULK_SIGNATURES_BUTTON) &&
+        !identical(e$module, TS_DRIVE_BULK_SIGNATURES_MODULE)) {
+      problems <- c(problems, sprintf("%s: must declare module '%s'",
+                                      id, TS_DRIVE_BULK_SIGNATURES_MODULE))
     }
     if (grepl("^(spatial|import_spatial)-", id) &&
         !(identical(id, "spatial-pipeline-btn_run_all") &&
