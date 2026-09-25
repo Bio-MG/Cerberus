@@ -19,6 +19,513 @@
 #       was looking at live.
 # =============================================================================
 
+# =============================================================================
+# Drive live control — SC auto-pipeline (ONE frozen action)
+# =============================================================================
+# `sc-btn_auto_pipeline_sc` is NOT drivable: it only calls showModal() (the
+# pipeline runs from `sc_ap_confirm` inside that modal, see the observeEvent
+# below). The protocol therefore owns its own id — `sc-pipeline-run_auto_pipeline`,
+# mirrored in R/core/drive_allowlist.R — dispatched by a counter this module
+# publishes. The human modal flow is untouched: zero behaviour change.
+#
+# These helpers are FILE-LEVEL on purpose. `mod_sc_server()` fans out to ~20
+# sibling servers, so `testServer()` on it would need the whole application
+# mocked; keeping the logic here lets tests/testthat/test-mod-sc-drive.R drive
+# it directly, exactly as test-sc-auto-pipeline.R drives run_sc_auto_pipeline().
+
+.SC_AP_DRIVE_MODULE <- "sc_pipeline"
+.SC_AP_DRIVE_BUTTON <- "sc-pipeline-run_auto_pipeline"
+
+# The step vocabulary, CLOSED. `ignored` is not a synonym for `skipped`: a step
+# can be SELECTED, attempted, and declined by the pipeline itself (a size guard
+# such as .AUTO_TSNE_MAX_CELLS) — that is neither a success nor a failure, and
+# collapsing the three would be a lie in either direction.
+.SC_AP_DRIVE_STEP_STATES <- c("skipped", "running", "ran", "ignored", "error")
+
+.SC_AP_DRIVE_STEPS <- c("mapping", "qc", "norm", "pca", "clusters", "umap",
+                        "tsne", "singler", "markers", "pathway",
+                        "correlation", "trajectory")
+
+#' The FROZEN, DECLARED parameter set of the drive action.
+#'
+#' Equal to the set tests/testthat/test-sc-auto-pipeline.R already runs
+#' end-to-end, so the drive path performs a computation the repository has
+#' proven rather than a new one. Two choices are deliberate:
+#'   * `sc_ap_sketch_preset = "max"` — FULL dataset. The drive must never depend
+#'     on a hidden sub-sampling decision.
+#'   * `sc_ap_bpcells = FALSE` — the action performs no disk write, so the Drive
+#'     channel stays the only thing this path touches outside the session.
+#' Every key run_sc_auto_pipeline() reads is present: a missing one would arrive
+#' as NULL and silently change a threshold.
+.sc_ap_drive_inputs <- function() {
+  list(
+    sc_ap_mapping              = FALSE,
+    sc_ap_mapping_org          = "human",
+    sc_ap_bpcells              = FALSE,
+    sc_ap_min_gene             = 10,
+    sc_ap_max_gene             = 10000,
+    sc_ap_mt                   = 50,
+    sc_ap_norm                 = "log",
+    sc_ap_pca_dim              = 10,
+    sc_ap_res                  = 0.5,
+    sc_ap_cluster_algo         = "1",
+    sc_ap_compute_umap         = TRUE,
+    sc_ap_sketch_preset        = "max",
+    sc_ap_sketch_ncells_custom = NA,
+    sc_ap_singler              = FALSE,
+    sc_ap_singler_ref          = "hpca",
+    sc_ap_singler_level        = "main",
+    sc_ap_markers              = TRUE,
+    sc_ap_pathway              = FALSE,
+    sc_ap_pathway_db           = "GOBP",
+    sc_ap_pathway_org          = "human",
+    sc_ap_correlation          = FALSE,
+    sc_ap_trajectory           = TRUE
+  )
+}
+
+#' Which steps the frozen set asks for. The always-on stages (QC, normalisation,
+#' PCA, clustering) have no toggle and are therefore always selected.
+.sc_ap_drive_selection <- function() {
+  out <- c(
+    mapping     = isTRUE(.sc_ap_drive_inputs()$sc_ap_mapping),
+    qc          = TRUE,
+    norm        = TRUE,
+    pca         = TRUE,
+    clusters    = TRUE,
+    umap        = isTRUE(.sc_ap_drive_inputs()$sc_ap_compute_umap),
+    tsne        = isTRUE(.sc_ap_drive_inputs()$sc_ap_compute_umap),
+    singler     = isTRUE(.sc_ap_drive_inputs()$sc_ap_singler),
+    markers     = isTRUE(.sc_ap_drive_inputs()$sc_ap_markers),
+    pathway     = isTRUE(.sc_ap_drive_inputs()$sc_ap_pathway),
+    correlation = isTRUE(.sc_ap_drive_inputs()$sc_ap_correlation),
+    trajectory  = isTRUE(.sc_ap_drive_inputs()$sc_ap_trajectory)
+  )
+  out[.SC_AP_DRIVE_STEPS]
+}
+
+#' A fresh step recorder.
+#'
+#' An ENVIRONMENT, never a list: a list is copied on every assignment, so a write
+#' from inside a callback would land in a copy and be lost without a warning.
+#' (Already paid once on the Spatial pipeline.)
+.sc_ap_steps_new <- function(selection) {
+  steps <- new.env(parent = emptyenv())
+  for (s in .SC_AP_DRIVE_STEPS) {
+    assign(s, if (isTRUE(selection[[s]])) "running" else "skipped", envir = steps)
+  }
+  steps
+}
+
+.sc_ap_step_set <- function(steps, step, value) {
+  if (!is.character(step) || length(step) != 1L || !step %in% .SC_AP_DRIVE_STEPS) {
+    stop("unknown SC auto-pipeline drive step", call. = FALSE)
+  }
+  if (!is.character(value) || length(value) != 1L ||
+      !value %in% .SC_AP_DRIVE_STEP_STATES) {
+    stop("unknown SC auto-pipeline drive step state", call. = FALSE)
+  }
+  assign(step, value, envir = steps)
+  invisible(TRUE)
+}
+
+.sc_ap_steps_as_list <- function(steps) {
+  out <- lapply(.SC_AP_DRIVE_STEPS, function(s) as.character(steps[[s]]))
+  names(out) <- .SC_AP_DRIVE_STEPS
+  out
+}
+
+#' The step record BEFORE any run: nothing has been attempted, so no step may
+#' claim work. `.sc_ap_steps_new()` would say `running` for every selected step,
+#' which is a lie when no job is in flight; the authoritative "nothing happened
+#' yet" signal is the top-level `status = "idle"`, and `skipped` here means "no
+#' work was done for this step".
+.sc_ap_steps_idle <- function() {
+  steps <- new.env(parent = emptyenv())
+  for (s in .SC_AP_DRIVE_STEPS) assign(s, "skipped", envir = steps)
+  steps
+}
+
+#' Derive the per-step outcome from OBSERVABLE state, never from the request.
+#'
+#' `run_sc_auto_pipeline()` returns nothing and swallows its error (decision B1:
+#' the function and its source lock stay untouched), so the only honest record is
+#' built from what the session can be seen to hold afterwards. A selected step
+#' with no result is reported `error` — the conservative direction: it can never
+#' claim a success that cannot be proven. A size guard that fired is `ignored`.
+.sc_ap_step_outcomes <- function(obj, selection, produced = list(),
+                                 n_genes_before = NA_integer_,
+                                 tsne_max = 30000L, traj_max = 100000L) {
+  steps  <- .sc_ap_steps_new(selection)
+  is_obj <- inherits(obj, "Seurat")
+  n_cells <- if (is_obj) ncol(obj) else 0L
+  meta <- if (is_obj) obj@meta.data else data.frame()
+  reds <- if (is_obj) names(obj@reductions) else character(0)
+  has_col <- function(x) is_obj && x %in% colnames(meta)
+  mark <- function(step, value) .sc_ap_step_set(steps, step, value)
+
+  nvf <- if (is_obj) {
+    length(tryCatch(Seurat::VariableFeatures(obj), error = function(e) character(0)))
+  } else 0L
+
+  mark("qc",       if (has_col("percent.mt")) "ran" else "error")
+  mark("norm",     if (nvf > 0L) "ran" else "error")
+  mark("pca",      if (any(c("pca", "pca.full") %in% reds)) "ran" else "error")
+  mark("clusters", if (has_col("seurat_clusters")) "ran" else "error")
+
+  # Mapping rewrites rownames in place; a collapsed duplicate set changes the
+  # gene count. An unchanged count means the detector found symbols already, so
+  # the step was a deliberate no-op.
+  mark("mapping", if (!isTRUE(selection[["mapping"]])) "skipped"
+       else if (is_obj && !is.na(n_genes_before) && nrow(obj) != n_genes_before) "ran"
+       else "ignored")
+
+  mark("umap", if (!isTRUE(selection[["umap"]])) "skipped"
+       else if ("umap" %in% reds) "ran" else "error")
+  mark("tsne", if (!isTRUE(selection[["tsne"]])) "skipped"
+       else if ("tsne" %in% reds) "ran"
+       else if (n_cells > tsne_max) "ignored" else "error")
+  mark("singler", if (!isTRUE(selection[["singler"]])) "skipped"
+       else if (any(grepl("^SingleR_", colnames(meta)))) "ran" else "error")
+  mark("markers", if (!isTRUE(selection[["markers"]])) "skipped"
+       else if (isTRUE(produced$markers)) "ran" else "error")
+  mark("pathway", if (!isTRUE(selection[["pathway"]])) "skipped"
+       else if (isTRUE(produced$pathway)) "ran" else "error")
+  mark("correlation", if (!isTRUE(selection[["correlation"]])) "skipped"
+       else if (isTRUE(produced$correlation)) "ran" else "error")
+  mark("trajectory", if (!isTRUE(selection[["trajectory"]])) "skipped"
+       else if (has_col("pseudotime")) "ran"
+       else if (n_cells > traj_max) "ignored" else "error")
+
+  .sc_ap_steps_as_list(steps)
+}
+
+#' Which optional result slots the shared state holds RIGHT NOW.
+#'
+#' Presence only — never the content. The gene, cell and sample names these
+#' slots carry are exactly what the snapshot disclosure contract forbids, so
+#' they are read as booleans and never projected.
+.sc_ap_produced <- function(shared_rv) {
+  has <- function(slot) {
+    !is.null(tryCatch(shiny::isolate(state_get(shared_rv, slot)),
+                      error = function(e) NULL))
+  }
+  list(markers = has("markers_data"),
+       pathway = has("pathway_results"),
+       correlation = has("correlated_genes"))
+}
+
+.sc_ap_count_results <- function(obj, produced) {
+  n <- 0L
+  if (inherits(obj, "Seurat")) {
+    n <- n + sum(c("pca", "pca.full", "umap", "tsne") %in% names(obj@reductions))
+    n <- n + sum(c("seurat_clusters", "pseudotime") %in% colnames(obj@meta.data))
+  }
+  n + sum(vapply(produced, isTRUE, logical(1)))
+}
+
+#' The published state, as a CLOSED contract.
+#'
+#' Eight scalars plus the `steps` slot: nothing here can carry a gene name, a
+#' cell id, a coordinate, a cluster label or a path, because nothing here reads
+#' one.
+.sc_ap_drive_view <- function(status, elapsed_s = 0, seq = 0L, n_results = 0L,
+                              has_data = FALSE, ready = FALSE, steps = NULL) {
+  list(
+    module    = .SC_AP_DRIVE_MODULE,
+    action    = "run_pipeline",
+    status    = as.character(status),
+    elapsed_s = as.numeric(elapsed_s),
+    seq       = as.integer(seq),
+    n_results = as.integer(n_results),
+    has_data  = isTRUE(has_data),
+    ready     = isTRUE(ready),
+    steps     = if (is.null(steps)) {
+      .sc_ap_steps_as_list(.sc_ap_steps_idle())
+    } else {
+      steps
+    }
+  )
+}
+
+#' Run the pipeline for a drive request and report what actually happened.
+#'
+#' Never throws: the job must reach a terminal state whatever happens, or the
+#' agent is left with a `running` job it can never resolve. `close_job` is the
+#' module's job-closing callback (it verifies the job id before writing, so a
+#' human click can never close an agent's job).
+.sc_ap_run_drive <- function(global_data, shared_rv, session, sc_log_rv, close_job) {
+  obj_before <- tryCatch(shiny::isolate(global_data$sc_obj), error = function(e) NULL)
+  n_genes_before <- if (inherits(obj_before, "Seurat")) nrow(obj_before) else NA_integer_
+  log_before <- tryCatch(as.character(shiny::isolate(sc_log_rv())),
+                         error = function(e) "")
+
+  failed <- FALSE
+  tryCatch(
+    run_sc_auto_pipeline(.sc_ap_drive_inputs(), global_data, shared_rv,
+                         session, sc_log_rv),
+    error = function(e) failed <<- TRUE
+  )
+
+  # The swallowed error, recovered from the log. MEASURED in
+  # i18n/translation.json: the marker `.tr("\u274c Erreur:")` carries the emoji
+  # in BOTH the fr and en values, so it is language-independent — unlike the
+  # word that follows it, which is exactly the part a translation may change.
+  log_after <- tryCatch(as.character(shiny::isolate(sc_log_rv())),
+                        error = function(e) "")
+  if (nchar(log_after) > nchar(log_before)) {
+    delta <- substr(log_after, nchar(log_before) + 1L, nchar(log_after))
+    if (grepl("\u274c", delta, fixed = TRUE)) failed <- TRUE
+  }
+
+  obj <- tryCatch(shiny::isolate(global_data$sc_obj), error = function(e) NULL)
+  produced <- .sc_ap_produced(shared_rv)
+  steps <- .sc_ap_step_outcomes(
+    obj, .sc_ap_drive_selection(), produced = produced,
+    n_genes_before = n_genes_before
+  )
+  status <- if (isTRUE(failed)) "error" else "done"
+  close_job(status,
+            if (isTRUE(failed))
+              "the SC auto-pipeline reported an error (see the module log)" else NULL)
+  list(status = status, steps = steps,
+       n_results = .sc_ap_count_results(obj, produced))
+}
+
+.SC_ANNOT_DRIVE_MODULE <- "sc_annotation"
+.SC_ANNOT_DRIVE_BUTTON <- "sc-annotation-run_annot"
+
+.sc_annot_drive_inputs <- function() {
+  list(
+    ref_singler = "hpca",
+    label_level = "main",
+    maxcells = 50000L
+  )
+}
+
+run_annot <- function(input, global_data, shared_rv, session) {
+  obj <- tryCatch(shiny::isolate(global_data$sc_obj), error = function(e) NULL)
+  if (is.null(obj)) return(list(ok = FALSE, n_results = 0L))
+  tryCatch({
+    p <- shiny::Progress$new()
+    on.exit(p$close(), add = TRUE)
+    p$set(message = "Annotation SingleR...", value = 0.1)
+    result <- withCallingHandlers(
+      .run_singler_safe(obj, input$ref_singler, input$label_level,
+                        maxcells = input$maxcells),
+      warning = function(w) invokeRestart("muffleWarning")
+    )
+    col_name <- paste0("SingleR_", input$ref_singler, "_", input$label_level)
+    obj[[col_name]] <- result$labels
+    Idents(obj) <- result$labels
+    global_data$sc_obj <- obj
+    shared_rv$active_tab <- "tab_viz"
+    list(ok = TRUE,
+         n_results = as.integer(length(unique(result$labels))),
+         method = as.character(result$method))
+  }, error = function(e) list(ok = FALSE, n_results = 0L))
+}
+
+.sc_annot_drive_view <- function(status, elapsed_s = 0, seq = 0L,
+                                 n_results = 0L, has_data = FALSE,
+                                 ready = FALSE, step = NULL) {
+  step <- if (is.null(step)) "skipped" else as.character(step)
+  if (length(step) != 1L || is.na(step) || !step %in% .SC_AP_DRIVE_STEP_STATES) {
+    step <- "error"
+  }
+  list(
+    module = .SC_ANNOT_DRIVE_MODULE,
+    action = "run_pipeline",
+    status = as.character(status),
+    elapsed_s = as.numeric(elapsed_s),
+    seq = as.integer(seq),
+    n_results = as.integer(n_results),
+    has_data = isTRUE(has_data),
+    ready = isTRUE(ready),
+    steps = list(singler = step)
+  )
+}
+
+.sc_annot_drive_ready <- function(global_data) {
+  if (is.null(tryCatch(shiny::isolate(global_data$sc_obj), error = function(e) NULL))) {
+    return("sc_obj is not loaded")
+  }
+  TRUE
+}
+
+.sc_annot_drive_state <- function(global_data, run_state, last_step = NULL) {
+  job <- tryCatch(ts_drive_job_state(), error = function(e) NULL)
+  pending <- tryCatch(ts_drive_job_pending(), error = function(e) NULL)
+  ready <- isTRUE(.sc_annot_drive_ready(global_data))
+  obj <- tryCatch(shiny::isolate(global_data$sc_obj), error = function(e) NULL)
+  n_results <- 0L
+  if (inherits(obj, "Seurat")) {
+    cols <- grep("^SingleR_", colnames(obj@meta.data), value = TRUE)
+    if (length(cols)) {
+      n_results <- length(unique(obj@meta.data[[tail(cols, 1L)]]))
+    }
+  }
+  current <- if (is.function(run_state)) {
+    shiny::isolate(run_state())
+  } else {
+    as.character(run_state)
+  }
+  .sc_annot_drive_view(
+    status = if (ready) current else "not_ready",
+    elapsed_s = if (is.null(pending)) 0 else as.numeric(pending$elapsed_s),
+    seq = if (is.null(job)) 0L else as.integer(job$seq),
+    n_results = n_results,
+    has_data = !is.null(obj),
+    ready = ready,
+    step = last_step
+  )
+}
+
+.sc_annot_run_drive <- function(global_data, shared_rv, session, close_job) {
+  result <- tryCatch(
+    run_annot(.sc_annot_drive_inputs(), global_data, shared_rv, session),
+    error = function(e) list(ok = FALSE, n_results = 0L)
+  )
+  ok <- isTRUE(result$ok)
+  n_results <- suppressWarnings(as.integer(result$n_results %||% 0L))
+  if (length(n_results) != 1L || is.na(n_results) || n_results < 0L) n_results <- 0L
+  if (!ok) n_results <- 0L
+  status <- if (ok) "done" else "error"
+  close_job(status, if (ok) NULL else "the SC annotation action reported an error")
+  list(status = status, n_results = n_results,
+       step = if (ok) "ran" else "error")
+}
+
+.SC_MARKERS_DRIVE_MODULE <- "sc_markers"
+.SC_MARKERS_DRIVE_BUTTON <- "sc-markers-run_markers"
+
+.sc_markers_drive_inputs <- function() {
+  list(
+    marker_test = "wilcox",
+    marker_min_pct = 0.10,
+    marker_logfc = 0.25,
+    group_col = "seurat_clusters",
+    max_per_group = 5000L,
+    only_pos = TRUE,
+    verbose = FALSE
+  )
+}
+
+run_markers <- function(input, global_data, shared_rv, session) {
+  obj <- tryCatch(shiny::isolate(global_data$sc_obj), error = function(e) NULL)
+  if (is.null(obj)) return(list(ok = FALSE, n_results = 0L))
+  tryCatch({
+    p <- shiny::Progress$new()
+    on.exit(p$close(), add = TRUE)
+    p$set(message = "Recherche Marqueurs...", value = 0.3)
+    groups <- obj@meta.data[[input$group_col]]
+    if (length(unique(groups)) < 2L) {
+      stop(errorCondition("Au moins 2 groupes nécessaires",
+                          class = "sc_markers_error"))
+    }
+    Idents(obj) <- as.factor(groups)
+    sub_res <- subsample_seurat_for_analysis(
+      obj, max_per_group = input$max_per_group,
+      group_col = input$group_col
+    )
+    obj_use <- sub_res$object
+    Idents(obj_use) <- as.factor(obj_use@meta.data[[input$group_col]])
+    bpc <- tryCatch(optimize_bpcells_for_markers(obj_use), error = function(e) NULL)
+    if (!is.null(bpc) && isTRUE(bpc$transposed)) {
+      obj_use <- bpc$object
+      Idents(obj_use) <- as.factor(obj_use@meta.data[[input$group_col]])
+      session$onSessionEnded(function() unlink(bpc$dir, recursive = TRUE))
+    }
+    p$set(0.6, "FindAllMarkers...")
+    markers <- FindAllMarkers(
+      obj_use,
+      test.use = input$marker_test,
+      min.pct = input$marker_min_pct,
+      logfc.threshold = input$marker_logfc,
+      only.pos = input$only_pos,
+      verbose = input$verbose
+    )
+    if (is.null(markers) || nrow(markers) == 0L) {
+      shared_rv$markers_data <- NULL
+      return(list(ok = TRUE, n_results = 0L))
+    }
+    markers <- as.data.frame(markers)
+    rownames(markers) <- NULL
+    markers <- .normalize_marker_cols(markers)
+    markers <- markers[order(markers$p_val_adj, -abs(markers$avg_log2FC)), ]
+    shared_rv$markers_data <- markers
+    shared_rv$active_tab <- "tab_table"
+    list(ok = TRUE, n_results = as.integer(nrow(markers)))
+  }, error = function(e) list(ok = FALSE, n_results = 0L))
+}
+
+.sc_markers_drive_view <- function(status, elapsed_s = 0, seq = 0L,
+                                  n_results = 0L, has_data = FALSE,
+                                  ready = FALSE, step = NULL) {
+  step <- if (is.null(step)) "skipped" else as.character(step)
+  if (length(step) != 1L || is.na(step) || !step %in% .SC_AP_DRIVE_STEP_STATES) {
+    step <- "error"
+  }
+  list(
+    module = .SC_MARKERS_DRIVE_MODULE,
+    action = "run_pipeline",
+    status = as.character(status),
+    elapsed_s = as.numeric(elapsed_s),
+    seq = as.integer(seq),
+    n_results = as.integer(n_results),
+    has_data = isTRUE(has_data),
+    ready = isTRUE(ready),
+    steps = list(markers = step)
+  )
+}
+
+.sc_markers_drive_ready <- function(global_data) {
+  if (is.null(tryCatch(shiny::isolate(global_data$sc_obj), error = function(e) NULL))) {
+    return("sc_obj is not loaded")
+  }
+  TRUE
+}
+
+.sc_markers_drive_state <- function(global_data, shared_rv, run_state,
+                                    last_step = NULL) {
+  job <- tryCatch(ts_drive_job_state(), error = function(e) NULL)
+  pending <- tryCatch(ts_drive_job_pending(), error = function(e) NULL)
+  ready <- isTRUE(.sc_markers_drive_ready(global_data))
+  obj <- tryCatch(shiny::isolate(global_data$sc_obj), error = function(e) NULL)
+  markers <- tryCatch(shiny::isolate(shared_rv$markers_data), error = function(e) NULL)
+  n_results <- if (is.data.frame(markers)) nrow(markers) else 0L
+  current <- if (is.function(run_state)) {
+    shiny::isolate(run_state())
+  } else {
+    as.character(run_state)
+  }
+  if (length(current) != 1L || is.na(current)) current <- "idle"
+  .sc_markers_drive_view(
+    status = if (ready) current else "not_ready",
+    elapsed_s = if (is.null(pending)) 0 else as.numeric(pending$elapsed_s),
+    seq = if (is.null(job)) 0L else as.integer(job$seq),
+    n_results = n_results,
+    has_data = !is.null(obj),
+    ready = ready,
+    step = last_step
+  )
+}
+
+.sc_markers_run_drive <- function(global_data, shared_rv, session, close_job) {
+  result <- tryCatch(
+    run_markers(.sc_markers_drive_inputs(), global_data, shared_rv, session),
+    error = function(e) list(ok = FALSE, n_results = 0L)
+  )
+  ok <- isTRUE(result$ok)
+  n_results <- suppressWarnings(as.integer(result$n_results %||% 0L))
+  if (length(n_results) != 1L || is.na(n_results) || n_results < 0L) n_results <- 0L
+  if (!ok) n_results <- 0L
+  status <- if (ok) "done" else "error"
+  close_job(status, if (ok) NULL else "the SC marker action reported an error")
+  list(status = status, n_results = n_results,
+       step = if (ok) "ran" else "error")
+}
+
 mod_sc_ui <- function(id) {
   ns <- NS(id)
   layout_sidebar(
@@ -600,6 +1107,177 @@ mod_sc_server <- function(id, global_data) {
       req(global_data$sc_obj)
       run_sc_auto_pipeline(input, global_data, shared_rv, session, sc_log_rv)
     })
+
+    # =========================================================================
+    # DRIVE LIVE CONTROL — the SC auto-pipeline, one frozen action
+    # =========================================================================
+    # Thin by construction: the observer below only wires the protocol to the
+    # file-level helpers, and every decision (readiness, parameters, per-step
+    # outcomes, terminal status) lives in those helpers, where it is testable
+    # without a session. `ignoreInit = TRUE` is load-bearing — a bare
+    # observeEvent() on a reactiveVal fires once at module init, which would
+    # launch the whole pipeline on every page load.
+    drive_counter  <- shiny::reactiveVal(0L)
+    drive_run_state <- shiny::reactiveVal("idle")
+    drive_last_steps <- new.env(parent = emptyenv())
+    drive_last_steps$value <- NULL
+    drive_job <- new.env(parent = emptyenv())
+    drive_job$id <- NULL
+
+    .sc_ap_drive_ready <- function() {
+      if (is.null(tryCatch(shiny::isolate(global_data$sc_obj), error = function(e) NULL))) {
+        return("sc_obj is not loaded")
+      }
+      TRUE
+    }
+
+    .sc_ap_drive_state <- function() {
+      job <- tryCatch(ts_drive_job_state(), error = function(e) NULL)
+      pending <- tryCatch(ts_drive_job_pending(), error = function(e) NULL)
+      ready <- isTRUE(.sc_ap_drive_ready())
+      obj <- tryCatch(shiny::isolate(global_data$sc_obj), error = function(e) NULL)
+      .sc_ap_drive_view(
+        status = if (ready) drive_run_state() else "not_ready",
+        elapsed_s = if (is.null(pending)) 0 else as.numeric(pending$elapsed_s),
+        seq = if (is.null(job)) 0L else as.integer(job$seq),
+        n_results = .sc_ap_count_results(obj, .sc_ap_produced(shared_rv)),
+        has_data = !is.null(obj),
+        ready = ready,
+        steps = drive_last_steps$value
+      )
+    }
+
+    # The id is written as a LITERAL, not as `.SC_AP_DRIVE_BUTTON`: the wiring
+    # guard in test-drive-watcher.R greps the module sources for
+    # `ts_drive_publish_token(.*"<id>"` to prove a token is actually published —
+    # a constant would make the binding a promise again, which is precisely what
+    # that guard exists to prevent. The literal is pinned against the allowlist
+    # constant in test-mod-sc-drive.R, so the duplication cannot drift.
+    ts_drive_publish_token(global_data, "sc-pipeline-run_auto_pipeline", drive_counter,
+      ready = .sc_ap_drive_ready, state = .sc_ap_drive_state, long = TRUE,
+      timeout_s = TS_SC_AUTO_PIPELINE_TIMEOUT_S
+    )
+
+    .close_sc_ap_drive_job <- function(status, error = NULL) {
+      if (is.null(drive_job$id)) return(invisible(FALSE))
+      job <- tryCatch(ts_drive_job_state(), error = function(e) NULL)
+      if (is.null(job) || !identical(job$job_id, drive_job$id)) {
+        return(invisible(FALSE))
+      }
+      ts_drive_job_finish(.SC_AP_DRIVE_BUTTON, status = status, error = error,
+                          job_id = drive_job$id)
+    }
+
+    observeEvent(drive_counter(), {
+      # Fail closed: an unready module never starts a job it cannot finish.
+      if (!isTRUE(.sc_ap_drive_ready())) return()
+      drive_job$id <- NULL
+      job <- tryCatch(ts_drive_job_state(), error = function(e) NULL)
+      if (!is.null(job) && isTRUE(ts_drive_job_busy()) &&
+          identical(job$button, .SC_AP_DRIVE_BUTTON)) {
+        drive_job$id <- job$job_id
+      }
+      drive_run_state("running")
+      res <- .sc_ap_run_drive(global_data, shared_rv, session, sc_log_rv,
+                              .close_sc_ap_drive_job)
+      drive_last_steps$value <- res$steps
+      drive_run_state(res$status)
+    }, ignoreInit = TRUE)
+
+    annot_drive_counter <- shiny::reactiveVal(0L)
+    annot_drive_run_state <- shiny::reactiveVal("idle")
+    annot_drive_last_step <- new.env(parent = emptyenv())
+    annot_drive_last_step$value <- NULL
+    annot_drive_job <- new.env(parent = emptyenv())
+    annot_drive_job$id <- NULL
+
+    annot_drive_ready <- function() {
+      .sc_annot_drive_ready(global_data)
+    }
+
+    annot_drive_state <- function() {
+      .sc_annot_drive_state(global_data, annot_drive_run_state,
+                             annot_drive_last_step$value)
+    }
+
+    ts_drive_publish_token(global_data, "sc-annotation-run_annot",
+      annot_drive_counter, ready = annot_drive_ready,
+      state = annot_drive_state, long = TRUE,
+      timeout_s = TS_SC_ANNOTATION_TIMEOUT_S
+    )
+
+    close_annot_drive_job <- function(status, error = NULL) {
+      if (is.null(annot_drive_job$id)) return(invisible(FALSE))
+      job <- tryCatch(ts_drive_job_state(), error = function(e) NULL)
+      if (is.null(job) || !identical(job$job_id, annot_drive_job$id)) {
+        return(invisible(FALSE))
+      }
+      ts_drive_job_finish(.SC_ANNOT_DRIVE_BUTTON, status = status, error = error,
+                          job_id = annot_drive_job$id)
+    }
+
+    observeEvent(annot_drive_counter(), {
+      if (!isTRUE(annot_drive_ready())) return()
+      annot_drive_job$id <- NULL
+      job <- tryCatch(ts_drive_job_state(), error = function(e) NULL)
+      if (!is.null(job) && isTRUE(ts_drive_job_busy()) &&
+          identical(job$button, .SC_ANNOT_DRIVE_BUTTON)) {
+        annot_drive_job$id <- job$job_id
+      }
+      annot_drive_run_state("running")
+      res <- .sc_annot_run_drive(global_data, shared_rv, session,
+                                 close_annot_drive_job)
+      annot_drive_last_step$value <- res$step
+      annot_drive_run_state(res$status)
+    }, ignoreInit = TRUE)
+
+    markers_drive_counter <- shiny::reactiveVal(0L)
+    markers_drive_run_state <- shiny::reactiveVal("idle")
+    markers_drive_last_step <- new.env(parent = emptyenv())
+    markers_drive_last_step$value <- NULL
+    markers_drive_job <- new.env(parent = emptyenv())
+    markers_drive_job$id <- NULL
+
+    markers_drive_ready <- function() {
+      .sc_markers_drive_ready(global_data)
+    }
+
+    markers_drive_state <- function() {
+      .sc_markers_drive_state(global_data, shared_rv,
+                              markers_drive_run_state,
+                              markers_drive_last_step$value)
+    }
+
+    ts_drive_publish_token(global_data, "sc-markers-run_markers",
+      markers_drive_counter, ready = markers_drive_ready,
+      state = markers_drive_state, long = TRUE,
+      timeout_s = TS_SC_MARKERS_TIMEOUT_S
+    )
+
+    close_markers_drive_job <- function(status, error = NULL) {
+      if (is.null(markers_drive_job$id)) return(invisible(FALSE))
+      job <- tryCatch(ts_drive_job_state(), error = function(e) NULL)
+      if (is.null(job) || !identical(job$job_id, markers_drive_job$id)) {
+        return(invisible(FALSE))
+      }
+      ts_drive_job_finish(.SC_MARKERS_DRIVE_BUTTON, status = status, error = error,
+                          job_id = markers_drive_job$id)
+    }
+
+    observeEvent(markers_drive_counter(), {
+      if (!isTRUE(markers_drive_ready())) return()
+      markers_drive_job$id <- NULL
+      job <- tryCatch(ts_drive_job_state(), error = function(e) NULL)
+      if (!is.null(job) && isTRUE(ts_drive_job_busy()) &&
+          identical(job$button, .SC_MARKERS_DRIVE_BUTTON)) {
+        markers_drive_job$id <- job$job_id
+      }
+      markers_drive_run_state("running")
+      res <- .sc_markers_run_drive(global_data, shared_rv, session,
+                                   close_markers_drive_job)
+      markers_drive_last_step$value <- res$step
+      markers_drive_run_state(res$status)
+    }, ignoreInit = TRUE)
 
     # =========================================================================
     # REPORT STATUS

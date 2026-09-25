@@ -129,11 +129,15 @@ test_that("the bound buttons are exactly the ones the spec names", {
   # snapshot simultaneously reported the matrix loaded (see §2 below).
   # A pin that silently accepted a sixth would be worse than no pin, so the set
   # stays closed and explicit.
+  # Grown to NINE on 2026-09-25: the SC auto-pipeline, SC annotation, and SC
+  # marker actions. The set remains closed and explicit.
   expect_setequal(
     TS_DRIVE_BUTTONS,
     c("import_bulk-btn_load", "bulk-de-run_de",
       "bulk-pathways-run_pathway", "bulk-pathways-run_scores",
-      "bulk-filter-run_filter_norm")
+      "bulk-filter-run_filter_norm", "spatial-pipeline-btn_run_all",
+      "sc-pipeline-run_auto_pipeline", "sc-annotation-run_annot",
+      "sc-markers-run_markers")
   )
   # Every button must be in the allowlist with kind = "button", otherwise
   # run_pipeline would accept an id the injector cannot classify.
@@ -142,13 +146,76 @@ test_that("the bound buttons are exactly the ones the spec names", {
   }
 })
 
-test_that("sc and spatial keys are NOT allowlisted (spec S3, v1 brake)", {
-  # Explicit negative: the allowlist must not be silently widened to a domain
-  # the spec froze out. If someone adds an sc key, this fails on purpose.
+test_that("Spatial drive exposure is exactly one owned pipeline button", {
+  button <- "spatial-pipeline-btn_run_all"
+  expect_true("spatial_pipeline" %in% TS_DRIVE_MODULES)
+  expect_true(ts_drive_allowlisted(button))
+  expect_identical(TS_DRIVE_ALLOWLIST[[button]]$kind, "button")
+  expect_identical(TS_DRIVE_ALLOWLIST[[button]]$module, "spatial_pipeline")
+  expect_identical(ts_drive_module_of(button), "spatial_pipeline")
+  expect_identical(ts_drive_button_module(button), "spatial_pipeline")
+  spatial_ids <- names(TS_DRIVE_ALLOWLIST)[
+    grepl("^(spatial|import_spatial)-", names(TS_DRIVE_ALLOWLIST))
+  ]
+  expect_identical(spatial_ids, button)
+})
+
+test_that("SC drive exposure is exactly three owned action buttons", {
+  buttons <- c("sc-pipeline-run_auto_pipeline", "sc-annotation-run_annot",
+               "sc-markers-run_markers")
+  modules <- c("sc_pipeline", "sc_annotation", "sc_markers")
+  expect_true(all(modules %in% TS_DRIVE_MODULES))
+  expect_setequal(TS_DRIVE_BUTTONS[startsWith(TS_DRIVE_BUTTONS, "sc-")], buttons)
+  for (button in buttons) {
+    expect_true(button %in% TS_DRIVE_BUTTONS)
+    expect_true(ts_drive_allowlisted(button))
+    expect_identical(TS_DRIVE_ALLOWLIST[[button]]$kind, "button")
+    expect_identical(ts_drive_module_of(button), modules[[match(button, buttons)]])
+    expect_identical(ts_drive_button_module(button), modules[[match(button, buttons)]])
+  }
   sc_ids <- names(TS_DRIVE_ALLOWLIST)[startsWith(names(TS_DRIVE_ALLOWLIST), "sc-")]
-  sp_ids <- names(TS_DRIVE_ALLOWLIST)[startsWith(names(TS_DRIVE_ALLOWLIST), "spatial-")]
-  expect_length(sc_ids, 0)
-  expect_length(sp_ids, 0)
+  expect_setequal(sc_ids, buttons)
+  expect_false(ts_drive_allowlisted("sc-btn_auto_pipeline_sc"))
+  expect_null(ts_drive_allowlist_get("sc-btn_auto_pipeline_sc"))
+  expect_false(ts_drive_allowlisted("sc-sc_ap_confirm"))
+})
+
+test_that("every other sc- key stays out of scope, and module 'sc' stays refused", {
+  # The v1 rail was "no sc- key at all". It is replaced by a CLOSED set of three,
+  # so widening it later is a visible edit rather than a default.
+  for (id in c("sc-mapping-btn_run", "sc-pipeline-run_markers",
+               "sc-btn_auto_pipeline_sc", "sc-sc_ap_min_gene",
+               "sc-da-run_design", "sc-velocity-run_velocity")) {
+    entry <- setNames(list(list(kind = "button", module = "sc_pipeline")), id)
+    problems <- ts_drive_allowlist_problems(entry, character(0))
+    expect_true(any(grepl("out of scope", problems)), info = id)
+  }
+  # A LYING module field does not buy an sc- key either.
+  liar <- list("sc-nonsense" = list(kind = "select", module = "bulk_de"))
+  expect_true(any(grepl("out of scope", ts_drive_allowlist_problems(liar, character(0)))))
+  # The parent `sc` module is still not a scenario target.
+  parent <- list("sc-pipeline-run_auto_pipeline" = list(kind = "button", module = "sc"))
+  expect_true(any(grepl("out of scope",
+                        ts_drive_allowlist_problems(parent, character(0)))))
+  # And the shipped tables are self-consistent.
+  expect_true(isTRUE(ts_drive_allowlist_problems()))
+})
+
+test_that("Spatial child, pipeline-input, import, and daemon ids stay private", {
+  forbidden <- c(
+    "spatial-pipeline-qc_min_count", "spatial-pipeline-compute_umap",
+    "spatial-qc-btn_apply_qc", "spatial-cluster-btn_cluster",
+    "spatial-deconv-btn_deconv", "spatial-viz-btn_add_to_report",
+    "spatial-multi-btn_integrate", "spatial-niche-btn_niches",
+    "spatial-niche-btn_enrichment", "spatial-niche-btn_ripley",
+    "spatial-export-dl_bundle", "spatial-report-dl_report",
+    "spatial-btn_reset_daemons", "import_spatial-btn_import",
+    "import_spatial-shared_ref_file", "import_spatial-dir_select"
+  )
+  for (id in forbidden) {
+    expect_false(ts_drive_allowlisted(id), info = id)
+    expect_null(ts_drive_allowlist_get(id), info = id)
+  }
 })
 
 test_that("ts_drive_module_of prefers the declared module, and falls back on the LAST dash", {

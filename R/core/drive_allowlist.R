@@ -40,9 +40,6 @@
 #                 modules/ (spec S5: updateActionButton() does NOT click).
 #   "nav"      -> a tabset value, applied through bslib::nav_select().
 #   "nav_top"  -> a page_navbar value (the root navbar is un-namespaced).
-#
-# Out of scope (spec S3 + §9): `sc` and `spatial` keys are NOT here and are
-# rejected as `invalid` in v1.
 # =============================================================================
 
 # --- Protocol constants (frozen) ---------------------------------------------
@@ -80,6 +77,44 @@ TS_DRIVE_BULK_PANELS <- c(
   "panel_pattern", "panel_dose", "panel_report", "panel_datasets",
   "panel_merge", "panel_network"
 )
+
+TS_DRIVE_SPATIAL_TOP_TAB      <- "tab_spatial"
+TS_DRIVE_SPATIAL_TABS_ID      <- "spatial-results"
+TS_DRIVE_SPATIAL_TAB          <- "results_pipeline"
+TS_DRIVE_SPATIAL_ACCORDION_ID <- "spatial-steps"
+TS_DRIVE_SPATIAL_PANELS       <- "panel_pipeline"
+
+# --- SC auto-pipeline (measured in modules/sc/mod_sc.R) -----------------------
+# The SC domain has NO single-click pipeline button. `btn_auto_pipeline_sc`
+# (DOM id `sc-btn_auto_pipeline_sc`, mod_sc.R:46) only calls `showModal()`; the
+# pipeline runs from `sc_ap_confirm` — a button INSIDE that dynamic modal
+# (mod_sc.R:591) — through `run_sc_auto_pipeline()` (mod_sc.R:598-602). Binding
+# the DOM id would report `done` for a click that opened a dialog and computed
+# nothing, so the protocol button is its OWN id, dispatched by a counter the
+# module publishes (decision A1: one action, frozen declared parameters).
+#
+# The nested module follows the bulk convention: prefix `sc-pipeline-`, module
+# name `sc_pipeline` (the DOM prefix with the dash turned into an underscore).
+TS_DRIVE_SC_BUTTON <- "sc-pipeline-run_auto_pipeline"
+TS_DRIVE_SC_MODULE <- "sc_pipeline"
+# Navigation, measured: `tab_sc` is the root navbar panel (app.R:421) and the
+# panel lives in a DOUBLY nested accordion — `acc_workflow` (value "grp_prep",
+# mod_sc.R:35/40) then `acc_prep` (value "0_autopipeline", mod_sc.R:41/45).
+# `acc_prep` opens on "1_pipeline", so the auto-pipeline panel is CLOSED by
+# default: both accordions must be opened for a human to watch the run.
+TS_DRIVE_SC_TOP_TAB        <- "tab_sc"
+TS_DRIVE_SC_PANELS         <- "0_autopipeline"
+TS_DRIVE_SC_ACCORDION_IDS  <- c("sc-acc_workflow", "sc-acc_prep")
+TS_DRIVE_SC_ANNOTATION_BUTTON <- "sc-annotation-run_annot"
+TS_DRIVE_SC_ANNOTATION_MODULE <- "sc_annotation"
+TS_DRIVE_SC_ANNOTATION_TOP_TAB <- "tab_sc"
+TS_DRIVE_SC_ANNOTATION_PANELS <- "2_annotation"
+TS_DRIVE_SC_ANNOTATION_ACCORDION_IDS <- c("sc-acc_workflow", "sc-acc_analyse")
+TS_DRIVE_SC_MARKERS_BUTTON <- "sc-markers-run_markers"
+TS_DRIVE_SC_MARKERS_MODULE <- "sc_markers"
+TS_DRIVE_SC_MARKERS_TOP_TAB <- "tab_sc"
+TS_DRIVE_SC_MARKERS_PANELS <- "4_markers"
+TS_DRIVE_SC_MARKERS_ACCORDION_IDS <- c("sc-acc_workflow", "sc-acc_analyse")
 
 # --- The allowlist (frozen data) --------------------------------------------
 #
@@ -179,29 +214,58 @@ TS_DRIVE_ALLOWLIST <- list(
   "bulk-filter-run_filter_norm" = list(kind = "button", module = "bulk_filter", note = "Step 1 Filtering & VST (mod_bulk_filter.R:59, DOM-measured)"),
   "bulk-de-run_de"             = list(kind = "button", module = "bulk_de", note = "DE single pair (mod_bulk_de_run.R:76)"),
   "bulk-pathways-run_pathway"  = list(kind = "button", module = "bulk_pathways", note = "ORA/GSEA enrichment (mod_bulk_pathways.R:44)"),
-  "bulk-pathways-run_scores"   = list(kind = "button", module = "bulk_pathways", note = "GSVA/ssGSEA scores (mod_bulk_pathways.R:89)")
+  "bulk-pathways-run_scores"   = list(kind = "button", module = "bulk_pathways", note = "GSVA/ssGSEA scores (mod_bulk_pathways.R:89)"),
+  "spatial-pipeline-btn_run_all" = list(kind = "button", module = "spatial_pipeline", note = "pipeline complet (mod_spatial_pipeline.R, DOM-measured)")
 )
 
-#' The ONLY FIVE button ids ts_drive_bind_button() is allowed to instrument.
-#' Spec G2 says "the three bulk observeEvents" — measured, the bulk pipeline
-#' the G3 acceptance runs touches FIVE click sites. The `run_scores` (GSVA
-#' per-sample) button is the fourth, and Step 1 (`run_filter_norm`) is the
-#' fifth — added by the second G3 milestone because it is the ONLY producer of
-#' `shared_rv$filtered_counts`, and therefore the only way any downstream
-#' action can ever be reached. Any further bind is visible in review.
+# The SC entries are APPENDED rather than written inline because `list(NAME = )`
+# takes a LITERAL name: writing `TS_DRIVE_SC_BUTTON = ...` would create an entry
+# called "TS_DRIVE_SC_BUTTON" — a key with no dash, which the consistency check
+# below refuses at source() time. `setNames()` keeps the constant the single
+# source of truth for each id.
+TS_DRIVE_ALLOWLIST <- c(
+  TS_DRIVE_ALLOWLIST,
+  stats::setNames(
+    list(
+      list(kind = "button", module = TS_DRIVE_SC_MODULE,
+           note = paste("pipeline SC complet via run_sc_auto_pipeline() avec le",
+                        "jeu de parametres FIGE .sc_ap_drive_inputs()",
+                        "(modules/sc/mod_sc.R). Le bouton DOM",
+                        "sc-btn_auto_pipeline_sc n'ouvre QUE la modale de",
+                        "parametres: il n'est PAS expose.")),
+      list(kind = "button", module = TS_DRIVE_SC_ANNOTATION_MODULE,
+           note = "SingleR annotation via run_annot() with frozen .sc_annot_drive_inputs(); the DOM button is not exposed"),
+      list(kind = "button", module = TS_DRIVE_SC_MARKERS_MODULE,
+           note = "FindAllMarkers via run_markers() with frozen .sc_markers_drive_inputs(); the DOM button is not exposed")
+    ),
+    c(TS_DRIVE_SC_BUTTON, TS_DRIVE_SC_ANNOTATION_BUTTON,
+      TS_DRIVE_SC_MARKERS_BUTTON)
+  )
+)
+
+#' The ONLY NINE button ids ts_drive_bind_button() is allowed to instrument.
+#' The eighth and ninth are the SC annotation and marker actions; both are
+#' dispatched by counters and are not DOM bindings.
 TS_DRIVE_BUTTONS <- c(
   "import_bulk-btn_load",
   "bulk-filter-run_filter_norm",
   "bulk-de-run_de",
   "bulk-pathways-run_pathway",
-  "bulk-pathways-run_scores"
+  "bulk-pathways-run_scores",
+  "spatial-pipeline-btn_run_all",
+  TS_DRIVE_SC_BUTTON,
+  TS_DRIVE_SC_ANNOTATION_BUTTON,
+  TS_DRIVE_SC_MARKERS_BUTTON
 )
 
-#' The four modules the v1 allowlist covers. Anything else is `invalid`.
+#' The eight modules the allowlist covers. Anything else is `invalid`.
 #' `bulk_filter` is the nested Step 1 module (`bulk-filter-`), named after the
 #' same convention as `bulk_de` / `bulk_pathways`: the DOM prefix with the dash
-#' turned into an underscore.
-TS_DRIVE_MODULES <- c("import_bulk", "bulk_filter", "bulk_de", "bulk_pathways")
+#' turned into an underscore. The SC action modules follow it for the same
+#' reason; the parent module `sc` is deliberately NOT a member.
+TS_DRIVE_MODULES <- c("import_bulk", "bulk_filter", "bulk_de", "bulk_pathways",
+                      "spatial_pipeline", TS_DRIVE_SC_MODULE,
+                      TS_DRIVE_SC_ANNOTATION_MODULE, TS_DRIVE_SC_MARKERS_MODULE)
 
 #' Widget kinds the injector knows how to adapt (spec S5).
 #'
@@ -264,9 +328,41 @@ ts_drive_allowlist_problems <- function(allowlist = TS_DRIVE_ALLOWLIST,
     if (!grepl("-", id, fixed = TRUE)) {
       problems <- c(problems, sprintf("%s: not a namespaced id (no dash)", id))
     }
-    # Spec S3: sc / spatial are out of scope for v1.
-    if (e$module %in% c("sc", "spatial") || grepl("^(sc|spatial)-", id)) {
-      problems <- c(problems, sprintf("%s: sc/spatial keys are out of scope for v1", id))
+    if (identical(e$module, "sc")) {
+      problems <- c(problems, sprintf("%s: module 'sc' is out of scope", id))
+    }
+    # The `sc-` namespace is a CLOSED set of three declared actions. The
+    # original v1 rail was "no sc- key at all"; replacing it with named
+    # exceptions keeps every later widening a visible edit rather than a
+    # default. A LYING module field buys nothing: the id prefix alone is enough
+    # to refuse the key.
+    sc_buttons <- c(TS_DRIVE_SC_BUTTON, TS_DRIVE_SC_ANNOTATION_BUTTON,
+                    TS_DRIVE_SC_MARKERS_BUTTON)
+    if (grepl("^sc-", id) && !id %in% sc_buttons) {
+      problems <- c(problems, sprintf(
+        "%s: only %s, %s or %s is in scope, every other sc- key is out of scope",
+        id, TS_DRIVE_SC_BUTTON, TS_DRIVE_SC_ANNOTATION_BUTTON,
+        TS_DRIVE_SC_MARKERS_BUTTON))
+    }
+    if (identical(id, TS_DRIVE_SC_BUTTON) &&
+        !identical(e$module, TS_DRIVE_SC_MODULE)) {
+      problems <- c(problems, sprintf("%s: must declare module '%s'",
+                                      id, TS_DRIVE_SC_MODULE))
+    }
+    if (identical(id, TS_DRIVE_SC_ANNOTATION_BUTTON) &&
+        !identical(e$module, TS_DRIVE_SC_ANNOTATION_MODULE)) {
+      problems <- c(problems, sprintf("%s: must declare module '%s'",
+                                      id, TS_DRIVE_SC_ANNOTATION_MODULE))
+    }
+    if (identical(id, TS_DRIVE_SC_MARKERS_BUTTON) &&
+        !identical(e$module, TS_DRIVE_SC_MARKERS_MODULE)) {
+      problems <- c(problems, sprintf("%s: must declare module '%s'",
+                                      id, TS_DRIVE_SC_MARKERS_MODULE))
+    }
+    if (grepl("^(spatial|import_spatial)-", id) &&
+        !(identical(id, "spatial-pipeline-btn_run_all") &&
+          identical(e$module, "spatial_pipeline"))) {
+      problems <- c(problems, sprintf("%s: only spatial-pipeline-btn_run_all is in scope", id))
     }
   }
 
@@ -505,8 +601,8 @@ ts_drive_validate_import <- function(block, roots = ts_drive_import_roots()) {
 #' @param importer `function(request)` -> list(ok, status, errors, warnings).
 ts_drive_publish_importer <- function(global_data, module, importer) {
   if (!is.character(module) || length(module) != 1L || is.na(module) ||
-      !module %in% TS_DRIVE_MODULES) {
-    warning(sprintf("ts_drive_publish_importer(): '%s' is not in TS_DRIVE_MODULES — ignored.",
+      !module %in% TS_DRIVE_MODULES || !identical(module, "import_bulk")) {
+    warning(sprintf("ts_drive_publish_importer(): '%s' has no importer in the TS_DRIVE_MODULES import allowlist — ignored.",
                     module))
     return(invisible(FALSE))
   }

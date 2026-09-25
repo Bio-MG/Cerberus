@@ -47,6 +47,8 @@
 # The in-flight job, or NULL. See the "Job lifecycle" section for why this
 # exists and what an agent may conclude from it.
 .ts_drive_state$job <- NULL
+.ts_drive_state$selected_token <- NULL
+.ts_drive_state$job_serial <- 0L
 
 #' Record the app root once, at source time.
 #'
@@ -58,6 +60,7 @@
 #' @param root Absolute path to the app root.
 ts_drive_boot <- function(root = getwd()) {
   .ts_drive_state$root <- normalizePath(root, winslash = "/", mustWork = FALSE)
+  .ts_drive_state$selected_token <- NULL
   invisible(.ts_drive_state$root)
 }
 
@@ -753,7 +756,7 @@ ts_drive_validate_scenario <- function(scn, token, last_seq) {
     errors <- c(errors, "missing `module`")
   } else if (!module %in% TS_DRIVE_MODULES) {
     errors <- c(errors, sprintf(
-      "module '%s' outside the v1 bulk pilot allowlist (allowed: %s)",
+      "module '%s' outside the drive allowlist (allowed: %s)",
       module, paste(TS_DRIVE_MODULES, collapse = ", ")))
   }
 
@@ -864,6 +867,7 @@ ts_drive_write_result <- function(seq, status, active_module, armed,
     errors        = as.list(errors),
     warnings      = as.list(warnings),
     snapshot      = snapshot,
+    job           = ts_drive_job_view(ts_drive_job_state()),
     # Sanitized diagnostics for the last FAILED wire write, or NULL.
     #
     # This is how a write failure becomes visible: `ready.json` is itself a
@@ -963,8 +967,9 @@ ts_drive_module_states <- function(global_data) {
     if (is.na(mod)) next
     ans <- tryCatch(probe(), error = function(e) e)
     out[[mod]] <- if (inherits(ans, "condition")) {
-      list(probe_error = sprintf("the state probe raised: %s",
-                                 conditionMessage(ans)))
+      list(probe_error = ts_drive_badge_sanitize(
+        sprintf("the state probe raised: %s", conditionMessage(ans)), 200L
+      ))
     } else if (is.list(ans)) {
       ans
     } else {
@@ -1047,6 +1052,15 @@ ts_drive_entry_counter <- function(entry) {
 ts_drive_entry_long <- function(entry) {
   if (!is.list(entry)) return(FALSE)
   isTRUE(entry$long)
+}
+
+ts_drive_entry_timeout <- function(entry) {
+  if (!is.list(entry) || is.null(entry$timeout_s)) return(NULL)
+  value <- suppressWarnings(as.numeric(entry$timeout_s))
+  if (length(value) != 1L || is.na(value) || !is.finite(value) || value <= 0) {
+    return(NULL)
+  }
+  value
 }
 
 #' Ask one registry entry's readiness guard, and classify the answer.
@@ -1217,7 +1231,7 @@ ts_drive_registry <- function(global_data) {
 #'   that never reports. Declared by the MODULE because only the module knows
 #'   its own cost — the DE module cites its 852.7 s measurement.
 ts_drive_publish_token <- function(global_data, input_id, counter, ready = NULL,
-                                   state = NULL, long = FALSE) {
+                                    state = NULL, long = FALSE, timeout_s = NULL) {
   if (!input_id %in% TS_DRIVE_BUTTONS) {
     warning(sprintf("ts_drive_publish_token(): '%s' is not in TS_DRIVE_BUTTONS — ignored.", input_id))
     return(invisible(FALSE))
@@ -1225,7 +1239,8 @@ ts_drive_publish_token <- function(global_data, input_id, counter, ready = NULL,
   reg <- ts_drive_registry(global_data)
   if (is.null(reg)) return(invisible(FALSE))
   reg[[input_id]] <- list(counter = counter, ready = ready, state = state,
-                          long = isTRUE(long))
+                          long = isTRUE(long),
+                          timeout_s = ts_drive_entry_timeout(list(timeout_s = timeout_s)))
   invisible(TRUE)
 }
 
@@ -1391,7 +1406,7 @@ ts_drive_open_panel <- function(session, panel) {
 #' @param effects Callback invoked by the poller to bump one button token:
 #'   `effects(input_id)` -> TRUE when a bound token was incremented.
 #' @return list(status, errors, warnings, active_module)
-ts_drive_apply <- function(session, input, scn, effects = NULL) {
+ts_drive_apply <- function(session, input, scn, effects = NULL, owner_token = NULL) {
   warnings <- character(0)
   errors   <- character(0)
   action   <- scn$action
@@ -1405,6 +1420,27 @@ ts_drive_apply <- function(session, input, scn, effects = NULL) {
   if (identical(action, "snapshot")) {
     return(list(status = "done", errors = character(0), warnings = warnings,
                 active_module = module, nav = NULL))
+  }
+
+  if (identical(module, "spatial_pipeline") && identical(action, "set_inputs")) {
+    return(list(
+      status = "invalid",
+      errors = "module 'spatial_pipeline' does not accept set_inputs",
+      warnings = warnings, active_module = module, nav = NULL
+    ))
+  }
+
+  # Same rule, same reason, for the SC auto-pipeline, SC annotation, and SC
+  # marker actions: their inputs are FROZEN, DECLARED sets, and an injected input
+  # could not be honoured without silently changing the action boundary.
+  if (identical(action, "set_inputs") &&
+      module %in% c(TS_DRIVE_SC_MODULE, TS_DRIVE_SC_ANNOTATION_MODULE,
+                    TS_DRIVE_SC_MARKERS_MODULE)) {
+    return(list(
+      status = "invalid",
+      errors = sprintf("module '%s' does not accept set_inputs", module),
+      warnings = warnings, active_module = module, nav = NULL
+    ))
   }
 
   # The human must SEE the target tab (spec §2.3: the same httpuv session).
@@ -1430,9 +1466,21 @@ ts_drive_apply <- function(session, input, scn, effects = NULL) {
       bulk_filter   = "bulk-filter-run_filter_norm",
       bulk_de       = "bulk-de-run_de",
       bulk_pathways = "bulk-pathways-run_pathway",
+      spatial_pipeline = "spatial-pipeline-btn_run_all",
+      sc_pipeline   = TS_DRIVE_SC_BUTTON,
+      sc_annotation = TS_DRIVE_SC_ANNOTATION_BUTTON,
+      sc_markers    = TS_DRIVE_SC_MARKERS_BUTTON,
       NULL)
     if (is.null(btn) || !btn %in% TS_DRIVE_BUTTONS) {
       errors <- c(errors, sprintf("module '%s' has no bound button for run_pipeline", module))
+      return(list(status = "invalid", errors = errors, warnings = warnings,
+                  active_module = module, nav = nav))
+    }
+    if (!identical(ts_drive_button_module(btn), module)) {
+      errors <- c(errors, sprintf(
+        "button '%s' belongs to module '%s', not '%s'", btn,
+        ts_drive_button_module(btn), module
+      ))
       return(list(status = "invalid", errors = errors, warnings = warnings,
                   active_module = module, nav = nav))
     }
@@ -1492,7 +1540,11 @@ ts_drive_apply <- function(session, input, scn, effects = NULL) {
     # polling — and it is ALSO the proof of life while the synchronous job
     # blocks the event loop and the heartbeat stalls.
     if (isTRUE(ts_drive_entry_long(entry))) {
-      ts_drive_job_begin(scn$seq, module, action, btn)
+      ts_drive_job_begin(
+        scn$seq, module, action, btn,
+        owner_token = owner_token,
+        timeout_s = ts_drive_entry_timeout(entry)
+      )
       return(list(status = "running", errors = character(0), warnings = warnings,
                   active_module = module, nav = nav))
     }
@@ -1603,6 +1655,46 @@ ts_drive_tokens_for <- function(module, effects) {
 #' @param target_tab Optional value of `bulk-main_tabs` requested by `expect`.
 #' @return list(top = "tab_bulk", tab = <value-or-NULL>, panel = <value-or-NULL>)
 ts_drive_nav_plan <- function(module, target_tab = NULL) {
+  if (identical(module, "spatial_pipeline")) {
+    return(list(
+      top = TS_DRIVE_SPATIAL_TOP_TAB,
+      tab = TS_DRIVE_SPATIAL_TAB,
+      panel = TS_DRIVE_SPATIAL_PANELS,
+      tab_id = TS_DRIVE_SPATIAL_TABS_ID,
+      accordion_id = TS_DRIVE_SPATIAL_ACCORDION_ID
+    ))
+  }
+  if (identical(module, TS_DRIVE_SC_MARKERS_MODULE)) {
+    return(list(
+      top = TS_DRIVE_SC_MARKERS_TOP_TAB,
+      tab = NULL,
+      panel = TS_DRIVE_SC_MARKERS_PANELS,
+      tab_id = NULL,
+      accordion_id = TS_DRIVE_SC_MARKERS_ACCORDION_IDS
+    ))
+  }
+  if (identical(module, TS_DRIVE_SC_ANNOTATION_MODULE)) {
+    return(list(
+      top = TS_DRIVE_SC_ANNOTATION_TOP_TAB,
+      tab = NULL,
+      panel = TS_DRIVE_SC_ANNOTATION_PANELS,
+      tab_id = NULL,
+      accordion_id = TS_DRIVE_SC_ANNOTATION_ACCORDION_IDS
+    ))
+  }
+  # No inner navset on the SC side, so `tab`/`tab_id` stay NULL: the panel lives
+  # in a doubly nested accordion and BOTH ids must be opened. A scalar would open
+  # the outer section and leave the auto-pipeline panel folded away, because
+  # `acc_prep` opens on "1_pipeline" (mod_sc.R:41).
+  if (identical(module, TS_DRIVE_SC_MODULE)) {
+    return(list(
+      top = TS_DRIVE_SC_TOP_TAB,
+      tab = NULL,
+      panel = TS_DRIVE_SC_PANELS,
+      tab_id = NULL,
+      accordion_id = TS_DRIVE_SC_ACCORDION_IDS
+    ))
+  }
   panel <- switch(module,
     bulk_de       = "panel_de",
     bulk_pathways = "panel_pathways",
@@ -1611,7 +1703,9 @@ ts_drive_nav_plan <- function(module, target_tab = NULL) {
   list(
     top   = "tab_bulk",
     tab   = if (!is.null(target_tab) && target_tab %in% TS_DRIVE_BULK_TABS) target_tab else NULL,
-    panel = panel
+    panel = panel,
+    tab_id = TS_DRIVE_BULK_TABS_ID,
+    accordion_id = TS_DRIVE_BULK_ACCORDION_ID
   )
 }
 
@@ -1630,10 +1724,19 @@ ts_drive_nav_plan <- function(module, target_tab = NULL) {
 #' @return list(consumed, last_seq, armed, error, nav)
 ts_drive_tick <- function(session, input, global_data, token, last_seq = 0,
                           armed = FALSE, effects = NULL) {
-  out <- list(consumed = FALSE, last_seq = last_seq, armed = armed,
-              error = NULL, nav = NULL, status = NULL, module = NULL,
-              action = NULL, elapsed_s = NULL)
+  out <- list(consumed = FALSE, new_scenario = FALSE, published = FALSE,
+              deferred = FALSE, selected = TRUE, last_seq = last_seq,
+              armed = armed, error = NULL, nav = NULL, status = NULL,
+              job_status = NULL, module = NULL, action = NULL, elapsed_s = NULL)
+  selected <- .ts_drive_state$selected_token
+  if (!is.null(selected) &&
+      !identical(as.character(selected), as.character(token))) {
+    out$selected <- FALSE
+    out$armed <- FALSE
+    return(out)
+  }
   out$armed <- tryCatch(ts_drive_arm_state(token)$armed, error = function(e) FALSE)
+  ts_drive_job_expire()
 
   # ── A job that FINISHED outranks every other concern this beat ────────────
   # Resolved BEFORE the arm gate and before `scenario.json` is even read, and
@@ -1652,24 +1755,39 @@ ts_drive_tick <- function(session, input, global_data, token, last_seq = 0,
   pend <- ts_drive_job_pending()
   if (!is.null(pend)) {
     job <- ts_drive_job_state()
+    wire_status <- pend$wire_status %||% pend$status
+    errors <- if (identical(wire_status, "error")) {
+      pend$error %||% "the job failed"
+    } else {
+      character(0)
+    }
     wrote <- ts_drive_write_result(
-      job$seq, pend$status, job$module, out$armed,
-      errors   = if (identical(pend$status, "error")) pend$error else character(0),
+      job$seq, wire_status, job$module, out$armed,
+      errors   = errors,
       snapshot = ts_drive_snapshot(global_data)
     )
     if (isTRUE(attr(wrote, "written"))) {
       message(sprintf("[drive] job seq=%s module=%s finished status=%s elapsed=%.1fs",
                       job$seq, job$module, pend$status, pend$elapsed_s))
       ts_drive_job_clear()
-      out$consumed  <- TRUE
-      out$status    <- pend$status
-      out$module    <- job$module
-      out$action    <- job$action
-      out$elapsed_s <- pend$elapsed_s
+      out$consumed   <- TRUE
+      out$published  <- TRUE
+      out$last_seq   <- job$seq
+      out$status     <- wire_status
+      out$job_status <- pend$status
+      out$error      <- if (identical(wire_status, "error")) errors else NULL
+      out$module     <- job$module
+      out$action     <- job$action
+      out$elapsed_s  <- pend$elapsed_s
     } else {
       message(sprintf("[drive] terminal write for seq=%s FAILED — retrying next beat",
                       job$seq))
     }
+    return(out)
+  }
+
+  if (ts_drive_job_busy()) {
+    out$deferred <- TRUE
     return(out)
   }
 
@@ -1697,6 +1815,10 @@ ts_drive_tick <- function(session, input, global_data, token, last_seq = 0,
   # into one and a corrupted scenario.json is invisible.
   if (is.null(scn_raw) && !file.exists(ts_drive_path("scenario.json"))) return(out)
 
+  raw_seq_value <- if (is.list(scn_raw)) scn_raw$seq else NULL
+  raw_seq <- suppressWarnings(as.numeric(raw_seq_value %||% NA_real_))
+  if (!is.na(raw_seq) && isTRUE(last_seq > 0) && raw_seq == last_seq) return(out)
+
   v <- ts_drive_validate_scenario(scn_raw, token, last_seq)
 
   if (identical(v$status, "invalid")) {
@@ -1705,6 +1827,7 @@ ts_drive_tick <- function(session, input, global_data, token, last_seq = 0,
                           errors = v$errors, warnings = v$warnings,
                           snapshot = ts_drive_snapshot(global_data))
     out$consumed <- TRUE
+    out$new_scenario <- TRUE
     # `invalid` is CONSUMED but deliberately NOT reported as an error badge:
     # "the payload was refused, nothing ran" is not an app failure, and a red
     # badge there would teach the operator to ignore red.
@@ -1719,7 +1842,8 @@ ts_drive_tick <- function(session, input, global_data, token, last_seq = 0,
   # ONE scenario, ONE module (spec S7). The 32 GB budget forbids combining
   # sc + spatial + bulk, and the v1 allowlist is bulk-only anyway.
   t0  <- Sys.time()
-  res <- ts_drive_apply(session, input, scn, effects = effects)
+  res <- ts_drive_apply(session, input, scn, effects = effects,
+                        owner_token = token)
 
   message(sprintf("[drive] seq=%s module=%s action=%s status=%s preserve_data=%s",
                   scn$seq, scn$module, scn$action, res$status, preserve))
@@ -1733,11 +1857,13 @@ ts_drive_tick <- function(session, input, global_data, token, last_seq = 0,
   )
 
   out$consumed <- TRUE
+  out$new_scenario <- TRUE
   out$last_seq <- scn$seq
   out$nav      <- res$nav
   # Badge-facing fields. They describe what HAPPENED, and are the only things
   # app.R may put on screen (module/action are short, static-ish labels).
   out$status    <- res$status
+  out$job_status <- if (identical(res$status, "running")) "running" else NULL
   out$module    <- res$active_module %||% scn$module
   out$action    <- scn$action
   out$elapsed_s <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
@@ -1828,11 +1954,6 @@ ts_drive_badge_visible <- function(enabled, interactive, selected, armed, state)
 # maps it — but NOTHING ever produced it. The badge was built for this signal
 # and the producer was missing; that is the whole of what "badge-only" meant.
 #
-# THE CONTRACT AN AGENT MAY NOW RELY ON:
-#
-#   accepted -> running -> done/error     (contract A, a job DECLARED long)
-#   accepted -> invalid                   (contract B, a job already in flight)
-#
 # `running` is written to `result.json` at DISPATCH, so it travels the wire and
 # is not merely a colour on screen. The terminal status is written when the
 # MODULE DECLARES the job over — a measurement by the only side that knows,
@@ -1870,18 +1991,96 @@ ts_drive_job_pending <- function() {
   .ts_drive_state$job$pending
 }
 
+ts_drive_next_job_id <- function() {
+  .ts_drive_state$job_serial <- .ts_drive_state$job_serial + 1L
+  sprintf("job-%08d-%s", .ts_drive_state$job_serial, ts_drive_new_token())
+}
+
+ts_drive_job_result_status <- function(status) {
+  if (status %in% c("timeout", "session_lost")) "error" else status
+}
+
+ts_drive_job_view <- function(job) {
+  if (is.null(job)) return(NULL)
+  pending <- job$pending
+  list(
+    job_id     = as.character(job$job_id),
+    seq        = suppressWarnings(as.numeric(job$seq)),
+    module     = as.character(job$module),
+    action     = as.character(job$action),
+    button     = as.character(job$button),
+    status     = as.character(job$status),
+    started_at = as.character(job$started_at),
+    ended_at   = if (is.null(pending)) NULL else as.character(pending$ended_at),
+    elapsed_s  = if (is.null(pending)) NULL else as.numeric(pending$elapsed_s),
+    timeout_s  = if (is.null(job$timeout_s)) NULL else as.numeric(job$timeout_s)
+  )
+}
+
+ts_drive_job_owner_matches <- function(job, owner_token = NULL) {
+  if (is.null(job$owner_token)) return(TRUE)
+  candidate <- owner_token
+  if (is.null(candidate)) candidate <- .ts_drive_state$selected_token
+  if (is.null(candidate)) return(TRUE)
+  identical(as.character(candidate), as.character(job$owner_token))
+}
+
+ts_drive_job_set_pending <- function(status, error = NULL) {
+  job <- .ts_drive_state$job
+  if (is.null(job) || !identical(job$status, "running") ||
+      !is.null(job$pending)) {
+    return(invisible(FALSE))
+  }
+  status <- as.character(status)
+  valid <- c("done", "error", "invalid", "timeout", "session_lost")
+  if (length(status) != 1L || is.na(status) || !status %in% valid) {
+    return(invisible(FALSE))
+  }
+  if (is.null(error) && status %in% c("error", "timeout", "session_lost")) {
+    error <- if (identical(status, "timeout")) {
+      sprintf("the job exceeded its declared timeout of %s seconds",
+              format(job$timeout_s %||% 0, trim = TRUE))
+    } else if (identical(status, "session_lost")) {
+      "the session that owned this job ended"
+    } else {
+      "the job failed"
+    }
+  }
+  .ts_drive_state$job$status <- status
+  .ts_drive_state$job$pending <- list(
+    status      = status,
+    wire_status = ts_drive_job_result_status(status),
+    error       = if (identical(ts_drive_job_result_status(status), "error")) {
+      as.character(error)
+    } else {
+      NULL
+    },
+    ended_at    = ts_drive_now_iso(),
+    elapsed_s   = as.numeric(Sys.time()) - job$started
+  )
+  invisible(TRUE)
+}
+
 #' Record a job the tick has just DISPATCHED.
 #'
 #' @param seq Scenario sequence the job answers for.
 #' @param module,action,button Where the job was fired from.
-ts_drive_job_begin <- function(seq, module, action, button) {
+ts_drive_job_begin <- function(seq, module, action, button,
+                               owner_token = NULL, timeout_s = NULL) {
+  if (ts_drive_job_busy()) return(invisible(FALSE))
+  timeout <- ts_drive_entry_timeout(list(timeout_s = timeout_s))
+  owner <- owner_token %||% .ts_drive_state$selected_token
   .ts_drive_state$job <- list(
+    job_id     = ts_drive_next_job_id(),
     seq        = suppressWarnings(as.numeric(seq)),
     module     = as.character(module),
     action     = as.character(action),
     button     = as.character(button),
+    owner_token = if (is.null(owner)) NULL else as.character(owner),
+    status     = "running",
     started_at = ts_drive_now_iso(),
     started    = as.numeric(Sys.time()),
+    timeout_s  = timeout,
     pending    = NULL
   )
   invisible(.ts_drive_state$job)
@@ -1899,30 +2098,44 @@ ts_drive_job_begin <- function(seq, module, action, button) {
 #' observer, must not be able to close someone else's job.
 #'
 #' @param button The bound button id the job was dispatched from.
-#' @param status Terminal status. Must be one of `TS_DRIVE_STATUSES` AND
-#'   terminal by `ts_drive_status_terminal()` — `applied`/`running` are refused,
-#'   because a module declaring its own job "still running" would leave an agent
-#'   polling for a completion that will never be written.
-#' @param error Optional message, carried only for `error`.
 #' @return `TRUE` when the declaration was accepted.
-ts_drive_job_finish <- function(button, status = "done", error = NULL) {
+ts_drive_job_finish <- function(button, status = "done", error = NULL,
+                                job_id = NULL, owner_token = NULL) {
   job <- .ts_drive_state$job
-  if (is.null(job)) return(invisible(FALSE))
-  if (!identical(as.character(button), job$button)) return(invisible(FALSE))
-  st <- as.character(status)
-  if (length(st) != 1L || is.na(st) || !st %in% TS_DRIVE_STATUSES) {
+  if (is.null(job) || !identical(job$status, "running") ||
+      !is.null(job$pending)) {
     return(invisible(FALSE))
   }
-  if (!isTRUE(ts_drive_status_terminal(st))) return(invisible(FALSE))
-  .ts_drive_state$job$pending <- list(
-    status    = st,
-    error     = if (identical(st, "error")) {
-      as.character(error %||% "the job failed")
-    } else NULL,
-    ended_at  = ts_drive_now_iso(),
-    elapsed_s = as.numeric(Sys.time()) - job$started
-  )
-  invisible(TRUE)
+  if (!identical(as.character(button), job$button)) return(invisible(FALSE))
+  if (!is.null(job_id) && !identical(as.character(job_id), job$job_id)) {
+    return(invisible(FALSE))
+  }
+  if (!ts_drive_job_owner_matches(job, owner_token)) return(invisible(FALSE))
+  ts_drive_job_set_pending(status, error)
+}
+
+ts_drive_job_expire <- function(now = Sys.time()) {
+  job <- .ts_drive_state$job
+  if (is.null(job) || !identical(job$status, "running") ||
+      is.null(job$timeout_s)) {
+    return(invisible(FALSE))
+  }
+  if ((as.numeric(now) - job$started) < job$timeout_s) {
+    return(invisible(FALSE))
+  }
+  ts_drive_job_set_pending("timeout")
+}
+
+ts_drive_job_session_lost <- function(owner_token = NULL) {
+  job <- .ts_drive_state$job
+  if (is.null(job) || !identical(job$status, "running")) {
+    return(invisible(FALSE))
+  }
+  if (!is.null(owner_token) && !is.null(job$owner_token) &&
+      !identical(as.character(owner_token), as.character(job$owner_token))) {
+    return(invisible(FALSE))
+  }
+  ts_drive_job_set_pending("session_lost")
 }
 
 #' Forget the in-flight job. Called once its terminal status is ON THE WIRE.
@@ -1960,6 +2173,12 @@ ts_drive_attach <- function(session, input, poll_ms = 800) {
   dir.create(ts_drive_path(), showWarnings = FALSE, recursive = TRUE)
 
   token <- ts_drive_new_token()
+  prior_job <- ts_drive_job_state()
+  if (!is.null(prior_job$owner_token) &&
+      !identical(as.character(prior_job$owner_token), token)) {
+    ts_drive_job_session_lost(prior_job$owner_token)
+  }
+  .ts_drive_state$selected_token <- token
 
   # `started_at` is fixed for the whole session and `hb_n` starts at 0; both are
   # handed to every later rewrite so neither can drift.
@@ -1982,7 +2201,18 @@ ts_drive_attach <- function(session, input, poll_ms = 800) {
                   token, ts_drive_root(), TS_DRIVE_PROTOCOL))
 
   session$onSessionEnded(function() {
-    # A dead session must not leave a handshake the agent would trust.
+    lost <- ts_drive_job_session_lost(token)
+    if (identical(.ts_drive_state$selected_token, token)) {
+      .ts_drive_state$selected_token <- NULL
+    }
+    if (isTRUE(lost) || !is.null(ts_drive_job_pending())) {
+      try(ts_drive_tick(
+        session, input, NULL, token,
+        last_seq = cursor$last_seq,
+        armed = cursor$armed,
+        effects = NULL
+      ), silent = TRUE)
+    }
     try(ts_drive_invalidate_ready(token), silent = TRUE)
   })
 
@@ -2020,9 +2250,9 @@ ts_drive_attach <- function(session, input, poll_ms = 800) {
       tick <- ts_drive_tick(session, input, global_data, token,
                             last_seq = cursor$last_seq, armed = cursor$armed,
                             effects = effects)
+      if (isFALSE(tick$selected)) return(tick)
       if (!is.null(tick$error)) {
         message(sprintf("[drive] tick error: %s", tick$error))
-        return(tick)
       }
       if (isTRUE(tick$consumed) && !is.na(tick$last_seq)) {
         cursor$last_seq <- tick$last_seq
@@ -2054,10 +2284,12 @@ ts_drive_attach <- function(session, input, poll_ms = 800) {
       if (isTRUE(tick$consumed)) {
         seq_now <- if (!is.na(tick$last_seq)) tick$last_seq else cursor$last_seq
         st <- as.character(tick$status %||% "applied")
-        cursor$events[[length(cursor$events) + 1L]] <-
-          list(event = "accepted", ack_seq = seq_now,
-               module = tick$module %||% "", action = tick$action %||% "",
-               status = st)
+        if (isTRUE(tick$new_scenario)) {
+          cursor$events[[length(cursor$events) + 1L]] <-
+            list(event = "accepted", ack_seq = seq_now,
+                 module = tick$module %||% "", action = tick$action %||% "",
+                 status = st)
+        }
         if (identical(st, "error")) {
           cursor$events[[length(cursor$events) + 1L]] <-
             list(event = "error", ack_seq = seq_now, error = tick$error %||% "")
@@ -2175,16 +2407,24 @@ ts_drive_perform_nav <- function(session, plan) {
 
   if (!is.null(plan$tab)) {
     ok <- tryCatch({
-      bslib::nav_select(id = TS_DRIVE_BULK_TABS_ID, selected = plan$tab, session = session)
+      bslib::nav_select(id = plan$tab_id %||% TS_DRIVE_BULK_TABS_ID,
+                        selected = plan$tab, session = session)
       TRUE
     }, error = function(e) ok)
   }
   if (!is.null(plan$panel)) {
-    tryCatch(
-      bslib::accordion_panel_open(TS_DRIVE_BULK_ACCORDION_ID, values = plan$panel,
-                                  session = session),
-      error = function(e) NULL
-    )
+    # `accordion_id` may be a VECTOR: the SC panel lives in a doubly nested
+    # accordion, and opening only the outer one leaves the panel folded away.
+    # Each id is opened independently and every failure is swallowed — the
+    # navigation is there so a HUMAN can watch the run (spec 2.3), and a drive
+    # click is dispatched through a counter, not through the DOM, so a cosmetic
+    # failure here can never turn a completed job into a failed one.
+    for (aid in plan$accordion_id %||% TS_DRIVE_BULK_ACCORDION_ID) {
+      tryCatch(
+        bslib::accordion_panel_open(aid, values = plan$panel, session = session),
+        error = function(e) NULL
+      )
+    }
   }
   invisible(ok)
 }

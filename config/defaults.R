@@ -9,6 +9,18 @@
 TS_MIRAI_TIMEOUT_MS        <- 20 * 60 * 1000L   # 20 min generic task ceiling
 TS_RCTD_TIMEOUT_MS         <- 40 * 60 * 1000L   # RCTD-specific ceiling
 TS_LABEL_TRANSFER_TIMEOUT  <- 45 * 60 * 1000L   # Label Transfer ceiling
+# Plafond du job DRIVE `sc-pipeline-run_auto_pipeline` (4 h). Le pipeline SC est
+# PLUS LOURD que le Spatial : la le pipeline enchaîne Normalisation -> PCA ->
+# FindNeighbors -> FindClustering -> UMAP -> t-SNE, plus SingleR / FindAllMarkers
+# / ORA / correlation / pseudotemps selon les options, et les gardes
+# .AUTO_TSNE_MAX_CELLS (30 000) et .MAX_TRAJECTORY_CELLS (100 000) ne
+# plafonnent QUE les etapes optionnelles : normalisation, PCA, clustering et UMAP
+# ne sont pas bornes. D'ou une valeur DECLAREE, distincte du plafond Spatial, et
+# non une reutilisation de TS_MIRAI_TIMEOUT_MS (dimensionne pour des taches
+# spatiales isolees, cf. le meme raisonnement que le plafond Milo plus bas).
+TS_SC_AUTO_PIPELINE_TIMEOUT_S <- 4 * 60 * 60
+TS_SC_ANNOTATION_TIMEOUT_S <- TS_SC_AUTO_PIPELINE_TIMEOUT_S
+TS_SC_MARKERS_TIMEOUT_S <- TS_SC_AUTO_PIPELINE_TIMEOUT_S
 TS_MIRAI_N_DAEMONS         <- 6L
 
 # --- Single-Cell sketch presets (cells) ------------------------------------

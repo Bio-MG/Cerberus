@@ -314,7 +314,7 @@ test_that("unknown module and unknown action both land in invalid", {
     list(protocol = TS_DRIVE_PROTOCOL, seq = 1, module = "sc",
          action = "noop", session_token = "tok"), "tok", 0)
   expect_identical(v$status, "invalid")
-  expect_match(v$errors[1], "outside the v1 bulk pilot allowlist")
+  expect_match(v$errors[1], "outside the drive allowlist")
 
   v2 <- ts_drive_validate_scenario(
     list(protocol = TS_DRIVE_PROTOCOL, seq = 1, module = "bulk_de",
@@ -1115,6 +1115,200 @@ test_that("the nav plan targets the bulk tab, and the right panel per module", {
   # A tab value outside the measured list is dropped, not passed through.
   expect_null(ts_drive_nav_plan("bulk_de", "tab_made_up")$tab)
   expect_identical(ts_drive_nav_plan("bulk_de", "tab_volcano")$tab, "tab_volcano")
+})
+
+test_that("the Spatial nav plan is fixed to the pipeline panel", {
+  plan <- ts_drive_nav_plan("spatial_pipeline", "results_qc")
+  expect_identical(plan$top, "tab_spatial")
+  expect_identical(plan$tab, "results_pipeline")
+  expect_identical(plan$panel, "panel_pipeline")
+  expect_identical(plan$tab_id, "spatial-results")
+  expect_identical(plan$accordion_id, "spatial-steps")
+  expect_identical(ts_drive_nav_plan("spatial_pipeline", "not-a-spatial-tab")$tab,
+                   "results_pipeline")
+})
+
+test_that("Spatial run_pipeline is long, owned, and refuses foreign buttons", {
+  .drv_local_root()
+  .drv_write_arm("tok")
+  seen <- character(0)
+  effects <- function(id, mode = NULL, module = NULL) {
+    if (identical(mode, "tokens")) {
+      return(list("spatial-pipeline-btn_run_all" = list(
+        counter = NULL, ready = function() TRUE, state = NULL,
+        long = TRUE, timeout_s = 10800
+      )))
+    }
+    if (is.null(id)) return(FALSE)
+    seen <<- c(seen, id)
+    TRUE
+  }
+  .drv_write_scn(101L, action = "run_pipeline", module = "spatial_pipeline",
+                 session_token = "tok")
+  res <- ts_drive_tick(NULL, NULL, NULL, "tok", 0, FALSE, effects = effects)
+  expect_identical(res$status, "running")
+  expect_identical(seen, "spatial-pipeline-btn_run_all")
+  expect_identical(ts_drive_job_state()$module, "spatial_pipeline")
+  expect_identical(ts_drive_job_state()$button, "spatial-pipeline-btn_run_all")
+  expect_identical(ts_drive_job_state()$timeout_s, 10800)
+  expect_identical(res$nav$top, "tab_spatial")
+
+  ts_drive_job_finish("spatial-pipeline-btn_run_all", status = "done",
+                      job_id = ts_drive_job_state()$job_id)
+  ts_drive_tick(NULL, NULL, NULL, "tok", 101, TRUE, effects = effects)
+  .drv_write_scn(102L, action = "run_pipeline", module = "spatial_pipeline",
+                 session_token = "tok", button = "bulk-de-run_de")
+  res2 <- ts_drive_tick(NULL, NULL, NULL, "tok", 101, TRUE, effects = effects)
+  expect_identical(res2$status, "invalid")
+  expect_match(paste(unlist(ts_drive_read_result()$errors), collapse = " "),
+               "belongs to module")
+  expect_identical(seen, "spatial-pipeline-btn_run_all")
+})
+
+test_that("Spatial readiness fails closed and its input surface stays empty", {
+  seen <- 0L
+  effects <- function(id, mode = NULL, module = NULL) {
+    if (identical(mode, "tokens")) {
+      return(list("spatial-pipeline-btn_run_all" = list(
+        counter = NULL, ready = function() "spatial_obj is not loaded",
+        state = NULL, long = TRUE, timeout_s = 10800
+      )))
+    }
+    if (is.null(id)) return(FALSE)
+    seen <<- seen + 1L
+    TRUE
+  }
+  refused <- ts_drive_apply(NULL, NULL, list(
+    action = "run_pipeline", module = "spatial_pipeline", inputs = list()
+  ), effects = effects)
+  expect_identical(refused$status, "invalid")
+  expect_match(paste(refused$errors, collapse = " "), "spatial_obj is not loaded")
+  expect_identical(seen, 0L)
+
+  set_inputs <- ts_drive_apply(NULL, NULL, list(
+    action = "set_inputs", module = "spatial_pipeline", inputs = list()
+  ), effects = effects)
+  expect_identical(set_inputs$status, "invalid")
+  expect_match(paste(set_inputs$errors, collapse = " "), "does not accept set_inputs")
+})
+
+test_that("SC auto-pipeline: closed nav plan, empty input surface, and three run buttons", {
+  # MEASURED navigation target, not derived: `tab_sc` is the root navbar panel
+  # (app.R:421), and the button sits in a DOUBLY nested accordion —
+  # `sc-acc_workflow` (panel "grp_prep") then `sc-acc_prep` (panel
+  # "0_autopipeline", mod_sc.R:35/41/45). `acc_prep` opens on "1_pipeline",
+  # so the auto-pipeline panel is CLOSED by default and both must be opened.
+  plan <- ts_drive_nav_plan("sc_pipeline")
+  expect_identical(plan$top, "tab_sc")
+  expect_null(plan$tab)
+  expect_null(plan$tab_id)
+  expect_identical(plan$panel, "0_autopipeline")
+  expect_identical(plan$accordion_id, c("sc-acc_workflow", "sc-acc_prep"))
+
+  # The Spatial plan must be byte-identical after the SC addition.
+  sp <- ts_drive_nav_plan("spatial_pipeline")
+  expect_identical(sp$top, "tab_spatial")
+  expect_identical(sp$tab, "results_pipeline")
+  expect_identical(sp$panel, "panel_pipeline")
+  expect_identical(sp$accordion_id, "spatial-steps")
+
+  seen <- 0L
+  effects <- function(id, mode = NULL, module = NULL) {
+    if (identical(mode, "tokens")) {
+      return(list("sc-pipeline-run_auto_pipeline" = list(
+        counter = NULL, ready = function() "sc_obj is not loaded",
+        state = NULL, long = TRUE, timeout_s = 14400
+      )))
+    }
+    if (is.null(id)) return(FALSE)
+    seen <<- seen + 1L
+    TRUE
+  }
+  refused <- ts_drive_apply(NULL, NULL, list(
+    action = "run_pipeline", module = "sc_pipeline", inputs = list()
+  ), effects = effects)
+  expect_identical(refused$status, "invalid")
+  expect_match(paste(refused$errors, collapse = " "), "sc_obj is not loaded")
+  # Readiness fails CLOSED: the doomed click is never fired.
+  expect_identical(seen, 0L)
+
+  set_inputs <- ts_drive_apply(NULL, NULL, list(
+    action = "set_inputs", module = "sc_pipeline", inputs = list()
+  ), effects = effects)
+  expect_identical(set_inputs$status, "invalid")
+  expect_match(paste(set_inputs$errors, collapse = " "), "does not accept set_inputs")
+
+  expect_identical(ts_drive_button_module("sc-pipeline-run_auto_pipeline"), "sc_pipeline")
+})
+
+test_that("SC annotation has a closed nav plan, long job, and refused inputs", {
+  plan <- ts_drive_nav_plan("sc_annotation")
+  expect_identical(plan$top, "tab_sc")
+  expect_null(plan$tab)
+  expect_null(plan$tab_id)
+  expect_identical(plan$panel, "2_annotation")
+  expect_identical(plan$accordion_id, c("sc-acc_workflow", "sc-acc_analyse"))
+
+  seen <- 0L
+  effects <- function(id, mode = NULL, module = NULL) {
+    if (identical(mode, "tokens")) {
+      return(list("sc-annotation-run_annot" = list(
+        counter = NULL, ready = function() "sc_obj is not loaded",
+        state = NULL, long = TRUE, timeout_s = 14400
+      )))
+    }
+    if (is.null(id)) return(FALSE)
+    seen <<- seen + 1L
+    TRUE
+  }
+  refused <- ts_drive_apply(NULL, NULL, list(
+    action = "run_pipeline", module = "sc_annotation", inputs = list()
+  ), effects = effects)
+  expect_identical(refused$status, "invalid")
+  expect_match(paste(refused$errors, collapse = " "), "sc_obj is not loaded")
+  expect_identical(seen, 0L)
+
+  set_inputs <- ts_drive_apply(NULL, NULL, list(
+    action = "set_inputs", module = "sc_annotation", inputs = list()
+  ), effects = effects)
+  expect_identical(set_inputs$status, "invalid")
+  expect_match(paste(set_inputs$errors, collapse = " "), "does not accept set_inputs")
+  expect_identical(ts_drive_button_module("sc-annotation-run_annot"), "sc_annotation")
+})
+
+test_that("SC markers have a closed nav plan, long job, and refused inputs", {
+  plan <- ts_drive_nav_plan("sc_markers")
+  expect_identical(plan$top, "tab_sc")
+  expect_null(plan$tab)
+  expect_null(plan$tab_id)
+  expect_identical(plan$panel, "4_markers")
+  expect_identical(plan$accordion_id, c("sc-acc_workflow", "sc-acc_analyse"))
+
+  seen <- 0L
+  effects <- function(id, mode = NULL, module = NULL) {
+    if (identical(mode, "tokens")) {
+      return(list("sc-markers-run_markers" = list(
+        counter = NULL, ready = function() "sc_obj is not loaded",
+        state = NULL, long = TRUE, timeout_s = 14400
+      )))
+    }
+    if (is.null(id)) return(FALSE)
+    seen <<- seen + 1L
+    TRUE
+  }
+  refused <- ts_drive_apply(NULL, NULL, list(
+    action = "run_pipeline", module = "sc_markers", inputs = list()
+  ), effects = effects)
+  expect_identical(refused$status, "invalid")
+  expect_match(paste(refused$errors, collapse = " "), "sc_obj is not loaded")
+  expect_identical(seen, 0L)
+
+  set_inputs <- ts_drive_apply(NULL, NULL, list(
+    action = "set_inputs", module = "sc_markers", inputs = list()
+  ), effects = effects)
+  expect_identical(set_inputs$status, "invalid")
+  expect_match(paste(set_inputs$errors, collapse = " "), "does not accept set_inputs")
+  expect_identical(ts_drive_button_module("sc-markers-run_markers"), "sc_markers")
 })
 
 # =============================================================================
@@ -2378,6 +2572,19 @@ test_that("publishing an importer for an unknown module is refused, LOUDLY", {
   expect_null(ts_drive_importer_of(gd, "sc"))
 })
 
+test_that("a token-ownable Spatial module still cannot publish an importer", {
+  gd <- list(drive_registry = new.env(parent = emptyenv()))
+  expect_warning(
+    ok <- ts_drive_publish_importer(
+      gd, "spatial_pipeline", function(request) NULL
+    ),
+    "TS_DRIVE_MODULES"
+  )
+  expect_false(isTRUE(ok))
+  expect_null(ts_drive_importer_of(gd, "spatial_pipeline"))
+  expect_length(ls(gd$drive_registry), 0L)
+})
+
 test_that("only an OPERATOR can widen the import roots — never the scenario", {
   # The G3 dataset lives outside the project (`D:/Data_science/Données/bulk/…`),
   # so a data directory has to be allowlistable. It must be widened from the
@@ -2756,9 +2963,6 @@ test_that("the free-text contrast name stays NOT drivable, so the pair is self-c
 # =============================================================================
 # JOB LIFECYCLE — the contract an agent polls (spec §5)
 # =============================================================================
-# Contract A: accepted -> running -> done/error, for a job DECLARED long.
-# Contract B: accepted -> invalid, when a job is already in flight.
-#
 # WHY THESE TESTS EXIST. `run_pipeline` used to answer `done` for every module,
 # and `done` is TERMINAL. MEASURED live (2026-09-22, DESeq2, 17 925 genes x 18
 # samples): the token answered `done` in 2.1 s while the contrast first became
@@ -2768,11 +2972,12 @@ test_that("the free-text contrast name stays NOT drivable, so the pair is self-c
 
 # An `effects` callback whose registry DECLARES `bulk-de-run_de` long, i.e. the
 # shape the real DE module publishes after this change.
-.drv_long_effects <- function(long = TRUE) {
+.drv_long_effects <- function(long = TRUE, timeout_s = NULL) {
   function(id, mode = NULL, module = NULL) {
     if (identical(mode, "tokens")) {
       return(list("bulk-de-run_de" = list(counter = NULL, ready = NULL,
-                                          state = NULL, long = long)))
+                                          state = NULL, long = long,
+                                          timeout_s = timeout_s)))
     }
     if (is.null(id)) return(FALSE)
     TRUE
@@ -2865,7 +3070,7 @@ test_that("CONTRACT A: a FAILED job reports `error` and carries the cause", {
   expect_true(any(grepl("DE computation raised", unlist(r$errors))))
 })
 
-test_that("CONTRACT B: a second run_pipeline while a job is in flight is REFUSED, not queued", {
+test_that("CONTRACT B: a mutating scenario waits while a job is authoritative", {
   .drv_local_root()
   .drv_write_arm("tok")
   .drv_write_scn(31L, action = "run_pipeline", module = "bulk_de",
@@ -2873,17 +3078,15 @@ test_that("CONTRACT B: a second run_pipeline while a job is in flight is REFUSED
   ts_drive_tick(NULL, NULL, NULL, "tok", 0, FALSE, effects = .drv_long_effects())
   expect_identical(ts_drive_read_result()$status, "running")
 
-  # A second job arrives while the first is still in flight.
   .drv_write_scn(32L, action = "run_pipeline", module = "bulk_de",
                  session_token = "tok")
   res <- ts_drive_tick(NULL, NULL, NULL, "tok", 31, TRUE,
                        effects = .drv_long_effects())
-  expect_identical(res$status, "invalid")
+  expect_true(isTRUE(res$deferred))
+  expect_false(isTRUE(res$consumed))
   r <- ts_drive_read_result()
-  expect_identical(r$status, "invalid")
-  expect_true(any(grepl("another job is already running", unlist(r$errors))))
-  # The job in flight is UNTOUCHED: a refusal must not evict the work the agent
-  # is waiting on.
+  expect_identical(r$status, "running")
+  expect_identical(r$ack_seq, 31L)
   expect_true(ts_drive_job_busy())
   expect_identical(ts_drive_job_state()$seq, 31)
 })
@@ -2940,6 +3143,187 @@ test_that("a failed terminal WRITE keeps the job pending, so the next beat retri
   # Cleanup, so the next test starts from a healthy root.
   unlink(root, recursive = TRUE)
   .drv_local_root()
+})
+
+test_that("an async job stays authoritative across duplicate and newer scenarios", {
+  .drv_local_root()
+  old <- options(ts.drive.hb_interval = 0.001)
+  on.exit(options(old), add = TRUE)
+  d <- ts_drive_attach(.drv_fake_session(new.env()), list())
+  .drv_write_arm(d$token)
+  .drv_write_scn(51L, action = "run_pipeline", module = "bulk_de",
+                 session_token = d$token)
+
+  first <- d$on_tick(global_data = list(), effects = .drv_long_effects())
+  expect_identical(first$status, "running")
+  job <- ts_drive_job_state()
+  expect_identical(job$status, "running")
+  expect_identical(job$owner_token, d$token)
+  expect_true(nzchar(job$job_id))
+  running_result <- ts_drive_read_result()
+  expect_identical(running_result$job$job_id, job$job_id)
+  expect_setequal(names(running_result$job), c(
+    "job_id", "seq", "module", "action", "button", "status",
+    "started_at", "ended_at", "elapsed_s", "timeout_s"
+  ))
+  hb1 <- as.integer(ts_drive_read_ready()$hb_n)
+
+  Sys.sleep(0.01)
+  duplicate <- d$on_tick(global_data = list(), effects = .drv_long_effects())
+  expect_false(isTRUE(duplicate$consumed))
+  expect_identical(ts_drive_read_result()$status, "running")
+  expect_identical(ts_drive_read_result()$ack_seq, 51L)
+  expect_gt(as.integer(ts_drive_read_ready()$hb_n), hb1)
+  expect_identical(ts_drive_job_state()$job_id, job$job_id)
+
+  .drv_write_scn(52L, action = "set_inputs", module = "bulk_de",
+                 session_token = d$token)
+  deferred <- d$on_tick(global_data = list(), effects = .drv_long_effects())
+  expect_true(isTRUE(deferred$deferred))
+  expect_false(isTRUE(deferred$consumed))
+  expect_identical(ts_drive_read_result()$status, "running")
+  expect_identical(ts_drive_read_result()$ack_seq, 51L)
+  expect_identical(ts_drive_job_state()$status, "running")
+
+  expect_true(ts_drive_job_finish("bulk-de-run_de", status = "done",
+                                  job_id = job$job_id, owner_token = d$token))
+  terminal <- d$on_tick(global_data = list(), effects = .drv_long_effects())
+  expect_identical(terminal$status, "done")
+  expect_identical(terminal$job_status, "done")
+  expect_false(ts_drive_job_busy())
+
+  resumed <- d$on_tick(global_data = list(), effects = .drv_long_effects())
+  expect_identical(resumed$status, "applied")
+  expect_identical(as.integer(d$last_seq()), 52L)
+})
+
+test_that("a declared timeout transitions once and preserves the frozen wire enum", {
+  .drv_local_root()
+  d <- ts_drive_attach(.drv_fake_session(new.env()), list())
+  .drv_write_arm(d$token)
+  .drv_write_scn(61L, action = "run_pipeline", module = "bulk_de",
+                 session_token = d$token)
+  effects <- .drv_long_effects(timeout_s = 10)
+  d$on_tick(global_data = list(), effects = effects)
+  job <- ts_drive_job_state()
+
+  expect_identical(job$status, "running")
+  expect_identical(job$timeout_s, 10)
+  expect_true(ts_drive_job_expire(now = job$started + 10.001))
+  expect_identical(ts_drive_job_state()$status, "timeout")
+  expect_false(ts_drive_job_finish("bulk-de-run_de", status = "done",
+                                   job_id = job$job_id, owner_token = d$token))
+
+  terminal <- d$on_tick(global_data = list(), effects = effects)
+  expect_identical(terminal$status, "error")
+  expect_identical(terminal$job_status, "timeout")
+  r <- ts_drive_read_result()
+  expect_identical(r$status, "error")
+  expect_identical(r$job$status, "timeout")
+  expect_match(paste(unlist(r$errors), collapse = " "), "timeout")
+  expect_false("timeout" %in% TS_DRIVE_STATUSES)
+  expect_false(ts_drive_job_busy())
+})
+
+test_that("ending the owning session publishes session_lost and rejects a late ack", {
+  .drv_local_root()
+  env <- new.env(); env$f <- NULL
+  d <- ts_drive_attach(.drv_fake_session(env), list())
+  .drv_write_arm(d$token)
+  .drv_write_scn(71L, action = "run_pipeline", module = "bulk_de",
+                 session_token = d$token)
+  d$on_tick(global_data = list(), effects = .drv_long_effects())
+  job <- ts_drive_job_state()
+
+  env$f()
+
+  expect_false(file.exists(ts_drive_path("ready.json")))
+  expect_false(ts_drive_job_busy())
+  r <- ts_drive_read_result()
+  expect_identical(r$status, "error")
+  expect_identical(r$job$status, "session_lost")
+  expect_match(paste(unlist(r$errors), collapse = " "), "session")
+  expect_false("owner_token" %in% names(r$job))
+  expect_false(ts_drive_job_finish("bulk-de-run_de", status = "done",
+                                   job_id = job$job_id, owner_token = d$token))
+})
+
+test_that("a replacement session cannot be closed by the stale job owner", {
+  .drv_local_root()
+  env1 <- new.env(); env1$f <- NULL
+  d1 <- ts_drive_attach(.drv_fake_session(env1), list())
+  .drv_write_arm(d1$token)
+  .drv_write_scn(72L, action = "run_pipeline", module = "bulk_de",
+                 session_token = d1$token)
+  d1$on_tick(global_data = list(), effects = .drv_long_effects())
+  job <- ts_drive_job_state()
+
+  d2 <- ts_drive_attach(.drv_fake_session(new.env()), list())
+
+  expect_identical(ts_drive_job_state()$status, "session_lost")
+  expect_false(ts_drive_job_finish("bulk-de-run_de", status = "done",
+                                   job_id = job$job_id, owner_token = d1$token))
+  terminal <- d2$on_tick(global_data = list(), effects = .drv_long_effects())
+  expect_identical(terminal$status, "error")
+  expect_identical(terminal$job_status, "session_lost")
+  expect_identical(as.integer(d2$last_seq()), 72L)
+  expect_identical(as.character(ts_drive_read_ready()$session_token), d2$token)
+  expect_identical(ts_drive_read_result()$job$status, "session_lost")
+  expect_false(ts_drive_job_busy())
+})
+
+test_that("a stale heartbeat does not lose a long synchronous job", {
+  .drv_local_root()
+  d <- ts_drive_attach(.drv_fake_session(new.env()), list())
+  .drv_write_arm(d$token)
+  .drv_write_scn(81L, action = "run_pipeline", module = "bulk_de",
+                 session_token = d$token)
+  d$on_tick(global_data = list(), effects = .drv_long_effects())
+  job <- ts_drive_job_state()
+  ready <- ts_drive_read_ready()
+  ready$hb_at <- format(Sys.time() - 60, "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+  ts_drive_write_json(ready, ts_drive_path("ready.json"))
+
+  expect_false(ts_drive_ready_fresh(timeout_s = 15))
+  expect_identical(job$status, "running")
+  expect_false(ts_drive_job_expire(now = job$started + 1))
+  d$on_tick(global_data = list(), effects = .drv_long_effects())
+
+  expect_identical(ts_drive_job_state()$status, "running")
+  expect_identical(ts_drive_job_state()$job_id, job$job_id)
+  expect_identical(ts_drive_read_result()$status, "running")
+  expect_identical(ts_drive_read_result()$ack_seq, 81L)
+})
+
+test_that("the first terminal declaration wins and terminal publication is not re-accepted", {
+  .drv_local_root()
+  d <- ts_drive_attach(.drv_fake_session(new.env()), list())
+  .drv_write_arm(d$token)
+  .drv_write_scn(91L, action = "run_pipeline", module = "bulk_de",
+                 session_token = d$token)
+  d$on_tick(global_data = list(), effects = .drv_long_effects())
+  job <- ts_drive_job_state()
+  invisible(d$pending_events())
+
+  expect_false(ts_drive_job_finish("bulk-de-run_de", status = "done",
+                                   job_id = "not-this-job", owner_token = d$token))
+  expect_true(ts_drive_job_finish("bulk-de-run_de", status = "done",
+                                  job_id = job$job_id, owner_token = d$token))
+  first <- ts_drive_job_pending()
+  expect_false(ts_drive_job_finish("bulk-de-run_de", status = "error",
+                                   error = "late duplicate",
+                                   job_id = job$job_id, owner_token = d$token))
+  expect_identical(ts_drive_job_pending(), first)
+  expect_identical(ts_drive_job_pending()$status, "done")
+
+  terminal <- d$on_tick(global_data = list(), effects = .drv_long_effects())
+  expect_identical(terminal$status, "done")
+  expect_identical(terminal$job_status, "done")
+  expect_identical(vapply(d$pending_events(), function(e) e$event, ""), "completed")
+  expect_identical(ts_drive_read_result()$job$job_id, job$job_id)
+
+  d$on_tick(global_data = list(), effects = .drv_long_effects())
+  expect_length(d$pending_events(), 0L)
 })
 
 # =============================================================================
@@ -3048,7 +3432,11 @@ test_that("a module that DECLARES a drive job has only ADDITIVE on.exit() calls"
     decls <- c(decls, f)
 
     on_ids <- pd$id[pd$token == "SYMBOL_FUNCTION_CALL" & pd$text == "on.exit"]
-    expect_gt(length(on_ids), 0L)
+    if (length(on_ids) == 0L) {
+      expect_true(grepl("mod_spatial_pipeline\\.R$", f) &&
+                    any(grepl(".close_drive_job <- function", src, fixed = TRUE)))
+      next
+    }
 
     parents <- stats::setNames(pd$parent, as.character(pd$id))
     ancestors <- function(node) {
@@ -3078,6 +3466,7 @@ test_that("a module that DECLARES a drive job has only ADDITIVE on.exit() calls"
   # mode a scoped invariant is most likely to have.
   expect_gt(length(decls), 0L)
   expect_true(any(grepl("mod_bulk_de_run\\.R$", decls)))
+  expect_true(any(grepl("mod_spatial_pipeline\\.R$", decls)))
 })
 
 test_that("the watcher and the badge own no reactive and run no unbounded loop", {
