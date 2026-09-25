@@ -131,14 +131,15 @@ test_that("the bound buttons are exactly the ones the spec names", {
   # stays closed and explicit.
   # Grown to NINE on 2026-09-25: the SC auto-pipeline, SC annotation, and SC
   # marker actions. Grown to TEN on 2026-09-25 (Phase C): the Bulk signature
-  # scoring action, the first Bulk action outside import/filter/DE/pathway. The
-  # set remains closed and explicit.
+  # scoring action. Grown to ELEVEN on 2026-09-25 (Phase D): Bulk profile
+  # clustering, whose one undeclared parameter is resolved by rule. The set
+  # remains closed and explicit.
   expect_setequal(
     TS_DRIVE_BUTTONS,
     c("import_bulk-btn_load", "bulk-de-run_de",
       "bulk-pathways-run_pathway", "bulk-pathways-run_scores",
       "bulk-filter-run_filter_norm", "bulk-signatures-run_signatures",
-      "spatial-pipeline-btn_run_all",
+      "bulk-pattern-run_pattern", "spatial-pipeline-btn_run_all",
       "sc-pipeline-run_auto_pipeline", "sc-annotation-run_annot",
       "sc-markers-run_markers")
   )

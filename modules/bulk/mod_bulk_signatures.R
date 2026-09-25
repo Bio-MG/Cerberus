@@ -100,9 +100,52 @@ run_signatures <- function(vst_mat, inputs = .bulk_signatures_drive_inputs()) {
   res  <- bulk_score_signatures(vst_mat, sets, method = method,
                                 min_size = inputs$sig_min_size,
                                 max_size = inputs$sig_max_size)
-  scores <- res$scores
-  list(ok = TRUE, n_results = as.integer(nrow(scores)), scores = scores,
+  # `record` is the WHOLE scoring result, `resource` attached exactly as the human
+  # observer does it. It is what gets stored, because that is the shape the five
+  # readers expect; `n_results` is derived from it so the two can never disagree.
+  res$resource <- resource
+  list(ok = TRUE, n_results = as.integer(nrow(res$scores)), record = res,
        resource = resource, method = method)
+}
+
+#' THE single writer for the two slots one signature run fills.
+#'
+#' Both the human observer and the MCP drive action go through here, so the shape
+#' stored in `shared_rv$signature_scores` cannot drift from what the READERS
+#' expect. There are five of them and they are not interchangeable: `sig_status`
+#' reads `$scores` and `$method`, `sig_heatmap` and `sig_pca` pass the WHOLE
+#' record to the plotting helpers, `sig_table` reads `$scores`, and both download
+#' handlers read `$method` for the filename and the whole record for the body.
+#'
+#' 🔴 WHY THIS HELPER EXISTS — measured, not designed. Live validation on
+#' 2026-09-25 found the drive path storing a bare MATRIX where this slot holds the
+#' scoring RECORD. The drive state still reported `done` with a correct
+#' `n_results`, while the panel raised `$ operator is invalid for atomic vectors`
+#' for both `sig_status` and `sig_heatmap`, nothing rendered, and the CSV
+#' filename resolved to `signature_scores_NULL`. The unit tests had been green
+#' because they asserted the writer's own assumption. One writer, one shape.
+#'
+#' @param res The `bulk_score_signatures()` result, with `resource` attached.
+#' @return `res`, invisibly, so the caller can report counts from it.
+#'
+#' ⚠️ The local names below are not cosmetic: `bo$pathways$signatures <- res$scores`
+#' is pinned as a LITERAL by test-bulk-signatures-contract-freeze.R:165, so this
+#' helper is written to reproduce that line byte for byte rather than to satisfy
+#' the freeze test with a rename.
+.bulk_signatures_store <- function(res, global_data, shared_rv) {
+  if (!is.list(res) || is.null(res$scores)) {
+    stop(errorCondition(
+      "bulk signatures: the result to store must be the scoring record carrying $scores.",
+      class = "bulk_signatures_error", state = "invalid_input"))
+  }
+  shared_rv$signature_scores <- res
+  # Contractual storage in bulk_obj$pathways$signatures (mission §M3).
+  # `global_data` is fully re-assigned so the reactive invalidation is clean.
+  bo <- global_data$bulk_obj
+  if (!is.list(bo$pathways)) bo$pathways <- list()
+  bo$pathways$signatures <- res$scores
+  global_data$bulk_obj <- bulk_ensure_provenance(bo)
+  invisible(res)
 }
 
 .bulk_signatures_drive_view <- function(status, elapsed_s = 0, seq = 0L,
@@ -155,7 +198,12 @@ run_signatures <- function(vst_mat, inputs = .bulk_signatures_drive_inputs()) {
   ready <- isTRUE(.bulk_signatures_drive_ready(shared_rv, global_data))
   obj <- tryCatch(shiny::isolate(global_data$bulk_obj), error = function(e) NULL)
   sc <- tryCatch(shiny::isolate(shared_rv$signature_scores), error = function(e) NULL)
-  n_results <- if (is.matrix(sc) || is.data.frame(sc)) nrow(sc) else 0L
+  # The slot holds the scoring RECORD; the count comes from its `$scores`. The
+  # matrix fallback is deliberate and narrow: a divergent writer must still yield
+  # a TRUE count here, so this probe cannot quietly report 0 while the UI breaks.
+  # The canonical shape itself is pinned by the writer/reader regression test.
+  scores <- if (is.list(sc)) sc$scores else sc
+  n_results <- if (is.matrix(scores) || is.data.frame(scores)) nrow(scores) else 0L
   current <- if (is.function(run_state)) {
     shiny::isolate(run_state())
   } else {
@@ -185,13 +233,10 @@ run_signatures <- function(vst_mat, inputs = .bulk_signatures_drive_inputs()) {
     close_job("error", conditionMessage(res))
     return(list(status = "error", n_results = 0L, step = "error"))
   }
-  shared_rv$signature_scores <- res$scores
-  bo <- global_data$bulk_obj
-  if (is.list(bo)) {
-    if (!is.list(bo$pathways)) bo$pathways <- list()
-    bo$pathways$signatures <- res$scores
-    global_data$bulk_obj <- bulk_ensure_provenance(bo)
-  }
+  # ONE writer, shared with the human observer: the drive path stores the same
+  # scoring RECORD, so the five readers cannot see a different shape depending on
+  # who triggered the run.
+  .bulk_signatures_store(res$record, global_data, shared_rv)
   n_results <- as.integer(res$n_results %||% 0L)
   if (length(n_results) != 1L || is.na(n_results) || n_results < 0L) n_results <- 0L
   # 🔴 THE JOB VOCABULARY IS NARROWER THAN THE VIEW VOCABULARY.
@@ -358,14 +403,9 @@ mod_bulk_signatures_server <- function(id, global_data, shared_rv) {
           max_size = input$sig_max_size %||% TS_BULK_GSVA_MAX_SIZE
         )
         res$resource <- resource
-        shared_rv$signature_scores <- res
-        # Stockage contractuel bulk_obj$pathways$signatures (réaffectation
-        # complète pour l'invalidation propre de global_data).
-        bo <- global_data$bulk_obj
-        if (!is.list(bo$pathways)) bo$pathways <- list()
-        bo$pathways$signatures <- res$scores
-        bo <- bulk_ensure_provenance(bo)
-        global_data$bulk_obj <- bo
+        # The SAME writer the drive path uses (see .bulk_signatures_store): the
+        # slot shape is defined once, in one place, for both triggers.
+        .bulk_signatures_store(res, global_data, shared_rv)
         showNotification(.t_fmt(.tr("\u2713 {n} signatures scor\u00e9es sur {m} \u00e9chantillons."),
                                  n = nrow(res$scores), m = ncol(res$scores)), type = "message")
         nav_select(id = "sig_tabs", selected = "sig_heatmap_tab", session = session)

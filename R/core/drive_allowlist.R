@@ -130,6 +130,17 @@ TS_DRIVE_BULK_SIGNATURES_MODULE <- "bulk_signatures"
 TS_DRIVE_BULK_SIGNATURES_TOP_TAB <- "tab_bulk"
 TS_DRIVE_BULK_SIGNATURES_PANELS <- "panel_signatures"
 
+# --- Bulk pattern clustering (measured in modules/bulk/mod_bulk_pattern.R) ----
+# The eleventh action, and the first one whose parameters are resolved by a RULE
+# rather than a frozen value: `run_pattern_clustering()` takes `group_column` as a
+# REQUIRED argument that must name a metadata column, so the drive action derives
+# it (preferring the column step 2 recorded) and refuses with `not_ready` when it
+# cannot decide. Nested module server id is "pattern", hence `bulk-pattern-`.
+TS_DRIVE_BULK_PATTERN_BUTTON <- "bulk-pattern-run_pattern"
+TS_DRIVE_BULK_PATTERN_MODULE <- "bulk_pattern"
+TS_DRIVE_BULK_PATTERN_TOP_TAB <- "tab_bulk"
+TS_DRIVE_BULK_PATTERN_PANELS <- "panel_pattern"
+
 # --- The allowlist (frozen data) --------------------------------------------
 #
 # `kind` is the ONLY thing the injector switches on — it decides which
@@ -260,17 +271,23 @@ TS_DRIVE_ALLOWLIST <- c(
            note = paste("signature scoring via run_signatures() with frozen",
                         ".bulk_signatures_drive_inputs(); `sig_rds` (a fileInput",
                         "path) is deliberately absent. The DOM button is not",
-                        "exposed"))
+                        "exposed")),
+      list(kind = "button", module = TS_DRIVE_BULK_PATTERN_MODULE,
+           note = paste("profile clustering via run_pattern_profile() with frozen",
+                        ".bulk_pattern_drive_inputs(); `group_column` is resolved by",
+                        "RULE (.bulk_pattern_group_column), never frozen. The DOM",
+                        "button is not exposed"))
     ),
     c(TS_DRIVE_SC_BUTTON, TS_DRIVE_SC_ANNOTATION_BUTTON,
-      TS_DRIVE_SC_MARKERS_BUTTON, TS_DRIVE_BULK_SIGNATURES_BUTTON)
+      TS_DRIVE_SC_MARKERS_BUTTON, TS_DRIVE_BULK_SIGNATURES_BUTTON,
+      TS_DRIVE_BULK_PATTERN_BUTTON)
   )
 )
 
-#' The ONLY TEN button ids ts_drive_bind_button() is allowed to instrument.
-#' The eighth and ninth are the SC annotation and marker actions, the tenth is the
-#' Bulk signature scoring action; all three are dispatched by counters and are not
-#' DOM bindings.
+#' The ONLY ELEVEN button ids ts_drive_bind_button() is allowed to instrument.
+#' The eighth, ninth and tenth are the SC annotation, SC marker and Bulk
+#' signature actions, the eleventh is Bulk profile clustering; all four are
+#' dispatched by counters and are not DOM bindings.
 TS_DRIVE_BUTTONS <- c(
   "import_bulk-btn_load",
   "bulk-filter-run_filter_norm",
@@ -278,19 +295,21 @@ TS_DRIVE_BUTTONS <- c(
   "bulk-pathways-run_pathway",
   "bulk-pathways-run_scores",
   TS_DRIVE_BULK_SIGNATURES_BUTTON,
+  TS_DRIVE_BULK_PATTERN_BUTTON,
   "spatial-pipeline-btn_run_all",
   TS_DRIVE_SC_BUTTON,
   TS_DRIVE_SC_ANNOTATION_BUTTON,
   TS_DRIVE_SC_MARKERS_BUTTON
 )
 
-#' The nine modules the allowlist covers. Anything else is `invalid`.
+#' The ten modules the allowlist covers. Anything else is `invalid`.
 #' `bulk_filter` is the nested Step 1 module (`bulk-filter-`), named after the
-#' same convention as `bulk_de` / `bulk_pathways` / `bulk_signatures`: the DOM
-#' prefix with the dash turned into an underscore. The SC action modules follow it
-#' for the same reason; the parent module `sc` is deliberately NOT a member.
+#' same convention as `bulk_de` / `bulk_pathways` / `bulk_signatures` /
+#' `bulk_pattern`: the DOM prefix with the dash turned into an underscore. The SC
+#' action modules follow it for the same reason; the parent module `sc` is
+#' deliberately NOT a member.
 TS_DRIVE_MODULES <- c("import_bulk", "bulk_filter", "bulk_de", "bulk_pathways",
-                      TS_DRIVE_BULK_SIGNATURES_MODULE,
+                      TS_DRIVE_BULK_SIGNATURES_MODULE, TS_DRIVE_BULK_PATTERN_MODULE,
                       "spatial_pipeline", TS_DRIVE_SC_MODULE,
                       TS_DRIVE_SC_ANNOTATION_MODULE, TS_DRIVE_SC_MARKERS_MODULE)
 
@@ -390,6 +409,11 @@ ts_drive_allowlist_problems <- function(allowlist = TS_DRIVE_ALLOWLIST,
         !identical(e$module, TS_DRIVE_BULK_SIGNATURES_MODULE)) {
       problems <- c(problems, sprintf("%s: must declare module '%s'",
                                       id, TS_DRIVE_BULK_SIGNATURES_MODULE))
+    }
+    if (identical(id, TS_DRIVE_BULK_PATTERN_BUTTON) &&
+        !identical(e$module, TS_DRIVE_BULK_PATTERN_MODULE)) {
+      problems <- c(problems, sprintf("%s: must declare module '%s'",
+                                      id, TS_DRIVE_BULK_PATTERN_MODULE))
     }
     if (grepl("^(spatial|import_spatial)-", id) &&
         !(identical(id, "spatial-pipeline-btn_run_all") &&

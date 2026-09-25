@@ -67,6 +67,82 @@
 
 `%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
 
+.spatial_pipeline_result_ok <- function(x, kind) {
+  ids_ok <- function(v) {
+    is.character(v) && length(v) > 0L && !anyNA(v) && all(nzchar(v))
+  }
+  df_ok <- function(v, cols, min_rows = 1L) {
+    is.data.frame(v) && nrow(v) >= min_rows && all(cols %in% names(v))
+  }
+  numeric_cols <- function(v, cols) {
+    all(vapply(cols, function(k) is.numeric(v[[k]]), logical(1)))
+  }
+  list_ok <- function(v, cols) {
+    is.list(v) && !is.data.frame(v) && all(cols %in% names(v)) &&
+      all(vapply(cols, function(k) !is.null(v[[k]]), logical(1)))
+  }
+  if (identical(kind, "qc")) {
+    return(df_ok(x, c("id", "nCount", "nFeature", "pct_mt", "pct_ribo", "log_nCount")) &&
+             ids_ok(x$id))
+  }
+  if (identical(kind, "cluster")) {
+    return(is.character(x) && length(x) > 0L && !is.null(names(x)) &&
+             ids_ok(names(x)) && ids_ok(x) && length(unique(x)) >= 2L)
+  }
+  if (identical(kind, "deconv")) {
+    if (!df_ok(x, "id") || !ids_ok(x$id)) return(FALSE)
+    value_cols <- setdiff(names(x), "id")
+    return(length(value_cols) > 0L && numeric_cols(x, value_cols))
+  }
+  if (identical(kind, "niche")) {
+    if (!list_ok(x, c("assignments", "niche_composition"))) return(FALSE)
+    if (!df_ok(x$assignments, c("id", "niche")) || !ids_ok(x$assignments$id)) return(FALSE)
+    if (!df_ok(x$niche_composition, "niche") || ncol(x$niche_composition) < 3L) return(FALSE)
+    group_cols <- setdiff(names(x$niche_composition), "niche")
+    return(ids_ok(x$niche_composition$niche) && numeric_cols(x$niche_composition, group_cols))
+  }
+  if (identical(kind, "umap")) {
+    return(df_ok(x, c("id", "dim1", "dim2")) && ids_ok(x$id) &&
+             numeric_cols(x, c("dim1", "dim2")))
+  }
+  if (identical(kind, "moran")) {
+    return(df_ok(x, c("gene", "moran_i", "p_value")) && ids_ok(x$gene) &&
+             numeric_cols(x, c("moran_i", "p_value")))
+  }
+  if (identical(kind, "enrichment")) {
+    if (!list_ok(x, c("enrichment", "matrix", "levels", "k_neighbors", "n_perm"))) return(FALSE)
+    return(df_ok(x$enrichment, c("from", "to", "observed", "z_score")) &&
+             numeric_cols(x$enrichment, c("observed", "z_score")) &&
+             is.character(x$levels) && length(x$levels) >= 2L &&
+             is.matrix(x$matrix) && is.numeric(x$matrix) &&
+             identical(dim(x$matrix), c(length(x$levels), length(x$levels))) &&
+             is.numeric(x$k_neighbors) && length(x$k_neighbors) == 1L &&
+             is.finite(x$k_neighbors) && x$k_neighbors > 0 &&
+             is.numeric(x$n_perm) && length(x$n_perm) == 1L &&
+             is.finite(x$n_perm) && x$n_perm > 0)
+  }
+  if (identical(kind, "hotspot")) {
+    return(df_ok(x, c("id", "value", "gi_star", "p_value", "hotspot")) &&
+             ids_ok(x$id) && numeric_cols(x, c("value", "gi_star", "p_value")) &&
+             is.character(x$hotspot))
+  }
+  if (identical(kind, "ripley")) {
+    if (!list_ok(x, c("curve", "target_level", "n_target", "n_total", "n_perm", "subsampled"))) return(FALSE)
+    return(df_ok(x$curve, c("r", "k_observed", "k_perm_mean", "k_perm_lo", "k_perm_hi", "signif")) &&
+             numeric_cols(x$curve, c("r", "k_observed", "k_perm_mean", "k_perm_lo", "k_perm_hi")) &&
+             is.character(x$curve$signif) &&
+             is.character(x$target_level) && length(x$target_level) == 1L && nzchar(x$target_level) &&
+             is.numeric(x$n_target) && length(x$n_target) == 1L &&
+             is.finite(x$n_target) && x$n_target > 0 &&
+             is.numeric(x$n_total) && length(x$n_total) == 1L &&
+             is.finite(x$n_total) && x$n_total >= x$n_target &&
+             is.numeric(x$n_perm) && length(x$n_perm) == 1L &&
+             is.finite(x$n_perm) && x$n_perm > 0 &&
+             is.logical(x$subsampled) && length(x$subsampled) == 1L && !is.na(x$subsampled))
+  }
+  FALSE
+}
+
 mod_spatial_pipeline_ui <- function(id) {
   ns <- NS(id)
   # ── V1.x UX (spatial container): CONTROLS ONLY. ──────────────────────────
@@ -247,6 +323,93 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
     pipeline_state <- reactiveVal("idle")   # idle | running | done | error
     deconv_mode_decided <- reactiveVal("none")
     TOTAL_STEPS <- 9L
+    drive_counter <- shiny::reactiveVal(0L)
+    drive_job <- new.env(parent = emptyenv())
+    drive_job$id <- NULL
+
+    drive_ready <- function() {
+      obj <- tryCatch(shiny::isolate(global_data$spatial_obj), error = function(e) NULL)
+      if (is.null(obj)) return("spatial_obj is not loaded")
+      bpcells_dir <- obj$bpcells_dir
+      if (!is.character(bpcells_dir) || length(bpcells_dir) != 1L ||
+          is.na(bpcells_dir) || !nzchar(bpcells_dir) || !dir.exists(bpcells_dir)) {
+        return("spatial_obj$bpcells_dir is not an existing directory")
+      }
+      coords <- obj$coords
+      if (!is.data.frame(coords) || nrow(coords) == 0L ||
+          !all(c("id", "x", "y") %in% names(coords))) {
+        return("spatial_obj$coords is missing id/x/y")
+      }
+      if (!isTRUE(tryCatch(spatial_daemons_ready(), error = function(e) FALSE))) {
+        return("spatial daemons are not ready")
+      }
+      if (isTRUE(shiny::isolate(input$compute_umap)) && is.null(obj$sketch)) {
+        return("spatial_obj$sketch is required for UMAP")
+      }
+      TRUE
+    }
+
+    drive_state <- function() {
+      job <- tryCatch(ts_drive_job_state(), error = function(e) NULL)
+      pending <- tryCatch(ts_drive_job_pending(), error = function(e) NULL)
+      ready <- isTRUE(drive_ready())
+      result_fields <- c(
+        "qc_metrics", "qc_pass_idx", "qc_params", "cluster_labels",
+        "cluster_params", "deconv_props", "deconv_params", "niche_labels",
+        "niche_composition", "niche_params", "umap_df", "moran_results",
+        "moran_params", "enrichment_result", "enrichment_params",
+        "hotspot_result", "hotspot_params", "ripley_result", "ripley_params"
+      )
+      n_results <- sum(vapply(result_fields, function(field) {
+        !is.null(shiny::isolate(shared_rv[[field]]))
+      }, logical(1)))
+      list(
+        module = "spatial_pipeline",
+        action = "run_pipeline",
+        status = if (isTRUE(ready)) pipeline_state() else "not_ready",
+        elapsed_s = if (is.null(pending)) 0 else as.numeric(pending$elapsed_s),
+        seq = if (is.null(job)) 0L else as.integer(job$seq),
+        n_results = as.integer(n_results),
+        has_data = !is.null(shiny::isolate(global_data$spatial_obj)),
+        ready = ready
+      )
+    }
+
+    ts_drive_publish_token(global_data, "spatial-pipeline-btn_run_all", drive_counter,
+      ready = drive_ready, state = drive_state, long = TRUE,
+      timeout_s = TS_SPATIAL_PIPELINE_TIMEOUT_S
+    )
+    drive_trigger <- shiny::reactive(list(drive_counter(), input$btn_run_all))
+
+    .close_drive_job <- function(status, error = NULL) {
+      if (is.null(drive_job$id)) return(invisible(FALSE))
+      job <- tryCatch(ts_drive_job_state(), error = function(e) NULL)
+      if (is.null(job) || !identical(job$job_id, drive_job$id)) {
+        return(invisible(FALSE))
+      }
+      ts_drive_job_finish(
+        "spatial-pipeline-btn_run_all", status = status, error = error,
+        job_id = drive_job$id
+      )
+    }
+
+    .result_ok <- function(value, kind) {
+      .spatial_pipeline_result_ok(value, kind)
+    }
+
+    .fail_stage <- function(step, message) {
+      write_mirai_log(log_file, message, step, TOTAL_STEPS)
+      pipeline_state("error")
+      .close_drive_job("error", ts_drive_badge_sanitize(message, 200L))
+      showNotification(.tr("\u274c Erreur \u2014 voir le journal ci-dessous."),
+                       type = "error", duration = 10)
+    }
+
+    .finish_pipeline <- function() {
+      pipeline_state("done")
+      .close_drive_job("done")
+      showNotification(.tr("\u2705 Pipeline automatique termine."), type = "message", duration = 6)
+    }
 
     output$deconv_status_ui <- renderUI({
       global_data$language  # re-render on language switch
@@ -513,22 +676,32 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
       # immediats, on enchaine directement sur l'etape suivante.
       if (isTRUE(input$compute_hotspots)) {
         write_mirai_log(log_file, "Etape 8/9 : Hotspots locaux (Getis-Ord Gi*)...", 8, TOTAL_STEPS)
-        req(shared_rv$qc_metrics)
+        qc_metrics <- shared_rv$qc_metrics
         metric <- input$hotspot_metric %||% "log_nCount"
-        values <- stats::setNames(shared_rv$qc_metrics[[metric]], shared_rv$qc_metrics$id)
+        if (!.result_ok(qc_metrics, "qc") || !metric %in% names(qc_metrics) ||
+            !is.numeric(qc_metrics[[metric]])) {
+          .fail_stage(8, "Etape 8/9 : metrique QC invalide -- pipeline interrompu.")
+          return()
+        }
+        values <- stats::setNames(qc_metrics[[metric]], qc_metrics$id)
+        caught <- new.env(parent = emptyenv())
+        caught$error <- NULL
         res <- tryCatch(
           compute_getis_ord_hotspots(coords = global_data$spatial_obj$coords, values = values,
                                      k_neighbors = input$k_neighbors_hotspot %||% 30),
           error = function(e) {
-            write_mirai_log(log_file, paste("Etape 8/9 : Hotspots echoues --", conditionMessage(e)), 8, TOTAL_STEPS)
+            caught$error <- e
             NULL
           }
         )
-        if (!is.null(res)) {
-          shared_rv$hotspot_result <- res
-          shared_rv$hotspot_params <- list(source = "qc", metric = metric, k_neighbors = input$k_neighbors_hotspot %||% 30)
-          write_mirai_log(log_file, "Etape 8/9 : Hotspots termines.", 8, TOTAL_STEPS)
+        if (is.null(res) || !.result_ok(res, "hotspot")) {
+          detail <- if (is.null(caught$error)) "resultat invalide" else conditionMessage(caught$error)
+          .fail_stage(8, paste("Etape 8/9 : Hotspots echoues --", detail))
+          return()
         }
+        shared_rv$hotspot_result <- res
+        shared_rv$hotspot_params <- list(source = "qc", metric = metric, k_neighbors = input$k_neighbors_hotspot %||% 30)
+        write_mirai_log(log_file, "Etape 8/9 : Hotspots termines.", 8, TOTAL_STEPS)
       } else {
         write_mirai_log(log_file, "Etape 8/9 : Hotspots ignores (non coche).", 8, TOTAL_STEPS)
       }
@@ -538,13 +711,15 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
     .launch_ripley_or_finish <- function() {
       if (isTRUE(input$compute_ripley)) {
         cl <- shared_rv$cluster_labels
-        if (is.null(cl) || length(cl) == 0) {
-          write_mirai_log(log_file, "Etape 9/9 : Ripley's K ignore (aucun cluster disponible).", 9, TOTAL_STEPS)
-          pipeline_state("done")
-          showNotification(.tr("\u2705 Pipeline automatique termine."), type = "message", duration = 6)
+        if (!.result_ok(cl, "cluster")) {
+          .fail_stage(9, "Etape 9/9 : Ripley's K impossible (clusters invalides) -- pipeline interrompu.")
           return()
         }
         target_level <- names(sort(table(cl), decreasing = TRUE))[1]
+        if (is.null(target_level) || !nzchar(target_level)) {
+          .fail_stage(9, "Etape 9/9 : Ripley's K sans cible valide -- pipeline interrompu.")
+          return()
+        }
         write_mirai_log(log_file, sprintf("Etape 9/9 : Ripley's K (cible auto = cluster '%s')...", target_level),
                         9, TOTAL_STEPS)
         ripley_task$invoke(
@@ -553,31 +728,39 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
         )
       } else {
         write_mirai_log(log_file, "Etape 9/9 : Ripley's K ignore (non coche). Pipeline termine.", 9, TOTAL_STEPS)
-        pipeline_state("done")
-        showNotification(.tr("\u2705 Pipeline automatique termine."), type = "message", duration = 6)
+        .finish_pipeline()
       }
     }
 
-    observeEvent(input$btn_run_all, {
+    observeEvent(drive_trigger(), {
+      req(input$btn_run_all > 0 || shiny::isolate(drive_counter()) > 0)
       req(global_data$spatial_obj$bpcells_dir, global_data$spatial_obj$coords)
       if (identical(pipeline_state(), "running")) return()   # re-entrance guard
 
+      drive_job$id <- NULL
+      job <- tryCatch(ts_drive_job_state(), error = function(e) NULL)
+      if (!is.null(job) && isTRUE(ts_drive_job_busy()) &&
+          identical(job$button, "spatial-pipeline-btn_run_all")) {
+        drive_job$id <- job$job_id
+      }
       reset_log(log_file)
       pipeline_state("running")
 
       write_mirai_log(log_file, "Etape 1/9 : QC (seuils appliques)...", 1, TOTAL_STEPS)
       qc_metrics <- tryCatch(compute_qc_metrics_fast(global_data$spatial_obj$bpcells_dir),
                              error = function(e) NULL)
-      if (is.null(qc_metrics)) {
-        write_mirai_log(log_file, "Erreur QC -- pipeline interrompu.", 1, TOTAL_STEPS)
-        pipeline_state("error")
-        showNotification(.tr("Erreur lors du calcul QC (pipeline auto)."), type = "error", duration = 8)
+      if (!.result_ok(qc_metrics, "qc")) {
+        .fail_stage(1, "Erreur QC -- resultat invalide -- pipeline interrompu.")
         return()
       }
-      shared_rv$qc_metrics <- qc_metrics
       pass <- with(qc_metrics, nCount >= input$qc_min_count & nFeature >= input$qc_min_features &
                      (is.na(pct_mt) | pct_mt <= input$qc_max_pct_mt))
       pass_idx <- which(pass)
+      if (length(pass_idx) == 0L) {
+        .fail_stage(1, "Erreur QC -- aucun element ne passe les seuils -- pipeline interrompu.")
+        return()
+      }
+      shared_rv$qc_metrics <- qc_metrics
       shared_rv$qc_pass_idx <- pass_idx
       shared_rv$qc_params <- list(min_count = input$qc_min_count, min_features = input$qc_min_features,
                                    max_pct_mt = input$qc_max_pct_mt)
@@ -602,10 +785,15 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
       req(identical(pipeline_state(), "running"))
       st <- cluster_task$status()
       if (identical(st, "success")) {
-        shared_rv$cluster_labels <- cluster_task$result()
+        res <- cluster_task$result()
+        if (!.result_ok(res, "cluster")) {
+          .fail_stage(2, "Clustering termine avec un resultat invalide -- pipeline interrompu.")
+          return()
+        }
+        shared_rv$cluster_labels <- res
         shared_rv$cluster_params <- list(lambda = input$lambda, k_geom = 18, npcs = 30, resolution = input$resolution)
         write_mirai_log(log_file, sprintf("Clustering termine : %d clusters.",
-                                          length(unique(shared_rv$cluster_labels))), 2, TOTAL_STEPS)
+                                          length(unique(res))), 2, TOTAL_STEPS)
         mode <- deconv_mode_decided()
         if (!identical(mode, "none")) {
           write_mirai_log(log_file, sprintf("Etape 3/9 : Deconvolution (%s)...", mode), 3, TOTAL_STEPS)
@@ -623,9 +811,7 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
           .launch_niche()
         }
       } else if (identical(st, "error")) {
-        write_mirai_log(log_file, "Erreur pendant le clustering -- pipeline interrompu.", 2, TOTAL_STEPS)
-        pipeline_state("error")
-        showNotification(.tr("Erreur pendant le clustering (pipeline auto) -- voir le journal."), type = "error", duration = 10)
+        .fail_stage(2, "Erreur pendant le clustering -- pipeline interrompu.")
       }
     })
 
@@ -633,7 +819,12 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
       req(identical(pipeline_state(), "running"), !identical(deconv_mode_decided(), "none"))
       st <- deconv_task$status()
       if (identical(st, "success")) {
-        shared_rv$deconv_props <- deconv_task$result()
+        res <- deconv_task$result()
+        if (!.result_ok(res, "deconv")) {
+          .fail_stage(3, "Deconvolution terminee avec un resultat invalide -- pipeline interrompu.")
+          return()
+        }
+        shared_rv$deconv_props <- res
         shared_rv$deconv_params <- list(
           mode = deconv_mode_decided(),
           ref_path = if (deconv_mode_decided() %in% c("rctd", "labeltransfer")) global_data$spatial_reference$path else NULL,
@@ -644,8 +835,7 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
         write_mirai_log(log_file, "Deconvolution terminee.", 3, TOTAL_STEPS)
         .launch_niche()
       } else if (identical(st, "error")) {
-        write_mirai_log(log_file, "Deconvolution echouee -- poursuite sans elle (niches basees sur le clustering).", 3, TOTAL_STEPS)
-        .launch_niche()
+        .fail_stage(3, "Erreur pendant la deconvolution -- pipeline interrompu.")
       }
     })
 
@@ -654,71 +844,91 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
       st <- niche_task$status()
       if (identical(st, "success")) {
         res <- niche_task$result()
+        if (!.result_ok(res, "niche")) {
+          .fail_stage(4, "Niches terminees avec un resultat invalide -- pipeline interrompu.")
+          return()
+        }
         shared_rv$niche_labels      <- stats::setNames(res$assignments$niche, res$assignments$id)
         shared_rv$niche_composition <- res$niche_composition
         shared_rv$niche_params <- list(group_by = "cluster", k_neighbors = 30, n_niches = input$n_niches)
         write_mirai_log(log_file, "Niches terminees.", 4, TOTAL_STEPS)
         .launch_umap_or_moran()
       } else if (identical(st, "error")) {
-        write_mirai_log(log_file, "Erreur pendant le calcul des niches.", 4, TOTAL_STEPS)
-        pipeline_state("error")
-        showNotification(.tr("Erreur pendant le calcul des niches (pipeline auto) -- voir le journal."), type = "error", duration = 10)
+        .fail_stage(4, "Erreur pendant le calcul des niches -- pipeline interrompu.")
       }
     })
 
     observeEvent(umap_task$status(), {
-      req(identical(pipeline_state(), "running"), isTRUE(input$compute_umap))
+      req(identical(pipeline_state(), "running"))
       st <- umap_task$status()
       if (identical(st, "success")) {
-        shared_rv$umap_df <- umap_task$result()
+        res <- umap_task$result()
+        if (!.result_ok(res, "umap")) {
+          .fail_stage(5, "UMAP termine avec un resultat invalide -- pipeline interrompu.")
+          return()
+        }
+        shared_rv$umap_df <- res
         write_mirai_log(log_file, "UMAP termine.", 5, TOTAL_STEPS)
         .launch_moran()
       } else if (identical(st, "error")) {
-        write_mirai_log(log_file, "UMAP echoue -- poursuite sans lui.", 5, TOTAL_STEPS)
-        .launch_moran()
+        .fail_stage(5, "Erreur pendant le calcul UMAP -- pipeline interrompu.")
       }
     })
 
     observeEvent(moran_task$status(), {
-      req(identical(pipeline_state(), "running"), isTRUE(input$compute_moran))
+      req(identical(pipeline_state(), "running"))
       st <- moran_task$status()
       if (identical(st, "success")) {
-        shared_rv$moran_results <- moran_task$result()
+        res <- moran_task$result()
+        if (!.result_ok(res, "moran")) {
+          .fail_stage(6, "Indice de Moran termine avec un resultat invalide -- pipeline interrompu.")
+          return()
+        }
+        shared_rv$moran_results <- res
         shared_rv$moran_params <- list(n_hvg = input$n_hvg_moran %||% 1000, x_cuts = 0, y_cuts = 0, method = "moransi")
         write_mirai_log(log_file, "Moran termine.", 6, TOTAL_STEPS)
+        .launch_enrichment()
       } else if (identical(st, "error")) {
-        write_mirai_log(log_file, "Indice de Moran echoue.", 6, TOTAL_STEPS)
+        .fail_stage(6, "Erreur pendant l'indice de Moran -- pipeline interrompu.")
       }
-      .launch_enrichment()
     })
 
     observeEvent(enrichment_task$status(), {
-      req(identical(pipeline_state(), "running"), isTRUE(input$compute_enrichment))
+      req(identical(pipeline_state(), "running"))
       st <- enrichment_task$status()
       if (identical(st, "success")) {
-        shared_rv$enrichment_result <- enrichment_task$result()
+        res <- enrichment_task$result()
+        if (!.result_ok(res, "enrichment")) {
+          .fail_stage(7, "Enrichissement termine avec un resultat invalide -- pipeline interrompu.")
+          return()
+        }
+        shared_rv$enrichment_result <- res
         shared_rv$enrichment_params <- list(group_by = "cluster", k_neighbors = input$k_neighbors_enrich %||% 30,
                                             n_perm = input$n_perm_enrich %||% 200)
         write_mirai_log(log_file, "Enrichissement termine.", 7, TOTAL_STEPS)
+        .launch_hotspots()
       } else if (identical(st, "error")) {
-        write_mirai_log(log_file, "Enrichissement de voisinage echoue.", 7, TOTAL_STEPS)
+        .fail_stage(7, "Erreur pendant l'enrichissement de voisinage -- pipeline interrompu.")
       }
-      .launch_hotspots()
     })
 
     observeEvent(ripley_task$status(), {
-      req(identical(pipeline_state(), "running"), isTRUE(input$compute_ripley))
+      req(identical(pipeline_state(), "running"))
       st <- ripley_task$status()
       if (identical(st, "success")) {
-        shared_rv$ripley_result <- ripley_task$result()
-        shared_rv$ripley_params <- list(group_by = "cluster", target = shared_rv$ripley_result$target_level,
+        res <- ripley_task$result()
+        if (!.result_ok(res, "ripley")) {
+          .fail_stage(9, "Ripley's K termine avec un resultat invalide -- pipeline interrompu.")
+          return()
+        }
+        shared_rv$ripley_result <- res
+        shared_rv$ripley_params <- list(group_by = "cluster", target = res$target_level,
                                         n_perm = input$n_perm_ripley %||% 199)
         write_mirai_log(log_file, "Ripley's K termine.", 9, TOTAL_STEPS)
+        .finish_pipeline()
       } else if (identical(st, "error")) {
-        write_mirai_log(log_file, "Ripley's K echoue.", 9, TOTAL_STEPS)
+        .fail_stage(9, "Erreur pendant Ripley's K -- pipeline interrompu.")
       }
-      pipeline_state("done")
-      showNotification(.tr("\u2705 Pipeline automatique termine."), type = "message", duration = 6)
     })
 
     output$pipeline_summary_ui <- renderUI({

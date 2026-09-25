@@ -9,6 +9,8 @@
 TS_MIRAI_TIMEOUT_MS        <- 20 * 60 * 1000L   # 20 min generic task ceiling
 TS_RCTD_TIMEOUT_MS         <- 40 * 60 * 1000L   # RCTD-specific ceiling
 TS_LABEL_TRANSFER_TIMEOUT  <- 45 * 60 * 1000L   # Label Transfer ceiling
+TS_SPATIAL_PIPELINE_TIMEOUT_S <-
+  (6 * TS_MIRAI_TIMEOUT_MS + max(TS_RCTD_TIMEOUT_MS, TS_LABEL_TRANSFER_TIMEOUT)) / 1000 + 15 * 60
 # Plafond du job DRIVE `sc-pipeline-run_auto_pipeline` (4 h). Le pipeline SC est
 # PLUS LOURD que le Spatial : la le pipeline enchaîne Normalisation -> PCA ->
 # FindNeighbors -> FindClustering -> UMAP -> t-SNE, plus SingleR / FindAllMarkers

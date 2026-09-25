@@ -26,6 +26,7 @@ source_project_file("config/defaults.R")
 source_project_file("config/thresholds.R")   # TS_BULK_GSVA_MIN_SIZE / MAX_SIZE
 source_project_file("R/core/io_helpers.R")    # %||%
 source_project_file("R/core/error_state.R")   # ts_error_state
+source_project_file("R/bulk/bulk_provenance.R")  # bulk_ensure_provenance (store path)
 source_project_file("R/core/drive_allowlist.R")
 source_project_file("R/core/drive_watcher.R")
 source_project_file("R/bulk/bulk_signatures.R")
@@ -33,6 +34,19 @@ source_project_file("modules/bulk/mod_bulk_signatures.R")  # the code under test
 
 if (!exists(".tr", envir = globalenv()))
   assign(".tr", function(key) key, envir = globalenv())
+
+# `.t_fmt()` also lives in global.R (not in any R/ module file), and the human
+# observer calls it to build its notification. Stubbed with the same
+# named-placeholder substitution as global.R:275; a drift here could only change
+# notification TEXT in this test, never the stored shape it measures.
+if (!exists(".t_fmt", envir = globalenv()))
+  assign(".t_fmt", function(template, ...) {
+    vals <- list(...)
+    for (nm in names(vals)) {
+      template <- gsub(paste0("{", nm, "}"), format(vals[[nm]]), template, fixed = TRUE)
+    }
+    template
+  }, envir = globalenv())
 
 # --- Mocks -------------------------------------------------------------------
 # `run_signatures()` and `.bulk_signatures_run_drive()` are top-level functions of
@@ -66,8 +80,11 @@ if (!exists(".tr", envir = globalenv()))
   # `bulk_signature_resources()`, which reports Hallmark as available on a host
   # where msigdbr IS installed — so the mocked "missing" case sailed straight
   # through and the test asserted on a returned list instead of an error.
+  # The store helper is one of the patched targets: the drive path reaches
+  # `bulk_ensure_provenance` THROUGH it, so patching only the wrapper would leave
+  # the real function in the chain.
   targets <- c("run_signatures", ".bulk_signatures_run_drive",
-               ".bulk_signatures_resource_check")
+               ".bulk_signatures_resource_check", ".bulk_signatures_store")
   olds <- lapply(targets, .bsig_patch_env, e = e)
   names(olds) <- targets
   on.exit({
@@ -159,8 +176,11 @@ test_that("run_signatures loads Hallmark and scores the frozen set on the VST ma
   expect_identical(out$n_results, 3L)
   expect_identical(out$resource, "hallmark")
   expect_identical(out$method, "ssgsea")
-  expect_true(is.matrix(out$scores))
-  expect_identical(dim(out$scores), c(3L, 6L))
+  # The wrapper hands back the WHOLE record, because that is the shape the slot
+  # holds and the readers read.
+  expect_true(is.list(out$record))
+  expect_true(is.matrix(out$record$scores))
+  expect_identical(dim(out$record$scores), c(3L, 6L))
 
   # The wrapper must call the two domain functions with the FROZEN values, not
   # with anything re-read from the session.
@@ -316,6 +336,147 @@ test_that("readiness names the missing prerequisite instead of returning FALSE",
 })
 
 # -----------------------------------------------------------------------------
+# THE READER-SIDE CONTRACT.
+#
+# Live validation on 2026-09-25 proved that 84 green assertions could sit on top
+# of a broken panel: the drive path stored a bare MATRIX where the slot holds the
+# scoring RECORD, so `sig_status` and `sig_heatmap` both raised
+# `$ operator is invalid for atomic vectors` while the drive state still reported
+# `done` with a correct `n_results`. The old test had asserted the writer's own
+# assumption, so it agreed with the bug.
+#
+# This test therefore asserts from the READER's side, and it runs BOTH triggers:
+# the real human observer (`testServer` on the module, so its own code path
+# executes) and the real drive wrapper. It compares the two stored objects rather
+# than either one's idea of the right shape, so any future divergence between the
+# triggers - or between the writer and the readers - turns it red.
+# -----------------------------------------------------------------------------
+# Patches a name in globalenv and returns what to put back. A name that does not
+# exist here is a legitimate case: the module calls `nav_select()` unqualified and
+# only resolves it because `bslib` is ATTACHED in the app, which a test run does
+# not do. `existed = FALSE` means "remove the binding again on restore".
+.bsig_patch_global <- function(name, value) {
+  existed <- exists(name, envir = globalenv(), inherits = FALSE)
+  old <- if (existed) get(name, envir = globalenv()) else NULL
+  assign(name, value, envir = globalenv())
+  list(value = old, existed = existed)
+}
+
+.bsig_restore_globals <- function(saved) {
+  for (nm in names(saved)) {
+    entry <- saved[[nm]]
+    if (isTRUE(entry$existed)) {
+      assign(nm, entry$value, envir = globalenv())
+    } else if (exists(nm, envir = globalenv(), inherits = FALSE)) {
+      rm(list = nm, envir = globalenv())
+    }
+  }
+}
+
+test_that("the human observer and the drive action store the SAME shape", {
+  scores <- .bsig_scores(n_sig = 3L, n_samples = 6L)
+
+  # The score record the domain returns, with every field the readers touch.
+  record <- function(method = "ssgsea") {
+    list(type = "bulk_signature_scores", status = "ok", analysis_id = "x",
+         method = method, resource = "hallmark", scores = scores,
+         gene_sets = list(A = "G1"), qc = list(), warnings = character(0),
+         disclaimer = "d", provenance = list(), timestamp_utc = "2026-01-01T00:00:00Z")
+  }
+
+  saved <- list(
+    bulk_load_signatures = .bsig_patch_global("bulk_load_signatures",
+      function(resource = "hallmark", organism = "human", ...) list(A = c("G1", "G2"))),
+    bulk_score_signatures = .bsig_patch_global("bulk_score_signatures",
+      function(expr_matrix, gene_sets, method = "ssgsea", ...) record(method)),
+    bulk_ensure_provenance = .bsig_patch_global("bulk_ensure_provenance",
+      function(bo) bo),
+    # UI calls the test does not care about, and which only exist because a
+    # package is ATTACHED in the app: `nav_select` (bslib) and `renderDT` (DT).
+    # `renderDT` in particular is CALLED while the outputs are defined, so an
+    # absent binding aborts testServer before any assertion runs.
+    nav_select = .bsig_patch_global("nav_select", function(...) invisible(TRUE)),
+    renderDT = .bsig_patch_global("renderDT", function(...) NULL)
+  )
+  on.exit(.bsig_restore_globals(saved), add = TRUE)
+
+  new_state <- function() {
+    gd <- shiny::reactiveValues()
+    gd$bulk_obj <- list(counts = .bsig_mat(), metadata = data.frame(x = 1))
+    gd$language <- "fr"
+    rv <- shiny::reactiveValues()
+    rv$vst_mat <- .bsig_mat()
+    list(gd = gd, rv = rv)
+  }
+
+  # --- 1. the HUMAN path: the module's own observer, through testServer --------
+  h <- new_state()
+  shiny::testServer(mod_bulk_signatures_server,
+                    args = list(global_data = h$gd, shared_rv = h$rv), {
+                      session$setInputs(run_signatures = 1)
+                    })
+  human <- shiny::isolate(h$rv$signature_scores)
+
+  # --- 2. the DRIVE path: the real wrapper, on its own state ------------------
+  d <- new_state()
+  close_log <- character(0)
+  res <- shiny::isolate(.bulk_signatures_run_drive(d$gd, d$rv,
+    function(status, error = NULL) { close_log <<- c(close_log, status) }))
+  driven <- shiny::isolate(d$rv$signature_scores)
+
+  expect_identical(res$status, "done")
+  expect_identical(close_log, "done")
+
+  # Both writes happened, and both are the RECORD. The name comparison is done
+  # through a safe form so a divergent writer produces FAILURES here rather than an
+  # error inside expect_setequal() - the `is.list` assertions above are what make
+  # the divergence loud.
+  expect_true(is.list(human))
+  expect_true(is.list(driven))
+  nm_h <- if (is.list(human)) names(human) else character(0)
+  nm_d <- if (is.list(driven)) names(driven) else character(0)
+  expect_setequal(nm_h, nm_d)
+
+  # The exact expressions the five readers evaluate, on BOTH objects. This is the
+  # assertion that failed live: `$` on a matrix. The `$` is reached through
+  # `if (is.list(obj))`, so a divergent writer yields a FAILURE with the reader's
+  # own error message quoted, instead of crashing the test on it.
+  for (obj in list(human, driven)) {
+    s <- if (is.list(obj)) obj$scores else NULL
+    expect_true(is.list(obj))
+    expect_true(is.matrix(s))
+    expect_identical(nrow(s), 3L)
+    expect_identical(ncol(s), 6L)
+    expect_true(is.character(if (is.list(obj)) obj$method else NULL))
+    expect_identical(as.character(if (is.list(obj)) obj$method else NULL), "ssgsea")
+    expect_identical(as.character(if (is.list(obj)) obj$resource else NULL), "hallmark")
+  }
+
+  # The contractual second slot gets the MATRIX in both cases.
+  expect_true(is.matrix(shiny::isolate(h$gd$bulk_obj$pathways$signatures)))
+  expect_true(is.matrix(shiny::isolate(d$gd$bulk_obj$pathways$signatures)))
+  expect_identical(dim(shiny::isolate(d$gd$bulk_obj$pathways$signatures)), c(3L, 6L))
+
+  # And the drive state counts the stored scores, not the wrapper's own field.
+  st <- .bulk_signatures_drive_state(d$rv, d$gd, function() "done", "ran")
+  expect_identical(st$n_results, 3L)
+})
+
+test_that("the shared writer refuses anything that is not a scoring record", {
+  gd <- shiny::reactiveValues()
+  gd$bulk_obj <- list(counts = .bsig_mat(), metadata = data.frame(x = 1))
+  rv <- shiny::reactiveValues()
+
+  # A bare matrix is exactly what the live defect stored: it must be refused, not
+  # silently written, so the failure surfaces here instead of in the panel.
+  err <- tryCatch(.bulk_signatures_store(.bsig_scores(n_sig = 2L), gd, rv),
+                  condition = function(e) e)
+  expect_s3_class(err, "bulk_signatures_error")
+  expect_identical(ts_error_state(err), "invalid_input")
+  expect_null(shiny::isolate(rv$signature_scores))
+})
+
+# -----------------------------------------------------------------------------
 test_that("the drive run publishes done, empty and error without a stale count", {
   close_log <- list()
   closer <- function(status, error = NULL) {
@@ -341,8 +502,11 @@ test_that("the drive run publishes done, empty and error without a stale count",
   expect_identical(res$n_results, 3L)
   expect_identical(close_log[[1L]]$status, "done")
   expect_null(close_log[[1L]]$error)
-  # The result is written the way the human path writes it.
-  expect_identical(dim(shiny::isolate(rv$signature_scores)), c(3L, 6L))
+  # The result is written the way the human path writes it: the RECORD in the
+  # slot, and the MATRIX in the contractual bulk_obj slot.
+  sc <- shiny::isolate(rv$signature_scores)
+  expect_true(is.list(sc))
+  expect_identical(dim(if (is.list(sc)) sc$scores else NULL), c(3L, 6L))
   expect_true(!is.null(shiny::isolate(gd$bulk_obj$pathways$signatures)))
 
   # empty is NOT done: the step ran, it produced nothing. The JOB still closes as

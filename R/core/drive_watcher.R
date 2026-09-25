@@ -1430,15 +1430,16 @@ ts_drive_apply <- function(session, input, scn, effects = NULL, owner_token = NU
     ))
   }
 
-  # Same rule, same reason, for the SC auto-pipeline, SC annotation, SC marker
-  # and Bulk signature actions: their inputs are FROZEN, DECLARED sets, and an
-  # injected input could not be honoured without silently changing the action
-  # boundary. For the signature action the refusal also keeps a fileInput PATH
-  # (`sig_rds`) out of reach of a remote caller.
+  # Same rule, same reason, for the SC auto-pipeline, SC annotation, SC marker,
+  # Bulk signature and Bulk pattern actions: their inputs are FROZEN, DECLARED
+  # sets, and an injected input could not be honoured without silently changing
+  # the action boundary. For the signature action the refusal also keeps a
+  # fileInput PATH (`sig_rds`) out of reach of a remote caller.
   if (identical(action, "set_inputs") &&
       module %in% c(TS_DRIVE_SC_MODULE, TS_DRIVE_SC_ANNOTATION_MODULE,
                     TS_DRIVE_SC_MARKERS_MODULE,
-                    TS_DRIVE_BULK_SIGNATURES_MODULE)) {
+                    TS_DRIVE_BULK_SIGNATURES_MODULE,
+                    TS_DRIVE_BULK_PATTERN_MODULE)) {
     return(list(
       status = "invalid",
       errors = sprintf("module '%s' does not accept set_inputs", module),
@@ -1470,6 +1471,7 @@ ts_drive_apply <- function(session, input, scn, effects = NULL, owner_token = NU
       bulk_de       = "bulk-de-run_de",
       bulk_pathways = "bulk-pathways-run_pathway",
       bulk_signatures = TS_DRIVE_BULK_SIGNATURES_BUTTON,
+      bulk_pattern  = TS_DRIVE_BULK_PATTERN_BUTTON,
       spatial_pipeline = "spatial-pipeline-btn_run_all",
       sc_pipeline   = TS_DRIVE_SC_BUTTON,
       sc_annotation = TS_DRIVE_SC_ANNOTATION_BUTTON,
@@ -1703,6 +1705,7 @@ ts_drive_nav_plan <- function(module, target_tab = NULL) {
     bulk_de       = "panel_de",
     bulk_pathways = "panel_pathways",
     bulk_signatures = TS_DRIVE_BULK_SIGNATURES_PANELS,
+    bulk_pattern  = TS_DRIVE_BULK_PATTERN_PANELS,
     import_bulk   = NULL,
     NULL)
   list(

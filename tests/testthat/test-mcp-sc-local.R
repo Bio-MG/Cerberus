@@ -151,9 +151,9 @@ test_that("local MCP snapshot projects the SC step record and leaks nothing", {
   expect_match(note$policy, "snapshot-allowlist")
   expect_true(all(c("gene names", "spot or cell IDs", "matrices", "raw log text") %in%
                     note$never_published))
-  # 9 since Phase C: the Bulk signature action is the ninth drivable module, and
+  # 10 since Phase D: the Bulk pattern action is the tenth drivable module, and
   # a smaller cap would truncate a runnable module out of every snapshot.
-  expect_identical(note$limits$max_modules, 9L)
+  expect_identical(note$limits$max_modules, 10L)
 })
 
 test_that("local MCP run writes the SC scenarios into an external fixture root", {
