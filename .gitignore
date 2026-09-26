@@ -1,0 +1,62 @@
+# --- R (Fichiers temporaires et sessions) ---
+.Rhistory
+.RData
+.RDataTmp
+.Rds
+
+# --- RStudio (Utilisateur et projet) ---
+*.Rproj
+.Rproj.user/
+.Rproj.user/ app.log                        
+app.tex                       
+RData                        
+.RDataTmp                                
+
+
+# --- Shiny & Fichiers de test locaux ---
+/test new features.R
+/Tests save/
+test_trajectory_refactor.R
+# --- Système d'exploitation ---
+.DS_Store
+Thumbs.db
+
+# Git
+.gitignore
+.Rproj.userTests/
+test_new_features.R
+conversation-export.md
+
+# POSIT? zcode
+app.tex
+app.log
+.posit/
+.posit/
+AGENTS.md
+docs/
+docs/contracts/VELOCITY_RESULT_CONTRACT.md
+docs/contracts/
+.zcode
+.workbuddy-ai/
+QC
+mcp.examples/
+
+
+
+# --- Environnement Python scCODA (Stage 15, local machine only) ---
+/python_env_sccoda/
+
+# --- Sorties de tests (artefacts regeneres, non sources) ---
+full_suite_results.txt
+_e2e_out.txt
+_suite_stdout.log
+
+#repomix
+repomix.config.json
+
+# --- DRIVE LIVE CONTROL (docs/DRIVE_LIVE_CONTROL_PLAN.md) ---
+# Runtime IPC between an agent and a LIVE session: the JSON handshake files are
+# transient by nature (pid/token/seq of THIS machine) and must never be
+# committed. Only tools/_drive/README.md is tracked — it documents the channel.
+tools/_drive/*.json
+tools/_drive/*.tmp
