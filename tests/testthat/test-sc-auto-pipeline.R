@@ -75,10 +75,17 @@ if (!exists(".tr", envir = globalenv()))
   mock <- shiny::MockShinySession$new()
   # isolate(): reactiveValues reads need a consumer context;
   # withReactiveDomain(): Progress/notifications need a session domain.
-  shiny::isolate(shiny:::withReactiveDomain(mock, {
-    run_sc_auto_pipeline(input, gd, shared_rv, mock, sc_log_rv)
+  # Roadmap 5.2 (2026-09-27) : run_sc_auto_pipeline RELANCE désormais son
+  # erreur après journalisation/notification — .ap_run la capture pour
+  # permettre les assertions de classe.
+  err <- shiny::isolate(shiny:::withReactiveDomain(mock, {
+    tryCatch(
+      run_sc_auto_pipeline(input, gd, shared_rv, mock, sc_log_rv),
+      error = function(e) e
+    )
   }))
-  list(global_data = gd, shared_rv = shared_rv, log = shiny::isolate(sc_log_rv()))
+  list(global_data = gd, shared_rv = shared_rv, log = shiny::isolate(sc_log_rv()),
+       error = err)
 }
 
 testthat::test_that("SC auto-pipeline runs end-to-end on a tiny fixture (full-dataset path)", {
@@ -125,9 +132,11 @@ testthat::test_that("SC auto-pipeline fails gracefully when QC removes nearly al
   res <- .ap_run(bad, obj)
 
   # Gracious failure: the error is logged (Seurat's subset throws "No cells
-  # found" before the pipeline's own "< 10 cells" guard fires) and the
-  # function returns without propagating.
+  # found" before the pipeline's own "< 10 cells" guard fires), notified,
+  # THEN re-raised (roadmap 5.2 — captured here by .ap_run).
   testthat::expect_match(res$log, "Erreur: No cells found", fixed = TRUE)
+  testthat::expect_s3_class(res$error, "error")
+  testthat::expect_match(conditionMessage(res$error), "No cells found", fixed = TRUE)
   # Original object untouched (commit never reached).
   testthat::expect_identical(dim(shiny::isolate(res$global_data$sc_obj)), dim(obj))
 })

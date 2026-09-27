@@ -125,7 +125,8 @@ test_that("résumé : colonnes figées, compteurs Seurat, relation exposée", {
   expect_setequal(
     names(s),
     c("label", "producer", "relation", "n_cells", "n_genes", "n_samples",
-      "has_clusters", "registered_at", "updated_at")
+      "has_clusters", "median_nFeature_RNA", "median_nCount_RNA",
+      "median_percent_mt", "registered_at", "updated_at")
   )
   expect_identical(s$label, "Jeu_A")
   expect_identical(s$producer, "import")

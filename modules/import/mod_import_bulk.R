@@ -666,6 +666,7 @@ mod_import_bulk_server <- function(id, global_data) {
       }
 
       global_data$bulk_obj <- bulk_obj
+      global_data$bulk_obj_epoch <- (global_data$bulk_obj_epoch %||% 0L) + 1L  # purge résultats partagés (jeu remplacé)
       temp_data$is_loaded  <- TRUE
       .register_multi_dataset(global_data$bulk_obj)
       add_log(paste("✅ Import (drive) réussi :", nrow(bulk_obj$counts), "gènes ×",
@@ -1074,6 +1075,7 @@ mod_import_bulk_server <- function(id, global_data) {
                                         input$min_counts, input$project_name)
           
           global_data$bulk_obj <- bulk_obj
+          global_data$bulk_obj_epoch <- (global_data$bulk_obj_epoch %||% 0L) + 1L  # purge résultats partagés (jeu remplacé)
           temp_data$is_loaded  <- TRUE
           add_log(paste("✅ Import réussi!", nrow(bulk_obj$counts), "gènes ×",
                         ncol(bulk_obj$counts), "échantillons"))
@@ -1228,6 +1230,7 @@ mod_import_bulk_server <- function(id, global_data) {
           de_allowed    = result$de_ok,
           import_mode   = "per_sample"
         )
+        global_data$bulk_obj_epoch <- (global_data$bulk_obj_epoch %||% 0L) + 1L  # purge résultats partagés (jeu remplacé)
 
         .register_multi_dataset(global_data$bulk_obj)  # MD-1 (label optionnel)
 

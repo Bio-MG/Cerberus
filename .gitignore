@@ -33,9 +33,9 @@ app.log
 .posit/
 .posit/
 AGENTS.md
-docs/
-docs/contracts/VELOCITY_RESULT_CONTRACT.md
-docs/contracts/
+# docs/ et docs/contracts/ SUIVIS dans git depuis 2026-09-27 (audit §0 : les
+# tests *-contract-freeze.R lisaient des contrats fantômes — readLines sans
+# garde — et échouaient sur tout checkout propre).
 .zcode
 .workbuddy-ai/
 QC

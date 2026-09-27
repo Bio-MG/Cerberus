@@ -711,6 +711,14 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
 
         corrected <- run_combat_seq(pristine$counts, batch_vec, group = group_vec)
 
+        # Métrique de mélange des lots (parité SC roadmap 4.3 — handoff §4) :
+        # un chiffre avant/après complète le jugement « à l'œil » sur les PCA.
+        # L'échec de la métrique ne fait JAMAIS échouer la correction (NA).
+        mixing <- tryCatch(
+          list(before = bulk_batch_mixing_score(pristine$counts, batch_vec)$score,
+               after  = bulk_batch_mixing_score(corrected, batch_vec)$score),
+          error = function(e) list(before = NA_real_, after = NA_real_))
+
         p$set(0.6, .tr("Reconstruction DESeqDataSet (design ~1)..."))
         dds <- build_dds(corrected, meta, design_formula = "~1", run_deseq = FALSE)
         dds <- DESeq2::estimateSizeFactors(dds)
@@ -732,12 +740,17 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
             if (isTRUE(d$use_group)) d$condition_col else NULL,
             global_data$bulk_obj$provenance$normalization))
 
+        mix_txt <- if (!is.na(mixing$before) && !is.na(mixing$after))
+          paste0(" \u2014 ", .t_fmt(.tr("m\u00e9lange des lots : {b}% \u2192 {a}%"),
+                 b = sprintf("%.0f", 100 * mixing$before),
+                 a = sprintf("%.0f", 100 * mixing$after)))
+        else ""
         showNotification(
-          .t_fmt(.tr("\u2713 Correction de batch appliqu\u00e9e \u2014 {n} g\u00e8nes \u00d7 {m} \u00e9chantillons"),
-                 n = nrow(corrected), m = ncol(corrected)),
+          paste0(.t_fmt(.tr("\u2713 Correction de batch appliqu\u00e9e \u2014 {n} g\u00e8nes \u00d7 {m} \u00e9chantillons"),
+                        n = nrow(corrected), m = ncol(corrected)), mix_txt),
           type = "message", duration = 6)
 
-        list(before_vst = pristine$vst, after_vst = vst_corrected)
+        list(before_vst = pristine$vst, after_vst = vst_corrected, mixing = mixing)
       }, error = function(e) {
         showNotification(paste(.tr("Erreur correction de batch :"), conditionMessage(e)),
                          type = "error", duration = 8)

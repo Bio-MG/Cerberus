@@ -62,7 +62,8 @@ TS_BULK_DOSE_CURVE_POINTS  <- 100L     # points de la grille de courbe ajustée
 TS_BULK_MULTI_MAX_DATASETS <- 20L      # plafond du conteneur (budget RAM 32 Go — chaque entrée duplique counts + filtré + VST)
 
 # --- MD-4 — conteneur sc_datasets (double jeu SC) -----------------------------
-TS_SC_MULTI_MAX_DATASETS   <- 5L       # plafond du conteneur (budget RAM 32 Go — chaque entrée est un objet Seurat complet, bien plus lourd qu'une matrice bulk)
+TS_SC_MULTI_MAX_DATASETS   <- 20L      # plafond du conteneur (budget RAM 32 Go) — relevé de 5 à 20 le
+                                       # 2026-09-27 (feature 6×10X : les 6 réplicats doivent tenir ; aligné bulk)
 
 # --- NEW-3 — interactome local (réseau dérivé des voies Reactome) -------------
 # La conversion UniProt -> SYMBOL perd des nœuds : le réseau est amputé en

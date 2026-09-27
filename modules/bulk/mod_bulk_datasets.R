@@ -3,9 +3,13 @@
 # (jeux bulk nommés pour la comparaison multi-jeux) — UI + orchestration.
 # =============================================================================
 # Logique pure : R/bulk/bulk_multi.R (contrat gelé BULK_MULTI_CONTRACT.md).
-# Ce module ne fait que LIRE global_data$bulk_obj et shared_rv : aucune
-# écriture sur le jeu actif (garde §2.1 du contrat). La comparaison des jeux
-# est MD-2 (mod_bulk_multi.R, futur) ; le pont pseudobulk est MD-3.
+# Ce module ne fait que LIRE global_data$bulk_obj et shared_rv, SAUF
+# l'activation (amendé 2026-09-27, parité SC_MULTI roadmap 4.1) : le bouton
+# « Activer ce dataset » écrit global_data$bulk_obj via bulk_multi_get() —
+# SEULE écriture autorisée sur le jeu actif (contrat §6 amended). Le bump de
+# global_data$bulk_obj_epoch qui suit purge les résultats partagés.
+# La comparaison des jeux est MD-2 (mod_bulk_multi.R) ; le pont pseudobulk
+# est MD-3.
 #
 # Producteurs du conteneur :
 #   - "import"        : modules/import/mod_import_bulk.R (label optionnel)
@@ -25,6 +29,7 @@ mod_bulk_datasets_ui <- function(id) {
     hr(),
     h6(i18n$t("Datasets enregistrés"), style = "font-weight:bold;"),
     DTOutput(ns("ds_summary")),
+    uiOutput(ns("ds_activate_ui")),
     uiOutput(ns("ds_delete_ui"))
   )
 }
@@ -123,6 +128,50 @@ mod_bulk_datasets_server <- function(id, global_data, shared_rv) {
       global_data$bulk_datasets <- new_ds
       showNotification(sprintf(.tr("✓ Dataset « %s » supprimé."), lbl),
                        type = "message", duration = 5)
+    })
+
+    # ── Activation (parité SC_MULTI roadmap 4.1, 2026-09-27) : relit un ────
+    # dataset enregistré et en fait l'objet actif. SEULE écriture autorisée
+    # sur global_data$bulk_obj dans ce module (contrat BULK_MULTI_CONTRACT.md
+    # §6 amended). Le bump d'epoch déclenche la purge des résultats partagés
+    # (audit 2026-09-27 §1.5).
+    output$ds_activate_ui <- renderUI({
+      ds_names <- names(global_data$bulk_datasets)
+      if (length(ds_names) == 0L) {
+        return(tags$div(class = "small text-muted",
+                        .tr("Aucun dataset à activer.")))
+      }
+      tagList(
+        selectInput(ns("ds_to_activate"), .tr("Dataset à activer"),
+                    choices = ds_names, selected = ds_names[1L], width = "100%"),
+        actionButton(ns("ds_activate"), .tr("✅ Activer ce dataset"),
+                     icon = icon("circle-play"), class = "btn-outline-success w-100 mb-1"),
+        helpText(style = "font-size:0.76em;", .tr(
+          "L'activation remplace le jeu actif : filtrage, contrastes et voies du jeu précédent sont purgés."))
+      )
+    })
+
+    observeEvent(input$ds_activate, {
+      global_data$language  # i18n
+      lbl <- input$ds_to_activate
+      req(lbl, nzchar(lbl))
+      entry <- tryCatch(bulk_multi_get(global_data$bulk_datasets, lbl),
+                        bulk_multi_error = function(e) e)
+      if (inherits(entry, "bulk_multi_error")) {
+        showNotification(entry$message, type = "error", duration = 8)
+        return()
+      }
+      dims <- tryCatch(
+        sprintf("%s gènes × %s échantillons",
+                format(nrow(entry$obj$counts), big.mark = " "),
+                format(ncol(entry$obj$counts), big.mark = " ")),
+        error = function(e) "?")
+      global_data$bulk_obj <- entry$obj
+      global_data$bulk_obj_epoch <- (global_data$bulk_obj_epoch %||% 0L) + 1L
+      showNotification(
+        sprintf(.tr("✓ Jeu « %s » activé (%s) — objet actif remplacé, résultats purgés."),
+                lbl, dims),
+        type = "message", duration = 6)
     })
 
     # ── Summary table (pure consumer of bulk_multi_summary) ─────────────

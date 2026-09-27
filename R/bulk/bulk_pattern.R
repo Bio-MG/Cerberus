@@ -203,8 +203,11 @@ run_pattern_clustering <- function(vst_mat, metadata, group_column, genes = NULL
   }
 
   # -- kmeans -------------------------------------------------------------------
-  set.seed(seed)
-  km <- stats::kmeans(profiles_z, centers = k, nstart = nstart, iter.max = itermax)
+  # Graine déclarée (paramètre seed) + restauration du RNG par withr : deux
+  # exécutions identiques donnent les mêmes clusters, sans fuiter la graine
+  # vers l'analyse suivante (parité withr des pipelines SC, audit §1.8).
+  km <- withr::with_seed(seed,
+    stats::kmeans(profiles_z, centers = k, nstart = nstart, iter.max = itermax))
 
   clusters <- data.frame(
     gene    = rownames(profiles_z),

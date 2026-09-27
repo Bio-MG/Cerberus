@@ -17,23 +17,15 @@ test_that("resolve_sketch_preset caps at n_total_cells", {
 })
 
 # ---------------------------------------------------------------------------
-# 24ᵉ incrément de la dette de conventions (2026-09-18, §2ci).
-# ⚠️ LOT « VERROU SOURCE SEUL » — la classe `sc_pipeline_error` est
-# INOBSERVABLE ici, pour DEUX raisons MESURÉES (sonde, §2ci.1) :
-#   1. `run_sc_auto_pipeline()` n'est PAS pilotable hors session Shiny :
-#      ligne 19 `removeModal()` ⇒ « attempt to apply non-function » et ligne 28
-#      `shiny::Progress$new()` ⇒ « Can only use Progress$new() inside a Shiny
-#      app » (les deux MESURÉS, pas supposés).
-#   2. Même atteint, le site serait AVALÉ : le `tryCatch` ouvert ligne 30 se
-#      ferme ligne 408 sur un gestionnaire qui **retourne** une valeur
-#      (`log_sc()` + `showNotification()`) au lieu de `stop()` (§2cd.2).
-# ⇒ Le seul témoin possible serait le TEXTE du message via `sc_log_rv` — hors
-#   de portée sans session. La preuve se limite donc au **VERROU SOURCE**,
-#   comme pour les lots de `modules/` (§2bs).
-# ⚠️ La justification est rendue EXÉCUTABLE ci-dessous : une justification non
-#   vérifiée pourrit (§2bp, §2cb.2). Si le second test se met à ÉCHOUER, c'est
-#   que le gestionnaire s'est mis à relancer ⇒ le lot devient PROUVABLE à
-#   l'exécution et ce test doit être remplacé par des assertions de classe.
+# 25ᵉ incrément — REWRITE du verrou (roadmap 5.2, audit 2026-09-27 §1.9).
+# Historiquement ce verrou INTERDISAIT le `stop(` dans le gestionnaire final :
+# la classe `sc_pipeline_error` était inobservable (§2cd.2). Le contrat est
+# INVERSÉ : le gestionnaire journalise ET notifie, puis RELANCE — l'erreur
+# devient observable par les appelants (.sc_ap_run_drive marque le job en
+# échec ; les observateurs UI enveloppent dans tryCatch). Le verrou source
+# ci-dessous gèle la NOUVELLE propriété : journalisation + notification +
+# relance. Les assertions de classe complètes restent dans
+# test-sc-auto-pipeline.R (exécution e2e).
 # ---------------------------------------------------------------------------
 
 test_that("sc_pipeline.R ne contribue aucun signalement C10", {
@@ -51,7 +43,7 @@ test_that("sc_pipeline.R ne contribue aucun signalement C10", {
   expect_equal(n, 0L)
 })
 
-test_that("run_sc_auto_pipeline AVALE son erreur (justification du verrou source)", {
+test_that("run_sc_auto_pipeline journalise, notifie PUIS relance (erreur observable)", {
   src <- readLines(file.path(ts_project_root(), "R/sc/sc_pipeline.R"), warn = FALSE)
   h <- grep("error *= *function", src)
   expect_true(length(h) > 0L)
@@ -60,6 +52,6 @@ test_that("run_sc_auto_pipeline AVALE son erreur (justification du verrou source
   # Il journalise ET notifie…
   expect_true(grepl("log_sc\\(", tail_src))
   expect_true(grepl("showNotification\\(", tail_src))
-  # …mais il NE RELANCE PAS ⇒ la classe est inobservable (§2cd.2).
-  expect_false(grepl("stop\\(", tail_src))
+  # …puis RELANCE : la classe sc_pipeline_error est observable (roadmap 5.2).
+  expect_true(grepl("stop\\(e\\)", tail_src))
 })

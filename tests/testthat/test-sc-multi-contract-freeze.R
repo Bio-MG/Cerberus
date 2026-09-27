@@ -90,12 +90,14 @@ test_that("R/sc/sc_multi.R is pure (no Shiny symbols)", {
 # ── Seuil config + repli (contrat §9) ──────────────────────────────────────
 test_that("capacity threshold is declared in config and consumed with fallback", {
   expect_true(exists("TS_SC_MULTI_MAX_DATASETS", inherits = TRUE))
-  expect_identical(TS_SC_MULTI_MAX_DATASETS, 5L)
+  # 2026-09-27 : relevé de 5 à 20 (feature 6×10X — les 6 réplicats doivent
+  # tenir dans le conteneur ; aligné sur TS_BULK_MULTI_MAX_DATASETS).
+  expect_identical(TS_SC_MULTI_MAX_DATASETS, 20L)
   # repli si la config n'est pas sourcée : la valeur de repli est dans le
-  # source de la logique pure (5L, même pattern que TS_BULK_MULTI_MAX_DATASETS).
+  # source de la logique pure (20L, même pattern que TS_BULK_MULTI_MAX_DATASETS).
   src <- .ts_read("R/sc/sc_multi.R")
   expect_match(src, "TS_SC_MULTI_MAX_DATASETS", fixed = TRUE)
-  expect_match(src, "      5L", fixed = TRUE)
+  expect_match(src, "      20L", fixed = TRUE)
 })
 
 # ── Producteur 1 : import SC (contrat §6) ──────────────────────────────────
@@ -136,9 +138,16 @@ test_that("mod_sc_datasets.R is a thin consumer of the pure API", {
   }
   expect_match(mbd, 'producer = "pipeline_save"', fixed = TRUE)
   expect_match(mbd, "overwrite = TRUE", fixed = TRUE)
-  expect_false(grepl("global_data\\$sc_obj\\s*(<-|\\[\\[\\]\\s*<-)", mbd,
-                     perl = TRUE),
-               info = "écriture interdite sur global_data$sc_obj")
+  # Roadmap 4.1 (2026-09-27) : l'ACTIVATION d'un dataset enregistré écrit
+  # global_data$sc_obj via sc_multi_get — SEULE écriture autorisée (contrat
+  # SC_MULTI_CONTRACT.md §6, amended). Toute autre écriture reste interdite.
+  mbd_no_activation <- gsub("global_data\\$sc_obj <- entry\\$obj", "", mbd,
+                            perl = TRUE)
+  expect_false(grepl("global_data\\$sc_obj\\s*(<-|\\[\\[\\]\\s*<-)",
+                     mbd_no_activation, perl = TRUE),
+               info = "écriture interdite sur global_data$sc_obj hors activation")
+  expect_match(mbd, "sc_multi_get(", fixed = TRUE)
+  expect_match(mbd, "sc_obj_epoch", fixed = TRUE)
 })
 
 # ── Câblage mod_sc.R (contrat §6) ──────────────────────────────────────────

@@ -194,6 +194,9 @@ mod_import_sc_ui <- function(id) {
                 bsicons::bs_icon("lightbulb"),
                 " ", i18n$t("Formats acceptés : barcodes.tsv(.gz), features.tsv(.gz) ou genes.tsv(.gz), matrix.mtx(.gz).")),
             uiOutput(ns("dir_select_ui")),
+            # Feature 6×10X (audit 2026-09-27, roadmap 3.1) : auto-découverte
+            # des triplets 10X — 1 sélection remplace 6×(dossier + nom).
+            uiOutput(ns("dir_scan_ui")),
             textInput(ns("sample_name"), i18n$t("Nom de l'échantillon"), placeholder = "Ex: Patient1"),
             actionButton(ns("btn_add_sample"), i18n$t("➕ Ajouter à la liste"), class = "btn-info w-100 mt-2"),
             hr(),
@@ -203,7 +206,13 @@ mod_import_sc_ui <- function(id) {
             actionButton(ns("btn_clear_samples"), i18n$t("🗑️ Tout Effacer"),
                          class = "btn-outline-danger btn-sm w-100 mt-2"),
             hr(),
+            # Roadmap 3.2 : nom de design optionnel (project Seurat du merge).
+            textInput(ns("design_name"), i18n$t("Nom du design (optionnel)"),
+                      placeholder = .tr_plain("ex : Dose_2026 — sinon MultiSample")),
             verbatimTextOutput(ns("path_display"), placeholder = TRUE),
+            # Roadmap 3.4 : annulation coopérative de la boucle d'import.
+            actionButton(ns("btn_cancel_import_a"), i18n$t("⛔ Annuler l'import"),
+                         class = "btn-outline-danger w-100 mb-1"),
             actionButton(ns("btn_load_dir"), i18n$t("🚀 Charger Tous les Échantillons"),
                          class = "btn-success w-100 mt-2", icon = icon("play"))
           ),
@@ -222,6 +231,10 @@ mod_import_sc_ui <- function(id) {
             fileInput(ns("file_upload"), i18n$t("Ajouter Fichier(s)"),
                       accept = c(".rds", ".h5", ".h5ad", ".loom", ".rda", ".RData"), multiple = TRUE),
             uiOutput(ns("file_list_display")),
+            # Roadmap 3.4 : sélection par fichier avant chargement.
+            uiOutput(ns("file_select_ui")),
+            actionButton(ns("btn_cancel_import_b"), i18n$t("⛔ Annuler l'import"),
+                         class = "btn-outline-danger w-100 mb-1"),
             actionButton(ns("btn_load_file"), i18n$t("🚀 Charger"), class = "btn-primary w-100", icon = icon("play"))
           ),
           accordion_panel(
@@ -333,6 +346,7 @@ mod_import_sc_server <- function(id, global_data) {
         if (is.data.frame(obj)) obj <- as.matrix(obj)
         prepared <- prepare_seurat_object(obj, "SingleSample")
         global_data$sc_obj <- prepared
+        global_data$sc_obj_epoch <- (global_data$sc_obj_epoch %||% 0L) + 1L  # purge résultats partagés (jeu remplacé)
         .register_sc_multi_dataset(prepared)
         add_log(paste(.tr("✅ Import réussi:"), ncol(prepared), .tr("cellules"), "—", obj_name))
         showNotification(paste(.tr("✅ Import réussi:"), ncol(prepared), .tr("cellules")),
@@ -381,8 +395,14 @@ mod_import_sc_server <- function(id, global_data) {
     }, ignoreInit = TRUE)
 
     sample_list <- reactiveVal(list())
+    # Roadmap 3.4 : annulation coopérative des boucles d'import (A et B).
+    import_cancel <- reactiveVal(FALSE)
+    observeEvent(input$btn_cancel_import_a, import_cancel(TRUE))
+    observeEvent(input$btn_cancel_import_b, import_cancel(TRUE))
     volumes     <- c(Home = fs::path_home(), getVolumes()())
     shinyDirChoose(input, "dir_select", roots = volumes, session = session)
+    # Feature 6×10X (roadmap 3.1) : deuxième binding pour l'auto-découverte.
+    shinyDirChoose(input, "dir_scan", roots = volumes, session = session)
 
     output$dir_select_ui <- renderUI({
       global_data$language
@@ -393,6 +413,50 @@ mod_import_sc_server <- function(id, global_data) {
         class = "btn-secondary w-100",
         icon  = icon("folder-open")
       )
+    })
+
+    output$dir_scan_ui <- renderUI({
+      global_data$language
+      shinyDirButton(
+        ns("dir_scan"),
+        label = .tr("⚡ Scanner un dossier parent (auto-découverte des échantillons)"),
+        title = .tr("Sélectionner le dossier parent contenant UN sous-dossier par échantillon (chaque sous-dossier = triplets 10X)"),
+        class = "btn-outline-info w-100",
+        icon  = icon("folder-tree")
+      )
+    })
+
+    # Auto-découverte : chaque sous-dossier du dossier parent contenant un
+    # triplet 10X (matrix.mtx(.gz)) devient un échantillon nommé basename().
+    # Les noms déjà présents dans la liste sont ignorés (garde anti-doublon).
+    observeEvent(input$dir_scan, {
+      base <- parseDirPath(volumes, input$dir_scan)
+      req(length(base) > 0)
+      add_log(paste(.tr("🔍 Scan du dossier parent:"), base))
+      subdirs <- list.dirs(base, recursive = FALSE)
+      hits  <- character(0)
+      for (d in subdirs) {
+        has_matrix <- any(file.exists(file.path(d, c("matrix.mtx", "matrix.mtx.gz"))))
+        if (!has_matrix) next
+        sn <- utils::basename(d)
+        cs <- sample_list()
+        if (sn %in% names(cs)) {
+          add_log(paste("  =", sn, "—", .tr("déjà dans la liste, ignoré")))
+          next
+        }
+        cs[[sn]] <- d; sample_list(cs)
+        hits <- c(hits, sn)
+      }
+      if (length(hits)) {
+        add_log(paste("  ✓", length(hits), .tr("échantillon(s) détecté(s):"), paste(hits, collapse = ", ")))
+        showNotification(
+          sprintf(.tr("⚡ %d échantillon(s) 10X détecté(s) et ajouté(s) : %s"),
+                  length(hits), paste(hits, collapse = ", ")),
+          type = "message", duration = 8)
+      } else {
+        showNotification(.tr("Aucun sous-dossier contenant matrix.mtx(.gz) trouvé — utilisez « Ajouter un Dossier » manuellement."),
+                         type = "warning", duration = 8)
+      }
     })
 
     dir_path <- reactiveVal(NULL)
@@ -433,21 +497,46 @@ mod_import_sc_server <- function(id, global_data) {
       add_log(paste(.tr("🔄 Import de"), length(samples), .tr("dossiers 10X...")))
       p <- shiny::Progress$new(); on.exit(p$close())
       p$set(message = .tr("Chargement..."), value = 0)
+      import_cancel(FALSE)
       tryCatch({
         obj_list <- list()
         for (i in seq_along(samples)) {
+          if (import_cancel()) {
+            add_log(.tr("⛔ Import annulé par l'utilisateur."))
+            showNotification(.tr("Import annulé."), type = "warning", duration = 6)
+            return()
+          }
           sn <- names(samples)[i]; path <- samples[[i]]
           p$set(i/length(samples), detail=sn)
           add_log(paste("  📂", .tr("Lecture:"), path))
           raw <- load_single_cell_data(path, add_log)
           obj <- prepare_seurat_object(raw, sn)
           obj$orig.ident <- sn; obj_list[[sn]] <- obj
-          add_log(paste("    ✓", ncol(obj), .tr("cellules")))
+          add_log(paste("    ✓", ncol(obj), .tr("cellules"), "—", nrow(obj), .tr("gènes")))
         }
         p$set(0.9, .tr("Fusion..."))
         merged <- if (length(obj_list)==1) obj_list[[1]] else
-          merge(obj_list[[1]], y=obj_list[-1], add.cell.ids=names(obj_list), project="MultiSample")
+          merge(obj_list[[1]], y=obj_list[-1], add.cell.ids=names(obj_list),
+                project = if (!is.null(input$design_name) && nzchar(trimws(input$design_name)))
+                  trimws(input$design_name) else "MultiSample")
+        # Roadmap 3.2 (audit 2026-09-27 §1.3 corrigé) : Seurat merge l'UNION des
+        # gènes (zéro-remplissage). On journalise l'union et le manque par
+        # échantillon, puis on joint les couches v5 (sinon l'assay reste
+        # éclaté en counts.<sample> et certaines analyses aval dégradent).
+        if (length(obj_list) > 1) {
+          per_feat <- vapply(obj_list, function(o) nrow(o), integer(1))
+          add_log(paste("  🧬", .tr("Gènes par échantillon :"),
+                        paste(paste0(names(per_feat), "=", per_feat), collapse = ", ")))
+          add_log(paste("  🧬", .tr("Union au merge :"), nrow(merged), .tr("gènes"),
+                        "—", .tr("gènes absents = zéro-remplis (aucune suppression)")))
+          merged <- tryCatch({
+            a <- SeuratObject::JoinLayers(merged[["RNA"]])
+            merged[["RNA"]] <- a
+            merged
+          }, error = function(e) merged)
+        }
         global_data$sc_obj <- merged
+        global_data$sc_obj_epoch <- (global_data$sc_obj_epoch %||% 0L) + 1L  # purge résultats partagés (jeu remplacé)
         .register_sc_multi_dataset(merged)
         add_log(paste("✅", ncol(merged), .tr("cellules,"), length(unique(merged$orig.ident)), .tr("échantillon(s)")))
         showNotification(paste(.tr("✅ Import réussi:"), ncol(merged), .tr("cellules")), type = "message", duration = 5)
@@ -469,17 +558,49 @@ mod_import_sc_server <- function(id, global_data) {
         }))
     })
 
+    # Roadmap 3.4 : sélection par fichier avant chargement (tout coché par
+    # défaut — décocher exclut le fichier du merge).
+    output$file_select_ui <- renderUI({
+      req(input$file_upload)
+      files <- input$file_upload
+      checkboxGroupInput(ns("file_select"),
+                         .tr("Fichiers à charger (décochez pour exclure)"),
+                         choices = files$name, selected = files$name)
+    })
+
     observeEvent(input$btn_load_file, {
       req(input$file_upload)
       files <- input$file_upload
-      add_log(paste(.tr("🔄 Import de"), nrow(files), "fichier(s)..."))
+      selected <- if (is.null(input$file_select)) files$name else
+        intersect(input$file_select, files$name)
+      if (!length(selected)) {
+        showNotification(.tr("Aucun fichier sélectionné — cochez au moins un fichier."),
+                         type = "warning", duration = 6)
+        return()
+      }
+      add_log(paste(.tr("🔄 Import de"), length(selected), "/", nrow(files), "fichier(s)..."))
       p <- shiny::Progress$new(); on.exit(p$close())
       p$set(message = .tr("Chargement..."), value = 0)
+      import_cancel(FALSE)
       tryCatch({
         obj_list <- list()
-        for (i in 1:nrow(files)) {
+        for (i in which(files$name %in% selected)) {
+          if (import_cancel()) {
+            add_log(.tr("⛔ Import annulé par l'utilisateur."))
+            showNotification(.tr("Import annulé."), type = "warning", duration = 6)
+            return()
+          }
           fn <- tools::file_path_sans_ext(files$name[i])
           p$set(i/nrow(files), detail=files$name[i])
+
+          # Roadmap 3.3 (audit 2026-09-27 §1.6 corrigé) : file_path_sans_ext ne
+          # retire qu'UNE extension — deux fichiers de même stem (S1.rds +
+          # S1.h5 → « S1 ») s'écrasaient silencieusement. Garde explicite.
+          if (fn %in% names(obj_list)) {
+            stop(errorCondition(sprintf(
+              "%s : un fichier « %s » a déjà été chargé (même nom après retrait d'extension). Renommez un des fichiers ou utilisez l'Option A (dossiers) pour préserver les deux jeux de cellules.",
+              files$name[i], fn), class = "sc_import_error"))
+          }
 
           # Step-3.8: verify the upload actually completed before attempting
           # to open it (see .verify_upload_integrity() docstring above).
@@ -498,10 +619,20 @@ mod_import_sc_server <- function(id, global_data) {
         p$set(0.9, .tr("Fusion..."))
         merged <- if (length(obj_list)==1) obj_list[[1]] else
           merge(obj_list[[1]], y=obj_list[-1], add.cell.ids=names(obj_list), project="MultiFile")
+        if (length(obj_list) > 1) {
+          add_log(paste("  🧬", .tr("Union au merge :"), nrow(merged), .tr("gènes"),
+                        "—", .tr("gènes absents = zéro-remplis (aucune suppression)")))
+          merged <- tryCatch({
+            a <- SeuratObject::JoinLayers(merged[["RNA"]])
+            merged[["RNA"]] <- a
+            merged
+          }, error = function(e) merged)
+        }
         global_data$sc_obj <- merged
+        global_data$sc_obj_epoch <- (global_data$sc_obj_epoch %||% 0L) + 1L  # purge résultats partagés (jeu remplacé)
         .register_sc_multi_dataset(merged)
         add_log(paste("✅", ncol(merged), .tr("cellules")))
-        showNotification(.tr("✅ Import réussi:"), type = "message", duration = 5)
+        showNotification(paste(.tr("✅ Import réussi:"), ncol(merged), .tr("cellules")), type = "message", duration = 5)
       }, error = function(e) {
         msg <- paste(.tr("❌ Erreur:"), conditionMessage(e))
         add_log(msg); showNotification(msg, type = "error", duration = 12)
@@ -534,6 +665,7 @@ mod_import_sc_server <- function(id, global_data) {
           raw <- load_single_cell_data(input$single_file_upload$datapath, add_log)
           obj <- prepare_seurat_object(raw, "SingleSample")
           global_data$sc_obj <- obj
+          global_data$sc_obj_epoch <- (global_data$sc_obj_epoch %||% 0L) + 1L  # purge résultats partagés (jeu remplacé)
           .register_sc_multi_dataset(obj)
           add_log(paste(.tr("✅ Import réussi:"), ncol(obj), .tr("cellules")))
           showNotification(.tr("✅ Import réussi:"), type = "message")
@@ -604,6 +736,10 @@ mod_import_sc_server <- function(id, global_data) {
         smry[[.tr("Batch")]] <- tapply(as.character(meta$batch), ids,
           function(x) paste(unique(x), collapse = ", "))[samples]
       }
+      if ("replicate" %in% colnames(meta)) {
+        smry[[.tr("Réplicat")]] <- tapply(as.character(meta$replicate), ids,
+          function(x) paste(unique(x), collapse = ", "))[samples]
+      }
       df <- as.data.frame(smry, check.names = FALSE, stringsAsFactors = FALSE)
       ts_datatable(df, page_length = 10, buttons = FALSE,
                    dom = "t", filter = "none")
@@ -670,25 +806,47 @@ mod_import_sc_server <- function(id, global_data) {
       }
 
       # 4. .h5ad — cascade of converters
+      # Roadmap 5.4 (audit 2026-09-27 §1.7) : chaque convertisseur est tenté
+      # et son échec CAPTURÉ + journalisé — le message terminal cite les
+      # causes réelles au lieu d'accuser à tort des paquets installés.
       if (ext == "h5ad") {
+        h5ad_errs <- character(0)
         if (requireNamespace("BPCells", quietly=TRUE)) {
-          try({ mat <- BPCells::open_matrix_anndata_hdf5(path)
+          tryCatch({ mat <- BPCells::open_matrix_anndata_hdf5(path)
                 tmp <- tempfile(pattern="bpcells_h5ad_")
                 BPCells::write_matrix_dir(mat=mat, dir=tmp)
-                return(BPCells::open_matrix_dir(dir=tmp)) }, silent=TRUE)
+                return(BPCells::open_matrix_dir(dir=tmp)) },
+                error = function(e) {
+                  h5ad_errs <<- c(h5ad_errs, paste0("BPCells : ", conditionMessage(e)))
+                  log(paste("  ⚠ BPCells h5ad :", conditionMessage(e)))
+                  NULL })
         }
         if (requireNamespace("zellkonverter", quietly=TRUE)) {
-          try({ sce <- zellkonverter::readH5AD(file=path, use_hdf5=TRUE, raw=TRUE)
+          tryCatch({ sce <- zellkonverter::readH5AD(file=path, use_hdf5=TRUE, raw=TRUE)
                 if (!"counts" %in% SummarizedExperiment::assayNames(sce))
                   SummarizedExperiment::assay(sce,"counts") <- SummarizedExperiment::assay(sce,SummarizedExperiment::assayNames(sce)[1])
-                return(Seurat::as.Seurat(sce, counts="counts", data=NULL)) }, silent=TRUE)
+                return(Seurat::as.Seurat(sce, counts="counts", data=NULL)) },
+                error = function(e) {
+                  h5ad_errs <<- c(h5ad_errs, paste0("zellkonverter : ", conditionMessage(e)))
+                  log(paste("  ⚠ zellkonverter h5ad :", conditionMessage(e)))
+                  NULL })
         }
         if (requireNamespace("sceasy", quietly=TRUE)) {
-          try({ tmp_rds <- tempfile(fileext=".rds")
+          tryCatch({ tmp_rds <- tempfile(fileext=".rds")
                 sceasy::convertFormat(path, from="anndata", to="seurat", outFile=tmp_rds)
-                return(readRDS(tmp_rds)) }, silent=TRUE)
+                return(readRDS(tmp_rds)) },
+                error = function(e) {
+                  h5ad_errs <<- c(h5ad_errs, paste0("sceasy : ", conditionMessage(e)))
+                  log(paste("  ⚠ sceasy h5ad :", conditionMessage(e)))
+                  NULL })
         }
-        stop(errorCondition("Impossible de charger .h5ad. Installez BPCells, zellkonverter ou sceasy.", class = "sc_import_error"))
+        stop(errorCondition(paste0(
+          "Impossible de charger .h5ad.",
+          if (length(h5ad_errs)) paste0(
+            " Causes rencontrées (dans l'ordre) : ", paste(h5ad_errs, collapse = " | "),
+            " — résolvez la cause la plus profonde ou convertissez le fichier en .h5/.rds.")
+          else " Installez BPCells, zellkonverter ou sceasy."),
+          class = "sc_import_error"))
       }
 
       # 5. .loom
