@@ -46,6 +46,30 @@
   fn(...)
 }
 
+#' Skip unless we are inside a real git repository.
+#'
+#' 🔴 This precondition is REAL and it was measured, not anticipated. Running
+#' this file from an extracted `git archive` gave 97 PASS / 3 FAIL / 1 ERROR,
+#' because the extracted tree has NO `.git`: `vct_repo_root()` cannot resolve,
+#' and `vct_archive()` refuses with a correct but unexpected reason.
+#'
+#' The repo's rule is to verify a commit from its archive — and for THIS file
+#' that is impossible, because the thing under test measures a repository. So
+#' the dependency is declared instead of hidden: these cases SKIP, visibly, and
+#' the pure layer (parse, classify, format, exit status) keeps running anywhere.
+#' A skip is reported in the tally; it is not a pass.
+vct_skip_unless_repo <- function() {
+  e <- .vct_env()
+  if (!is.environment(e)) return(invisible(FALSE))
+  ok <- tryCatch(identical(e$vct_git_probe("rev-parse", "--git-dir")$status, 0L),
+                 error = function(err) FALSE)
+  if (!isTRUE(ok)) {
+    testthat::skip(paste("needs a git repository; an extracted `git archive` has no",
+                         ".git, and this tool measures a repository"))
+  }
+  invisible(TRUE)
+}
+
 # ---------------------------------------------------------------------------
 # Parsing a gate's own words — never its exit code alone
 # ---------------------------------------------------------------------------
@@ -325,14 +349,19 @@ test_that("vct_archive_preflight nomme la CAUSE, pas un code git", {
 
   # et le refus est bien LEVE, avec SA cause. 🔴 Un ref invalide, pas « HEAD » :
   # la premiere version demandait l'echec de `vct_archive` depuis le depot, ce
-  # qui est legitimate — un test ne peut pas exiger qu'un outil echoue.
-  raised <- tryCatch(.vct("vct_archive", "definitely_not_a_ref",
-                          file.path(tempdir(), "vct_nope")),
-                     error = function(err) conditionMessage(err))
-  expect_true(is.character(raised) && length(raised) == 1L && nzchar(raised))
-  if (!is.character(raised) || length(raised) != 1L) return()
-  expect_match(raised, "definitely_not_a_ref", fixed = TRUE)
-  expect_match(raised, "does not resolve to a commit", fixed = TRUE)
+  # qui est legitimate — un test ne peut pas exiger qu'un outil echoue. Et ce
+  # bout-la necessite un depot REEL (la sonde ci-dessus est une fausse), donc il
+  # saute hors d'un `git archive` — ou bien la raison levee serait legitement
+  # « pas un depot », pas « ref inconnu ».
+  if (isTRUE(vct_skip_unless_repo())) {
+    raised <- tryCatch(.vct("vct_archive", "definitely_not_a_ref",
+                            file.path(tempdir(), "vct_nope")),
+                       error = function(err) conditionMessage(err))
+    expect_true(is.character(raised) && length(raised) == 1L && nzchar(raised))
+    if (!is.character(raised) || length(raised) != 1L) return()
+    expect_match(raised, "definitely_not_a_ref", fixed = TRUE)
+    expect_match(raised, "does not resolve to a commit", fixed = TRUE)
+  }
 })
 
 test_that("vct_run_cmd rend un VRAI code de sortie, pas un NA deguise en 0", {
@@ -379,6 +408,7 @@ test_that("la racine du projet vient de GIT, jamais du repertoire courant", {
   # qui change selon le repertoire depuis lequel on tape la commande n'est pas
   # une mesure. `testthat` execute avec le wd sur `tests/testthat`, donc le test
   # unitaire voit ce que l'execution manuelle depuis la racine ne voyait pas.
+  vct_skip_unless_repo()
   e <- .vct_env()
   if (!is.environment(e)) return()
   root <- .vct("vct_repo_root")
@@ -396,6 +426,9 @@ test_that("vct_archive extrait un VRAI commit par la route zip (jamais tar|sh)",
   # The happy path, measured. This is the assertion that would catch a
   # regression to the piped `git archive | tar` form — the one that MEASURED as
   # "Damaged tar archive (bad header checksum)" leaving ZERO files on this host.
+  #
+  # 🔴 Needs a real repository, so it SKIPS inside an extracted `git archive`.
+  vct_skip_unless_repo()
   e <- .vct_env()
   if (!is.environment(e)) return()
   dest <- file.path(tempdir(), "vct_test_extract")
