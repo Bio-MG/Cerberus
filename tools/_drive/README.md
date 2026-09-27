@@ -462,6 +462,68 @@ state" and "probe crashed" stay distinguishable.
 requires the design/contrast inputs, which are their own milestone. A DE
 refusal immediately after `import_file` is **expected**, not a protocol bug.
 
+### `bulk_de.shrunk` / `shrink_requested` / `shrink_method` — is the LFC shrunk?
+
+`snapshot.modules.bulk_de` publishes a significance count under a NAMED
+convention that contains `|log2FoldChange| > 1`. That half of the convention is
+evaluated on whatever the LFC column holds — **shrunken, or raw MLE**. Both are
+correct counts; they are not the same reading, and until now nothing on the wire
+said which. Three scalars travel beside the count:
+
+| field | meaning |
+|---|---|
+| `shrunk` | the published LFCs are shrunk. `null` when the engine has no shrinkage step |
+| `shrink_requested` | the user asked for shrinkage (`true`), or left the box unticked (`false`) |
+| `shrink_method` | `"apeglm"` / `"normal"` when something was applied, `null` otherwise |
+
+🔴 **The two booleans are both required.** `shrunk = false` alone cannot separate
+three real situations: the box unticked; the box ticked and the package missing,
+so the table fell back to raw MLE **and warned**; the box ticked and
+`lfcShrink()` raised. The pairs are distinct — applied `(true, true)`, asked but
+not applied `(false, true)`, never asked `(false, false)`.
+
+🔴 **Absent is NOT false, and this is the property most easily got wrong.** The
+edgeR and limma frames carry no `shrunk` attribute at all, because neither engine
+shrinks. Publishing `false` there would assert "we tried and did not shrink";
+the truth is "there is no such step here". So a result without the attribute
+yields three `null`s, never a `false`. The same holds before any contrast exists.
+
+**Measured live** (2026-09-27, GSE164073 subset 1 928 genes × 18 samples, DESeq2,
+`shrink_lfc` left at its default `true`):
+
+```
+n_contrasts = 1   n_genes = 1928   n_padj_finite = 1928   n_significant = 346
+convention       = "padj < 0.05 & |log2FoldChange| > 1"
+shrunk           = false
+shrink_requested = true
+shrink_method    = null
+```
+
+and the app's own log, in the same run:
+
+> `Shrinkage LFC non applique : le paquet optionnel 'apeglm' n'est pas installe :
+> les log2FoldChange affiches sont ceux de results(), NON retrecis.`
+
+So **346 is a count computed on UNSHRUNK log2FoldChange** — the default run on
+any host without `apeglm` (measured absent here, and listed in `renv.lock`:
+the known hermeticity gap). Before this field set, a reader could not tell that
+from a properly-shrunk count under an identical convention string.
+
+⚠️ **The contrast pair in that run was NOT the injected one.** The auto-generated
+contrast was `limbus_vs_cornea` (the `tissue` column) while the scenario
+requested `CoV2` / `mock` — the known dependent-select inversion, documented and
+still open. It does not weaken the measurement: the shrinkage state is read off
+the DESeq2 result and is orthogonal to which contrast was chosen. It is reported
+here rather than quietly dropped, because "I injected the pair" would have been
+false.
+
+**No line of the statistical path was touched.** `extract_deseq2_contrast()`
+already recorded `shrunk` / `shrunk_method` / `shrunk_reason` on the frame it
+returns; this is publication only, and `bulk_de_shrinkage_state()` reads those
+attributes rather than recomputing anything. `shrink_requested` is derived from
+`shrunk_reason` because that is the one field the code fills on EVERY failure
+path and leaves `NA` only when the `if (shrink)` block never ran.
+
 ### The FIRST-ARM symptom was the app's SLOW BOOT, not a lost write
 
 Measured on a fresh session: the **first** `arm.json` after session start is
@@ -633,6 +695,11 @@ action. **One fresh session** (fresh app process, drop dir deleted first),
 | 6 | `set_inputs` `group_ref = CoV2`, `group_target = mock`, `de_engine = deseq2` | `applied`; DOM readback returned **`CoV2` / `mock` / `deseq2`** |
 | 7 | `run_pipeline` **`bulk_de`** | `done` in **2.1 s** — and the contrast was first observable **852.7 s** later |
 | 8 | `snapshot` | **`n_contrasts = 1`**, **`active_contrast = mock_vs_CoV2`**, `n_genes = 17925`, `n_padj_finite = 14102`, `n_significant = 29`, `bypass = FALSE` |
+
+> The field set has since GREWN: `shrunk` / `shrink_requested` / `shrink_method`
+> were added later — see *"`bulk_de.shrunk` / `shrink_requested` /
+> `shrink_method`"* above. The numbers in this row are the ones measured on that
+> date and are deliberately left as they were.
 | 9–10 | **second** DE run, same pair | `done`; `n_contrasts` stays **1** (same name overwritten), `n_genes` unchanged, imported object **intact**, 18 samples |
 
 ⚠️ **Why `done` in 2.1 s is the whole point.** `status: done` means the token

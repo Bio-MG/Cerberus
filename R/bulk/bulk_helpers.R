@@ -352,6 +352,85 @@ extract_deseq2_contrast <- function(dds, condition_col, group_target, group_ref,
 
 }
 
+#' The SHRINKAGE state of a differential result, as three bounded scalars.
+#'
+#' @description
+#' `extract_deseq2_contrast()` already records what it did to the
+#' log2FoldChange column, in three attributes on the frame it returns:
+#' `shrunk`, `shrunk_method` and `shrunk_reason` (see above). Nothing published
+#' them, so a consumer of a DE result could read a significance COUNT without
+#' knowing whether the LFCs behind it were shrunk — and the two are not
+#' interchangeable readings of the same column.
+#'
+#' This function turns those attributes into the smallest honest answer:
+#'
+#' \describe{
+#'   \item{`shrunk`}{`TRUE`/`FALSE` — the published LFCs are shrunk. `NULL`
+#'     when the engine has no shrinkage step at all.}
+#'   \item{`shrink_requested`}{`TRUE` when shrinkage was asked for, `FALSE` when
+#'     the user left the box unticked.}
+#'   \item{`shrink_method`}{`"apeglm"` / `"normal"` when something was applied,
+#'     `NULL` otherwise.}
+#' }
+#'
+#' 🔴 `shrunk = FALSE` alone is NOT enough, and that is the reason this function
+#' exists. Three different situations all yield `shrunk = FALSE`:
+#'
+#'   1. the user unticked the box — nothing was asked, nothing is wrong;
+#'   2. the box was ticked, the package was missing, so the table fell back to
+#'      raw MLE log2FC **and warned** (the normal path for a `~condition` design
+#'      when `apeglm` is absent);
+#'   3. the box was ticked and `lfcShrink()` raised.
+#'
+#' `shrink_requested` separates them, and it is derived from `shrunk_reason`
+#' because that is the one field the code fills on EVERY failure path and
+#' leaves `NA` only when the `if (shrink)` block never ran.
+#'
+#' 🔴 ABSENT IS NOT FALSE, and this is the property most likely to be got wrong.
+#' The edgeR and limma frames carry NO `shrunk` attribute, because neither
+#' engine shrinks. Reporting `FALSE` there would assert "we tried and did not
+#' shrink"; the truth is "there is no such step here". So a result without the
+#' attribute yields three `NULL`s, never a `FALSE`.
+#'
+#' @param res A DE result (data.frame), or `NULL`.
+#' @return A named list of three atomic scalars; `NULL` where not applicable.
+#' @noRd
+bulk_de_shrinkage_state <- function(res) {
+
+  out <- list(shrunk = NULL, shrink_requested = NULL, shrink_method = NULL)
+
+  if (is.null(res)) return(out)
+
+  # Only DESeq2 sets the attribute. edgeR/limma must read as "not applicable".
+  shrunk <- attr(res, "shrunk")
+
+  if (is.null(shrunk)) return(out)
+
+  reason <- attr(res, "shrunk_reason")
+
+  # NA / absent => the `if (shrink)` block never ran => nothing was requested.
+  has_reason <- !is.null(reason) && length(reason) == 1L && !is.na(reason)
+
+  out$shrunk           <- isTRUE(shrunk)
+
+  out$shrink_requested <- isTRUE(shrunk) || has_reason
+
+  if (isTRUE(shrunk)) {
+
+    method <- attr(res, "shrunk_method")
+
+    if (!is.null(method) && length(method) == 1L && !is.na(method)) {
+
+      out$shrink_method <- as.character(method)
+
+    }
+
+  }
+
+  out
+
+}
+
 
 
 #' Build the edgeR contrast vector for "group_target vs group_ref"

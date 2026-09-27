@@ -60,6 +60,17 @@
   # `n_significant` is computed under a FIXED, NAMED convention rather than the
   # panel's thresholds: those are INPUTS, so a probe that borrowed them would
   # describe the last click instead of the state.
+  #
+  # SHRINKAGE (publication only — no line of the statistical path is touched).
+  # The convention above names `|log2FoldChange| > 1`, and that half is evaluated
+  # on WHATEVER the LFC column holds: shrunken, or raw MLE. Both are correct
+  # counts; they are not the same reading, and nothing on the wire said which.
+  # MEASURED on this host: `apeglm` is NOT installed, and for a `~condition`
+  # design `use_coef` is TRUE, so the DEFAULT run takes the branch that asks
+  # for apeglm, finds nothing, and publishes UNSHRUNK log2FoldChange with a
+  # warning. An agent reading only `n_significant` would take those LFCs for
+  # shrunken ones. `bulk_de_shrinkage_state()` reads the three attributes
+  # `extract_deseq2_contrast()` already sets, so nothing is recomputed here.
   drive_state <- function() {
     contrasts <- shiny::isolate(shared_rv$contrasts)
     active    <- shiny::isolate(shared_rv$active_contrast)
@@ -71,13 +82,22 @@
       n_padj_finite   = NULL,
       n_significant   = NULL,
       convention      = "padj < 0.05 & |log2FoldChange| > 1",
-      bypass          = !is.null(shiny::isolate(shared_rv$de_bypass))
+      bypass          = !is.null(shiny::isolate(shared_rv$de_bypass)),
+      # Three scalars, and NULL — not FALSE — where they do not apply: an
+      # edgeR/limma result has no shrinkage step, and "absent" is the fact.
+      shrunk          = NULL,
+      shrink_requested = NULL,
+      shrink_method   = NULL
     )
     if (!is.null(res)) {
       out$n_genes       <- nrow(res)
       out$n_padj_finite <- sum(is.finite(res$padj))
       out$n_significant <- sum(res$padj < 0.05 & abs(res$log2FoldChange) > 1,
                                na.rm = TRUE)
+      shr <- bulk_de_shrinkage_state(res)
+      out$shrunk           <- shr$shrunk
+      out$shrink_requested <- shr$shrink_requested
+      out$shrink_method    <- shr$shrink_method
     }
     out
   }

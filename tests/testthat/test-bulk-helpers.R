@@ -407,3 +407,189 @@ test_that("bulk_helpers : un message multi-arguments n'est pas TRONQUE par error
   expect_s3_class(e2, "bulk_de_error")
   expect_true(grepl("moteur_inconnu", conditionMessage(e2), fixed = TRUE))
 })
+
+# ---------------------------------------------------------------------------
+# bulk_de_shrinkage_state() — is the PUBLISHED log2FoldChange actually SHRUNK?
+# ---------------------------------------------------------------------------
+# WHY THIS EXISTS. `extract_deseq2_contrast()` records the shrinkage outcome in
+# three attributes on the result it returns (`shrunk`, `shrunk_method`,
+# `shrunk_reason`; see R/bulk/bulk_helpers.R ~l.323-349). Nothing on the drive
+# protocol published them, so a snapshot reported
+#
+#     n_significant = <n>   under   convention = "padj < 0.05 & |log2FoldChange| > 1"
+#
+# and the `|log2FoldChange| > 1` half of that convention is evaluated on
+# WHATEVER the LFC column happens to hold — shrunken or not. The count is
+# correct either way; its MEANING is not, and nothing said which.
+#
+# 🔴 THIS HOST MAKES IT ACUTE, and that is measured, not assumed:
+# `apeglm` is NOT installed (the lockfile lists it, the library does not have
+# it — the known hermeticity gap). For a `~condition` design `use_coef` is TRUE,
+# so the branch that normally runs asks for `type = "apeglm"`, finds no
+# package, and leaves the table UNSHRUNK while warning. So on this machine the
+# default run publishes a "significant" count computed on raw MLE log2FC, under
+# a convention that reads as if it were computed on shrunken values.
+
+.shr_frame <- function(shrunk, method = NA_character_, reason = NA_character_) {
+  d <- data.frame(gene = c("g1", "g2"), padj = c(0.01, 0.2),
+                  log2FoldChange = c(2, 0.1))
+  attr(d, "shrunk")        <- shrunk
+  attr(d, "shrunk_method") <- method
+  attr(d, "shrunk_reason") <- reason
+  d
+}
+
+# 🔴 LA FONCTION N'EXISTE PAS ENCORE, et c'est le ROUGE qui doit le montrer.
+# Un appel direct d'un symbole absent lève « could not find function » : le
+# fichier sort en ERROR, et un ROUGE qui PLANTE dit « le test est cassé », pas
+# « la fonctionnalité manque » (CONVENTIONS.md, jalon §2dn). Le garde transforme
+# l'absence en un FAIL net portant sur le CONTRAT, et laisse les assertions
+# suivantes s'executer des que la fonction existe — donc le vert prouve le
+# contrat entier, pas seulement son premier maillon.
+.shr <- function(res) {
+  if (!exists("bulk_de_shrinkage_state", mode = "function")) return(NULL)
+  bulk_de_shrinkage_state(res)
+}
+
+test_that("bulk_de_shrinkage_state : la fonction existe et rend un triple nomme", {
+  expect_true(exists("bulk_de_shrinkage_state", mode = "function"),
+              info = "la derivation de l'etat du shrinkage n'est pas ecrite")
+  st <- .shr(.shr_frame(TRUE, "apeglm"))
+  expect_true(is.list(st))
+  expect_named(st, c("shrunk", "shrink_requested", "shrink_method"))
+})
+
+test_that("bulk_de_shrinkage_state : ABSENT is not FALSE (edgeR/limma shrink nothing)", {
+  # 🔴 The honesty property, and the one most likely to be got wrong. edgeR and
+  # limma do not shrink, and their result frames carry NO `shrunk` attribute at
+  # all. Publishing `shrunk = FALSE` there would assert "we tried and did not
+  # shrink"; the truth is "this engine has no shrinkage step". Those are
+  # different, and only the second one is a fact.
+  st <- .shr(NULL)
+  expect_null(st$shrunk)
+  expect_null(st$shrink_requested)
+  expect_null(st$shrink_method)
+
+  bare <- data.frame(gene = "g1", padj = 0.01, log2FoldChange = 2)
+  st2 <- .shr(bare)
+  expect_null(st2$shrunk, "a frame with no shrunk attribute is NOT a FALSE")
+  expect_null(st2$shrink_requested)
+  expect_null(st2$shrink_method)
+})
+
+test_that("bulk_de_shrinkage_state : the DESeq2 outcomes are told apart", {
+  # Requested AND applied — the apeglm path.
+  a <- .shr(.shr_frame(TRUE, "apeglm"))
+  expect_identical(a$shrunk, TRUE)
+  expect_identical(a$shrink_requested, TRUE)
+  expect_identical(a$shrink_method, "apeglm")
+
+  # Requested AND applied — the OTHER shrinker, `normal`. Without this case a
+  # hardcoded `shrink_method <- "apeglm"` would satisfy every assertion above:
+  # `apeglm` is the only method the other cases ever carry, and `use_coef` is
+  # TRUE for a plain `~condition` design, so `normal` is reached only when the
+  # coefficient is ABSENT from `resultsNames()`. It is a real branch, so it is
+  # measured here rather than assumed unreachable.
+  nrm <- .shr(.shr_frame(TRUE, "normal"))
+  expect_identical(nrm$shrunk, TRUE)
+  expect_identical(nrm$shrink_requested, TRUE)
+  expect_identical(nrm$shrink_method, "normal")
+  expect_false(identical(a$shrink_method, nrm$shrink_method))
+
+  # Requested, NOT applied (apeglm absent, or lfcShrink raised). `shrunk_reason`
+  # is NON-NA on both failure paths, so "reason present" is what proves the
+  # user ASKED for shrinkage and did not get it. That is the case the count is
+  # most misleading in, and it must be distinguishable from "never asked".
+  b <- .shr(.shr_frame(FALSE, NA_character_, "apeglm absent"))
+  expect_identical(b$shrunk, FALSE)
+  expect_identical(b$shrink_requested, TRUE)
+  expect_null(b$shrink_method, "no method is named when nothing was applied")
+
+  # NOT requested at all: `shrink = FALSE` skips the whole block, so `shrunk`
+  # is FALSE and `shrunk_reason` is still NA. FALSE/FALSE is the only pair
+  # that means "the box was unticked" — and it is a legitimate state, not an
+  # absence.
+  c3 <- .shr(.shr_frame(FALSE))
+  expect_identical(c3$shrunk, FALSE)
+  expect_identical(c3$shrink_requested, FALSE)
+  expect_null(c3$shrink_method)
+
+  # 🔴 The three DESeq2 outcomes must NOT collapse into one another — and the
+  # claim is about the PAIR, not about `shrink_requested` alone. A first version
+  # asserted `a$shrink_requested != b$shrink_requested`; that is WRONG, and the
+  # green run said so: `a` (applied) and `b` (asked, failed) were BOTH requested,
+  # so what separates them is `shrunk`, not the request. The three states are
+  #
+  #   applied            -> (TRUE,  TRUE)
+  #   asked, not applied -> (FALSE, TRUE)
+  #   never asked        -> (FALSE, FALSE)
+  #
+  # and the point of publishing two fields is exactly that no single one of them
+  # separates all three.
+  pair <- function(s) list(s$shrunk, s$shrink_requested)
+  expect_identical(pair(a), list(TRUE,  TRUE))
+  expect_identical(pair(b), list(FALSE, TRUE))
+  expect_identical(pair(c3), list(FALSE, FALSE))
+  expect_false(identical(pair(a), pair(b)))
+  expect_false(identical(pair(b), pair(c3)))
+  expect_false(identical(pair(a), pair(c3)))
+})
+
+test_that("bulk_de_shrinkage_state : bounded scalars only, never the frame or a row value", {
+  # COUNTS AND FLAGS ONLY. The probe runs inside the poller's reactive beat, so
+  # returning anything row-shaped would enrol the DE result in the poller's
+  # dependency set — and a gene name is user data.
+  st <- .shr(.shr_frame(TRUE, "apeglm"))
+  expect_named(st, c("shrunk", "shrink_requested", "shrink_method"))
+  for (v in st) expect_true(is.atomic(v) && length(v) <= 1L)
+  expect_false(any(grepl("g1|g2", unlist(st), ignore.case = TRUE)))
+})
+
+test_that("bulk_de_shrinkage_state : agrees with a REAL DESeq2 fit on this host", {
+  skip_if_not_installed("DESeq2")
+  set.seed(1)
+  ng <- 400L
+  counts <- matrix(rnbinom(ng * 6L, mu = 100, size = 3), nrow = ng,
+                   dimnames = list(paste0("g", seq_len(ng)),
+                                   paste0("s", 1:6)))
+  # a real signal, so the fit is not degenerate
+  counts[1:40, 4:6] <- counts[1:40, 4:6] * 8L
+  meta <- data.frame(condition = rep(c("ctrl", "treat"), each = 3L),
+                     row.names = paste0("s", 1:6))
+
+  # 🔴 `run_bulk_de_dispatch("deseq2", ...)` does NOT build a dds from counts: the
+  # deseq2 branch REFUSES a NULL `dds` ("DESeqDataSet manquant", l.632). So a
+  # first version of this test called it that way and the block ERRORED — a red
+  # that says "the test is broken", not "the feature is missing". The dds is
+  # built and fitted here, exactly as `mod_bulk_de_run.R:386` does it.
+  dds <- build_dds(counts, meta, design_formula = "~ condition", run_deseq = TRUE)
+  expect_s4_class(dds, "DESeqDataSet")
+
+  run <- function(shrink) {
+    suppressWarnings(
+      run_bulk_de_dispatch("deseq2", counts, meta, "condition", "treat", "ctrl",
+                           dds = dds, shrink = shrink))
+  }
+  asked  <- run(TRUE)
+  untick <- run(FALSE)
+
+  # The attributes really are on the returned frame, and are booleans/strings —
+  # a contract this test now pins instead of assuming.
+  expect_true("shrunk" %in% names(attributes(asked)))
+  expect_type(attr(asked, "shrunk"), "logical")
+
+  sa <- .shr(asked)
+  su <- .shr(untick)
+  # On THIS host `apeglm` is absent, so asking produces `shrunk = FALSE` WITH a
+  # reason. If a future environment installs it, the two states split the other
+  # way; either way `shrink_requested` must be TRUE for the asked run and FALSE
+  # for the unticked one. Asserting the REQUEST rather than the outcome is what
+  # makes this test portable.
+  expect_identical(sa$shrink_requested, TRUE, "shrink = TRUE was requested")
+  expect_identical(su$shrink_requested, FALSE, "shrink = FALSE was not requested")
+  expect_identical(sa$shrunk, FALSE, "apeglm is absent on this host, so nothing is shrunk")
+  expect_null(sa$shrink_method)
+  # and the outcome is the same in both cases — which is exactly why the flag
+  # has to travel beside the count.
+  expect_identical(attr(asked, "shrunk"), attr(untick, "shrunk"))
+})

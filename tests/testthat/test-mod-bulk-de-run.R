@@ -408,7 +408,127 @@ test_that("the REAL probe tells a landed round trip, a pending one, and a human 
 
   # Et l'inverse : un controle DEMANDE mais VIDE doit toujours etre signale absent.
   r6 <- probe(list(`bulk-de-group_ref` = "CoV2"), "tokpin01",
-              list(`bulk-de-group_ref` = "mock"))
+               list(`bulk-de-group_ref` = "mock"))
   expect_false(r6$ok)
   expect_true("bulk-de-group_ref" %in% r6$missing)
+})
+
+# ---------------------------------------------------------------------------
+# Le PROBE publie-t-il l'etat du SHRINKAGE ?
+# ---------------------------------------------------------------------------
+# La sonde publie `n_significant` sous une convention nommee qui contient
+# `|log2FoldChange| > 1`. Cette moitie de la convention s'applique aux valeurs
+# de la colonne log2FoldChange,ESHANTES ou NON. Sans dire lequel, le compte est
+# exact mais illisible : deux environnements (apeglm installe / absent) rendent le
+# MEME nombre sous la MEME convention, et rien sur le fil ne les distingue.
+#
+# Le resultat porte deja l'information (`attr(res, "shrunk")`), donc ce jalon est
+# une PUBLICATION : aucune ligne de calcul statistique n'est touchee (hard rule
+# 1 — zero behaviour change).
+
+# 🔴 `.mdr_block()` extrait le bloc `drive_trigger`, PAS la sonde. La sonde est une
+# AFFECTATION (`drive_state <- function() ...`) : elle s'importe avec
+# `ts_ast_assignment()`, qui lit la definition REELLE du depot sans `source()`er
+# le module (il initialiserait l'application) et sans la recopier (regle 3). Un
+# test mesure donc la sonde reelle, pas une version reecrite ici.
+#
+# La sonde appelle `bulk_de_shrinkage_state()`, qui vit dans
+# `R/bulk/bulk_helpers.R` — un fichier que ce test ne source PAS (il n'injecte
+# que des STUBS, cf. `e$build_dds` plus haut). Un STUB pour cette fonction ne
+# prouverait qu'une chose : que la sonde recopie trois noms. Il faut donc le
+# VRAI, et le fichier est source dans un env JETEABLE pour que ses 1 700 lignes
+# ne derangent aucun des stubs installes ici ; seule la fonction est greffeee.
+.MDR_SHRINK_ENV <- local({
+  e <- new.env(parent = globalenv())
+  sys.source(file.path(ts_project_root(), "R/bulk/bulk_helpers.R"), envir = e)
+  e
+})
+
+.mdr_state <- function(e) {
+  e$bulk_de_shrinkage_state <- .MDR_SHRINK_ENV$bulk_de_shrinkage_state
+  shiny::isolate(ts_ast_assignment(.MDR_FILE, "drive_state", eval_env = e)())
+}
+
+.mdr_shrunk_frame <- function(shrunk, method = NA_character_,
+                              reason = NA_character_) {
+  d <- .mdr_fake_res()
+  attr(d, "shrunk")        <- shrunk
+  attr(d, "shrunk_method") <- method
+  attr(d, "shrunk_reason") <- reason
+  d
+}
+
+test_that("la sonde publie l'etat du shrinkage, et pas seulement FALSE", {
+  # `expect_identical(x, TRUE)` et non `expect_true(x)` : le champ ABSENT vaut
+  # NULL, et `expect_true(NULL)` est un ERROR, pas un FAIL. Un rouge qui
+  # PLANTE dirait « le test est casse » (CONVENTIONS.md) — ici le rouge doit
+  # dire « la sonde ne publie pas le champ ».
+  e <- .mdr_env()
+  e$shared_rv$contrasts      <- list("B_vs_A" = .mdr_shrunk_frame(TRUE, "apeglm"))
+  e$shared_rv$active_contrast <- "B_vs_A"
+  st <- .mdr_state(e)
+  expect_identical(st$shrunk, TRUE)
+  expect_identical(st$shrink_requested, TRUE)
+  expect_identical(st$shrink_method, "apeglm")
+  # the counts the probe already published are untouched by this slice
+  expect_identical(st$n_genes, 4L)
+  expect_identical(st$convention, "padj < 0.05 & |log2FoldChange| > 1")
+})
+
+test_that("demandé sans succès reste distinguable de jamais demandé", {
+  # 🔴 THE distinction the slice exists for. `apeglm` is absent on this host, so
+  # a DEFAULT run lands here: the box was ticked, the table was NOT shrunk, and
+  # a warning names the missing package. An agent that reads only `shrunk` sees
+  # FALSE — identical to a user who simply unticked the box.
+  e1 <- .mdr_env()
+  e1$shared_rv$contrasts       <- list("B_vs_A" = .mdr_shrunk_frame(FALSE, NA_character_, "apeglm absent"))
+  e1$shared_rv$active_contrast <- "B_vs_A"
+  st1 <- .mdr_state(e1)
+  expect_identical(st1$shrunk, FALSE)
+  expect_identical(st1$shrink_requested, TRUE)
+  expect_null(st1$shrink_method)
+
+  e2 <- .mdr_env()
+  e2$shared_rv$contrasts       <- list("B_vs_A" = .mdr_shrunk_frame(FALSE))
+  e2$shared_rv$active_contrast <- "B_vs_A"
+  st2 <- .mdr_state(e2)
+  expect_identical(st2$shrunk, FALSE)
+  expect_identical(st2$shrink_requested, FALSE)
+  expect_false(identical(st1$shrink_requested, st2$shrink_requested))
+})
+
+test_that("sans contraste, l'etat du shrinkage est ABSENT, pas faux", {
+  e <- .mdr_env()
+  st <- .mdr_state(e)
+  expect_null(st$shrunk)
+  expect_null(st$shrink_requested)
+  expect_null(st$shrink_method)
+  # and the pre-existing "no contrast yet" reading is unchanged
+  expect_identical(st$n_contrasts, 0L)
+  expect_null(st$active_contrast)
+})
+
+test_that("un moteur sans shrinkage (edgeR) n'est pas declare FAUX", {
+  # edgeR/limma frames carry NO `shrunk` attribute. Publishing FALSE would claim
+  # "we tried and did not shrink"; the truth is "this engine has no such step".
+  e <- .mdr_env(engine = "edger")
+  e$shared_rv$contrasts       <- list("B_vs_A" = .mdr_fake_res())
+  e$shared_rv$active_contrast <- "B_vs_A"
+  st <- .mdr_state(e)
+  expect_null(st$shrunk)
+  expect_null(st$shrink_requested)
+  expect_null(st$shrink_method)
+})
+
+test_that("la sonde ne publie JAMAIS le cadre de resultats ni une valeur de ligne", {
+  e <- .mdr_env()
+  e$shared_rv$contrasts <- list("B_vs_A" = .mdr_shrunk_frame(TRUE, "apeglm"))
+  e$shared_rv$active_contrast <- "B_vs_A"
+  st <- .mdr_state(e)
+  # every published value is an atomic scalar
+  for (nm in names(st)) {
+    v <- st[[nm]]
+    expect_true(is.atomic(v) && length(v) <= 1L, info = paste("non-scalaire:", nm))
+  }
+  expect_false(any(grepl("TOKEN|secret|baseMean", unlist(st), ignore.case = TRUE)))
 })
