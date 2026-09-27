@@ -301,3 +301,234 @@ test_that("le module ne ferme pas le job d'un autre bouton", {
   # l'appeler du tout pour un job qui n'est pas le sien.
   expect_length(e$calls, 0L)
 })
+
+# --- S6 : la SONDE REELLE, et les trois etats qu'elle doit distinguer ----------
+#
+# Ecrit apres la session vivante du 2026-09-27, qui a produit le refus :
+#   "the values of 'bulk-de-condition_col', 'bulk-de-group_target',
+#    'bulk-de-group_ref', 'bulk-de-shrink_lfc' differ from those validated for
+#    seq 5 ... a human changed the control"
+# sur une session ou il n'y a AUCUN humain. La sonde comparait l'observe a la
+# valeur voulue, et ne pouvait donc pas distinguer « le aller-retour client n'est
+# pas encore arrive » de « quelqu'un a modifie ce controle » : elle a accuse un
+# utilisateur absent d'un retard qu'elle avait elle-meme cause.
+#
+# D'ou `prior` : les valeurs d'AVANT l'injection, que seul le DRIVE peut lire. Trois
+# etats, et le test les exerce sur la FONCTION REELLE, pas sur une doublure — une
+# doublure ne peut pas etre mutee, et c'est exactement pour cela que la mutation
+# M14 (supprimer le test « est-ce encore la valeur d'avant ? ») est restee VERTE.
+
+test_that("the REAL probe tells a landed round trip, a pending one, and a human edit apart", {
+  e <- .mdr_env()
+  # The REAL definition, imported by AST — never re-copied, never a double.
+  #
+  # ⚠️ `.mdr_block()` extracts ONLY the `drive_trigger` observe block, so the
+  # top-level `ts_drive_publish_token(..., confirm_inputs = drive_confirm_inputs)`
+  # never runs in this harness and the probe is NOT reachable through the registry.
+  # `ts_ast_assignment()` is the route the repo already uses for exactly this
+  # ("importer une definition REELLE sans source()er le fichier"), and evaluating
+  # it in `e` gives the closure the simulated `input`.
+  #
+  # A DOUBLE is not good enough here, and that is measured, not asserted:
+  # mutation M14 (delete the "is it still the prior value?" test) left a
+  # double-based suite GREEN, because a double has no such line to delete.
+  probe <- ts_ast_assignment(.MDR_FILE, "drive_confirm_inputs", eval_env = e)
+  expect_true(is.function(probe))
+
+  # Le probe DOIT accepter `prior`, sinon le drive le refuse par son nom (il ne peut
+  # pas distinguer les trois etats) — voir ts_drive_service_pending().
+  expect_true("prior" %in% names(formals(probe)))
+
+  want <- list(`bulk-de-condition_col` = "cond", `bulk-de-group_ref` = "a",
+               `bulk-de-group_target` = "b", `bulk-de-de_engine` = "deseq2",
+               `bulk-de-shrink_lfc` = FALSE)
+  prior <- list(`bulk-de-condition_col` = "tissue", `bulk-de-group_ref` = "x",
+                `bulk-de-group_target` = "y", `bulk-de-de_engine` = "limma",
+                `bulk-de-shrink_lfc` = TRUE)
+  set_input <- function(col, ref, tgt, eng, shr) {
+    e$input$condition_col <- col; e$input$group_ref <- ref
+    e$input$group_target  <- tgt;  e$input$de_engine <- eng
+    e$input$shrink_lfc    <- shr
+  }
+
+  # (1) OBSERVED == WANTED : confirme, le bouton peut partir.
+  set_input("cond", "a", "b", "deseq2", FALSE)
+  r1 <- probe(want, "tokpin01", prior)
+  expect_true(r1$ok)
+  expect_length(r1$differs, 0L)
+  expect_length(r1$waiting, 0L)
+
+  # (2) OBSERVED == PRIOR : le aller-retour n'est pas arrive. ATTENDRE.
+  #     `differs` DOIT rester vide : le remplirici, c'est accuser un humain.
+  set_input("tissue", "x", "y", "limma", TRUE)
+  r2 <- probe(want, "tokpin01", prior)
+  expect_false(r2$ok)
+  expect_length(r2$differs, 0L)
+  expect_true("bulk-de-shrink_lfc" %in% r2$waiting)
+  expect_true("bulk-de-condition_col" %in% r2$waiting)
+
+  # (3) OBSERVED NI L'UN NI L'AUTRE : une vraie edition humaine. REFUSER.
+  set_input("cond", "a", "b", "deseq2", FALSE)
+  e$input$group_ref <- "HAND_EDITED"
+  r3 <- probe(want, "tokpin01", prior)
+  expect_false(r3$ok)
+  expect_true("bulk-de-group_ref" %in% r3$differs)
+  expect_length(r3$waiting, 0L)
+
+  # (4) Un `prior` ABSENT n'est pas une licence pour accuse : le cas degrade doit
+  #     rester dans `differs` (le drive ne peut pas savoir), et surtout ne doit
+  #     jamais pretendre que l'observation est une confirmation.
+  e$input$group_ref <- "HAND_EDITED"
+  r4 <- probe(want, "tokpin01", NULL)
+  expect_false(r4$ok)
+  expect_true("bulk-de-group_ref" %in% r4$differs)
+
+  # (5) 🔴 LA SONDE NE REPOND QUE SUR LES CONTROLES DEMANDES. Un scenario
+  #     n'injectant QUE `shrink_lfc` a ete refuse en direct, avec une liste d'ids
+  #     VIDE, alors que le DOM montrait `shrink_lfc: checked=false` — la valeur
+  #     etait bien arrivee. Cause : la sonde parcourait les CINQ controles
+  #     observes, et `group_ref`/`group_target` (des `selectInput` dont les choix
+  #     sont reconstruits, donc NULL pendant le rendu) sortaient en `missing` alors
+  #     que le scenario ne lesmentionnait pas. Mesure vivante 2026-09-27.
+  #
+  #     ⚠️ Le controle NON DEMANDE doit etre VIDE ici. Une premiere version laissait
+  #     les cinq entrees valides, et la mutation M16 (`ids <- names(observed)`)
+  #     restait VERTE : la portee ne change rien quand rien n'est vide. C'est l'etat
+  #     REEL — un select non demande, vide pendant le rendu — qui fait la
+  #     difference, donc c'est lui qu'il faut reproduire.
+  e$input$condition_col <- "condition"; e$input$group_target <- "CoV2"
+  e$input$de_engine <- "deseq2";     e$input$shrink_lfc   <- FALSE
+  e$input$group_ref <- NULL          # NOT requested by the scenario, and EMPTY
+  r5 <- probe(list(`bulk-de-shrink_lfc` = FALSE), "tokpin01",
+              list(`bulk-de-shrink_lfc` = TRUE))
+  expect_true(r5$ok)
+  expect_length(r5$missing, 0L)
+  expect_length(r5$differs, 0L)
+  expect_length(r5$waiting, 0L)
+
+  # Et l'inverse : un controle DEMANDE mais VIDE doit toujours etre signale absent.
+  r6 <- probe(list(`bulk-de-group_ref` = "CoV2"), "tokpin01",
+               list(`bulk-de-group_ref` = "mock"))
+  expect_false(r6$ok)
+  expect_true("bulk-de-group_ref" %in% r6$missing)
+})
+
+# ---------------------------------------------------------------------------
+# Le PROBE publie-t-il l'etat du SHRINKAGE ?
+# ---------------------------------------------------------------------------
+# La sonde publie `n_significant` sous une convention nommee qui contient
+# `|log2FoldChange| > 1`. Cette moitie de la convention s'applique aux valeurs
+# de la colonne log2FoldChange,ESHANTES ou NON. Sans dire lequel, le compte est
+# exact mais illisible : deux environnements (apeglm installe / absent) rendent le
+# MEME nombre sous la MEME convention, et rien sur le fil ne les distingue.
+#
+# Le resultat porte deja l'information (`attr(res, "shrunk")`), donc ce jalon est
+# une PUBLICATION : aucune ligne de calcul statistique n'est touchee (hard rule
+# 1 — zero behaviour change).
+
+# 🔴 `.mdr_block()` extrait le bloc `drive_trigger`, PAS la sonde. La sonde est une
+# AFFECTATION (`drive_state <- function() ...`) : elle s'importe avec
+# `ts_ast_assignment()`, qui lit la definition REELLE du depot sans `source()`er
+# le module (il initialiserait l'application) et sans la recopier (regle 3). Un
+# test mesure donc la sonde reelle, pas une version reecrite ici.
+#
+# La sonde appelle `bulk_de_shrinkage_state()`, qui vit dans
+# `R/bulk/bulk_helpers.R` — un fichier que ce test ne source PAS (il n'injecte
+# que des STUBS, cf. `e$build_dds` plus haut). Un STUB pour cette fonction ne
+# prouverait qu'une chose : que la sonde recopie trois noms. Il faut donc le
+# VRAI, et le fichier est source dans un env JETEABLE pour que ses 1 700 lignes
+# ne derangent aucun des stubs installes ici ; seule la fonction est greffeee.
+.MDR_SHRINK_ENV <- local({
+  e <- new.env(parent = globalenv())
+  sys.source(file.path(ts_project_root(), "R/bulk/bulk_helpers.R"), envir = e)
+  e
+})
+
+.mdr_state <- function(e) {
+  e$bulk_de_shrinkage_state <- .MDR_SHRINK_ENV$bulk_de_shrinkage_state
+  shiny::isolate(ts_ast_assignment(.MDR_FILE, "drive_state", eval_env = e)())
+}
+
+.mdr_shrunk_frame <- function(shrunk, method = NA_character_,
+                              reason = NA_character_) {
+  d <- .mdr_fake_res()
+  attr(d, "shrunk")        <- shrunk
+  attr(d, "shrunk_method") <- method
+  attr(d, "shrunk_reason") <- reason
+  d
+}
+
+test_that("la sonde publie l'etat du shrinkage, et pas seulement FALSE", {
+  # `expect_identical(x, TRUE)` et non `expect_true(x)` : le champ ABSENT vaut
+  # NULL, et `expect_true(NULL)` est un ERROR, pas un FAIL. Un rouge qui
+  # PLANTE dirait « le test est casse » (CONVENTIONS.md) — ici le rouge doit
+  # dire « la sonde ne publie pas le champ ».
+  e <- .mdr_env()
+  e$shared_rv$contrasts      <- list("B_vs_A" = .mdr_shrunk_frame(TRUE, "apeglm"))
+  e$shared_rv$active_contrast <- "B_vs_A"
+  st <- .mdr_state(e)
+  expect_identical(st$shrunk, TRUE)
+  expect_identical(st$shrink_requested, TRUE)
+  expect_identical(st$shrink_method, "apeglm")
+  # the counts the probe already published are untouched by this slice
+  expect_identical(st$n_genes, 4L)
+  expect_identical(st$convention, "padj < 0.05 & |log2FoldChange| > 1")
+})
+
+test_that("demandé sans succès reste distinguable de jamais demandé", {
+  # 🔴 THE distinction the slice exists for. `apeglm` is absent on this host, so
+  # a DEFAULT run lands here: the box was ticked, the table was NOT shrunk, and
+  # a warning names the missing package. An agent that reads only `shrunk` sees
+  # FALSE — identical to a user who simply unticked the box.
+  e1 <- .mdr_env()
+  e1$shared_rv$contrasts       <- list("B_vs_A" = .mdr_shrunk_frame(FALSE, NA_character_, "apeglm absent"))
+  e1$shared_rv$active_contrast <- "B_vs_A"
+  st1 <- .mdr_state(e1)
+  expect_identical(st1$shrunk, FALSE)
+  expect_identical(st1$shrink_requested, TRUE)
+  expect_null(st1$shrink_method)
+
+  e2 <- .mdr_env()
+  e2$shared_rv$contrasts       <- list("B_vs_A" = .mdr_shrunk_frame(FALSE))
+  e2$shared_rv$active_contrast <- "B_vs_A"
+  st2 <- .mdr_state(e2)
+  expect_identical(st2$shrunk, FALSE)
+  expect_identical(st2$shrink_requested, FALSE)
+  expect_false(identical(st1$shrink_requested, st2$shrink_requested))
+})
+
+test_that("sans contraste, l'etat du shrinkage est ABSENT, pas faux", {
+  e <- .mdr_env()
+  st <- .mdr_state(e)
+  expect_null(st$shrunk)
+  expect_null(st$shrink_requested)
+  expect_null(st$shrink_method)
+  # and the pre-existing "no contrast yet" reading is unchanged
+  expect_identical(st$n_contrasts, 0L)
+  expect_null(st$active_contrast)
+})
+
+test_that("un moteur sans shrinkage (edgeR) n'est pas declare FAUX", {
+  # edgeR/limma frames carry NO `shrunk` attribute. Publishing FALSE would claim
+  # "we tried and did not shrink"; the truth is "this engine has no such step".
+  e <- .mdr_env(engine = "edger")
+  e$shared_rv$contrasts       <- list("B_vs_A" = .mdr_fake_res())
+  e$shared_rv$active_contrast <- "B_vs_A"
+  st <- .mdr_state(e)
+  expect_null(st$shrunk)
+  expect_null(st$shrink_requested)
+  expect_null(st$shrink_method)
+})
+
+test_that("la sonde ne publie JAMAIS le cadre de resultats ni une valeur de ligne", {
+  e <- .mdr_env()
+  e$shared_rv$contrasts <- list("B_vs_A" = .mdr_shrunk_frame(TRUE, "apeglm"))
+  e$shared_rv$active_contrast <- "B_vs_A"
+  st <- .mdr_state(e)
+  # every published value is an atomic scalar
+  for (nm in names(st)) {
+    v <- st[[nm]]
+    expect_true(is.atomic(v) && length(v) <= 1L, info = paste("non-scalaire:", nm))
+  }
+  expect_false(any(grepl("TOKEN|secret|baseMean", unlist(st), ignore.case = TRUE)))
+})

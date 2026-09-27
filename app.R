@@ -595,6 +595,32 @@ server <- function(input, output, session) {
           if (is.null(imp)) return(NULL)
           return(imp(request))
         }
+        # S2: `export_result` reaches a module's published EXPORTER, exactly as
+        # `import_file` reaches its importer, and for the same reason it is handled
+        # HERE and before the registry guard: the exporter is a function the poller
+        # calls, not a counter it increments.
+        #
+        # MEASURED, and the omission was invisible offline. This branch was missing
+        # at first, so an unknown `mode` fell THROUGH to the registry path below,
+        # which returned atomic `FALSE` (an empty `ids` loop), and the watcher's
+        # `!isTRUE(out$ok)` then raised "$ operator is invalid for atomic vectors".
+        # The error escaped the ONE reactive beat, so the poller observer DIED: the
+        # handshake stopped being rewritten and the session was reported lost. The
+        # unit tests could not see it because they supply their own `effects` stub,
+        # so only a live session found it — which is the whole argument for running
+        # the real app.
+        #
+        # `exp()` takes NO ARGUMENTS, and that is deliberate. The module publishes a
+        # closure over ITS OWN `shared_rv`, so the route is bound to the state that
+        # produced the result and cannot be pointed at another module's store. It
+        # also means this seam needs no `shared_rv`, which does not exist at app
+        # scope (see the note at :699) — passing one here was the second, quieter
+        # version of the same mistake.
+        if (identical(mode, "export")) {
+          exp <- ts_drive_export_of(global_data, module)
+          if (is.null(exp)) return(NULL)
+          return(exp())
+        }
         reg <- global_data$drive_registry
         if (!is.environment(reg)) {
           # Should be unreachable: the registry is created a few lines above.

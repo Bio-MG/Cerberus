@@ -675,7 +675,7 @@ ts_drive_arm_state <- function(token) {
 
 #' Allowed `action` values (spec §2.3, frozen).
 TS_DRIVE_ACTIONS <- c("noop", "set_inputs", "run_pipeline", "import_file",
-                      "snapshot", "reset_module")
+                      "snapshot", "reset_module", "export_result")
 
 #' The `result.json` status enum (spec §2.4, FROZEN).
 #'
@@ -740,15 +740,30 @@ ts_drive_validate_scenario <- function(scn, token, last_seq) {
                 scenario = NULL))
   }
 
-  declared_token <- as.character(scn$session_token %||% "")
-  if (nzchar(declared_token) && !identical(declared_token, token)) {
-    errors <- c(errors, sprintf("session_token mismatch ('%s' != '%s')", declared_token, token))
-  }
-
+  # `action` is resolved BEFORE the token comparison, because S2 makes the
+  # comparison ACTION-DEPENDENT: `export_result` writes a file, so it must be
+  # pinned to a session, while every other action may still be addressed without
+  # a token (the one-shot scenario an operator drops in by hand, and the
+  # human-driven path). Reading `action` after the comparison made the
+  # distinction inexpressible.
   action <- as.character(scn$action %||% "")
   if (!action %in% TS_DRIVE_ACTIONS) {
     errors <- c(errors, sprintf("unknown action '%s' (allowed: %s)",
                                 action, paste(TS_DRIVE_ACTIONS, collapse = ", ")))
+  }
+
+  declared_token <- as.character(scn$session_token %||% "")
+  # The actions that MUTATE the session are pinned; see
+  # `TS_DRIVE_TOKEN_PINNED_ACTIONS` for the measurement and for why the other five
+  # deliberately keep the token-optional affordance.
+  if (action %in% TS_DRIVE_TOKEN_PINNED_ACTIONS && !nzchar(declared_token)) {
+    errors <- c(errors, sprintf(
+      "`%s` changes this session, so it must carry the session_token of the session that owns it; a %s addressed to no session is refused",
+      action, action))
+  } else if (nzchar(declared_token) && !identical(declared_token, token)) {
+    # The declared token is NOT echoed: it is a credential, and an error message is
+    # copied into logs, transcripts and bug reports.
+    errors <- c(errors, "session_token mismatch (the declared token is not this session's)")
   }
 
   module <- as.character(scn$module %||% "")
@@ -801,9 +816,30 @@ ts_drive_validate_scenario <- function(scn, token, last_seq) {
   # handed downstream unexamined (spec S11).
   imp <- NULL
   if (identical(action, "import_file")) {
-    iv <- ts_drive_validate_import(scn$import)
+    # The MODULE routes the payload, because one flat key vector cannot describe
+    # two importers with different shapes: `import_bulk` needs a counts FILE,
+    # `import_spatial` needs a data FOLDER. Handing either the other's key would
+    # be accepted by a global whitelist and then fail inside the loader.
+    iv <- ts_drive_validate_import(scn$import, module = module)
     errors <- c(errors, iv$errors)
     if (length(iv$import)) imp <- iv$import
+  } else if (identical(action, "export_result")) {
+    # S2: `export_result` takes NO request field, and the refusal has to happen
+    # HERE, on the seam the poller actually calls.
+    #
+    # It used to happen further down, in `ts_drive_apply()`, on `scn$import` -
+    # but the whitelist above fills `imp` only for `import_file`, so for an
+    # export the field was ALWAYS NULL, and the validator opens with
+    # `if (is.null(req)) return(ok = TRUE)`. MEASURED consequence: the refusal
+    # was unreachable dead code, and a caller's `path` was dropped by the
+    # whitelist SILENTLY - which is the outcome the validator's own
+    # documentation refuses to accept, because "I asked for
+    # `filename: ../../x` and the tool said OK" is how an export ends up
+    # somewhere nobody chose. The unit test missed it by calling the validator
+    # directly, a path the live route never reaches with a non-NULL request.
+    ev <- ts_drive_validate_export_request(scn$import)
+    errors <- c(errors, ev$errors)
+    if (ev$ok) imp <- ev$request
   }
 
   status <- if (length(errors)) "invalid" else "applied-candidate"
@@ -853,9 +889,157 @@ ts_drive_validate_scenario <- function(scn, token, last_seq) {
 #' @param preserve_data Echo of the scenario flag.
 #' @param errors,warnings Character vectors (empty = none).
 #' @param snapshot Object snapshot, or NULL.
+#' Project an export descriptor onto the REDACTED set that may travel the wire.
+#'
+#' PURE, and deliberately so: it takes a descriptor and returns a list, writing
+#' nothing. `ts_drive_write_result()` calls it, and the offline tests call it too —
+#' a test that exercised the descriptor by invoking the real writer would have to
+#' write `tools/_drive/result.json`, which is the LIVE drive of a running session.
+#' That is not a test artifact, and putting it in a unit test would have made the
+#' suite unusable next to a live app.
+#'
+#' Two rules, and the second is defence in depth:
+#'   1. only the DECLARED keys travel, so widening an exporter's return value
+#'      cannot widen the wire;
+#'   2. every string goes through `ts_drive_badge_sanitize()` even though the
+#'      exporter is built not to carry a path — a field that is safe by
+#'      construction today is one constructor change away from not being.
+#' Project a descriptor onto the wire: DECLARED keys only, every string sanitised.
+#'
+#' The single implementation of the two rules, shared by the export descriptor and
+#' the module-state descriptor. Split out rather than written twice for the reason
+#' `.ts_drive_resolve_import_path()` was: "two copies of this function would be two
+#' places where a future edit to the security rule could be applied to one caller
+#' and forgotten in the other".
+#'
+#' @param descriptor The descriptor a producer built, or NULL.
+#' @param keep Character vector of the keys allowed on the wire.
+#' @return The projected list, or NULL when there is nothing to send.
+#' @noRd
+ts_drive_project_descriptor <- function(descriptor, keep, verbatim = character(0)) {
+  if (is.null(descriptor) || !is.list(descriptor)) return(NULL)
+  d <- as.list(descriptor)[intersect(keep, names(descriptor))]
+  lapply(d, function(v) {
+    if (is.character(v)) {
+      # A DECLARED, FROZEN vocabulary is exempt; anything else is sanitised.
+      #
+      # MEASURED (2026-09-27, live): the module-state path declared a `convention` of
+      # "number of pipeline artefacts produced (not rows)" and it came back on the
+      # wire as "number of <redacted> <redacted> <redacted> (not rows)". The
+      # sanitiser redacts every 8+-character alphanumeric run, and "pipeline",
+      # "artefacts" and "produced" each qualify. So the field whose entire purpose
+      # is to make a count INTERPRETABLE arrived unreadable - the same defect the
+      # badge had with its own label "snapshot" (STATUS.md, DRIVE README), and the
+      # same fix: a frozen set is returned verbatim, BEFORE the path/token rules.
+      #
+      # It is an OPT-IN per field, and deliberately narrow: `kind` and `convention`
+      # are compile-time constants in the module's own source. `columns` and
+      # `column` are NOT exempt - a column name can be user-supplied (an annotation
+      # label), so it keeps the sanitiser.
+      if (length(verbatim) && all(v %in% verbatim)) return(v)
+      vapply(as.character(v), function(s) ts_drive_badge_sanitize(s, 200L), character(1),
+             USE.NAMES = FALSE)
+    } else if (is.numeric(v)) as.numeric(v) else NULL
+  })
+}
+
+#' @noRd
+ts_drive_export_descriptor <- function(descriptor) {
+  ts_drive_project_descriptor(
+    descriptor, c("format", "file", "bytes", "n_rows", "n_cols", "n_sig", "columns"))
+}
+
+#' The DECLARED vocabulary a state descriptor's `kind` and `convention` may take.
+#'
+#' Frozen, and returned VERBATIM by the projection: both are compile-time constants
+#' in the modules' own source, so redacting them destroys meaning without removing
+#' any risk. `columns` / `column` are deliberately absent - those can carry a
+#' user-supplied annotation label, so they keep the sanitiser.
+#' @noRd
+TS_DRIVE_DESCRIPTOR_VERBATIM <- c(
+  "table", "levels",
+  "rows of the marker table (one row per gene x cluster)",
+  "rows of the enrichment table (one row per term x database)",
+  "unique levels of the annotation column named in `column`",
+  "number of pipeline artefacts produced (not rows)")
+
+#' The declared keys a MODULE STATE descriptor may carry.
+#'
+#' Separate from the export set on purpose: an export describes a FILE (so it has
+#' `format` and `bytes`), while a state descriptor describes a RESULT (so it has
+#' `kind` and `convention`). Sharing one list would let a state probe ship a
+#' `file` field, which is exactly the widening the projection exists to stop.
+#' @noRd
+#' Bounds on a state descriptor's schema field. Named, so they are declared rather
+#' than sprinkled as literals at each call site.
+#' @noRd
+TS_DRIVE_DESCRIPTOR_MAX_COLS <- 12L
+TS_DRIVE_DESCRIPTOR_MAX_COL  <- 60L
+
+#' @noRd
+TS_DRIVE_STATE_DESCRIPTOR_KEYS <- c(
+  "kind", "n_rows", "n_cols", "n_sig", "n_levels", "columns", "column",
+  "columns_truncated", "convention")
+
+#' A BOUNDED descriptor for a result a module produced.
+#'
+#' Schema and counts, never values. The gap it closes was MEASURED (2026-09-27): the
+#' four SC probes published `n_results` with no referent, no schema and no
+#' convention, so an agent could not act on the number.
+#'
+#' Two bounds, and both are the point:
+#'   * at most `TS_DRIVE_DESCRIPTOR_MAX_COLS` column names, each truncated to
+#'     `TS_DRIVE_DESCRIPTOR_MAX_COL`, so a 400-column table cannot write a kilobyte
+#'     of schema into every snapshot;
+#'   * no element is ever a data.frame, matrix or list — only scalars and short
+#'     strings — so a cell can not reach the wire through here.
+#'
+#' @param x A data.frame/matrix to describe, or NULL.
+#' @param kind `"table"` (default) or `"levels"` for a vector-shaped result.
+#' @param convention A FIXED, declared string saying what the counts mean. It is
+#'   never derived from the data, so two modules' numbers stay comparable.
+#' @param n_levels For `kind = "levels"`: the number of levels.
+#' @return The descriptor list, or NULL when there is nothing to describe.
+#' @noRd
+ts_drive_table_descriptor <- function(x, kind = "table", convention = NULL,
+                                     n_levels = NULL, column = NULL) {
+  conv <- if (is.null(convention)) NULL else
+    substr(paste(as.character(convention), collapse = " "), 1L, 120L)
+  col1 <- if (is.null(column)) NULL else
+    substr(as.character(column)[1L], 1L, TS_DRIVE_DESCRIPTOR_MAX_COL)
+  if (!is.null(n_levels)) {
+    # A VECTOR-shaped result: there is no frame, so the referent is the COLUMN the
+    # level count came from. Without it `n_levels = 12` is as anonymous as a bare
+    # row count was.
+    out <- list(kind = "levels", n_levels = as.numeric(n_levels))
+    if (!is.null(col1)) out$column <- col1
+    out$convention <- conv
+    return(out)
+  }
+  if (is.null(x)) return(NULL)
+  if (!is.data.frame(x) && !is.matrix(x)) return(NULL)
+  if (nrow(x) == 0L && ncol(x) == 0L) return(NULL)
+  nms <- colnames(x)
+  if (is.null(nms)) nms <- character(0)
+  cap <- TS_DRIVE_DESCRIPTOR_MAX_COLS
+  keep <- utils::head(nms, cap)
+  trunc <- length(nms) > cap ||
+    any(nchar(keep) > TS_DRIVE_DESCRIPTOR_MAX_COL)
+  out <- list(kind = kind,
+              n_rows = as.numeric(nrow(x)),
+              n_cols = as.numeric(ncol(x)),
+              columns = substr(as.character(keep), 1L, TS_DRIVE_DESCRIPTOR_MAX_COL))
+  if (trunc) out$columns_truncated <- TRUE
+  out$convention <- conv
+  out
+}
+
+
+#' @noRd
 ts_drive_write_result <- function(seq, status, active_module, armed,
                                  preserve_data = TRUE, errors = character(0),
-                                 warnings = character(0), snapshot = NULL) {
+                                 warnings = character(0), snapshot = NULL,
+                                 descriptor = NULL) {
   payload <- list(
     protocol      = TS_DRIVE_PROTOCOL,
     ack_seq       = if (is.null(seq)) 0L else as.integer(seq),
@@ -868,6 +1052,12 @@ ts_drive_write_result <- function(seq, status, active_module, armed,
     warnings      = as.list(warnings),
     snapshot      = snapshot,
     job           = ts_drive_job_view(ts_drive_job_state()),
+    # S2: the REDACTED export descriptor, or NULL. Projected by a PURE function so
+    # the rule is testable without writing `result.json`, and so a `done` export is
+    # never a verdict with nothing behind it. MEASURED on a live session: the export
+    # wrote a real 204 485-byte file, reported `done`, and published no descriptor —
+    # so the agent could not learn the filename, the row count or the columns.
+    descriptor    = ts_drive_export_descriptor(descriptor),
     # Sanitized diagnostics for the last FAILED wire write, or NULL.
     #
     # This is how a write failure becomes visible: `ready.json` is itself a
@@ -971,6 +1161,27 @@ ts_drive_module_states <- function(global_data) {
         sprintf("the state probe raised: %s", conditionMessage(ans)), 200L
       ))
     } else if (is.list(ans)) {
+      # 🔴 THE PROJECTION, and it is not optional. MEASURED: this collector returned
+      # a probe's list WHOLE, with no whitelist - unlike `ts_drive_export_descriptor()`.
+      # A descriptor reaching the wire through here would therefore skip BOTH rules
+      # (declared keys only, every string sanitised) and could ship whatever the
+      # probe returned. The descriptor is projected here, where it enters the wire,
+      # so a probe cannot widen it by returning one extra key.
+      if (!is.null(ans$descriptor)) {
+        ans$descriptor <- ts_drive_project_descriptor(
+          ans$descriptor, TS_DRIVE_STATE_DESCRIPTOR_KEYS,
+          verbatim = TS_DRIVE_DESCRIPTOR_VERBATIM)
+        # 🔴 `columns` MUST serialise as an ARRAY at every width. MEASURED live: a
+        # one-column descriptor published `"columns": "step"` while a four-column
+        # one published a JSON array, because the writer auto-unboxes a length-1
+        # vector. An agent then has to handle two shapes for one field, and the
+        # difference is invisible until it parses the wrong one. Wrapping in
+        # `as.list()` defeats the unboxing; the field is a list of names, not a
+        # name.
+        if (!is.null(ans$descriptor$columns)) {
+          ans$descriptor$columns <- as.list(ans$descriptor$columns)
+        }
+      }
       ans
     } else {
       list(probe_error = "the state probe returned neither a list nor an error")
@@ -1231,7 +1442,8 @@ ts_drive_registry <- function(global_data) {
 #'   that never reports. Declared by the MODULE because only the module knows
 #'   its own cost — the DE module cites its 852.7 s measurement.
 ts_drive_publish_token <- function(global_data, input_id, counter, ready = NULL,
-                                    state = NULL, long = FALSE, timeout_s = NULL) {
+                                    state = NULL, long = FALSE, timeout_s = NULL,
+                                    confirm_inputs = NULL) {
   if (!input_id %in% TS_DRIVE_BUTTONS) {
     warning(sprintf("ts_drive_publish_token(): '%s' is not in TS_DRIVE_BUTTONS — ignored.", input_id))
     return(invisible(FALSE))
@@ -1240,7 +1452,12 @@ ts_drive_publish_token <- function(global_data, input_id, counter, ready = NULL,
   if (is.null(reg)) return(invisible(FALSE))
   reg[[input_id]] <- list(counter = counter, ready = ready, state = state,
                           long = isTRUE(long),
-                          timeout_s = ts_drive_entry_timeout(list(timeout_s = timeout_s)))
+                          timeout_s = ts_drive_entry_timeout(list(timeout_s = timeout_s)),
+                          # S6: the module's own report of what it OBSERVES, used by
+                          # the confirmation handshake. `NULL` means the module
+                          # cannot confirm, and a run injecting non-button inputs
+                          # into it is refused rather than fired blind.
+                          confirm_inputs = if (is.function(confirm_inputs)) confirm_inputs else NULL)
   invisible(TRUE)
 }
 
@@ -1393,6 +1610,296 @@ ts_drive_open_panel <- function(session, panel) {
   }, error = function(e) FALSE)
 }
 
+#' Canonical form of an injected input block, for the confirmation handshake.
+#'
+#' @param values Named list of injected `id -> value`.
+#' @return A single string, or `""` for an empty block.
+#'
+#' WHY A STRING AND NOT A HASH. The watcher and the module run in the SAME R
+#' process, so the two sides can build the same canonical text and compare it
+#' exactly. A digest would add a dependency and a second way to be wrong (encoding,
+#' truncation) to solve a problem that string equality already solves. Order is
+#' normalised by key so JSON key order cannot change the verdict, and values are
+#' compared by their printed form so `TRUE` and `"TRUE"` are distinguishable from
+#' `1` and `"1"`.
+ts_drive_confirm_key <- function(values) {
+  if (length(values) == 0L) return("")
+  keys <- names(values)
+  if (is.null(keys)) keys <- as.character(seq_along(values))
+  ord <- order(keys)
+  paste0(keys[ord], "=",
+         vapply(values[ord], function(v) paste(as.character(v), collapse = ","), character(1)),
+         collapse = "\n")
+}
+
+#' The non-button ids of an `inputs` block: the ones a run must be confirmed on.
+#'
+#' A `button` entry is FIRED rather than set, so it needs no round trip and must be
+#' excluded: including it would make every ordinary button-only run wait for a
+#' confirmation that can never arrive, stranding it at `running`.
+ts_drive_nonbutton_inputs <- function(inputs) {
+  if (length(inputs) == 0L) return(character(0))
+  keep <- vapply(names(inputs), function(id) {
+    e <- ts_drive_allowlist_get(id)
+    !is.null(e) && !identical(as.character(e$kind), "button")
+  }, logical(1))
+  names(inputs)[keep]
+}
+
+#' Beats a pending confirmation may wait before it is refused.
+#'
+#' A bound, not a hope. At the 800 ms default poll this is ~4 s, which is several
+#' client round trips; the point is that a run either becomes confirmed or is
+#' REFUSED with a reason, and never sits at `running` indefinitely.
+TS_DRIVE_CONFIRM_MAX_BEATS <- 5L
+
+#' Service one pending confirmation.
+#'
+#' @param pending The record built by `ts_drive_apply()`.
+#' @param token The LIVE session token, for the identity comparison.
+#' @param effects The effect seam, used to fire the button once confirmed.
+#' @param out The tick's result list.
+#' @param inject Function(inputs, module) used to send a later injection stage.
+#' @return The tick's result list, with `out$pending` set to the next record or to
+#'   `NULL` once a verdict is reached.
+#'
+#' ⚠️ IT RETURNS `out` RATHER THAN MUTATING IT. A first version took `out` as a
+#' parameter and assigned `out$error <- msg` inside a `refuse()` closure, which
+#' modifies a COPY: R copies lists on assignment, so every verdict was silently
+#' lost and the tests saw `error = NULL`. This is the "environment recorder vs
+#' list" trap recorded for the S2 provenance work, reached again from the other
+#' direction — there the copy lost a WRITE, here it lost a VERDICT.
+#'
+#' Every terminal branch publishes a verdict and creates NO job. A human edit is
+#' REFUSED, never re-injected: the agent's earlier write does not get to win twice
+#' over a deliberate human change, and a new scenario is required.
+ts_drive_service_pending <- function(pending, token, effects, out, inject = NULL) {
+  refuse <- function(msg) {
+    out$consumed  <- TRUE
+    out$status    <- "invalid"
+    out$module    <- pending$module
+    out$error     <- msg
+    out$pending   <- NULL
+    wrote <- ts_drive_write_result(pending$seq, "invalid", pending$module,
+                                   out$armed, errors = msg)
+    if (!isTRUE(attr(wrote, "written"))) {
+      # Keep it pending so the refusal is RETRIED, exactly as a failed terminal
+      # job write is. Returning the record, not a verdict, is what makes the
+      # refusal durable across a transient IPC failure.
+      out$consumed <- FALSE
+      out$status   <- NULL
+      out$error    <- NULL
+      p <- pending
+      p$beats <- pending$beats + 1L
+      out$pending <- p
+      return(out)
+    }
+    out$published <- TRUE
+    out$last_seq  <- pending$seq
+    out
+  }
+  beats <- pending$beats + 1L
+
+  # ── STAGE THE REMAINING INJECTIONS, one per beat ──
+  #
+  # A `selectInput` cannot hold a value that is not among its current options, so
+  # a dependent value must not be sent before the options exist. The order is
+  # declared in `TS_DRIVE_INPUT_STAGES`; this walks it.
+  #
+  # It runs BEFORE the confirmation probe, and deliberately so: probing a stage
+  # that has not been injected yet would report the pre-injection state as a
+  # mismatch, which is the false accusation the `prior` comparison exists to
+  # prevent. Nothing is ever sent twice — a control appears in exactly one stage.
+  stages <- pending$stages
+  if (is.list(stages) && length(stages) &&
+      (is.null(pending$stage) || pending$stage < length(stages))) {
+    nxt <- pending$stage %||% 0L
+    if (nxt < length(stages)) {
+      if (!is.function(inject)) {
+        return(refuse(sprintf(
+          "module '%s' needs its inputs injected in %d stages, but no injector is available; the run for seq %s is refused. No job was created.",
+          pending$module, length(stages), pending$seq)))
+      }
+      got <- tryCatch(inject(stages[[nxt + 1L]], pending$module), error = function(e) e)
+      if (inherits(got, "condition")) {
+        return(refuse(sprintf(
+          "injecting stage %d of %d for seq %s failed; the run is refused. No job was created.",
+          nxt + 1L, length(stages), pending$seq)))
+      }
+      p <- pending
+      p$stage  <- nxt + 1L
+      p$beats  <- beats
+      out$pending <- p
+      return(out)
+    }
+  }
+
+  # A replaced session must never be satisfied by the old one's confirmation.
+  #
+  # 🔑 ON SESSION IDENTITY: the comparison is on `session_token` ALONE, and
+  # `started_at` is deliberately NOT part of it. `token <- ts_drive_new_token()`
+  # mints 8 fresh random characters per session (see ts_drive_attach), so the
+  # token IS the session identity — and it is already the identity notion the rest
+  # of the file uses: ts_drive_write_ready() refuses to carry a heartbeat across a
+  # token change (l. 462/474) and the pinned-action validator refuses a scenario
+  # whose declared token is not this session's (l. 755). `started_at` is a
+  # companion FIELD for humans reading ready.json, not a stronger key: threading
+  # it into ts_drive_tick() would add a second identity to keep in sync for no
+  # gain in discrimination. Stated here so it reads as a decision, not an omission.
+  if (!identical(as.character(pending$session_token), as.character(token))) {
+    return(refuse(sprintf(
+      "the session was replaced while inputs for seq %s were pending confirmation; no run started",
+      pending$seq)))
+  }
+  entry <- ts_drive_tokens_for(pending$module, effects)[[pending$button]]
+  conf <- entry$confirm_inputs
+  if (!is.function(conf)) {
+    return(refuse(sprintf(
+      "module '%s' no longer publishes confirm_inputs(); the injected run for seq %s is refused. No job was created.",
+      pending$module, pending$seq)))
+  }
+  # The probe is called as `confirm_inputs(values, session_token, prior)`. A probe
+  # that does not accept `prior` cannot tell a round trip that has not landed from
+  # a human edit, so it is refused BY NAME rather than allowed to fail as an
+  # "unused argument" error. MEASURED: the first version simply called it with
+  # three arguments, and every two-argument probe surfaced as the opaque
+  # "the confirmation probe of module 'x' failed" — true, and useless.
+  cf <- names(formals(conf))
+  if (!("prior" %in% cf) && !("..." %in% cf)) {
+    return(refuse(sprintf(
+      "module '%s' publishes a confirm_inputs() that does not accept `prior`; the drive needs the pre-injection values to tell a round trip that has not landed from a human edit, so the run for seq %s is refused. No job was created.",
+      pending$module, pending$seq)))
+  }
+  r <- tryCatch(conf(pending$values, token, pending$prior), error = function(e) e)
+  if (inherits(r, "condition")) {
+    return(refuse(sprintf(
+      "the confirmation probe of module '%s' failed for seq %s; no run started",
+      pending$module, pending$seq)))
+  }
+  # A module that REPORTS a sequence must report THIS one. ⚠️ This check is
+  # OPTIONAL and the reason is a design error found on a live session (2026-09-27).
+  # The first version required `identical(r$seq, pending$seq)` unconditionally,
+  # on the theory that the confirmation had to be "bound to this scenario's
+  # sequence". It cannot be: the MODULE has no access to the drive's sequence - it
+  # is not a widget, not an input, not anything the module can read - so it could
+  # only ever answer `NA`, and the run was refused 100% of the time with
+  #   "the confirmation ... is for a different scenario (seq NA, expected 5)"
+  # i.e. the guard was not a guard, it was a wall.
+  #
+  # What actually binds a confirmation to its scenario is the RECORD, and it is
+  # structural, not declared: the drive holds one pending record at a time, it
+  # carries that scenario's own `seq`, `values` and `key`, it is matched against
+  # the live session token, and it is CLEARED the moment it reaches a verdict. A
+  # second scenario cannot reuse it, and a queued scenario is not even read until
+  # the pending one has resolved. So a stale confirmation has nothing to satisfy.
+  # A module is still free to return a `seq` and be held to it; it is simply not
+  # required to, and `NA`/`NULL` means "I have no sequence to declare".
+  if (!is.null(r$seq) && length(r$seq) == 1L && !is.na(r$seq) &&
+      !identical(as.integer(r$seq), as.integer(pending$seq))) {
+    return(refuse(sprintf(
+      "the confirmation from module '%s' declares seq %s but the pending run is seq %s; it is refused. No run started",
+      pending$module, as.character(r$seq), pending$seq)))
+  }
+  differs <- as.character(r$differs %||% character(0))
+  waiting <- as.character(r$waiting %||% character(0))
+  # 🔴 COMPARE ONLY THE REQUESTED IDS. `r$observed` is the module's whole view of
+  # the panel (MEASURED: `bulk_de` reports all five controls), while `pending$key`
+  # was built from the ids the SCENARIO carried — so hashing the full observation
+  # against the pending key can never match once the two differ in size, and the
+  # run waits out its bound and is refused even though every requested value was
+  # correct. MEASURED live (2026-09-27): a scenario injecting only
+  # `bulk-de-shrink_lfc` was refused at the bound with the DOM reading
+  # `shrink_lfc: checked=false`.
+  #
+  # The drive validated `pending$values` and nothing else, so it must confirm
+  # exactly those ids. A module that reports FEWER of them cannot produce a
+  # matching key, which fails closed rather than open.
+  obs <- r$observed %||% list()
+  obs_ids <- if (length(obs)) intersect(pending$ids, names(obs)) else character(0)
+  if (isTRUE(r$ok) && length(obs_ids) &&
+      identical(ts_drive_confirm_key(obs[obs_ids]), pending$key)) {
+    if (is.null(effects) || !isTRUE(effects(pending$button))) {
+      return(refuse(sprintf(
+        "the inputs for seq %s were confirmed but the button could not be fired; no run started",
+        pending$seq)))
+    }
+    # 🔴 DECLARE THE JOB, or the run hangs at `running` forever.
+    #
+    # `ts_drive_apply()` calls `ts_drive_job_begin()` for a `long = TRUE` entry
+    # BEFORE returning `running`, and that declaration is what the module's
+    # `on.exit(ts_drive_job_finish(...))` closes. This fire path went straight to
+    # `effects(button)`, so no job was ever in flight: the module's terminal was
+    # refused (it may only declare the job that is in flight) and `result.json`
+    # stayed `running` for good.
+    #
+    # MEASURED live (2026-09-27): the confirmation succeeded and the log said
+    # `inputs confirmed ... run fired`, the heartbeat kept climbing (so nothing was
+    # blocked and nothing had thrown), and the verdict never moved off `running`.
+    # The button HAD been fired — only the job bookkeeping was missing.
+    if (isTRUE(ts_drive_entry_long(entry))) {
+      ts_drive_job_begin(pending$seq, pending$module, "run_pipeline",
+                         pending$button, owner_token = token,
+                         timeout_s = ts_drive_entry_timeout(entry))
+    }
+    out$consumed <- TRUE
+    out$status   <- if (isTRUE(ts_drive_entry_long(entry))) "running" else "done"
+    out$job_status <- if (isTRUE(out$status == "running")) "running" else NULL
+    out$module   <- pending$module
+    out$action   <- "run_pipeline"
+    out$last_seq <- pending$seq
+    out$pending  <- NULL
+    message(sprintf("[drive] inputs confirmed for seq=%s module=%s (%s); run fired",
+                    pending$seq, pending$module,
+                    paste(pending$ids, collapse = ", ")))
+    return(out)
+  }
+  if (beats > TS_DRIVE_CONFIRM_MAX_BEATS) {
+    # 🔴 WHY THERE IS NO IMMEDIATE "A HUMAN CHANGED THIS" REFUSAL.
+    #
+    # The first version refused the moment a control's observed value was neither
+    # the wanted one nor the pre-injection one, and said a human had changed it.
+    # TWO live measurements killed it, both on a session with no human in it:
+    #
+    #   * "'bulk-de-condition_col', 'bulk-de-group_target', 'bulk-de-group_ref',
+    #     'bulk-de-shrink_lfc' differ ... a human changed the control" — the round
+    #     trip had simply not landed. `prior` fixes that class, and the count fell
+    #     from four ids to two.
+    #   * "'bulk-de-group_target', 'bulk-de-group_ref' differ" — those two are
+    #     `selectInput`s whose CHOICES are rebuilt when the condition column
+    #     changes, so they pass through intermediate values that are neither the
+    #     wanted nor the prior one. A re-render is not tampering, and the drive
+    #     cannot tell the two apart from `input` alone.
+    #
+    # So "neither" is not a verdict: the run WAITS — which creates no job and
+    # re-injects nothing — and is refused only at the bound. The refusal names the
+    # ids and states BOTH causes, because claiming to know which it was would be
+    # the same false accusation one layer down.
+    #
+    # SAFETY IS UNCHANGED. A run whose values never reach what the drive validated
+    # is never fired, and the drive never re-sends its own value over whatever it
+    # finds: during a wait the only writer of these controls is the human.
+    ids <- unique(c(waiting, differs, missing <- as.character(r$missing %||% character(0))))
+    why <- if (length(missing) && !length(differs) && !length(waiting)) {
+      "the session never held a value for the control(s) at all (an empty or not-yet-populated widget)"
+    } else if (length(differs) && !length(waiting) && !length(missing)) {
+      "a human edited the control, or the panel rebuilt its options while the values were being applied"
+    } else if (length(waiting) && !length(differs) && !length(missing)) {
+      "the values never reached the session"
+    } else {
+      "the controls ended the wait in more than one state (some never arrived, some still held their pre-injection value, some held neither)"
+    }
+    return(refuse(sprintf(
+      "the inputs for seq %s were not confirmed by module '%s' within %d poll beats: %s never matched (%s). The cause is %s; the drive cannot tell those apart, so the run is REFUSED. NO job was created and NOTHING was re-injected - re-request the run explicitly.",
+      pending$seq, pending$module, TS_DRIVE_CONFIRM_MAX_BEATS,
+      if (length(ids)) sprintf("%d control(s)", length(ids)) else "one or more controls",
+      paste(sprintf("'%s'", ids), collapse = ", "), why)))
+  }
+  p <- pending
+  p$beats <- beats
+  out$pending <- p
+  out
+}
+
 
 # =============================================================================
 # The tick — the whole reasoning of one poll cycle
@@ -1406,7 +1913,53 @@ ts_drive_open_panel <- function(session, panel) {
 #' @param effects Callback invoked by the poller to bump one button token:
 #'   `effects(input_id)` -> TRUE when a bound token was incremented.
 #' @return list(status, errors, warnings, active_module)
-ts_drive_apply <- function(session, input, scn, effects = NULL, owner_token = NULL) {
+#' The injection PLAN for a set of controls: a list of stages, in order.
+#'
+#' Read from `TS_DRIVE_INPUT_STAGES`. A control the table does not mention is
+#' assumed INDEPENDENT and goes in the first stage — that is the default, and it is
+#' the historical behaviour, because a stage costs a protocol beat and an ordering
+#' is therefore declared only where a dependency has been measured.
+#'
+#' @param module The module whose controls these are.
+#' @param ids The control ids the scenario carried, after allowlist filtering.
+#' @param values The named list of values, same names as `ids`.
+#' @return A list of named lists. Length 1 means "inject it all at once".
+#' @noRd
+ts_drive_input_stages <- function(module, ids, values) {
+  decl <- TS_DRIVE_INPUT_STAGES[[module]]
+  if (is.null(decl) || !length(decl)) return(list(values))
+  out <- list()
+  used <- character(0)
+  for (stage in decl) {
+    take <- intersect(stage, ids)
+    if (length(take)) {
+      out[[length(out) + 1L]] <- values[take]
+      used <- c(used, take)
+    }
+  }
+  rest <- setdiff(ids, used)
+  # Undeclared controls join the FIRST stage: the table is a statement about
+  # dependencies, and a control absent from it has none that we know of.
+  if (length(rest) && length(out)) out[[1]] <- c(out[[1]], values[rest])
+  if (!length(out)) out <- list(values)
+  out
+}
+
+#' The injector the poller hands to the confirmation service.
+#'
+#' A closure over the session and the effect seam, so the service can inject a
+#' later stage without knowing anything about Shiny. Exported here so the unit
+#' tests can substitute a recorder.
+#' @noRd
+ts_drive_injector <- function(session, effects) {
+  function(inputs, module) {
+    ts_drive_apply_inputs(session, inputs, module,
+                          tokens = ts_drive_tokens_for(module, effects))
+  }
+}
+
+ts_drive_apply <- function(session, input, scn, effects = NULL, owner_token = NULL,
+                           inject = NULL) {
   warnings <- character(0)
   errors   <- character(0)
   action   <- scn$action
@@ -1421,6 +1974,69 @@ ts_drive_apply <- function(session, input, scn, effects = NULL, owner_token = NU
     return(list(status = "done", errors = character(0), warnings = warnings,
                 active_module = module, nav = NULL))
   }
+  # ── S2: export_result ─────────────────────────────────────────────────────
+  # ONE artefact, and the caller chooses NOTHING. The route is named by
+  # `TS_DRIVE_EXPORT_ROUTES`, the destination by `ts_drive_export_dir()`, the
+  # the filename by the module's own `ts_drive_export_next_path()` over the
+  # shared `TS_DRIVE_EXPORT_STEM`, the format by the module's own
+  # serialiser, and the request carries no field at all. Everything a download
+  # verb normally takes from its caller is therefore absent by construction
+  # rather than by validation — which is the only arrangement in which "the client
+  # cannot choose an arbitrary destination" is a property of the protocol instead
+  # of a promise about its discipline.
+  #
+  # The freshness gate lives ABOVE this branch (the poller only dispatches to a
+  # live session), so a stale handshake never reaches the exporter. That is why
+  # this function does not re-check it: a second check would be a second rule, and
+  # two rules about liveness drift.
+  if (identical(action, "export_result")) {
+    if (!module %in% TS_DRIVE_EXPORT_MODULES) {
+      return(list(status = "invalid", errors = c(errors, sprintf(
+        "module '%s' has no export route; the only exported artefact belongs to %s",
+        module, paste(TS_DRIVE_EXPORT_MODULES, collapse = ", "))),
+        warnings = warnings, active_module = module, nav = NULL))
+    }
+    v <- ts_drive_validate_export_request(scn$import)
+    if (!isTRUE(v$ok)) {
+      return(list(status = "invalid", errors = c(errors, v$errors),
+                  warnings = warnings, active_module = module, nav = NULL))
+    }
+    out <- if (is.null(effects)) NULL else
+      tryCatch(effects(NULL, mode = "export", module = module, request = v$request),
+               error = function(e) e)
+    if (inherits(out, "condition")) {
+      return(list(status = "error", errors = c(errors, sprintf(
+        "the exporter raised: %s", ts_drive_badge_sanitize(conditionMessage(out), 200L))),
+        warnings = warnings, active_module = module, nav = NULL))
+    }
+    # MEASURED, and this guard exists because of it. The app-side `effects` seam
+    # had no `export` branch on the first run, so an unknown `mode` fell through to
+    # the registry path and returned atomic `FALSE`. The `out$ok` below then raised
+    # "$ operator is invalid for atomic vectors", and because this function is
+    # called from the ONE reactive beat of the poller, the error killed the
+    # observer: the handshake stopped being rewritten and the session was reported
+    # lost. A missing seam must degrade to a VERDICT, never to a dead poller.
+    if (!is.null(out) && !is.list(out)) {
+      return(list(status = "invalid", errors = c(errors, sprintf(
+        "the app's effect seam returned a %s for mode 'export', not a verdict list - the seam is not wired",
+        class(out)[[1L]])),
+        warnings = warnings, active_module = module, nav = NULL))
+    }
+    if (is.null(out)) {
+      return(list(status = "invalid", errors = c(errors, sprintf(
+        "module '%s' published no exporter - its server() does not call ts_drive_publish_export()",
+        module)), warnings = warnings, active_module = module, nav = NULL))
+    }
+    if (!isTRUE(out$ok)) {
+      return(list(status = out$status %||% "invalid",
+                  errors = c(errors, out$errors %||% "the exporter refused"),
+                  warnings = c(warnings, out$warnings %||% character(0)),
+                  active_module = module, nav = NULL))
+    }
+    return(list(status = "done", errors = character(0), warnings = warnings,
+                active_module = module, nav = NULL,
+                descriptor = out$descriptor))
+  }
 
   if (identical(module, "spatial_pipeline") && identical(action, "set_inputs")) {
     return(list(
@@ -1431,15 +2047,18 @@ ts_drive_apply <- function(session, input, scn, effects = NULL, owner_token = NU
   }
 
   # Same rule, same reason, for the SC auto-pipeline, SC annotation, SC marker,
-  # Bulk signature and Bulk pattern actions: their inputs are FROZEN, DECLARED
-  # sets, and an injected input could not be honoured without silently changing
-  # the action boundary. For the signature action the refusal also keeps a
-  # fileInput PATH (`sig_rds`) out of reach of a remote caller.
+  # SC pathway, Bulk signature, Bulk pattern and Bulk network actions: their
+  # inputs are FROZEN, DECLARED sets, and an injected input could not be honoured
+  # without silently changing the action boundary. For the signature action the
+  # refusal also keeps a fileInput PATH (`sig_rds`) out of reach of a remote
+  # caller.
   if (identical(action, "set_inputs") &&
       module %in% c(TS_DRIVE_SC_MODULE, TS_DRIVE_SC_ANNOTATION_MODULE,
-                    TS_DRIVE_SC_MARKERS_MODULE,
+                    TS_DRIVE_SC_MARKERS_MODULE, TS_DRIVE_SC_PATHWAYS_MODULE,
                     TS_DRIVE_BULK_SIGNATURES_MODULE,
-                    TS_DRIVE_BULK_PATTERN_MODULE)) {
+                    TS_DRIVE_BULK_PATTERN_MODULE,
+                    TS_DRIVE_BULK_NETWORK_MODULE,
+                    TS_DRIVE_SPATIAL_QC_MODULE)) {
     return(list(
       status = "invalid",
       errors = sprintf("module '%s' does not accept set_inputs", module),
@@ -1453,10 +2072,26 @@ ts_drive_apply <- function(session, input, scn, effects = NULL, owner_token = NU
   nav <- ts_drive_nav_plan(module, scn$expect$nav %||% NULL)
 
   applied <- list(applied = character(0), refused = character(0), warnings = character(0))
-  if (length(scn$inputs)) {
-    applied <- ts_drive_apply_inputs(session, scn$inputs, module,
-                                    tokens = ts_drive_tokens_for(module, effects))
-    warnings <- c(warnings, applied$warnings)
+  # A `run_pipeline` that injects non-button inputs is DEFERRED below, and a
+  # deferred run injects in STAGES, one per beat. Injecting it here would hand a
+  # value to a `selectInput` whose options do not exist yet, and a browser select
+  # cannot represent such a value: it is silently dropped and the module's own
+  # default takes its place. MEASURED live (2026-09-27, GSE164073) — the pair came
+  # out as the module's defaults and the run was refused at the bound.
+  # Every other action injects here, exactly as before.
+  staged_run <- identical(action, "run_pipeline") &&
+    length(scn$inputs) && !is.null(TS_DRIVE_INPUT_STAGES[[module]])
+  if (length(scn$inputs) && !staged_run) {
+    # ONE seam for every injection, staged or eager. This used to call
+    # `ts_drive_apply_inputs()` directly while the staged path went through
+    # `inject`, so the two were different code paths: a double injection (restoring
+    # the eager call for a deferred run) was real in production and INVISIBLE to
+    # every test, because the recorder only saw the staged side. Measured.
+    inj <- inject %||% (if (is.function(effects)) ts_drive_injector(session, effects) else NULL)
+    if (!is.null(inj)) {
+      applied <- inj(scn$inputs, module)
+      warnings <- c(warnings, applied$warnings)
+    }
   }
 
   if (identical(action, "set_inputs")) {
@@ -1472,10 +2107,13 @@ ts_drive_apply <- function(session, input, scn, effects = NULL, owner_token = NU
       bulk_pathways = "bulk-pathways-run_pathway",
       bulk_signatures = TS_DRIVE_BULK_SIGNATURES_BUTTON,
       bulk_pattern  = TS_DRIVE_BULK_PATTERN_BUTTON,
+      bulk_network  = TS_DRIVE_BULK_NETWORK_BUTTON,
       spatial_pipeline = "spatial-pipeline-btn_run_all",
+      spatial_qc    = TS_DRIVE_SPATIAL_QC_BUTTON,
       sc_pipeline   = TS_DRIVE_SC_BUTTON,
       sc_annotation = TS_DRIVE_SC_ANNOTATION_BUTTON,
       sc_markers    = TS_DRIVE_SC_MARKERS_BUTTON,
+      sc_pathways   = TS_DRIVE_SC_PATHWAYS_BUTTON,
       NULL)
     if (is.null(btn) || !btn %in% TS_DRIVE_BUTTONS) {
       errors <- c(errors, sprintf("module '%s' has no bound button for run_pipeline", module))
@@ -1522,6 +2160,104 @@ ts_drive_apply <- function(session, input, scn, effects = NULL, owner_token = NU
       errors <- c(errors, ts_drive_ready_refusal(btn, probe))
       return(list(status = "invalid", errors = errors, warnings = warnings,
                   active_module = module, nav = nav))
+    }
+
+    # ── S6: CONFIRM BEFORE FIRING, when inputs were injected ──────────────
+    # Every adapter above is `shiny::update*Input()`, a CLIENT ROUND-TRIP, so a
+    # value injected by this scenario is not yet in the server's `input` when this
+    # same tick fires the button. MEASURED live over four runs: run N read run
+    # N-1's values, so `shrink_lfc = FALSE` was ignored (the run warned as if it
+    # were TRUE) and a bare run hit the observer's `req()` and was recorded
+    # `invalid` with no reason.
+    #
+    # `session$setInputs()` is NOT the fix: it does not exist on a live session
+    # (mod_import_bulk.R:298) and is testServer-only (this file's header). So the
+    # run is DEFERRED across beats and fired only once the OWNING MODULE confirms
+    # it observes the values validated for THIS scenario. Fail-closed: a module
+    # that publishes no `confirm_inputs` cannot be confirmed, so a run that
+    # injects non-button inputs into it is REFUSED rather than fired blind.
+    nb <- ts_drive_nonbutton_inputs(scn$inputs)
+    if (length(nb)) {
+      conf <- entry$confirm_inputs
+      if (!is.function(conf)) {
+        errors <- c(errors, sprintf(
+          "module '%s' cannot confirm injected inputs, so this run is refused: it publishes no confirm_inputs(). Without a confirmation the run would read whatever the session happened to hold. No job was created.",
+          module))
+        return(list(status = "invalid", errors = errors, warnings = warnings,
+                    active_module = module, nav = nav, pending_confirm = NULL))
+      }
+      vals <- scn$inputs[nb]
+      # The injection PLAN, and stage 1 goes in NOW. Injecting here rather than on
+      # the next servicing beat is what keeps a single-stage scenario on the fast
+      # path: it is fully injected at deferral time, exactly as before, and only a
+      # DEPENDENT stage costs an extra beat.
+      stages <- ts_drive_input_stages(module, nb, vals)
+      # ONE seam for every stage. The poller's injector is preferred so that the
+      # first stage and the later ones go through the same path — a first version
+      # built a fresh injector here from `session` + `effects`, which meant the
+      # caller's seam saw only stages 2..n and stage 1 was invisible to it.
+      inject1 <- inject %||% (if (is.function(effects)) ts_drive_injector(session, effects) else NULL)
+      if (!is.null(inject1)) {
+        got <- inject1(stages[[1]], module)
+        warnings <- c(warnings, got$warnings)
+      }
+      # 🔴 THE PRIOR VALUES, and the reason this handshake needs a third state.
+      # `shiny::update*Input()` is a CLIENT ROUND-TRIP, so on the beat the button
+      # would be fired the new values are not in `input` yet. The module then sees
+      # the SESSION's previous values, and a "did the human change this?" test
+      # cannot tell that apart from a deliberate human edit.
+      # MEASURED live (2026-09-27), and the symptom is the worst kind: the drive
+      # refused with "the values of 'bulk-de-condition_col', ... differ ... a human
+      # changed the control" — on a session with NO human in it, blaming one for a
+      # lag it caused. Three states, and only the drive can see all three:
+      #   observed == wanted  -> confirmed
+      #   observed == prior   -> the round trip has not landed yet; WAIT
+      #   observed == neither -> a human edit; REFUSE
+      # Without `prior` the middle state is unreachable and every first injection
+      # is misreported as tampering.
+      #
+      # Read with `isolate()`: this runs inside the poller's observer, so a bare
+      # read of `input` would enrol the protocol in every widget change and make
+      # the observer re-run on each one. The fall back to the trailing id segment
+      # covers a runtime that hands us an already-namespaced `input`.
+      prior <- list()
+      for (id in nb) {
+        v <- tryCatch(shiny::isolate(input[[id]]), error = function(e) NULL)
+        if (is.null(v)) {
+          v <- tryCatch(shiny::isolate(input[[sub("^.*-", "", id)]]),
+                        error = function(e) NULL)
+        }
+        prior[[id]] <- v
+      }
+      return(list(
+        status = "running", errors = errors, warnings = warnings,
+        active_module = module, nav = nav,
+        pending_confirm = list(seq = scn$seq, module = module, button = btn,
+                               values = vals, ids = nb, prior = prior,
+                               # The staging plan. `stage` counts the stages already
+                               # INJECTED, so `stage == length(stages)` means the whole
+                               # plan is in and the confirmation may begin.
+                               stages = stages, stage = 1L,
+                               key = ts_drive_confirm_key(vals),
+                               # 🔴 THE IDENTITY IS `owner_token`, NOT `scn$session_token`.
+                               # `scn` here is the scenario REBUILT by the validator, and
+                               # that whitelist (seq/module/action/preserve_data/inputs/
+                               # inputs_ok/expect/button/import) does NOT carry
+                               # `session_token` — the validator reads the declared
+                               # token for its PIN CHECK and then drops it. So
+                               # `scn$session_token` is always NULL, the record stored
+                               # `""`, and the identity check rejected EVERY
+                               # confirmation as "the session was replaced".
+                               # MEASURED (unit, via the round-trip diagnostic): beat 2
+                               # returned `invalid` with exactly that message, 100% of
+                               # the time, on a healthy single session.
+                               # `owner_token` IS the live consuming session, and the
+                               # pin check has already proven the declared token equals
+                               # it, so this is the same identity by another route — and
+                               # it cannot drift from the session doing the work.
+                               session_token = as.character(owner_token %||%
+                                                             scn$session_token %||% ""),
+                               beats = 0L)))
     }
 
     if (is.null(effects) || !isTRUE(effects(btn))) {
@@ -1578,8 +2314,44 @@ ts_drive_apply <- function(session, input, scn, effects = NULL, owner_token = NU
     # as DATA through the same `effects` callback that fires buttons — never as
     # a string handed to `update*()` (spec S5).
     req <- scn$import
-    if (is.null(req) || is.null(req$counts_path)) {
-      errors <- c(errors, "`import_file` needs an `import` block carrying `counts_path`")
+    # 🔴 THIS GUARD WAS BULK-ONLY AND SAID SO. It asked for `counts_path` by name,
+    # so an `import_file` aimed at `import_spatial` — which carries a `dir_path` —
+    # was refused with "`import_file` needs an `import` block carrying
+    # `counts_path`" before the module was ever consulted. MEASURED on a live
+    # session (Phase F, 2026-09-26), and it is the second of TWO independent
+    # `counts_path` assumptions in this file; the other is the key schema, which
+    # `ts_drive_validate_import()` now routes on the module. A second copy of a
+    # rule is exactly what a grep for the obvious spelling misses.
+    #
+    # The required keys are therefore READ FROM THE SCHEMA rather than named
+    # here, so a third importer needs no third edit in this function.
+    #
+    # ALL of them, not the first. `need` became a vector when `import_sc` arrived
+    # (it carries `dir_path` AND `sample_name`), and `req[[need]]` with a vector
+    # subscript would have addressed `req[[c("dir_path","sample_name")]]` — a
+    # silent, total miss that would have let a half-populated payload reach the
+    # importer. The schema is not the gate this function uses; it is a second one.
+    need <- TS_DRIVE_IMPORT_SCHEMA[[module]]$required
+    if (is.null(need)) {
+      errors <- c(errors, sprintf(
+        "`import_file` for '%s' needs an `import` block carrying `%s`", module,
+        "<the module's required key>"))
+      return(list(status = "invalid", errors = errors, warnings = warnings,
+                  active_module = module, nav = nav))
+    }
+    if (is.null(req) || !is.list(req)) {
+      errors <- c(errors, sprintf(
+        "`import_file` for '%s' needs an `import` block carrying %s", module,
+        paste0("`", need, "`", collapse = " and ")))
+      return(list(status = "invalid", errors = errors, warnings = warnings,
+                  active_module = module, nav = nav))
+    }
+    lack <- need[vapply(need, function(k) is.null(req[[k]]), logical(1))]
+    if (length(lack)) {
+      errors <- c(errors, sprintf(
+        "`import_file` for '%s' needs an `import` block carrying %s; absent: %s",
+        module, paste0("`", need, "`", collapse = " and "),
+        paste0("`", lack, "`", collapse = ", ")))
       return(list(status = "invalid", errors = errors, warnings = warnings,
                   active_module = module, nav = nav))
     }
@@ -1670,21 +2442,76 @@ ts_drive_nav_plan <- function(module, target_tab = NULL) {
       accordion_id = TS_DRIVE_SPATIAL_ACCORDION_ID
     ))
   }
+  # The Spatial QC child module, measured in mod_spatial.R: the results navset is
+  # the SAME one (`spatial-results`), only the value differs, and the controls live
+  # in the SAME accordion (`spatial-steps`). The pipeline branch above hard-codes
+  # both values, so this one is a separate explicit branch rather than a parameter
+  # of it — a shared branch would have meant guessing which of the two a new
+  # Spatial module wanted.
+  if (identical(module, TS_DRIVE_SPATIAL_QC_MODULE)) {
+    return(list(
+      top = TS_DRIVE_SPATIAL_TOP_TAB,
+      tab = TS_DRIVE_SPATIAL_QC_TAB,
+      panel = TS_DRIVE_SPATIAL_QC_PANELS,
+      tab_id = TS_DRIVE_SPATIAL_TABS_ID,
+      accordion_id = TS_DRIVE_SPATIAL_ACCORDION_ID,
+      # S1: the FOURTH level. This module nests a navset of its own inside the
+      # `spatial-results` one, and the hotspot map / histogram / table / CSV
+      # button live in it. `sub_tab` is deliberately ABSENT for every other module,
+      # and `ts_drive_perform_nav()` treats its absence as "three levels, as
+      # before" rather than inventing one.
+      sub_tab = TS_DRIVE_SPATIAL_QC_SUB_TAB,
+      sub_tab_id = TS_DRIVE_SPATIAL_QC_SUB_TABS_ID
+    ))
+  }
+  # The Spatial import lives on a DIFFERENT navbar page from every Spatial
+  # analysis tab, and that page's value is not a stable id. MEASURED on a live
+  # session: `nav_panel(i18n$t("Spatial"), ...)` (app.R:395) passes no `value=`,
+  # so bslib uses the title TAG, and after clicking Import > Spatial the navbar
+  # reads
+  #   "<span class=\"i18n\" data-key=\"Spatial\">Spatial</span>"
+  # A 47-character HTML fragment emitted by the i18n shim. Hard-coding it would
+  # buy a navigation effect whose failure mode is a silent no-op the day the shim
+  # markup changes, so the plan is DELIBERATELY empty: `top = NULL` means "do not
+  # navigate", which is a documented outcome of this function and not a missing
+  # branch. The import announces itself with a `showNotification`, which is how a
+  # human watching sees it. `test-drive-watcher.R` pins the measured value so the
+  # reasoning stays falsifiable.
+  if (identical(module, TS_DRIVE_SPATIAL_IMPORT_MODULE)) {
+    return(list(top = NULL, tab = NULL, panel = NULL,
+                tab_id = NULL, accordion_id = NULL))
+  }
+  if (identical(module, TS_DRIVE_SC_PATHWAYS_MODULE)) {
+    return(list(
+      top = TS_DRIVE_SC_PATHWAYS_TOP_TAB,
+      # S5: see the sc_markers branch — the barplot is a panel of `sc-main_tabs`.
+      tab = TS_DRIVE_SC_RESULTS_TAB[[TS_DRIVE_SC_PATHWAYS_MODULE]],
+      panel = TS_DRIVE_SC_PATHWAYS_PANELS,
+      tab_id = TS_DRIVE_SC_MAIN_TABS_ID,
+      accordion_id = TS_DRIVE_SC_PATHWAYS_ACCORDION_IDS
+    ))
+  }
   if (identical(module, TS_DRIVE_SC_MARKERS_MODULE)) {
     return(list(
       top = TS_DRIVE_SC_MARKERS_TOP_TAB,
-      tab = NULL,
+      # S5: `tab`/`tab_id` were NULL. They opened the CONTROLS accordion and
+      # stopped, but the reader is a panel of the `sc-main_tabs` results navset —
+      # a SIBLING of the accordions (mod_sc.R:693) — and bslib does not render an
+      # output in an unselected tab. The value comes from the shared table, which
+      # `test-drive-watcher.R` cross-checks against the module's own
+      # `nav_panel(value = )`, because a stale id is a silent no-op here.
+      tab = TS_DRIVE_SC_RESULTS_TAB[[TS_DRIVE_SC_MARKERS_MODULE]],
       panel = TS_DRIVE_SC_MARKERS_PANELS,
-      tab_id = NULL,
+      tab_id = TS_DRIVE_SC_MAIN_TABS_ID,
       accordion_id = TS_DRIVE_SC_MARKERS_ACCORDION_IDS
     ))
   }
   if (identical(module, TS_DRIVE_SC_ANNOTATION_MODULE)) {
     return(list(
       top = TS_DRIVE_SC_ANNOTATION_TOP_TAB,
-      tab = NULL,
+      tab = TS_DRIVE_SC_RESULTS_TAB[[TS_DRIVE_SC_ANNOTATION_MODULE]],
       panel = TS_DRIVE_SC_ANNOTATION_PANELS,
-      tab_id = NULL,
+      tab_id = TS_DRIVE_SC_MAIN_TABS_ID,
       accordion_id = TS_DRIVE_SC_ANNOTATION_ACCORDION_IDS
     ))
   }
@@ -1706,6 +2533,7 @@ ts_drive_nav_plan <- function(module, target_tab = NULL) {
     bulk_pathways = "panel_pathways",
     bulk_signatures = TS_DRIVE_BULK_SIGNATURES_PANELS,
     bulk_pattern  = TS_DRIVE_BULK_PATTERN_PANELS,
+    bulk_network  = TS_DRIVE_BULK_NETWORK_PANELS,
     import_bulk   = NULL,
     NULL)
   list(
@@ -1730,12 +2558,14 @@ ts_drive_nav_plan <- function(module, target_tab = NULL) {
 #' @param last_seq Highest applied seq so far.
 #' @param armed Previously-known arm state, echoed into `result.json`.
 #' @return list(consumed, last_seq, armed, error, nav)
-ts_drive_tick <- function(session, input, global_data, token, last_seq = 0,
-                          armed = FALSE, effects = NULL) {
-  out <- list(consumed = FALSE, new_scenario = FALSE, published = FALSE,
-              deferred = FALSE, selected = TRUE, last_seq = last_seq,
-              armed = armed, error = NULL, nav = NULL, status = NULL,
-              job_status = NULL, module = NULL, action = NULL, elapsed_s = NULL)
+  ts_drive_tick <- function(session, input, global_data, token, last_seq = 0,
+                            armed = FALSE, effects = NULL, inject = NULL,
+                            pending = NULL) {
+    out <- list(consumed = FALSE, new_scenario = FALSE, published = FALSE,
+                deferred = FALSE, selected = TRUE, last_seq = last_seq,
+                armed = armed, error = NULL, nav = NULL, status = NULL,
+                job_status = NULL, module = NULL, action = NULL, elapsed_s = NULL,
+                pending = pending)
   selected <- .ts_drive_state$selected_token
   if (!is.null(selected) &&
       !identical(as.character(selected), as.character(token))) {
@@ -1743,8 +2573,24 @@ ts_drive_tick <- function(session, input, global_data, token, last_seq = 0,
     out$armed <- FALSE
     return(out)
   }
-  out$armed <- tryCatch(ts_drive_arm_state(token)$armed, error = function(e) FALSE)
-  ts_drive_job_expire()
+    out$armed <- tryCatch(ts_drive_arm_state(token)$armed, error = function(e) FALSE)
+    ts_drive_job_expire()
+
+    # ── S6: service a PENDING confirmation before anything else ────────────
+    # Same precedence discipline as the finished-job block below, for the same
+    # reason: a confirmation resolved in the same beat as a queued scenario would
+    # have the scenario's own outcome overwrite it.
+    if (!is.null(pending)) {
+      # The poller supplies the injector; a caller that omits it (an offline test)
+      # gets one built from the session and the effect seam, so the staging path is
+      # never silently inert.
+      if (is.null(inject)) inject <- ts_drive_injector(session, effects)
+      out <- ts_drive_service_pending(pending, token, effects, out, inject)
+      # Still waiting: consume NOTHING this beat and let the next one look again.
+      if (!is.null(out$pending)) return(out)
+      if (isTRUE(out$consumed)) return(out)
+    }
+
 
   # ── A job that FINISHED outranks every other concern this beat ────────────
   # Resolved BEFORE the arm gate and before `scenario.json` is even read, and
@@ -1851,7 +2697,7 @@ ts_drive_tick <- function(session, input, global_data, token, last_seq = 0,
   # sc + spatial + bulk, and the v1 allowlist is bulk-only anyway.
   t0  <- Sys.time()
   res <- ts_drive_apply(session, input, scn, effects = effects,
-                        owner_token = token)
+                        owner_token = token, inject = inject)
 
   message(sprintf("[drive] seq=%s module=%s action=%s status=%s preserve_data=%s",
                   scn$seq, scn$module, scn$action, res$status, preserve))
@@ -1861,7 +2707,15 @@ ts_drive_tick <- function(session, input, global_data, token, last_seq = 0,
     preserve_data = preserve,
     errors   = c(v$errors, res$errors),
     warnings = c(v$warnings, res$warnings),
-    snapshot = ts_drive_snapshot(global_data)
+    snapshot = ts_drive_snapshot(global_data),
+    # S2: the export DESCRIPTOR, so a `done` verdict is not a verdict with nothing
+    # behind it. MEASURED on a live session: the export wrote a real 204 485-byte
+    # file and reported `done`, and `result.json` carried no descriptor at all — an
+    # agent could not learn the filename, the row count or the column names, so
+    # "the export worked" was indistinguishable from "the export silently did
+    # nothing". The descriptor is bounded scalars and short strings by
+    # construction; it is projected through the same redaction as everything else.
+    descriptor = res$descriptor
   )
 
   out$consumed <- TRUE
@@ -1875,6 +2729,20 @@ ts_drive_tick <- function(session, input, global_data, token, last_seq = 0,
   out$module    <- res$active_module %||% scn$module
   out$action    <- scn$action
   out$elapsed_s <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+  # 🔴 S6: LIFT THE DEFERRED RECORD. `ts_drive_apply()` returns it as
+  # `pending_confirm`, and this block copied `res$status`, `res$nav`,
+  # `res$action` and `res$elapsed_s` — but NOT that field, so the record died
+  # here. MEASURED on a live session (2026-09-27): seq 7 answered `running` (so
+  # the deferral itself worked and the arm/beat loop was healthy, `hb_n`
+  # climbing), and then NOTHING happened for 250+ s: no `[drive] inputs
+  # confirmed`, and no 5-beat timeout refusal either. The wait could neither
+  # complete nor expire, because the next beat was handed `pending = NULL`.
+  #
+  # ⚠️ This is the SECOND of two breaks in the same chain, and the offline suite
+  # could not see either: every test drove `ts_drive_tick(pending = )` by hand and
+  # asserted on the service directly, so the apply -> tick -> attach ROUND TRIP
+  # was never executed. The unit tests were green on a path no live session takes.
+  if (!is.null(res$pending_confirm)) out$pending <- res$pending_confirm
   out
 }
 
@@ -2226,10 +3094,15 @@ ts_drive_attach <- function(session, input, poll_ms = 800) {
 
   # Mutable cursor shared by the closure. Kept in the closure's environment,
   # not in a `reactiveVal`, precisely so `R/` stays free of reactivity.
-  cursor <- new.env(parent = emptyenv())
-  cursor$last_seq <- 0L
-  cursor$armed    <- FALSE
-  cursor$nav      <- NULL
+    cursor <- new.env(parent = emptyenv())
+    cursor$last_seq <- 0L
+    cursor$armed    <- FALSE
+    cursor$nav      <- NULL
+    # S6: a run waiting for its injected inputs to be confirmed by the owning
+    # module. Lives in the closure's environment beside `last_seq`, so the tick
+    # stays a pure function of its arguments and the state is per-session by
+    # construction.
+    cursor$pending  <- NULL
   # Heartbeat state. `hb_n` is monotonic for the session's life and `started_at`
   # is written once, so an agent can tell "same live session" from "a new
   # session reusing the pid" — see ts_drive_write_ready().
@@ -2256,15 +3129,30 @@ ts_drive_attach <- function(session, input, poll_ms = 800) {
     tick_fn <- function(global_data = NULL, effects = NULL) {
       was_armed <- cursor$armed
       tick <- ts_drive_tick(session, input, global_data, token,
-                            last_seq = cursor$last_seq, armed = cursor$armed,
-                            effects = effects)
-      if (isFALSE(tick$selected)) return(tick)
+                              last_seq = cursor$last_seq, armed = cursor$armed,
+                              effects = effects, pending = cursor$pending)
+        if (isFALSE(tick$selected)) return(tick)
       if (!is.null(tick$error)) {
         message(sprintf("[drive] tick error: %s", tick$error))
       }
-      if (isTRUE(tick$consumed) && !is.na(tick$last_seq)) {
-        cursor$last_seq <- tick$last_seq
-      }
+        if (isTRUE(tick$consumed) && !is.na(tick$last_seq)) {
+          cursor$last_seq <- tick$last_seq
+        }
+        # A pending confirmation is carried beat to beat. This assignment is
+        # UNCONDITIONAL, and getting that wrong is the second half of a defect
+        # MEASURED live (2026-09-27): the first version read
+        #   if (had_pending) cursor$pending <- tick$pending
+        # which only PROPAGATES a record that already existed, and cannot CAPTURE
+        # one the tick just created. So the record `ts_drive_apply()` deferred was
+        # dropped on the same beat it was created: the next beat was handed
+        # `pending = NULL`, the confirmation could neither complete nor hit its
+        # 5-beat timeout, and the run hung at `running` indefinitely - with a
+        # healthy heartbeat (`hb_n` climbing) and no error anywhere.
+        #
+        # `tick$pending` is the authoritative post-beat state, so one assignment
+        # covers all three cases: still waiting (non-NULL, carried), resolved
+        # (NULL, cleared), none (NULL).
+        cursor$pending <- tick$pending
       cursor$armed <- isTRUE(tick$armed)
       if (isTRUE(tick$consumed)) {
         # A navigation plan is a ONE-SHOT effect: it is stored for the caller
@@ -2406,8 +3294,15 @@ ts_drive_attach <- function(session, input, poll_ms = 800) {
 #' @param session The Shiny session.
 #' @param plan list(top, tab, panel) as returned by `ts_drive_nav_plan()`.
 #' @return TRUE when at least the top-level jump succeeded.
+#'
+#' A plan whose `top` is NULL is a DOCUMENTED "do not navigate" outcome, not a
+#' missing branch: `ts_drive_nav_plan()` returns one for a module that has no
+#' stable navbar value (see the `import_spatial` branch). It is answered here
+#' explicitly, so the empty plan is a decision and not an error swallowed by the
+#' `tryCatch` below.
 ts_drive_perform_nav <- function(session, plan) {
   if (is.null(plan)) return(invisible(FALSE))
+  if (is.null(plan$top)) return(invisible(FALSE))
   ok <- tryCatch({
     bslib::nav_select(id = TS_DRIVE_TOP_NAV_ID, selected = plan$top, session = session)
     TRUE
@@ -2433,6 +3328,20 @@ ts_drive_perform_nav <- function(session, plan) {
         error = function(e) NULL
       )
     }
+  }
+  # S1: the OPTIONAL fourth level, a navset nested inside the module's own results
+  # panel. It is performed LAST and only when the plan carries it, for two
+  # reasons that are both load-bearing: the nested navset is not in the DOM until
+  # the level above has selected its parent, and `bslib::nav_select()` on an id
+  # that is not present is a silent no-op that would otherwise be invisible.
+  # Same API and the same swallow-everything contract as the level above: the
+  # navigation exists so a human can watch, and it can never turn a completed job
+  # into a failed one.
+  if (!is.null(plan$sub_tab)) {
+    tryCatch(
+      bslib::nav_select(id = plan$sub_tab_id, selected = plan$sub_tab, session = session),
+      error = function(e) NULL
+    )
   }
   invisible(ok)
 }

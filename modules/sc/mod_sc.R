@@ -231,10 +231,11 @@
 #' Eight scalars plus the `steps` slot: nothing here can carry a gene name, a
 #' cell id, a coordinate, a cluster label or a path, because nothing here reads
 #' one.
-.sc_ap_drive_view <- function(status, elapsed_s = 0, seq = 0L, n_results = 0L,
-                              has_data = FALSE, ready = FALSE, steps = NULL) {
-  list(
-    module    = .SC_AP_DRIVE_MODULE,
+ .sc_ap_drive_view <- function(status, elapsed_s = 0, seq = 0L, n_results = 0L,
+                                has_data = FALSE, ready = FALSE, steps = NULL,
+                                descriptor = NULL, convention = NULL) {
+    out <- list(
+      module    = .SC_AP_DRIVE_MODULE,
     action    = "run_pipeline",
     status    = as.character(status),
     elapsed_s = as.numeric(elapsed_s),
@@ -242,13 +243,19 @@
     n_results = as.integer(n_results),
     has_data  = isTRUE(has_data),
     ready     = isTRUE(ready),
-    steps     = if (is.null(steps)) {
-      .sc_ap_steps_as_list(.sc_ap_steps_idle())
-    } else {
-      steps
-    }
-  )
-}
+      steps     = if (is.null(steps)) {
+        .sc_ap_steps_as_list(.sc_ap_steps_idle())
+      } else {
+        steps
+      }
+    )
+    # See `.sc_markers_drive_view()`. The auto-pipeline counts SEVERAL artefacts,
+    # so its convention has to say so, or its number is not comparable with a
+    # single-table module's.
+    if (!is.null(descriptor)) out$descriptor <- descriptor
+    if (!is.null(convention)) out$convention <- as.character(convention)[1L]
+    out
+  }
 
 #' Run the pipeline for a drive request and report what actually happened.
 #'
@@ -328,15 +335,16 @@ run_annot <- function(input, global_data, shared_rv, session) {
   }, error = function(e) list(ok = FALSE, n_results = 0L))
 }
 
-.sc_annot_drive_view <- function(status, elapsed_s = 0, seq = 0L,
-                                 n_results = 0L, has_data = FALSE,
-                                 ready = FALSE, step = NULL) {
-  step <- if (is.null(step)) "skipped" else as.character(step)
-  if (length(step) != 1L || is.na(step) || !step %in% .SC_AP_DRIVE_STEP_STATES) {
-    step <- "error"
-  }
-  list(
-    module = .SC_ANNOT_DRIVE_MODULE,
+ .sc_annot_drive_view <- function(status, elapsed_s = 0, seq = 0L,
+                                   n_results = 0L, has_data = FALSE,
+                                   ready = FALSE, step = NULL,
+                                   descriptor = NULL, convention = NULL) {
+    step <- if (is.null(step)) "skipped" else as.character(step)
+    if (length(step) != 1L || is.na(step) || !step %in% .SC_AP_DRIVE_STEP_STATES) {
+      step <- "error"
+    }
+    out <- list(
+      module = .SC_ANNOT_DRIVE_MODULE,
     action = "run_pipeline",
     status = as.character(status),
     elapsed_s = as.numeric(elapsed_s),
@@ -344,9 +352,14 @@ run_annot <- function(input, global_data, shared_rv, session) {
     n_results = as.integer(n_results),
     has_data = isTRUE(has_data),
     ready = isTRUE(ready),
-    steps = list(singler = step)
-  )
-}
+      steps = list(singler = step)
+    )
+    # See `.sc_markers_drive_view()`: the descriptor is what gives `n_results` a
+    # referent and a convention. ABSENT, never empty, when there is no result.
+    if (!is.null(descriptor)) out$descriptor <- descriptor
+    if (!is.null(convention)) out$convention <- as.character(convention)[1L]
+    out
+  }
 
 .sc_annot_drive_ready <- function(global_data) {
   if (is.null(tryCatch(shiny::isolate(global_data$sc_obj), error = function(e) NULL))) {
@@ -361,10 +374,12 @@ run_annot <- function(input, global_data, shared_rv, session) {
   ready <- isTRUE(.sc_annot_drive_ready(global_data))
   obj <- tryCatch(shiny::isolate(global_data$sc_obj), error = function(e) NULL)
   n_results <- 0L
+  annot_col <- NULL
   if (inherits(obj, "Seurat")) {
     cols <- grep("^SingleR_", colnames(obj@meta.data), value = TRUE)
     if (length(cols)) {
-      n_results <- length(unique(obj@meta.data[[tail(cols, 1L)]]))
+      annot_col <- tail(cols, 1L)
+      n_results <- length(unique(obj@meta.data[[annot_col]]))
     }
   }
   current <- if (is.function(run_state)) {
@@ -379,7 +394,13 @@ run_annot <- function(input, global_data, shared_rv, session) {
     n_results = n_results,
     has_data = !is.null(obj),
     ready = ready,
-    step = last_step
+    step = last_step,
+    # Annotation has no table, so the referent for its level count is the COLUMN
+    # the count came from. NULL when SingleR has not run, and then omitted.
+    descriptor = if (is.null(annot_col)) NULL else ts_drive_table_descriptor(
+      NULL, kind = "levels", n_levels = n_results, column = annot_col,
+      convention = .SC_ANNOT_DRIVE_CONVENTION),
+    convention = .SC_ANNOT_DRIVE_CONVENTION
   )
 }
 
@@ -461,14 +482,30 @@ run_markers <- function(input, global_data, shared_rv, session) {
   }, error = function(e) list(ok = FALSE, n_results = 0L))
 }
 
-.sc_markers_drive_view <- function(status, elapsed_s = 0, seq = 0L,
-                                  n_results = 0L, has_data = FALSE,
-                                  ready = FALSE, step = NULL) {
+#' The declared CONVENTION behind each SC module's `n_results`.
+#'
+#' A FIXED string per module, never derived from the data, so two modules' counts
+#' are comparable and an agent can tell what the number means. `bulk_de` already
+#' shipped one for its `n_significant` ("padj < 0.05 & |log2FoldChange| > 1"); SC
+#' had none, which was the measured gap (2026-09-27) this slice closes.
+#'
+#' ⚠️ EACH constant lives in the file of the probe that uses it, not here.
+#' `.SC_PATHWAYS_DRIVE_CONVENTION` was first declared here and the real pathways
+#' state probe then died with "object not found" in three test blocks, because
+#' `test-mod-sc-pathways-drive.R` sources `mod_sc_pathways.R` and not this file. A
+#' shared block of conventions is the obvious place to put them and the wrong one.
+#' @noRd
+.SC_MARKERS_DRIVE_CONVENTION   <- "rows of the marker table (one row per gene x cluster)"
+.SC_ANNOT_DRIVE_CONVENTION     <- "unique levels of the annotation column named in `column`"
+.SC_AP_DRIVE_CONVENTION        <- "number of pipeline artefacts produced (not rows)"
+ .sc_markers_drive_view <- function(status, elapsed_s = 0, seq = 0L,                                  n_results = 0L, has_data = FALSE,
+                                  ready = FALSE, step = NULL,
+                                  descriptor = NULL, convention = NULL) {
   step <- if (is.null(step)) "skipped" else as.character(step)
   if (length(step) != 1L || is.na(step) || !step %in% .SC_AP_DRIVE_STEP_STATES) {
     step <- "error"
   }
-  list(
+  out <- list(
     module = .SC_MARKERS_DRIVE_MODULE,
     action = "run_pipeline",
     status = as.character(status),
@@ -479,6 +516,16 @@ run_markers <- function(input, global_data, shared_rv, session) {
     ready = isTRUE(ready),
     steps = list(markers = step)
   )
+  # The DESCRIPTOR. Without it `n_results` is a number with no subject: an agent
+  # cannot tell WHICH markers, nor interpret the count, nor compare it with another
+  # module's. MEASURED gap, 2026-09-27. Bounded by construction (see
+  # `ts_drive_table_descriptor()`) and PROJECTED on the wire by
+  # `ts_drive_module_states()`, which passes a probe's list WHOLE. Both fields are
+  # ABSENT rather than empty when there is no result, so "no descriptor" is never
+  # confused with "an empty result".
+  if (!is.null(descriptor)) out$descriptor <- descriptor
+  if (!is.null(convention)) out$convention <- as.character(convention)[1L]
+  out
 }
 
 .sc_markers_drive_ready <- function(global_data) {
@@ -502,15 +549,22 @@ run_markers <- function(input, global_data, shared_rv, session) {
     as.character(run_state)
   }
   if (length(current) != 1L || is.na(current)) current <- "idle"
-  .sc_markers_drive_view(
-    status = if (ready) current else "not_ready",
-    elapsed_s = if (is.null(pending)) 0 else as.numeric(pending$elapsed_s),
-    seq = if (is.null(job)) 0L else as.integer(job$seq),
-    n_results = n_results,
-    has_data = !is.null(obj),
-    ready = ready,
-    step = last_step
-  )
+    .sc_markers_drive_view(
+      status = if (ready) current else "not_ready",
+      elapsed_s = if (is.null(pending)) 0 else as.numeric(pending$elapsed_s),
+      seq = if (is.null(job)) 0L else as.integer(job$seq),
+      n_results = n_results,
+      has_data = !is.null(obj),
+      ready = ready,
+      step = last_step,
+      # The schema of the table `n_results` counts, so the number has a referent.
+      # NULL when there is no table, which the view then OMITS - a probe that never
+      # ran must not publish a "0 rows, 0 columns" descriptor that reads like an
+      # empty result.
+      descriptor = ts_drive_table_descriptor(
+        markers, convention = .SC_MARKERS_DRIVE_CONVENTION),
+      convention = .SC_MARKERS_DRIVE_CONVENTION
+    )
 }
 
 .sc_markers_run_drive <- function(global_data, shared_rv, session, close_job) {
@@ -1191,7 +1245,15 @@ mod_sc_server <- function(id, global_data) {
         n_results = .sc_ap_count_results(obj, .sc_ap_produced(shared_rv)),
         has_data = !is.null(obj),
         ready = ready,
-        steps = drive_last_steps$value
+        steps = drive_last_steps$value,
+        # The auto-pipeline produces SEVERAL artefacts, so its descriptor names
+        # them rather than describing a frame: the referent for its count is the
+        # set of steps that produced something.
+        descriptor = ts_drive_table_descriptor(
+          data.frame(step = names(.sc_ap_produced(shared_rv)),
+                     stringsAsFactors = FALSE),
+          convention = .SC_AP_DRIVE_CONVENTION),
+        convention = .SC_AP_DRIVE_CONVENTION
       )
     }
 

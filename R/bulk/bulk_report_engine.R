@@ -78,15 +78,34 @@ all_de <- list()
 all_de[[paste0(GROUP_TARGET, "_vs_", GROUP_REF)]] <- res_df
 for (pr in other_pairs) {
   coef_p <- paste0(CONDITION_COL, "_", pr$target, "_vs_", pr$ref)
-  res_p <- tryCatch({
-    r0 <- DESeq2::results(dds, contrast = c(CONDITION_COL, pr$target, pr$ref), pAdjustMethod = PADJ_METHOD)
-    if (coef_p %in% DESeq2::resultsNames(dds)) {
-      DESeq2::lfcShrink(dds, coef = coef_p, res = r0, type = "apeglm", quiet = TRUE)
-    } else {
-      DESeq2::lfcShrink(dds, contrast = c(CONDITION_COL, pr$target, pr$ref), res = r0, type = "normal", quiet = TRUE)
-    }
-  }, error = function(e) DESeq2::results(dds, contrast = c(CONDITION_COL, pr$target, pr$ref), pAdjustMethod = PADJ_METHOD))
+  # ── SHRINKAGE : porte + AVERTISSEMENT + drapeau ──
+  # `apeglm` est une dependance OPTIONNELLE de DESeq2 (SUGGERE, pas requis).
+  # MESURE : sur un projet ou il nest pas installe, le repli renvoyait le
+  # resultat NON RETRECI sans rien dire : meme tableau, meme volcano, meme
+  # compte de genes significatifs, et des LFC que personne n avait demandes.
+  # PAS DE SUBSTITUTION par type="normal" : ce serait changer lestimateur en
+  # silence, cest-à-dire la meme malhonnetete que le repli silencieux.
+  shrunk_p <- FALSE
+  r0 <- DESeq2::results(dds, contrast = c(CONDITION_COL, pr$target, pr$ref), pAdjustMethod = PADJ_METHOD)
+  if (requireNamespace("apeglm", quietly=TRUE)) {
+    res_p <- tryCatch({
+      shrunk_p <<- TRUE
+      if (coef_p %in% DESeq2::resultsNames(dds)) {
+        DESeq2::lfcShrink(dds, coef = coef_p, res = r0, type = "apeglm", quiet = TRUE)
+      } else {
+        DESeq2::lfcShrink(dds, contrast = c(CONDITION_COL, pr$target, pr$ref), res = r0, type = "normal", quiet = TRUE)
+      }
+    }, error = function(e) { shrunk_p <<- FALSE; r0 })
+  } else {
+    res_p <- r0
+  }
+  if (!shrunk_p) {
+    warning(paste0("Shrinkage LFC non applique pour ", pr$target, " vs ", pr$ref,
+                   " : paquet optionnel apeglm absent (ou shrinkage en echec). ",
+                   "Les log2FoldChange affiches sont ceux de results(), NON retrecis."))
+  }
   df_p <- as.data.frame(res_p); df_p$gene <- rownames(df_p); df_p <- df_p[order(df_p$padj), ]
+  attr(df_p, "shrunk") <- shrunk_p
   all_de[[paste0(pr$target, "_vs_", pr$ref)]] <- df_p
   write.csv(df_p, paste0("DE_", pr$target, "_vs_", pr$ref, "_", Sys.Date(), ".csv"), row.names = FALSE)
 }
@@ -143,8 +162,42 @@ if (requireNamespace("clusterProfiler",quietly=TRUE) && requireNamespace("org.Hs
   entrez <- tryCatch(bitr(sig_g,fromType="SYMBOL",toType="ENTREZID",OrgDb=org.Hs.eg.db),
                      error=function(e) NULL)
   if (!is.null(entrez) && nrow(entrez) >= 10) {
+    # ── Le FOND (universe) : les gènes TESTÉS, pas les gènes significatifs ──
+    # ⚠️ AUCUN APOSTROPHE dans ce commentaire : ce bloc est une chaîne R entre
+    # guillemets simples, donc un apostrophe le terminerait. Cest pour cela que
+    # les commentaires voisins de ce script n en contiennent aucun. Le test
+    # `parse(text = )` est le seul à voir ce genre de faute.
+    #
+    # Un ORA se réfère toujours à un univers. Sans `universe`, clusterProfiler
+    # prend TOUS les gènes annotés de lespèce (environ 193 000 symboles) comme
+    # référence, alors que l app utilise lensemble de gènes réellement détecté
+    # par l assay (4 sites d appel : sc_pipeline.R:309, mod_bulk.R:506,
+    # mod_sc_pathways.R:173/427 ; voir run_pathway_enrichment(),
+    # pathway_helpers.R:195/229/261). Les deux ne sont donc pas la meme analyse.
+    #
+    # MESURÉ (symboles réels, un terme GO BP réel, panel de 8 000 gènes) :
+    #   fond = gènes testés      -> 618 termes, meilleur p.adjust 3.9e-233
+    #   fond = défaut clusterProfiler -> 294 termes, meilleur p.adjust 2.3e-07
+    #   rapport médian des p.adjust script/app : 375
+    # Le SENS de lécart dépend de la composition du jeu de données, donc aucune
+    # direction nest revendiquée ici : ce qui est établi, cest que les deux
+    # chemins ne concordent pas. Le bon fond est lensemble testé, car cest
+    # lensemble sur lequel la correction des tests multiples a été appliquée.
+    #
+    # `res_df$gene` et NON `sig_g` : lunivers doit contenir la requête, sinon
+    # arithmétiquement rien ne peut être sur-représenté. D’où le `union()`, le
+    # meme ordre que pathway_helpers.R:164.
+    uni_all <- tryCatch(
+      bitr(unique(as.character(res_df$gene[!is.na(res_df$gene)])),
+           fromType="SYMBOL", toType="ENTREZID", OrgDb=org.Hs.eg.db),
+      error=function(e) NULL)
+    uni_ids <- if (!is.null(uni_all) && nrow(uni_all) > 0)
+      union(unique(uni_all$ENTREZID), unique(entrez$ENTREZID))
+    else
+      unique(entrez$ENTREZID)
     ora <- enrichGO(gene=entrez$ENTREZID, OrgDb=org.Hs.eg.db, ont="BP",
-                    pAdjustMethod=PADJ_METHOD_PW, pvalueCutoff=0.05, readable=TRUE)
+                    pAdjustMethod=PADJ_METHOD_PW, pvalueCutoff=0.05, readable=TRUE,
+                    universe=uni_ids)
     if (!is.null(ora) && nrow(as.data.frame(ora)) > 0) {
       barplot(ora, showCategory=15, title="GO BP (ORA)")
       write.csv(as.data.frame(ora), paste0("pathways_GOBP_",Sys.Date(),".csv"), row.names=FALSE)
@@ -212,12 +265,29 @@ coef_name <- paste0(CONDITION_COL, "_", GROUP_TARGET, "_vs_", GROUP_REF)
 # script ne reproduirait pas la m\u00e9thode choisie dans l\'application.
 res0 <- DESeq2::results(dds, contrast=c(CONDITION_COL, GROUP_TARGET, GROUP_REF),
                         pAdjustMethod=PADJ_METHOD)
-res <- tryCatch(
-  DESeq2::lfcShrink(dds, coef=coef_name, res=res0, type="apeglm", quiet=TRUE),
-  error=function(e) res0
-)
+# ── SHRINKAGE : porte + AVERTISSEMENT + drapeau (meme contrat que l app) ──
+# Ce site est le PIRE des deux : il demande `type="apeglm"` SANS branche
+# `normal`, donc sur un projet sans apeglm il ne pouvait que degrader en silence.
+# Le repli reste un repli (une table non retrecie vaut mieux qu un arret), mais
+# il est desormais ANONCE et MARQUE.
+shrunk <- FALSE
+if (requireNamespace("apeglm", quietly=TRUE)) {
+  res <- tryCatch({
+    shrunk <<- TRUE
+    DESeq2::lfcShrink(dds, coef=coef_name, res=res0, type="apeglm", quiet=TRUE)
+  }, error=function(e) { shrunk <<- FALSE; res0 })
+} else {
+  res <- res0
+}
+if (!shrunk) {
+  warning(paste0("Shrinkage LFC non applique : paquet optionnel apeglm absent ",
+                 "(ou shrinkage en echec). Les log2FoldChange affiches sont ceux ",
+                 "de results(), NON retrecis."))
+}
 res_df       <- as.data.frame(res); res_df$gene <- rownames(res_df)
 res_df       <- res_df[order(res_df$padj), ]
+attr(res_df, "shrunk") <- shrunk
+cat(sprintf("Shrinkage LFC : %s\\n", if (shrunk) "applique (apeglm)" else "NON applique (apeglm absent)"))
 cat(sprintf("%d significant genes\\n",
     sum(res_df$padj < PADJ_THRESH & abs(res_df$log2FoldChange) > LFC_THRESH, na.rm=TRUE)))
 ', pairwise_block, '

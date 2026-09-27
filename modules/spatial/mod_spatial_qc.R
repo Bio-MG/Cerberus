@@ -52,8 +52,286 @@
 # inline) rather than reimplementing Moran's I.
 # =============================================================================
 
-mod_spatial_qc_ui <- function(id) {
-  ns <- NS(id)
+# =============================================================================
+# MCP drive action `spatial-qc-btn_hotspots` (Phase E).
+#
+# Same module-layer wrapper pattern as the five other actions. The statistic
+# itself lives in R/spatial/spatial_stats.R and is NOT touched.
+#
+# WHY THIS BUTTON AND NOT ANOTHER: it is the only Spatial action that is a plain
+# `actionButton`, SYNCHRONOUS, and free of the two hard prerequisites the rest of
+# this tab has - no on-disk BPCells reopen and no mirai daemon. The clustering and
+# marker buttons need `global_data$spatial_obj$bpcells_dir` and inline their whole
+# algorithm in the worker body; Moran's I is an `input_task_button`. This one reads
+# two in-RAM tables, so a driven run is reproducible and cheap.
+#
+# THE ONE VALUE THAT CANNOT BE FROZEN IS THE METRIC, resolved by RULE
+# (.spatial_hotspot_metric) exactly as `bulk-pattern-run_pattern` resolves its
+# group column. The human path lets the user pick a QC column or a deconvolution
+# proportion; a remote caller cannot see either widget, so the rule declares a
+# preference order over the QC metrics and refuses with `not_ready` when none is
+# usable. The deconvolution branch is deliberately NOT reachable from the drive
+# action: it needs a prior deconvolution, which is not on the drive surface, and
+# silently substituting a QC metric for a requested proportion would be a lie.
+#
+# `n_results` COUNTS SIGNIFICANT SPOTS, not rows of the result table. The table has
+# one row per spatial element, so `nrow()` would report ~1000 for a run that found
+# two hotspots - the same "a number that does not mean what it says" failure the
+# `empty` distinction exists to prevent. A run with no significant spot is `empty`,
+# and that outcome is legitimate rather than an error.
+# =============================================================================
+
+.SPATIAL_QC_DRIVE_MODULE <- "spatial_qc"
+.SPATIAL_QC_DRIVE_BUTTON <- "spatial-qc-btn_hotspots"
+
+#' Closed step vocabulary for this action, same as the other actions.
+.SPATIAL_QC_DRIVE_STEP_STATES <- c("skipped", "running", "ran", "ignored", "error")
+
+#' The QC metrics this action may use, in preference order.
+#'
+#' `nCount` first because it is what the human `selectInput` picks by default (it is
+#' the first choice, and no `selected` is given), so a drive run and a human click
+#' agree on the common case. `log_nCount` follows as the monotone alternative. The
+#' rule never picks a metric that is not present.
+.spatial_hotspot_metric_order <- function() {
+  c("nCount", "log_nCount", "nFeature", "pct_mt", "pct_ribo")
+}
+
+#' Frozen input set for the drive action.
+#'
+#' `hotspot_k` is the widget default (30 neighbours, self included) and the frozen
+#' `hotspot_source = "qc"` is the DECLARED branch; the deconvolution branch is out of
+#' reach by design. `hotspot_alpha` is stated rather than left implicit: the domain
+#' hard-codes 1.96 / 0.05 in its own classification
+#' (R/spatial/spatial_stats.R), so the value is recorded for the report and MUST
+#' stay 0.05 — a frozen input that disagreed with the domain would be a lie in the
+#' provenance block.
+.spatial_qc_drive_inputs <- function() {
+  list(
+    hotspot_source = "qc",
+    hotspot_k      = 30L,
+    hotspot_alpha  = 0.05
+  )
+}
+
+#' Availability of the one optional package this action needs.
+#'
+#' `compute_getis_ord_hotspots()` guards `RANN` itself
+#' (R/spatial/spatial_stats.R), so this pre-check does not remove a guard, it only
+#' moves the failure from "halfway through a run" to "before a job is declared" so
+#' the refusal can carry `state = missing_dependency`.
+.spatial_hotspot_dependency_check <- function() {
+  if (isTRUE(requireNamespace("RANN", quietly = TRUE))) {
+    return(list(ok = TRUE, missing = character(0)))
+  }
+  list(ok = FALSE, missing = "RANN")
+}
+
+#' Resolve the metric by RULE, never by guessing.
+#'
+#' A metric is "usable" when it is a NUMERIC column of `shared_rv$qc_metrics` with
+#' at least one finite value. The returned field is named, never bare, for the same
+#' reason as `.bulk_pattern_group_column()`: a reason is a length-1 character too,
+#' and an earlier version there let the caller report `ready` while holding a
+#' sentence.
+#'
+#' @return `list(metric = <one column name>)` or `list(reason = <short reason>)`.
+.spatial_hotspot_metric <- function(shared_rv) {
+  qc <- tryCatch(shiny::isolate(shared_rv$qc_metrics), error = function(e) NULL)
+  if (!is.data.frame(qc) || !nrow(qc)) {
+    return(list(reason = "the QC step has not produced a metric table (shared_rv$qc_metrics is NULL)"))
+  }
+  order <- .spatial_hotspot_metric_order()
+  for (m in order) {
+    if (!m %in% names(qc)) next
+    v <- qc[[m]]
+    if (is.numeric(v) && any(is.finite(v))) return(list(metric = m))
+  }
+  return(list(reason = sprintf(
+    "no numeric QC metric among the %d declared (%s)", length(order),
+    paste(order, collapse = ", "))))
+}
+
+#' THE single writer for the hotspot slots, shared by THREE callers: the human
+#' observer, the drive action, and the Spatial pipeline's stage 8.
+#'
+#' S1.5 renamed this from a dot-prefixed private name. A leading dot claims a
+#' privacy that stopped being true when a second module started writing the same
+#' two slots, and the name is load-bearing in the other direction too: a private
+#' helper is one a second module would be tempted to inline rather than call, which
+#' is exactly the duplication this function exists to prevent.
+#'
+#' It is deliberately still a MODULE-LEVEL function in `modules/`, not a pure
+#' function in `R/`. `R/` is the pure domain layer and must not touch a Shiny
+#' reactiveValues (rule C2); this function's whole job is to write a store, so
+#' `modules/` is where it belongs. Keeping it here is also why S1.5 needed no
+#' extraction: it was already reachable from any module and from an offline test.
+#'
+#' `hotspot_params` and `hotspot_result` are read together by the status panel, the
+#' map, the histogram, the table and the CSV export, so they move together or not
+#' at all, and PARAMS ARE WRITTEN FIRST. `metric` is validated to be a scalar
+#' BEFORE anything is written, because an empty params block is what a half-written
+#' pair looks like. The `metric` VALUE is the caller's business and is stored as
+#' given: the QC rule resolves `nCount` and the pipeline declares `log_nCount`, and
+#' this function must not become the place where that difference is quietly erased.
+spatial_hotspot_store <- function(res, params, shared_rv) {
+  if (!is.null(res) && !is.data.frame(res)) {
+    stop(errorCondition(
+      "spatial hotspots: the result to store must be the Getis-Ord table or NULL.",
+      class = "spatial_stats_error", state = "invalid_input"))
+  }
+  if (!is.null(params)) {
+    if (!is.list(params) || is.null(params$metric) || length(params$metric) != 1L ||
+        is.na(params$metric)) {
+      stop(errorCondition(
+        "spatial hotspots: the parameters to store must name exactly one metric.",
+        class = "spatial_stats_error", state = "invalid_input"))
+    }
+    shared_rv$hotspot_params <- params
+  }
+  shared_rv$hotspot_result <- res
+  invisible(res)
+}
+
+#' S2 — the ONE serialiser for the hotspot table. Shared by the human
+#' `downloadHandler` and the drive export route so the two files are
+#' byte-identical; two serialisations would drift invisibly.
+spatial_hotspot_csv_write <- function(df, file) {
+  utils::write.csv(df, file, row.names = FALSE)
+  invisible(file)
+}
+
+#' Thin wrapper: the same call as the human `eventReactive`, on the frozen `k` and
+#' the rule-resolved metric.
+#'
+#' @return list(ok, n_results, record, params) where `n_results` is the number of
+#'   SIGNIFICANT spots (hot or cold). `n_elements` carries the table length, so a
+#'   caller that wants the other number does not have to guess.
+run_spatial_hotspots <- function(coords, qc_metrics,
+                                 inputs = .spatial_qc_drive_inputs()) {
+  if (!is.list(inputs)) inputs <- .spatial_qc_drive_inputs()
+  fail <- function(state, message) {
+    stop(errorCondition(message, class = "spatial_stats_error", state = state))
+  }
+  check <- .spatial_hotspot_dependency_check()
+  if (!isTRUE(check$ok)) {
+    fail("missing_dependency", sprintf(
+      "spatial hotspots: the local package '%s' is required; nothing is downloaded.",
+      paste(check$missing, collapse = ", ")))
+  }
+  if (!is.data.frame(coords) || !all(c("id", "x", "y") %in% names(coords)) || !nrow(coords)) {
+    fail("invalid_input", "spatial hotspots: the loaded dataset carries no spatial coordinates.")
+  }
+  m <- .spatial_hotspot_metric(list(qc_metrics = qc_metrics))
+  if (!is.null(m$reason)) fail("not_ready", as.character(m$reason))
+  metric <- m$metric
+  if (!"id" %in% names(qc_metrics)) {
+    fail("invalid_input", "spatial hotspots: the QC metric table has no 'id' column.")
+  }
+  values <- stats::setNames(qc_metrics[[metric]], as.character(qc_metrics$id))
+  params <- list(source = as.character(inputs$hotspot_source)[1L],
+                 metric = metric,
+                 k_neighbors = as.integer(inputs$hotspot_k))
+  res <- compute_getis_ord_hotspots(coords = coords, values = values,
+                                    k_neighbors = as.integer(inputs$hotspot_k))
+  if (!is.data.frame(res) || !nrow(res)) {
+    fail("invalid_input", "spatial hotspots: the domain returned no scored element.")
+  }
+  n_sig <- sum(res$hotspot != "NS", na.rm = TRUE)
+  list(ok = TRUE, n_results = as.integer(n_sig),
+       n_elements = as.integer(nrow(res)), record = res, params = params)
+}
+
+#' Readiness: a loaded dataset with coordinates, and a usable QC metric.
+#' Returning the REASON is what lets the poller publish `not_ready` instead of
+#' dispatching a job that must fail.
+.spatial_qc_drive_ready <- function(shared_rv, global_data) {
+  coords <- tryCatch(shiny::isolate(global_data$spatial_obj$coords), error = function(e) NULL)
+  if (!is.data.frame(coords) || !all(c("id", "x", "y") %in% names(coords)) || !nrow(coords)) {
+    return("no spatial dataset loaded (global_data$spatial_obj$coords is NULL)")
+  }
+  m <- .spatial_hotspot_metric(shared_rv)
+  if (!is.null(m$reason)) return(as.character(m$reason))
+  TRUE
+}
+
+.spatial_qc_drive_view <- function(status, elapsed_s = 0, seq = 0L,
+                                   n_results = 0L, has_data = FALSE,
+                                   ready = FALSE, step = NULL) {
+  step <- if (is.null(step)) "skipped" else as.character(step)
+  if (length(step) != 1L || is.na(step) || !step %in% .SPATIAL_QC_DRIVE_STEP_STATES) {
+    step <- "error"
+  }
+  list(
+    module = .SPATIAL_QC_DRIVE_MODULE,
+    action = "run_pipeline",
+    status = as.character(status),
+    elapsed_s = as.numeric(elapsed_s),
+    seq = as.integer(seq),
+    n_results = as.integer(n_results),
+    has_data = isTRUE(has_data),
+    ready = isTRUE(ready),
+    steps = list(hotspots = step)
+  )
+}
+
+#' State probe. `n_results` counts the significant spots of the last successful run,
+#' RECOMPUTED from the stored table rather than remembered, so a stale count cannot
+#' survive a re-import: `shiny::isolate()` keeps these reads out of the poller's
+#' dependency set.
+.spatial_qc_drive_state <- function(shared_rv, global_data, run_state,
+                                    last_step = NULL) {
+  job <- tryCatch(ts_drive_job_state(), error = function(e) NULL)
+  pending <- tryCatch(ts_drive_job_pending(), error = function(e) NULL)
+  ready <- isTRUE(.spatial_qc_drive_ready(shared_rv, global_data))
+  obj <- tryCatch(shiny::isolate(global_data$spatial_obj), error = function(e) NULL)
+  res <- tryCatch(shiny::isolate(shared_rv$hotspot_result), error = function(e) NULL)
+  n_results <- if (is.data.frame(res) && nrow(res) && "hotspot" %in% names(res)) {
+    as.integer(sum(res$hotspot != "NS", na.rm = TRUE))
+  } else 0L
+  current <- if (is.function(run_state)) {
+    shiny::isolate(run_state())
+  } else {
+    as.character(run_state)
+  }
+  if (length(current) != 1L || is.na(current)) current <- "idle"
+  .spatial_qc_drive_view(
+    status = if (ready) current else "not_ready",
+    elapsed_s = if (is.null(pending)) 0 else as.numeric(pending$elapsed_s),
+    seq = if (is.null(job)) 0L else as.integer(job$seq),
+    n_results = n_results,
+    has_data = !is.null(obj),
+    ready = ready,
+    step = last_step
+  )
+}
+
+#' Runs the wrapper, publishes through the shared writer, and reports the terminal
+#' state. A failure publishes NO result count, so a stale hotspot map can never be
+#' read next to an error.
+.spatial_qc_run_drive <- function(global_data, shared_rv, close_job) {
+  coords <- tryCatch(shiny::isolate(global_data$spatial_obj$coords), error = function(e) NULL)
+  qc <- tryCatch(shiny::isolate(shared_rv$qc_metrics), error = function(e) NULL)
+  res <- tryCatch(
+    run_spatial_hotspots(coords, qc, .spatial_qc_drive_inputs()),
+    error = function(e) e
+  )
+  if (inherits(res, "condition")) {
+    close_job("error", conditionMessage(res))
+    return(list(status = "error", n_results = 0L, step = "error"))
+  }
+  spatial_hotspot_store(res$record, res$params, shared_rv)
+  n_results <- as.integer(res$n_results %||% 0L)
+  if (length(n_results) != 1L || is.na(n_results) || n_results < 0L) n_results <- 0L
+  # The JOB vocabulary is narrower than the VIEW vocabulary: `done` / `error` /
+  # `invalid` / `timeout` / `session_lost` only. A metric with no significant spot
+  # is a job that COMPLETED, so it closes as `done` while the view reports `empty`.
+  close_job("done", NULL)
+  list(status = if (n_results == 0L) "empty" else "done",
+       n_results = n_results, step = "ran")
+}
+
+mod_spatial_qc_ui <- function(id) {  ns <- NS(id)
   layout_sidebar(
     sidebar = sidebar(
       title = i18n$t("QC & filtres"), width = 350,
@@ -138,7 +416,18 @@ mod_spatial_qc_ui <- function(id) {
       uiOutput(ns("hotspot_status_ui"))
     ),
 
+    # S1. `id` + `selected` are NEW, and they are what made the hotspots panel
+    # reachable at all. Declared without an `id`, bslib builds the tab list with
+    # an auto-generated key that nothing — not a human click, not
+    # `ts_drive_perform_nav()` — can address, so the panel 4-of-4 was shown to
+    # nobody and its four outputs stayed suspended under Shiny's default
+    # `suspendWhenHidden = TRUE`. `selected` is pinned to the first panel so the
+    # default view is unchanged and the addition is purely additive.
+    # The id is the module's own, and it is declared as DATA in
+    # R/core/drive_allowlist.R (TS_DRIVE_SPATIAL_QC_SUB_TABS_ID) so the UI and
+    # the drive's navigation plan cannot drift apart.
     navset_card_underline(
+      id = ns("qc_results"), selected = "overview",
       nav_panel(i18n$t("Apercu du jeu de donnees"), value = "overview",
                 uiOutput(ns("dataset_overview_ui")),
                 hr(),
@@ -176,7 +465,20 @@ mod_spatial_qc_ui <- function(id) {
                   card(full_screen = TRUE, card_header(i18n$t("Distribution du Gi*")),
                        plotOutput(ns("hotspot_hist"), height = "520px"))
                 ),
-                DT::DTOutput(ns("hotspot_table")))
+                DT::DTOutput(ns("hotspot_table")),
+                # ── Export (Phase F) ───────────────────────────────────────
+                # The ONE thing this panel was missing. `mod_spatial_viz.R`
+                # exports its table (`dl_csv`) and `mod_spatial_export.R` exports
+                # a session bundle, but the hotspot result — the artefact the
+                # `spatial-qc-btn_hotspots` drive action produces — lived only in
+                # `shared_rv$hotspot_result` and in the DOM, so an agent that ran
+                # the action had no way to OBTAIN the numbers. Additive only: a
+                # button and a handler, no change to the computation, the table or
+                # its classification.
+                div(class = "mt-2",
+                    downloadButton(ns("dl_hotspot_csv"),
+                                   label = .tr_plain("\U0001F4CE Exporter la table des hotspots (CSV)"),
+                                   class = "btn-sm btn-outline-secondary")))
     )
   )
 }
@@ -519,11 +821,17 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
         req(shared_rv$qc_metrics, input$hotspot_qc_metric)
         stats::setNames(shared_rv$qc_metrics[[input$hotspot_qc_metric]], shared_rv$qc_metrics$id)
       }
-      shared_rv$hotspot_params <- list(
-        source = input$hotspot_source,
-        metric = if (identical(input$hotspot_source, "deconv")) input$hotspot_deconv_celltype else input$hotspot_qc_metric,
-        k_neighbors = input$hotspot_k
-      )
+      # The SAME writer the drive path uses: one shape, written once. The drive
+      # action cannot reuse this eventReactive (it reads `input$`, which a driven
+      # run has none of), so the two paths converge on the writer, not on the
+      # reactive. The parameter block is recorded BEFORE the computation, as it
+      # always was, so a failed computation still leaves the provenance of what was
+      # attempted.
+      spatial_hotspot_store(NULL,
+        list(source = input$hotspot_source,
+             metric = if (identical(input$hotspot_source, "deconv")) input$hotspot_deconv_celltype else input$hotspot_qc_metric,
+             k_neighbors = input$hotspot_k),
+        shared_rv)
       res <- tryCatch(
         compute_getis_ord_hotspots(coords = global_data$spatial_obj$coords, values = values,
                                     k_neighbors = input$hotspot_k),
@@ -532,10 +840,99 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
           NULL
         }
       )
-      shared_rv$hotspot_result <- res
+      spatial_hotspot_store(res,
+        list(source = input$hotspot_source,
+             metric = if (identical(input$hotspot_source, "deconv")) input$hotspot_deconv_celltype else input$hotspot_qc_metric,
+             k_neighbors = input$hotspot_k),
+        shared_rv)
       req(res)
       res
     })
+
+    # S1 — `hotspot_result` IS LAZY, and it used to have exactly ONE dependent:
+    # `output$hotspot_map` below. A Shiny reactive that nobody reads is never
+    # evaluated, so the human click on `btn_hotspots` was only ever executed
+    # *because a plot happened to read the result*. Re-pointing the map at the
+    # store — the correct fix for the drive, which cannot click the button — would
+    # therefore have silently killed the human path as well: the observer would
+    # invalidate, nothing would evaluate, and the store would stay empty.
+    # Measured, not theorised: with the map moved to the store and nothing here,
+    # `shared_rv$hotspot_result` stayed NULL after a real `btn_hotspots` click.
+    #
+    # One line, and it makes the event's OWN execution explicit instead of an
+    # accident of who happens to render. The drive path already had this shape —
+    # its own observer on `spqc_drive_counter`, further down this server — so the
+    # human path now has its counterpart. `ignoreNULL = FALSE` because the result
+    # is a data.frame, not a value, and a `NULL` return from a failed computation
+    # is precisely the case that must not be skipped.
+    #
+    # NB the comment above deliberately spells the drive observer in prose rather
+    # than as a literal call. `tools/check_duplication.R` extracts an
+    # `observeEvent` trigger by scanning LINES and does not skip comments, so
+    # quoting the call here registered a second "repeated trigger" and pushed the
+    # warning ceiling from 3 to 4 for a line of English. The ceiling is a debt
+    # ceiling and must not grow on a comment.
+    observeEvent(input$btn_hotspots, hotspot_result(), ignoreNULL = FALSE)
+
+    # ── DRIVE (MCP) — spatial-qc-btn_hotspots ────────────────────────────────
+    # The human observer above is NOT re-wired and NOT duplicated: the drive action
+    # calls `run_spatial_hotspots()`, which makes the same domain call on the
+    # FROZEN k and the rule-resolved metric, then publishes through the same
+    # `spatial_hotspot_store()`. `spqc_drive_counter` is the only trigger, so no
+    # `input$` is read here - that is what makes a frozen input set possible at
+    # all, and it is also why the metric needs a RULE.
+    spqc_drive_counter <- shiny::reactiveVal(0L)
+    spqc_drive_run_state <- shiny::reactiveVal("idle")
+    spqc_drive_last_step <- new.env(parent = emptyenv())
+    spqc_drive_last_step$value <- NULL
+    spqc_drive_job <- new.env(parent = emptyenv())
+    spqc_drive_job$id <- NULL
+
+    spqc_drive_ready <- function() {
+      .spatial_qc_drive_ready(shared_rv, global_data)
+    }
+    spqc_drive_state <- function() {
+      .spatial_qc_drive_state(shared_rv, global_data,
+                              spqc_drive_run_state,
+                              spqc_drive_last_step$value)
+    }
+
+    # `long = TRUE` is declared even though Getis-Ord is cheap: the guarantee it
+    # buys is that `running` has a real producer, and the job is SYNCHRONOUS, so
+    # no tick would otherwise report `running` at all. No `timeout_s` is declared,
+    # matching the other long jobs, so the poller's default ceiling applies.
+    #
+    # The button id is a LITERAL here on purpose: test-drive-watcher.R greps every
+    # TS_DRIVE_BUTTONS entry as a quoted literal beside a `ts_drive_publish_token(`
+    # call, and that shared check is what proves an allowlist entry is really
+    # wired. The assertions keep the literal and the constant from drifting.
+    ts_drive_publish_token(global_data, "spatial-qc-btn_hotspots",
+      spqc_drive_counter, ready = spqc_drive_ready,
+      state = spqc_drive_state, long = TRUE)
+
+    close_spqc_drive_job <- function(status, error = NULL) {
+      if (is.null(spqc_drive_job$id)) return(invisible(FALSE))
+      job <- tryCatch(ts_drive_job_state(), error = function(e) NULL)
+      if (is.null(job) || !identical(job$job_id, spqc_drive_job$id)) {
+        return(invisible(FALSE))
+      }
+      ts_drive_job_finish(.SPATIAL_QC_DRIVE_BUTTON, status = status,
+                          error = error, job_id = spqc_drive_job$id)
+    }
+
+    observeEvent(spqc_drive_counter(), {
+      if (!isTRUE(spqc_drive_ready())) return()
+      spqc_drive_job$id <- NULL
+      job <- tryCatch(ts_drive_job_state(), error = function(e) NULL)
+      if (!is.null(job) && isTRUE(ts_drive_job_busy()) &&
+          identical(job$button, .SPATIAL_QC_DRIVE_BUTTON)) {
+        spqc_drive_job$id <- job$job_id
+      }
+      spqc_drive_run_state("running")
+      res <- .spatial_qc_run_drive(global_data, shared_rv, close_spqc_drive_job)
+      spqc_drive_last_step$value <- res$step
+      spqc_drive_run_state(res$status)
+    }, ignoreInit = TRUE)
 
     output$hotspot_status_ui <- renderUI({
       global_data$language  # re-render on language switch
@@ -551,7 +948,20 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
 
     output$hotspot_map <- renderPlot({
       global_data$language  # re-render on language switch
-      df <- hotspot_result()
+      # S1. This used to read `hotspot_result()`, the `eventReactive(input$btn_hotspots)`
+      # declared above, and that was the defect: the drive action dispatches
+      # `spqc_drive_counter()` and the Spatial pipeline writes
+      # `shared_rv$hotspot_result` directly, so NEITHER ever set the button and the
+      # map could not re-evaluate after either. A human click happened to satisfy
+      # the eventReactive, which is why the human path was never the failing one
+      # and why the panel looked broken only where it was actually driven.
+      # It now reads the STORE, like its three siblings at :880, :913 and :942.
+      # The value is identical: the eventReactive's own last act is
+      # `spatial_hotspot_store(res, ...)` at :809, so both sources are the same
+      # table. The `req()` is the siblings' guard, and it is what makes a cleared
+      # store clear the plot instead of leaving a stale frame on screen.
+      req(shared_rv$hotspot_result)
+      df <- shared_rv$hotspot_result
       coords <- global_data$spatial_obj$coords
       m <- match(df$id, coords$id)
       df$x <- coords$x[m]; df$y <- coords$y[m]
@@ -610,5 +1020,141 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
       ) |>
         DT::formatRound(c("value", "gi_star", "p_value"), 3)
     })
+
+    # ── Export CSV des hotspots (Phase F) ──────────────────────────────────
+    # The handler reads the SAME slot the table renders, so the file and the DOM
+    # cannot disagree — a second computation here would be a second chance to
+    # export something the panel never showed.
+    #
+    # The dataset name is part of the FILENAME only. It comes from the module's own
+    # active dataset, never from a scenario, and it is not published on the drive:
+    # a biological sample name has no business in `result.json`, which is read by a
+    # remote caller. The agent reads the numbers, not the sample.
+    # S2 — the ONE serialiser for the hotspot table.
+    #
+    # The human `downloadHandler` below and the drive export route
+    # (`spatial_qc_export_hotspot_csv`) BOTH call this. Two serialisations would
+    # drift, and the drift would be invisible: the agent would receive a file the
+    # analyst's own download does not match, and nothing in either path would
+    # report a difference. `row.names = FALSE` for the reason the handler already
+    # gave — an exported file whose first column is a meaningless row index is a
+    # file an analyst has to clean before use.
+    #
+    # MODULE LEVEL, and that is load-bearing rather than incidental. A function
+    # declared inside `moduleServer()` is a closure: no offline test and no second
+    # caller can reach it, which is the same trap `load_single_cell_data()` set for
+    # the SC importer. Both S2 helpers take the stores as ARGUMENTS precisely so
+    # they can live here, next to `spatial_hotspot_store()` and
+    # `.spatial_qc_drive_state()`.
+    output$dl_hotspot_csv <- downloadHandler(
+      filename = function() {
+        sprintf("spatial_qc_hotspots_%s_%s.csv",
+                gsub("[^A-Za-z0-9._-]", "_",
+                     as.character(global_data$active_spatial_dataset %||% "dataset")),
+                Sys.Date())
+      },
+      content = function(file) {
+        df <- shared_rv$hotspot_result
+        validate(need(!is.null(df) && nrow(df) > 0,
+                      .tr("Aucun resultat de hotspots a exporter.")))
+        # Through the shared serialiser, so this file and the drive export route's
+        # file are byte-identical.
+        spatial_hotspot_csv_write(df, file)
+      }
+    )
+
+    # Published as a closure over THIS module's own `shared_rv`, and published at
+    # all rather than bound to a button: an export is a READ of a result that
+    # already exists, and a fake clickable control plus an extra entry in the
+    # closed `spatial-` set would buy nothing.
+    #
+    # The closure taking NO ARGUMENTS is the binding. The route is welded to the
+    # store that produced the result, so nothing upstream — a scenario field, a
+    # second module, a different `shared_rv` — can point the export at another
+    # state. It also means the app-side seam needs no `shared_rv` at all, which
+    # does not exist at app scope.
+    ts_drive_publish_export(global_data, TS_DRIVE_SPATIAL_QC_MODULE, function() {
+      spatial_qc_export_hotspot_csv(shared_rv, global_data)
+    })
   })
+}
+
+# ── S2: the ONE drive export route ───────────────────────────────────────────
+# Bound to THIS module and to the result THIS session already produced. The caller
+# supplies no handler, no outputId, no destination, no filename and no format; the
+# destination is `ts_drive_export_dir()` and the basename is
+# `ts_drive_export_next_path()` over the shared `TS_DRIVE_EXPORT_STEM`, both
+# app-controlled.
+#
+# The basename deliberately does NOT embed `active_spatial_dataset`, which the
+# human filename does. That name is a sample name, and this descriptor is read by
+# a remote caller: the agent gets counts, never the sample.
+#
+# Returns a VERDICT, never throws, for the reason `run_spatial_import()` gives: a
+# `tryCatch` in the wrapper would buy a second place for the two channels to
+# disagree. `status = "invalid"` means "this session has nothing to export";
+# `status = "error"` means the write itself failed.
+spatial_qc_export_hotspot_csv <- function(shared_rv, global_data, dir = NULL) {
+  bad <- function(status, msg) {
+    list(ok = FALSE, status = status, errors = msg, descriptor = NULL)
+  }
+  df <- tryCatch(shiny::isolate(shared_rv$hotspot_result), error = function(e) NULL)
+  if (is.null(df)) {
+    return(bad("invalid",
+      paste("this session has produced no hotspot result yet; run",
+            "spatial-qc-btn_hotspots (or the panel's own button) first")))
+  }
+  # The same shape the readers assume. The single writer's guard normally makes
+  # this unreachable; the export is the one place that must not hand a
+  # reader-breaking value to a FILE either.
+  if (!is.data.frame(df) || !nrow(df) ||
+      !all(c("id", "value", "gi_star", "p_value", "hotspot") %in% names(df))) {
+    return(bad("invalid", "the stored hotspot result is not the Getis-Ord table"))
+  }
+  if (is.null(dir) || !nzchar(dir)) dir <- ts_drive_export_dir()
+  if (!dir.exists(dir)) dir.create(dir, recursive = TRUE, showWarnings = FALSE)
+  # MEASURED DESIGN DECISION, and the first version was wrong. A single fixed
+  # basename made `TS_DRIVE_EXPORT_MAX_FILES` and `ts_drive_export_prune()`
+  # UNREACHABLE — the route always overwrote one file, so the directory could
+  # never exceed one entry and the cap was dead code, which is the same defect the
+  # C9/C9b work exists to eliminate. Each export is therefore a DISTINCT file,
+  # named by the app from what is already on disk: one more than the highest
+  # index present. No caller input, no session field, no sample name, and no new
+  # mutable state — the count is derived, so a second export in the same session
+  # cannot collide with the first.
+  file <- spatial_qc_export_next_path(dir)
+  wrote <- tryCatch({
+    spatial_hotspot_csv_write(df, file)
+    TRUE
+  }, error = function(e) conditionMessage(e))
+  if (!isTRUE(wrote)) {
+    return(bad("error", paste("the export could not be written:", wrote)))
+  }
+  ts_drive_export_prune(dir)
+  list(ok = TRUE, status = "done", errors = character(0), warnings = character(0),
+       descriptor = list(
+         format = "csv",
+         file = basename(file),
+         bytes = as.integer(file.size(file)),
+         n_rows = as.integer(nrow(df)),
+         n_cols = as.integer(ncol(df)),
+         n_sig = as.integer(sum(df$hotspot != "NS", na.rm = TRUE)),
+         columns = as.character(names(df))
+       ))
+}
+
+#' The next unused export path under `dir`, derived from what is already there.
+#'
+#' `TS_DRIVE_EXPORT_STEM` plus an index one above the highest present. Deriving
+#' the index rather than keeping a counter means the function is stateless, so it
+#' cannot disagree with the directory after a restart, a prune, or two exports in
+#' the same session.
+spatial_qc_export_next_path <- function(dir) {
+  stem <- TS_DRIVE_EXPORT_STEM
+  present <- list.files(dir, pattern = paste0("^", stem, "_[0-9]+\\.csv$"))
+  idx <- suppressWarnings(as.integer(sub(paste0("^", stem, "_"), "",
+                                         sub("\\.csv$", "", present))))
+  idx <- idx[!is.na(idx)]
+  n <- if (length(idx)) max(idx) + 1L else 1L
+  file.path(dir, sprintf("%s_%d.csv", stem, n))
 }

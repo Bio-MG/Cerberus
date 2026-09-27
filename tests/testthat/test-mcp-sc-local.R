@@ -22,17 +22,35 @@
   e
 }
 
-test_that("local MCP keeps seven tools and resolves the three SC action buttons", {
+test_that("local MCP keeps EIGHT tools and resolves the three SC action buttons", {
   e <- .mcp_sc_local_env()
   tools <- e$.ts_tools()
-  # The inventory is FROZEN: adding a module must never add a tool.
-  expect_length(tools, 7L)
+  # THE INVARIANT, restated rather than deleted â€” and the distinction is the whole
+  # point of the edit. The original line read "The inventory is FROZEN: adding a
+  # MODULE must never add a tool", and `expect_length(tools, 7L)` was its
+  # enforcement. S2 added an EIGHTH tool for a new ACTION (`export_result`), not
+  # for a module, so the rule was not broken â€” but the ENFORCEMENT no longer
+  # expressed the rule, and a pin that has quietly become a snapshot is worse than
+  # no pin: the next module would have had to widen it again, and nobody could tell
+  # a module from a verb by looking at the diff.
+  #
+  # So both are now stated: the rule (a module never adds a tool) is asserted
+  # directly below over the module inventory, and the declared surface is pinned as
+  # a separate, visible list.
+  expect_length(tools, 8L)
   expect_setequal(vapply(tools, function(x) x$name, character(1)), c(
     "transcripto_drive_status", "transcripto_drive_read_result",
     "transcripto_drive_snapshot", "transcripto_drive_set_inputs",
     "transcripto_drive_run", "transcripto_drive_wait",
-    "transcripto_drive_set_armed"
+    "transcripto_drive_set_armed", "transcripto_drive_export"
   ))
+  # THE RULE, enforced where it can be: every module in the app's own table must be
+  # reachable through the EXISTING tools, so a new module is a new entry in
+  # TS_MCP_RUN_BUTTONS / TS_MCP_SET_INPUT_MODULES and never a new tool name.
+  nms <- vapply(tools, function(x) x$name, character(1))
+  expect_false(any(grepl("^(sc|bulk|spatial)[_-]", nms)))
+  # ... and every tool name is verb-shaped, never module-shaped.
+  expect_true(all(grepl("^transcripto_drive_[a-z_]+$", nms)))
   expect_length(e$.ts_mcp_run_problems(), 0L)
   expect_identical(e$TS_MCP_RUN_ACTIONS, "run_pipeline")
 
@@ -71,16 +89,22 @@ test_that("local MCP exposes SC for run and wait but not set_inputs", {
   expect_true("sc_pipeline" %in% run_modules)
   expect_true("sc_annotation" %in% run_modules)
   expect_true("sc_markers" %in% run_modules)
+  expect_true("sc_pathways" %in% run_modules)
   expect_true("sc_pipeline" %in% wait_modules)
   expect_true("sc_annotation" %in% wait_modules)
   expect_true("sc_markers" %in% wait_modules)
+  expect_true("sc_pathways" %in% wait_modules)
   expect_true("sc-pipeline-run_auto_pipeline" %in% run_buttons)
   expect_true("sc-annotation-run_annot" %in% run_buttons)
   expect_true("sc-markers-run_markers" %in% run_buttons)
+  expect_true("sc-pathways-run_pathway" %in% run_buttons)
   sc_buttons <- run_buttons[startsWith(run_buttons, "sc-")]
+  # FOUR, since Phase E. The `sc-` surface is a CLOSED set, so this pin is what
+  # makes the next addition a visible edit here and in the app's own rail.
   expect_setequal(sc_buttons, c("sc-pipeline-run_auto_pipeline",
                                 "sc-annotation-run_annot",
-                                "sc-markers-run_markers"))
+                                "sc-markers-run_markers",
+                                "sc-pathways-run_pathway"))
   expect_false(any(grepl("^(sc-mapping|sc-pipeline-(run_annot)|sc-da|sc-velocity|import_sc)-",
                          run_buttons)))
 })
@@ -216,4 +240,58 @@ test_that("local MCP run writes the SC scenarios into an external fixture root",
   expect_identical(scenario$action, "run_pipeline")
   expect_identical(scenario$button, "sc-markers-run_markers")
   expect_length(scenario$inputs, 0L)
+})
+
+# =============================================================================
+# S2 — the export tool's SCHEMA is the trust boundary, and a schema a client
+# ignores is not a boundary. So the schema is asserted here as data: only `seq` and
+# `expect`, `additionalProperties = FALSE` at BOTH levels, and no property whose
+# name could carry a destination.
+# =============================================================================
+test_that("the export tool exposes only `seq` and `expect`, at both levels", {
+  e <- .mcp_sc_local_env()
+  tools <- e$.ts_tools()
+  ex <- Filter(function(x) identical(x$name, "transcripto_drive_export"), tools)
+  expect_length(ex, 1L)
+  if (!length(ex)) return(invisible(NULL))
+  sch <- ex[[1]]$inputSchema
+  expect_identical(sch$type, "object")
+  expect_setequal(names(sch$properties), c("seq", "expect"))
+  expect_setequal(sch$required, c("seq", "expect"))
+  # Closed at the top level and closed inside `expect`: a field smuggled into
+  # `expect` would otherwise reach the session assertion unchecked.
+  expect_false(sch$additionalProperties)
+  expect_false(sch$properties$expect$additionalProperties)
+  expect_setequal(names(sch$properties$expect$properties),
+                  c("pid", "started_at", "session_token", "session_id"))
+  # And nothing in the schema could be read as a destination, a handler or a
+  # format. Checked against the names rather than trusted from the description.
+  walk <- function(x) {
+    if (is.character(x)) return(x)
+    if (!is.list(x)) return(character(0))
+    unlist(lapply(x, walk), use.names = FALSE)
+  }
+  keys <- walk(sch)
+  banned <- c("path", "file", "filename", "dir", "dest", "where",
+              "format", "type", "ext", "handler", "output", "output_id", "id")
+  for (b in banned) {
+    expect_false(b %in% keys, info = sprintf("the export schema must not expose `%s`", b))
+  }
+  # The module is not a parameter either: the route table has one entry and the app
+  # resolves it. A `module` argument would be a caller choosing an artefact.
+  expect_false("module" %in% names(sch$properties))
+})
+
+test_that("the export scenario payload is REBUILT, and carries no import block", {
+  e <- .mcp_sc_local_env()
+  p <- e$.ts_export_payload(7L, "sometoken")
+  expect_identical(p$seq, 7L)
+  expect_identical(p$action, "export_result")
+  expect_identical(p$module, e$TS_MCP_EXPORT_MODULE)
+  expect_identical(names(p), c("protocol", "seq", "session_token", "module", "action"))
+  # No `import` block at all: the app-side validator refuses every key, so sending
+  # even an empty one would be a refusal waiting to happen.
+  expect_false("import" %in% names(p))
+  expect_false("inputs" %in% names(p))
+  expect_false("button" %in% names(p))
 })
