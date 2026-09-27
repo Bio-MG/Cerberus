@@ -1519,6 +1519,7 @@ TS_DRIVE_CONFIRM_MAX_BEATS <- 5L
 #' @param token The LIVE session token, for the identity comparison.
 #' @param effects The effect seam, used to fire the button once confirmed.
 #' @param out The tick's result list.
+#' @param inject Function(inputs, module) used to send a later injection stage.
 #' @return The tick's result list, with `out$pending` set to the next record or to
 #'   `NULL` once a verdict is reached.
 #'
@@ -1532,7 +1533,7 @@ TS_DRIVE_CONFIRM_MAX_BEATS <- 5L
 #' Every terminal branch publishes a verdict and creates NO job. A human edit is
 #' REFUSED, never re-injected: the agent's earlier write does not get to win twice
 #' over a deliberate human change, and a new scenario is required.
-ts_drive_service_pending <- function(pending, token, effects, out) {
+ts_drive_service_pending <- function(pending, token, effects, out, inject = NULL) {
   refuse <- function(msg) {
     out$consumed  <- TRUE
     out$status    <- "invalid"
@@ -1558,6 +1559,40 @@ ts_drive_service_pending <- function(pending, token, effects, out) {
     out
   }
   beats <- pending$beats + 1L
+
+  # ── STAGE THE REMAINING INJECTIONS, one per beat ──
+  #
+  # A `selectInput` cannot hold a value that is not among its current options, so
+  # a dependent value must not be sent before the options exist. The order is
+  # declared in `TS_DRIVE_INPUT_STAGES`; this walks it.
+  #
+  # It runs BEFORE the confirmation probe, and deliberately so: probing a stage
+  # that has not been injected yet would report the pre-injection state as a
+  # mismatch, which is the false accusation the `prior` comparison exists to
+  # prevent. Nothing is ever sent twice — a control appears in exactly one stage.
+  stages <- pending$stages
+  if (is.list(stages) && length(stages) &&
+      (is.null(pending$stage) || pending$stage < length(stages))) {
+    nxt <- pending$stage %||% 0L
+    if (nxt < length(stages)) {
+      if (!is.function(inject)) {
+        return(refuse(sprintf(
+          "module '%s' needs its inputs injected in %d stages, but no injector is available; the run for seq %s is refused. No job was created.",
+          pending$module, length(stages), pending$seq)))
+      }
+      got <- tryCatch(inject(stages[[nxt + 1L]], pending$module), error = function(e) e)
+      if (inherits(got, "condition")) {
+        return(refuse(sprintf(
+          "injecting stage %d of %d for seq %s failed; the run is refused. No job was created.",
+          nxt + 1L, length(stages), pending$seq)))
+      }
+      p <- pending
+      p$stage  <- nxt + 1L
+      p$beats  <- beats
+      out$pending <- p
+      return(out)
+    }
+  }
 
   # A replaced session must never be satisfied by the old one's confirmation.
   #
@@ -1738,7 +1773,53 @@ ts_drive_service_pending <- function(pending, token, effects, out) {
 #' @param effects Callback invoked by the poller to bump one button token:
 #'   `effects(input_id)` -> TRUE when a bound token was incremented.
 #' @return list(status, errors, warnings, active_module)
-ts_drive_apply <- function(session, input, scn, effects = NULL, owner_token = NULL) {
+#' The injection PLAN for a set of controls: a list of stages, in order.
+#'
+#' Read from `TS_DRIVE_INPUT_STAGES`. A control the table does not mention is
+#' assumed INDEPENDENT and goes in the first stage — that is the default, and it is
+#' the historical behaviour, because a stage costs a protocol beat and an ordering
+#' is therefore declared only where a dependency has been measured.
+#'
+#' @param module The module whose controls these are.
+#' @param ids The control ids the scenario carried, after allowlist filtering.
+#' @param values The named list of values, same names as `ids`.
+#' @return A list of named lists. Length 1 means "inject it all at once".
+#' @noRd
+ts_drive_input_stages <- function(module, ids, values) {
+  decl <- TS_DRIVE_INPUT_STAGES[[module]]
+  if (is.null(decl) || !length(decl)) return(list(values))
+  out <- list()
+  used <- character(0)
+  for (stage in decl) {
+    take <- intersect(stage, ids)
+    if (length(take)) {
+      out[[length(out) + 1L]] <- values[take]
+      used <- c(used, take)
+    }
+  }
+  rest <- setdiff(ids, used)
+  # Undeclared controls join the FIRST stage: the table is a statement about
+  # dependencies, and a control absent from it has none that we know of.
+  if (length(rest) && length(out)) out[[1]] <- c(out[[1]], values[rest])
+  if (!length(out)) out <- list(values)
+  out
+}
+
+#' The injector the poller hands to the confirmation service.
+#'
+#' A closure over the session and the effect seam, so the service can inject a
+#' later stage without knowing anything about Shiny. Exported here so the unit
+#' tests can substitute a recorder.
+#' @noRd
+ts_drive_injector <- function(session, effects) {
+  function(inputs, module) {
+    ts_drive_apply_inputs(session, inputs, module,
+                          tokens = ts_drive_tokens_for(module, effects))
+  }
+}
+
+ts_drive_apply <- function(session, input, scn, effects = NULL, owner_token = NULL,
+                           inject = NULL) {
   warnings <- character(0)
   errors   <- character(0)
   action   <- scn$action
@@ -1851,10 +1932,26 @@ ts_drive_apply <- function(session, input, scn, effects = NULL, owner_token = NU
   nav <- ts_drive_nav_plan(module, scn$expect$nav %||% NULL)
 
   applied <- list(applied = character(0), refused = character(0), warnings = character(0))
-  if (length(scn$inputs)) {
-    applied <- ts_drive_apply_inputs(session, scn$inputs, module,
-                                    tokens = ts_drive_tokens_for(module, effects))
-    warnings <- c(warnings, applied$warnings)
+  # A `run_pipeline` that injects non-button inputs is DEFERRED below, and a
+  # deferred run injects in STAGES, one per beat. Injecting it here would hand a
+  # value to a `selectInput` whose options do not exist yet, and a browser select
+  # cannot represent such a value: it is silently dropped and the module's own
+  # default takes its place. MEASURED live (2026-09-27, GSE164073) — the pair came
+  # out as the module's defaults and the run was refused at the bound.
+  # Every other action injects here, exactly as before.
+  staged_run <- identical(action, "run_pipeline") &&
+    length(scn$inputs) && !is.null(TS_DRIVE_INPUT_STAGES[[module]])
+  if (length(scn$inputs) && !staged_run) {
+    # ONE seam for every injection, staged or eager. This used to call
+    # `ts_drive_apply_inputs()` directly while the staged path went through
+    # `inject`, so the two were different code paths: a double injection (restoring
+    # the eager call for a deferred run) was real in production and INVISIBLE to
+    # every test, because the recorder only saw the staged side. Measured.
+    inj <- inject %||% (if (is.function(effects)) ts_drive_injector(session, effects) else NULL)
+    if (!is.null(inj)) {
+      applied <- inj(scn$inputs, module)
+      warnings <- c(warnings, applied$warnings)
+    }
   }
 
   if (identical(action, "set_inputs")) {
@@ -1950,6 +2047,20 @@ ts_drive_apply <- function(session, input, scn, effects = NULL, owner_token = NU
                     active_module = module, nav = nav, pending_confirm = NULL))
       }
       vals <- scn$inputs[nb]
+      # The injection PLAN, and stage 1 goes in NOW. Injecting here rather than on
+      # the next servicing beat is what keeps a single-stage scenario on the fast
+      # path: it is fully injected at deferral time, exactly as before, and only a
+      # DEPENDENT stage costs an extra beat.
+      stages <- ts_drive_input_stages(module, nb, vals)
+      # ONE seam for every stage. The poller's injector is preferred so that the
+      # first stage and the later ones go through the same path — a first version
+      # built a fresh injector here from `session` + `effects`, which meant the
+      # caller's seam saw only stages 2..n and stage 1 was invisible to it.
+      inject1 <- inject %||% (if (is.function(effects)) ts_drive_injector(session, effects) else NULL)
+      if (!is.null(inject1)) {
+        got <- inject1(stages[[1]], module)
+        warnings <- c(warnings, got$warnings)
+      }
       # 🔴 THE PRIOR VALUES, and the reason this handshake needs a third state.
       # `shiny::update*Input()` is a CLIENT ROUND-TRIP, so on the beat the button
       # would be fired the new values are not in `input` yet. The module then sees
@@ -1983,6 +2094,10 @@ ts_drive_apply <- function(session, input, scn, effects = NULL, owner_token = NU
         active_module = module, nav = nav,
         pending_confirm = list(seq = scn$seq, module = module, button = btn,
                                values = vals, ids = nb, prior = prior,
+                               # The staging plan. `stage` counts the stages already
+                               # INJECTED, so `stage == length(stages)` means the whole
+                               # plan is in and the confirmation may begin.
+                               stages = stages, stage = 1L,
                                key = ts_drive_confirm_key(vals),
                                # 🔴 THE IDENTITY IS `owner_token`, NOT `scn$session_token`.
                                # `scn` here is the scenario REBUILT by the validator, and
@@ -2304,7 +2419,8 @@ ts_drive_nav_plan <- function(module, target_tab = NULL) {
 #' @param armed Previously-known arm state, echoed into `result.json`.
 #' @return list(consumed, last_seq, armed, error, nav)
   ts_drive_tick <- function(session, input, global_data, token, last_seq = 0,
-                            armed = FALSE, effects = NULL, pending = NULL) {
+                            armed = FALSE, effects = NULL, inject = NULL,
+                            pending = NULL) {
     out <- list(consumed = FALSE, new_scenario = FALSE, published = FALSE,
                 deferred = FALSE, selected = TRUE, last_seq = last_seq,
                 armed = armed, error = NULL, nav = NULL, status = NULL,
@@ -2325,7 +2441,11 @@ ts_drive_nav_plan <- function(module, target_tab = NULL) {
     # reason: a confirmation resolved in the same beat as a queued scenario would
     # have the scenario's own outcome overwrite it.
     if (!is.null(pending)) {
-      out <- ts_drive_service_pending(pending, token, effects, out)
+      # The poller supplies the injector; a caller that omits it (an offline test)
+      # gets one built from the session and the effect seam, so the staging path is
+      # never silently inert.
+      if (is.null(inject)) inject <- ts_drive_injector(session, effects)
+      out <- ts_drive_service_pending(pending, token, effects, out, inject)
       # Still waiting: consume NOTHING this beat and let the next one look again.
       if (!is.null(out$pending)) return(out)
       if (isTRUE(out$consumed)) return(out)
@@ -2437,7 +2557,7 @@ ts_drive_nav_plan <- function(module, target_tab = NULL) {
   # sc + spatial + bulk, and the v1 allowlist is bulk-only anyway.
   t0  <- Sys.time()
   res <- ts_drive_apply(session, input, scn, effects = effects,
-                        owner_token = token)
+                        owner_token = token, inject = inject)
 
   message(sprintf("[drive] seq=%s module=%s action=%s status=%s preserve_data=%s",
                   scn$seq, scn$module, scn$action, res$status, preserve))

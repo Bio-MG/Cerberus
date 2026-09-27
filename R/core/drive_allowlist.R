@@ -707,6 +707,51 @@ TS_DRIVE_IMPORT_KEYS <- unique(unlist(lapply(TS_DRIVE_IMPORT_SCHEMA, function(e)
   c(e$required, e$optional)
 }), use.names = FALSE))
 
+#' Injection ORDER for a module's controls, declared as DATA.
+#'
+#' A `selectInput` can only hold a value that is among its CURRENT options, so
+#' injecting a value whose options do not exist yet cannot work: the browser
+#' cannot represent it, the value never reaches the client, and the owning module
+#' then supplies its own default in its place.
+#'
+#' MEASURED live (2026-09-27, GSE164073 27,946 x 18): one scenario carrying
+#' `condition_col = "condition"`, `group_ref = "CoV2"`, `group_target = "mock"`
+#' left the client holding `mock` / `CoV2` — the module's defaults, which are the
+#' requested pair REVERSED only because `lvls[1]`/`lvls[2]` happen to be
+#' `mock`/`CoV2` for that dataset. No code swaps ref and target: a keep-if-valid
+#' rule in the rebuild observer was implemented and the identical batch still
+#' failed, so the observer is not the culprit.
+#'
+#' The measured proof of the mechanism: inject `condition_col` ALONE, let the
+#' module rebuild, then inject the reverse pair — it landed and produced
+#' `active_contrast = "mock_vs_CoV2"`, the requested pair under the module's
+#' `target_vs_ref` naming.
+#'
+#' Each entry is a LIST OF STAGES in injection order, and a control appears in
+#' exactly one. The drive injects one stage per protocol beat and only begins
+#' confirming once the last is in, so a value is never handed to a select that
+#' cannot represent it. Nothing is re-injected: each control is sent once.
+#'
+#' A module absent from this table injects everything in one batch, which is the
+#' historical behaviour and the right default — a stage costs an extra beat, so an
+#' order is declared only where the dependency has been MEASURED.
+#'
+#' @section Why this is data and not inference:
+#' The dependency is a property of the MODULE's reactive logic, which the drive
+#' cannot see and must not guess. An inferred order that is wrong injects a value
+#' in the wrong beat, which is the very failure this exists to remove.
+TS_DRIVE_INPUT_STAGES <- list(
+  bulk_de = list(
+    # Stage 1: what the group choices are NOT derived from.
+    c("bulk-de-condition_col", "bulk-de-covariates", "bulk-de-de_engine",
+      "bulk-de-shrink_lfc", "bulk-de-lfc_thresh", "bulk-de-padj_thresh",
+      "bulk-de-heatmap_top_n"),
+    # Stage 2: the two selects whose OPTIONS are rebuilt from `condition_col`
+    # (mod_bulk_de_engine.R, observeEvent(input$condition_col, ...)).
+    c("bulk-de-group_ref", "bulk-de-group_target")
+  )
+)
+
 # --- Pure helpers (no Shiny) -------------------------------------------------
 
 #' Look up one allowlist entry.
