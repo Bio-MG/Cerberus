@@ -285,6 +285,130 @@ test_that("vct_format_report montre la RAISON d'un echec, pas seulement FAIL", {
   expect_match(txt, "FOREIGN", fixed = TRUE)
 })
 
+test_that("vct_archive_preflight nomme la CAUSE, pas un code git", {
+  # 🔴 MESURÉ en lançant l'outil depuis un `git archive` déjà extrait : il meurt
+  # sur « git archive HEAD failed (status 128) ». Vrai, et inexploitable — 128 est
+  # le « fatal » générique de git, et la cause est « ce repertoire n'est pas un
+  # depot ». Le meme fichier refuse d'afficher un FAIL sans sa raison ; il
+  # faut appliquer cette regle a son propre mode d'echec.
+  #
+  # `probe` est le point d'injection : aucune mutation de disque, aucun depot
+  # temporaire, et les trois branches sont couvertes.
+  e <- .vct_env()
+  p_repo <- function(...) list(out = ".git", status = 0L)
+
+  # 1. pas un depot -> la raison nomme le depot
+  not_repo <- function(...) list(out = "fatal: not a git repository", status = 128L)
+  why <- .vct("vct_archive_preflight", "HEAD", not_repo)
+  expect_true(is.character(why) && length(why) == 1L)
+  if (!is.character(why) || length(why) != 1L) return()
+  expect_match(why, "not inside a git repository", fixed = TRUE)
+  expect_match(why, "128", fixed = TRUE)   # the number is kept, not the only clue
+  expect_match(why, "archive", ignore.case = TRUE)
+
+  # 2. un depot, mais un ref qui ne resout pas -> la raison nomme le ref
+  bad_ref <- function(...) {
+    if (identical(..1, "rev-parse") && identical(..2, "--git-dir")) {
+      list(out = ".git", status = 0L)
+    } else list(out = "", status = 128L)
+  }
+  why2 <- .vct("vct_archive_preflight", "no_such_ref", bad_ref)
+  expect_true(is.character(why2) && length(why2) == 1L)
+  if (!is.character(why2) || length(why2) != 1L) return()
+  expect_match(why2, "no_such_ref", fixed = TRUE)
+  expect_match(why2, "does not resolve to a commit", fixed = TRUE)
+
+  # 3. tout va bien -> AUCUNE raison. `NULL` et pas "" : une chaine vide se
+  #    lirait comme un echec muet a l'appelant.
+  ok <- .vct("vct_archive_preflight", "HEAD", p_repo)
+  expect_null(ok)
+
+  # et le refus est bien LEVE, avec SA cause. 🔴 Un ref invalide, pas « HEAD » :
+  # la premiere version demandait l'echec de `vct_archive` depuis le depot, ce
+  # qui est legitimate — un test ne peut pas exiger qu'un outil echoue.
+  raised <- tryCatch(.vct("vct_archive", "definitely_not_a_ref",
+                          file.path(tempdir(), "vct_nope")),
+                     error = function(err) conditionMessage(err))
+  expect_true(is.character(raised) && length(raised) == 1L && nzchar(raised))
+  if (!is.character(raised) || length(raised) != 1L) return()
+  expect_match(raised, "definitely_not_a_ref", fixed = TRUE)
+  expect_match(raised, "does not resolve to a commit", fixed = TRUE)
+})
+
+test_that("vct_run_cmd rend un VRAI code de sortie, pas un NA deguise en 0", {
+  # 🔴 LE DEFAUT QUE CET OUTIL S'ETAIT INFLEIGE. Mesuré :
+  # `system2(..., stdout = TRUE, stderr = TRUE)` ne renvoie AUCUN attribut
+  # `status` — il est NULL. La premiere version lisait
+  # `attr(o, "status") %||% 0L`, donc :
+  #   * `mcp --check` disait PASS pour N'IMPORTE QUEL resultat ;
+  #   * la nouvelle preflight refusait TOUTES les executions avec « exited NA ».
+  # Aucun test ne l'a vu avant qu'un test exerce le vrai `git` — et aucune
+  # execution manuelle ne l'aurait vu : le resultat reel etait bien 0, donc le
+  # mensonge coincidait avec la verite par chance.
+  e <- .vct_env()
+  rs <- "D:/Data_science/R-4.4.2/bin/Rscript.exe"
+  if (!is.environment(e) || !file.exists(rs)) return()
+
+  # 🔴 A SCRIPT FILE, not `-e "quit(status=3)"`. The first version used `-e` and
+  # measured exit 1 instead of 3 — so the test was asserting a fact about
+  # Rscript's `-e` handling and would have failed for the wrong reason. A file
+  # that plainly exits 3 tests the CHANNEL, which is the thing under suspicion.
+  sc <- file.path(tempdir(), "vct_exit3.R")
+  writeLines("quit(status = 3)", sc)
+  r3 <- .vct("vct_run_cmd", rs, c("--vanilla", shQuote(sc)))
+  expect_true(is.list(r3))
+  if (!is.list(r3)) return()
+  expect_identical(r3$status, 3L, "un exit 3 ne doit pas devenir 0")
+
+  # et la sortie standard doit toujours arriver
+  so <- file.path(tempdir(), "vct_hello.R")
+  writeLines("cat('hello\\n')", so)
+  r0 <- .vct("vct_run_cmd", rs, c("--vanilla", shQuote(so)))
+  expect_identical(r0$status, 0L)
+  expect_match(r0$out, "hello", fixed = TRUE)
+
+  # une commande inexistante ne doit pas non plus lire 0
+  rbad <- .vct("vct_run_cmd", "definitely_not_a_real_binary_xyz", character(0))
+  expect_false(identical(rbad$status, 0L))
+})
+
+test_that("la racine du projet vient de GIT, jamais du repertoire courant", {
+  # 🔴 MESURÉ en lançant l'outil depuis `tests/` : avec `normalizePath(".")` le
+  # baseline local etait pris DANS `tests/`, les portes ne trouvaient pas
+  # `tools/check_conventions.R`, et duplication + mcp sortaient FAIL. Un verdict
+  # qui change selon le repertoire depuis lequel on tape la commande n'est pas
+  # une mesure. `testthat` execute avec le wd sur `tests/testthat`, donc le test
+  # unitaire voit ce que l'execution manuelle depuis la racine ne voyait pas.
+  e <- .vct_env()
+  if (!is.environment(e)) return()
+  root <- .vct("vct_repo_root")
+  expect_true(is.character(root) && length(root) == 1L && nzchar(root))
+  if (!is.character(root) || length(root) != 1L) return()
+  expect_true(file.exists(file.path(root, "app.R")),
+              info = "vct_repo_root() must return the PROJECT ROOT, not the cwd")
+  expect_true(file.exists(file.path(root, "tools", "verify_committed_tree.R")))
+  # and it is stable: the test's own cwd is tests/testthat, so these differ
+  expect_false(identical(normalizePath(root, winslash = "/"),
+                         normalizePath(getwd(), winslash = "/")))
+})
+
+test_that("vct_archive extrait un VRAI commit par la route zip (jamais tar|sh)", {
+  # The happy path, measured. This is the assertion that would catch a
+  # regression to the piped `git archive | tar` form — the one that MEASURED as
+  # "Damaged tar archive (bad header checksum)" leaving ZERO files on this host.
+  e <- .vct_env()
+  if (!is.environment(e)) return()
+  dest <- file.path(tempdir(), "vct_test_extract")
+  n <- .vct("vct_archive", "HEAD", dest)
+  expect_true(is.numeric(n) && n > 0)
+  expect_true(file.exists(file.path(dest, "app.R")),
+              info = "the extracted tree must be a real project root")
+  # and a real file, with real content
+  rp <- file.path(dest, "renv.lock")
+  expect_true(file.exists(rp))
+  expect_gt(length(readLines(rp, warn = FALSE)), 10L)
+})
+
 test_that("le code de SORTIE est le seul contrat de l'outil avec une CI", {
   # 🔴 Cette fonction existe parce que la mutation T10 a MIS SON ANCHRE
   # DANS LE VERT : la ligne etait dans `vct_main()`, que les tests n'appellent

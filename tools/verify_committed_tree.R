@@ -222,6 +222,79 @@ vct_format_report <- function(v, ref = "HEAD") {
 
 `%||%` <- function(a, b) if (is.null(a)) b else a
 
+#' Run a command, capturing BOTH its output and its real exit status.
+#'
+#' 🔴 MEASURED, and it is the defect this whole tool is about, committed to its
+#' own source. `system2(..., stdout = TRUE, stderr = TRUE)` returns the output
+#' as a character vector and **NO `status` attribute** — it is NULL. The first
+#' version read `attr(o, "status") %||% 0L`, so:
+#'
+#'   * `mcp --check` reported PASS for ANY outcome, because a missing status
+#'     became 0 by the `??` fallback — a gate that cannot fail;
+#'   * the new preflight refused EVERY run with "exited NA".
+#'
+#' Nothing in the unit suite noticed until a test exercised the real `git`
+#' path, and nothing in a manual run would have: the earlier mcp result was
+#' genuinely 0, so the lie matched the truth by luck.
+#'
+#' `system2` DOES return the status when the streams are redirected to FILES.
+#' So: two temp files, read them back, return both. Same lesson as the
+#' `git archive | tar` corruption — a channel has to be proven, not assumed.
+#' @noRd
+vct_run_cmd <- function(cmd, args) {
+  so <- tempfile(); se <- tempfile()
+  on.exit(unlink(c(so, se), force = TRUE), add = TRUE)
+  st <- suppressWarnings(tryCatch(
+    system2(cmd, args, stdout = so, stderr = se),
+    error = function(e) 127L))
+  read1 <- function(f) if (file.exists(f)) paste(readLines(f, warn = FALSE), collapse = "\n") else ""
+  list(out = paste(read1(so), read1(se), collapse = "\n"), status = as.integer(st))
+}
+
+#' Run git and hand back its output AND its status.
+#' @noRd
+vct_git_probe <- function(...) vct_run_cmd("git", c(...))
+
+#' Refuse EARLY, and say why.
+#'
+#' 🔴 MEASURED, and this is the tool's own principle applied to itself. Running
+#' the tool from inside an already-extracted `git archive` dies with
+#' "git archive HEAD failed (status 128)" — true, and useless: the cause is that
+#' the directory is not a repository, and 128 is git's generic "fatal". A gate
+#' whose failure mode is an opaque number cannot be debugged from a CI log, and
+#' the same file already refuses to print a FAIL without a reason.
+#'
+#' @param ref The ref to verify.
+#' @param probe Injection point for the unit tests; defaults to real git.
+#' @return NULL when fine, else a one-sentence reason.
+#' @noRd
+vct_archive_preflight <- function(ref = "HEAD", probe = vct_git_probe) {
+  gd <- probe("rev-parse", "--git-dir")
+  if (!identical(gd$status, 0L)) {
+    return(sprintf(paste0(
+      "not inside a git repository (`git rev-parse --git-dir` exited %s). This tool ",
+      "measures a COMMITTED tree by extracting `git archive <ref>`, so it must run ",
+      "in the repository - not inside an already-extracted archive, which has no ref ",
+      "to measure."), if (is.na(gd$status)) "NA" else gd$status))
+  }
+  vr <- probe("rev-parse", "--verify", paste0(ref, "^{commit}"))
+  if (!identical(vr$status, 0L)) {
+    return(sprintf("ref `%s` does not resolve to a commit (`git rev-parse --verify` exited %s).",
+                   ref, if (is.na(vr$status)) "NA" else vr$status))
+  }
+  NULL
+}
+
+#' The repository root, as git itself sees it.
+#' @noRd
+vct_repo_root <- function(probe = vct_git_probe) {
+  r <- probe("rev-parse", "--show-toplevel")
+  if (!identical(r$status, 0L)) return(NULL)
+  out <- trimws(r$out)
+  if (!nzchar(out)) return(NULL)
+  out
+}
+
 #' Extract a ref into `dest` with `git archive` + `unzip`.
 #'
 #' 🔴 NEVER `git archive <ref> | tar -x` through a shell. MEASURED on this host:
@@ -230,13 +303,30 @@ vct_format_report <- function(v, ref = "HEAD") {
 #' files extracted — and a verifier that then "measures" an empty directory
 #' would report a nonsense result (it did: exit 0xC0000005 on an empty tree).
 #' `--format=zip` plus `unzip()` is binary-safe in both shells.
+#'
+#' 🔴 `git -C <root>` IS NOT OPTIONAL, and this was MEASURED, not reasoned. Run
+#' from a SUBDIRECTORY, `git archive HEAD` archives THAT SUBDIRECTORY ONLY: from
+#' `tests/testthat` it produced 161 files and no `app.R`, where the full tree is
+#' 345. The committed tree being graded would then depend on the caller's
+#' working directory — the worst possible failure for a gate, because a partial
+#' tree can contain no violation and produce a FALSE PASS. `testthat` runs its
+#' tests with the working directory set to `tests/testthat`, so the unit test
+#' caught what a manual run from the root never could.
 #' @noRd
 vct_archive <- function(ref, dest) {
+  why <- vct_archive_preflight(ref)
+  if (!is.null(why)) stop(why, call. = FALSE)
+  root <- vct_repo_root()
+  if (is.null(root)) {
+    stop("cannot determine the repository root (`git rev-parse --show-toplevel` failed)",
+         call. = FALSE)
+  }
   unlink(dest, recursive = TRUE, force = TRUE)
   dir.create(dest, recursive = TRUE, showWarnings = FALSE)
   zip <- file.path(tempdir(), paste0("vct_", gsub("[^A-Za-z0-9]", "_", ref), ".zip"))
   unlink(zip, force = TRUE)
-  st <- system2("git", c("archive", "--format=zip", "-o", shQuote(zip), shQuote(ref)),
+  st <- system2("git", c("-C", shQuote(root), "archive", "--format=zip",
+                         "-o", shQuote(zip), shQuote(ref)),
                 stdout = FALSE, stderr = FALSE)
   if (!identical(as.integer(st), 0L) || !file.exists(zip)) {
     stop(sprintf("git archive %s failed (status %s)", ref, st), call. = FALSE)
@@ -245,6 +335,14 @@ vct_archive <- function(ref, dest) {
   unlink(zip, force = TRUE)
   n <- length(list.files(dest, recursive = TRUE, all.files = TRUE, no.. = TRUE))
   if (n == 0L) stop(sprintf("git archive %s extracted ZERO files", ref), call. = FALSE)
+  # 🔴 REFUSE A PARTIAL TREE. If `app.R` is absent, the archive was taken from a
+  # subdirectory (see above) and every gate would then run against a fragment.
+  # Better to stop than to certify a fragment.
+  if (!file.exists(file.path(dest, "app.R"))) {
+    stop(sprintf(paste0("the archive of %s has no app.R, so it is NOT the project root ",
+                       "(%d files extracted) - refusing to grade a partial tree"),
+                 ref, n), call. = FALSE)
+  }
   n
 }
 
@@ -266,32 +364,25 @@ vct_run_check <- function(dir, kind) {
   on.exit(setwd(owd), add = TRUE)
   out <- switch(kind,
     "conventions" = {
-      o <- suppressWarnings(system2(rscript, c("tools/check_conventions.R"),
-                                    stdout = TRUE, stderr = TRUE))
-      vct_parse_gate_output(paste(o, collapse = "\n"),
-                            exit_status = attr(o, "status") %||% 0L)
+      r <- vct_run_cmd(rscript, c("tools/check_conventions.R"))
+      vct_parse_gate_output(r$out, exit_status = r$status)
     },
     "duplication" = {
-      o <- suppressWarnings(system2(rscript,
-                                    c("tools/check_duplication.R", "modules", "R", ".",
-                                      "--ext=R", "--fail-on-warning"),
-                                    stdout = TRUE, stderr = TRUE))
+      r <- vct_run_cmd(rscript, c("tools/check_duplication.R", "modules", "R", ".",
+                                  "--ext=R", "--fail-on-warning"))
       # 🔴 `--fail-on-warning` makes this exit 1 for the THREE standing
       # `observeEvent` warnings with ZERO errors. The exit code is a POLICY flag
-      # here, not a verdict; the parsed error count is the fact. Keying on `$?`
-      # would report a clean gate as red on every single run.
-      vct_parse_gate_output(paste(o, collapse = "\n"),
-                            exit_status = attr(o, "status") %||% 0L)
+      # here, not a verdict; the parsed error count is the fact. Keying on the
+      # status would report a clean gate as red on every single run.
+      vct_parse_gate_output(r$out, exit_status = r$status)
     },
     "mcp_check" = {
       # `--no-init-file` is REQUIRED: the project .Rprofile writes two lines to
       # stdout at start-up, which would corrupt the check's own output.
-      o <- suppressWarnings(system2(rscript, c("--no-init-file", "scripts/mcp_server.R",
-                                              "--check"),
-                                    stdout = TRUE, stderr = TRUE))
-      st <- as.integer(attr(o, "status") %||% 0L)
-      list(errors = if (st == 0L) 0L else 1L, warnings = 0L, findings = character(0),
-           unparsed = FALSE, blocking = st != 0L, exit_status = st)
+      r <- vct_run_cmd(rscript, c("--no-init-file", "scripts/mcp_server.R", "--check"))
+      list(errors = if (identical(r$status, 0L)) 0L else 1L, warnings = 0L,
+           findings = character(0), unparsed = FALSE, blocking = r$status != 0L,
+           exit_status = r$status)
     },
     stop("unknown check kind: ", kind, call. = FALSE)
   )
@@ -366,11 +457,25 @@ vct_exit_status <- function(v) if (isTRUE(v$ok)) 0L else 1L
 vct_main <- function(argv) {
   ref <- if (length(argv)) argv[[1]] else "HEAD"
   with_working <- !("--no-work" %in% argv)
-  root <- normalizePath(".", winslash = "/", mustWork = TRUE)
+  # 🔴 The working-tree baseline is GIT's project root, NOT `getwd()`. MEASURED
+  # by running the tool from `tests/`: with `normalizePath(".")` the local gates
+  # were executed inside `tests/`, could not find `tools/check_conventions.R`,
+  # and reported duplication and mcp --check as FAIL — a verdict that depends on
+  # the caller's shell. A gate whose answer changes with the directory you typed
+  # it from is not a measurement.
+  root <- vct_repo_root()
+  if (is.null(root)) {
+    stop("not inside a git repository: nothing to verify", call. = FALSE)
+  }
   dest <- file.path(tempdir(), "vct_committed")
   n <- vct_archive(ref, dest)
   cat(sprintf("  extracted %d files from `git archive %s`\n", n, ref))
-  cat(sprintf("  working tree: %s\n\n", root))
+  cat(sprintf("  project root: %s\n", root))
+  if (!identical(normalizePath(".", winslash = "/", mustWork = FALSE), root)) {
+    cat(sprintf("  (invoked from %s - the project root is used for every gate)\n",
+                normalizePath(".", winslash = "/", mustWork = FALSE)))
+  }
+  cat("\n")
   rows <- vct_build_rows(dest, with_working, root)
   v <- vct_classify(rows)
   cat(vct_format_report(v, ref = ref), "\n\n")
