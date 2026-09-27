@@ -904,17 +904,136 @@ ts_drive_validate_scenario <- function(scn, token, last_seq) {
 #'   2. every string goes through `ts_drive_badge_sanitize()` even though the
 #'      exporter is built not to carry a path — a field that is safe by
 #'      construction today is one constructor change away from not being.
-ts_drive_export_descriptor <- function(descriptor) {
+#' Project a descriptor onto the wire: DECLARED keys only, every string sanitised.
+#'
+#' The single implementation of the two rules, shared by the export descriptor and
+#' the module-state descriptor. Split out rather than written twice for the reason
+#' `.ts_drive_resolve_import_path()` was: "two copies of this function would be two
+#' places where a future edit to the security rule could be applied to one caller
+#' and forgotten in the other".
+#'
+#' @param descriptor The descriptor a producer built, or NULL.
+#' @param keep Character vector of the keys allowed on the wire.
+#' @return The projected list, or NULL when there is nothing to send.
+#' @noRd
+ts_drive_project_descriptor <- function(descriptor, keep, verbatim = character(0)) {
   if (is.null(descriptor) || !is.list(descriptor)) return(NULL)
-  keep <- c("format", "file", "bytes", "n_rows", "n_cols", "n_sig", "columns")
   d <- as.list(descriptor)[intersect(keep, names(descriptor))]
   lapply(d, function(v) {
     if (is.character(v)) {
+      # A DECLARED, FROZEN vocabulary is exempt; anything else is sanitised.
+      #
+      # MEASURED (2026-09-27, live): the module-state path declared a `convention` of
+      # "number of pipeline artefacts produced (not rows)" and it came back on the
+      # wire as "number of <redacted> <redacted> <redacted> (not rows)". The
+      # sanitiser redacts every 8+-character alphanumeric run, and "pipeline",
+      # "artefacts" and "produced" each qualify. So the field whose entire purpose
+      # is to make a count INTERPRETABLE arrived unreadable - the same defect the
+      # badge had with its own label "snapshot" (STATUS.md, DRIVE README), and the
+      # same fix: a frozen set is returned verbatim, BEFORE the path/token rules.
+      #
+      # It is an OPT-IN per field, and deliberately narrow: `kind` and `convention`
+      # are compile-time constants in the module's own source. `columns` and
+      # `column` are NOT exempt - a column name can be user-supplied (an annotation
+      # label), so it keeps the sanitiser.
+      if (length(verbatim) && all(v %in% verbatim)) return(v)
       vapply(as.character(v), function(s) ts_drive_badge_sanitize(s, 200L), character(1),
              USE.NAMES = FALSE)
     } else if (is.numeric(v)) as.numeric(v) else NULL
   })
 }
+
+#' @noRd
+ts_drive_export_descriptor <- function(descriptor) {
+  ts_drive_project_descriptor(
+    descriptor, c("format", "file", "bytes", "n_rows", "n_cols", "n_sig", "columns"))
+}
+
+#' The DECLARED vocabulary a state descriptor's `kind` and `convention` may take.
+#'
+#' Frozen, and returned VERBATIM by the projection: both are compile-time constants
+#' in the modules' own source, so redacting them destroys meaning without removing
+#' any risk. `columns` / `column` are deliberately absent - those can carry a
+#' user-supplied annotation label, so they keep the sanitiser.
+#' @noRd
+TS_DRIVE_DESCRIPTOR_VERBATIM <- c(
+  "table", "levels",
+  "rows of the marker table (one row per gene x cluster)",
+  "rows of the enrichment table (one row per term x database)",
+  "unique levels of the annotation column named in `column`",
+  "number of pipeline artefacts produced (not rows)")
+
+#' The declared keys a MODULE STATE descriptor may carry.
+#'
+#' Separate from the export set on purpose: an export describes a FILE (so it has
+#' `format` and `bytes`), while a state descriptor describes a RESULT (so it has
+#' `kind` and `convention`). Sharing one list would let a state probe ship a
+#' `file` field, which is exactly the widening the projection exists to stop.
+#' @noRd
+#' Bounds on a state descriptor's schema field. Named, so they are declared rather
+#' than sprinkled as literals at each call site.
+#' @noRd
+TS_DRIVE_DESCRIPTOR_MAX_COLS <- 12L
+TS_DRIVE_DESCRIPTOR_MAX_COL  <- 60L
+
+#' @noRd
+TS_DRIVE_STATE_DESCRIPTOR_KEYS <- c(
+  "kind", "n_rows", "n_cols", "n_sig", "n_levels", "columns", "column",
+  "columns_truncated", "convention")
+
+#' A BOUNDED descriptor for a result a module produced.
+#'
+#' Schema and counts, never values. The gap it closes was MEASURED (2026-09-27): the
+#' four SC probes published `n_results` with no referent, no schema and no
+#' convention, so an agent could not act on the number.
+#'
+#' Two bounds, and both are the point:
+#'   * at most `TS_DRIVE_DESCRIPTOR_MAX_COLS` column names, each truncated to
+#'     `TS_DRIVE_DESCRIPTOR_MAX_COL`, so a 400-column table cannot write a kilobyte
+#'     of schema into every snapshot;
+#'   * no element is ever a data.frame, matrix or list — only scalars and short
+#'     strings — so a cell can not reach the wire through here.
+#'
+#' @param x A data.frame/matrix to describe, or NULL.
+#' @param kind `"table"` (default) or `"levels"` for a vector-shaped result.
+#' @param convention A FIXED, declared string saying what the counts mean. It is
+#'   never derived from the data, so two modules' numbers stay comparable.
+#' @param n_levels For `kind = "levels"`: the number of levels.
+#' @return The descriptor list, or NULL when there is nothing to describe.
+#' @noRd
+ts_drive_table_descriptor <- function(x, kind = "table", convention = NULL,
+                                     n_levels = NULL, column = NULL) {
+  conv <- if (is.null(convention)) NULL else
+    substr(paste(as.character(convention), collapse = " "), 1L, 120L)
+  col1 <- if (is.null(column)) NULL else
+    substr(as.character(column)[1L], 1L, TS_DRIVE_DESCRIPTOR_MAX_COL)
+  if (!is.null(n_levels)) {
+    # A VECTOR-shaped result: there is no frame, so the referent is the COLUMN the
+    # level count came from. Without it `n_levels = 12` is as anonymous as a bare
+    # row count was.
+    out <- list(kind = "levels", n_levels = as.numeric(n_levels))
+    if (!is.null(col1)) out$column <- col1
+    out$convention <- conv
+    return(out)
+  }
+  if (is.null(x)) return(NULL)
+  if (!is.data.frame(x) && !is.matrix(x)) return(NULL)
+  if (nrow(x) == 0L && ncol(x) == 0L) return(NULL)
+  nms <- colnames(x)
+  if (is.null(nms)) nms <- character(0)
+  cap <- TS_DRIVE_DESCRIPTOR_MAX_COLS
+  keep <- utils::head(nms, cap)
+  trunc <- length(nms) > cap ||
+    any(nchar(keep) > TS_DRIVE_DESCRIPTOR_MAX_COL)
+  out <- list(kind = kind,
+              n_rows = as.numeric(nrow(x)),
+              n_cols = as.numeric(ncol(x)),
+              columns = substr(as.character(keep), 1L, TS_DRIVE_DESCRIPTOR_MAX_COL))
+  if (trunc) out$columns_truncated <- TRUE
+  out$convention <- conv
+  out
+}
+
 
 #' @noRd
 ts_drive_write_result <- function(seq, status, active_module, armed,
@@ -1042,6 +1161,27 @@ ts_drive_module_states <- function(global_data) {
         sprintf("the state probe raised: %s", conditionMessage(ans)), 200L
       ))
     } else if (is.list(ans)) {
+      # 🔴 THE PROJECTION, and it is not optional. MEASURED: this collector returned
+      # a probe's list WHOLE, with no whitelist - unlike `ts_drive_export_descriptor()`.
+      # A descriptor reaching the wire through here would therefore skip BOTH rules
+      # (declared keys only, every string sanitised) and could ship whatever the
+      # probe returned. The descriptor is projected here, where it enters the wire,
+      # so a probe cannot widen it by returning one extra key.
+      if (!is.null(ans$descriptor)) {
+        ans$descriptor <- ts_drive_project_descriptor(
+          ans$descriptor, TS_DRIVE_STATE_DESCRIPTOR_KEYS,
+          verbatim = TS_DRIVE_DESCRIPTOR_VERBATIM)
+        # 🔴 `columns` MUST serialise as an ARRAY at every width. MEASURED live: a
+        # one-column descriptor published `"columns": "step"` while a four-column
+        # one published a JSON array, because the writer auto-unboxes a length-1
+        # vector. An agent then has to handle two shapes for one field, and the
+        # difference is invisible until it parses the wrong one. Wrapping in
+        # `as.list()` defeats the unboxing; the field is a list of names, not a
+        # name.
+        if (!is.null(ans$descriptor$columns)) {
+          ans$descriptor$columns <- as.list(ans$descriptor$columns)
+        }
+      }
       ans
     } else {
       list(probe_error = "the state probe returned neither a list nor an error")
