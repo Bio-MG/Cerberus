@@ -1241,11 +1241,91 @@ test_that("SC auto-pipeline: closed nav plan, empty input surface, and three run
   expect_identical(ts_drive_button_module("sc-pipeline-run_auto_pipeline"), "sc_pipeline")
 })
 
+test_that("every SC READER module selects its results tab, and the values match the UI", {
+  # S5. The three reader modules share one table, not three hand-copied strings,
+  # and the table is CROSS-CHECKED against the module's own `nav_panel(value=)`.
+  #
+  # That cross-check is the point. A `nav_select()` on an id that no longer exists
+  # is a SILENT no-op — the same failure mode the S1 sub-tab comment describes —
+  # so renaming a tab in mod_sc.R would leave the plan pointing at nothing and
+  # every test above would still pass on the hard-coded string. Reading the value
+  # out of the UI is what turns a silent orphan into a red test.
+  tabmap <- get0("TS_DRIVE_SC_RESULTS_TAB", envir = globalenv())
+  # A named CHARACTER vector, not a list: a first draft asserted `is.list()` and
+  # failed, because `c(sc_markers = "tab_table", ...)` is a character vector. The
+  # plan indexes it with `[[`, which works on either, so the shape only matters
+  # to this assertion — which is exactly why it is written to be read.
+  expect_true(is.character(tabmap) && length(tabmap) >= 3L)
+  if (!is.character(tabmap)) return(invisible(NULL))
+  expect_setequal(names(tabmap), c("sc_markers", "sc_pathways", "sc_annotation"))
+
+  ui <- paste(readLines(file.path(ts_project_root(), "modules", "sc", "mod_sc.R"),
+                        warn = FALSE), collapse = "\n")
+  # module suffix -> the `ns()` argument its output UI is mounted under, so the
+  # two are tied to each other and not to a bare module name.
+  ui_mod <- c(sc_markers = "markers", sc_pathways = "pathways", sc_annotation = "annotation")
+  for (m in names(tabmap)) {
+    plan <- ts_drive_nav_plan(m)
+    expect_identical(plan$tab, tabmap[[m]])
+    expect_identical(plan$tab_id, "sc-main_tabs")
+    # The value must exist as a nav_panel value in the UI...
+    expect_match(ui, sprintf('value = "%s"', tabmap[[m]]), fixed = TRUE)
+    # ...AND that panel must be the one mounting THIS module's output UI.
+    expect_match(ui, sprintf('value = "%s", mod_sc_%s_output_ui',
+                             tabmap[[m]], ui_mod[[m]]), fixed = TRUE)
+  }
+
+  # The navset id is the module's own `ns("main_tabs")`; pin the source so a
+  # rename there is caught here rather than as a silent no-op at runtime.
+  expect_match(ui, 'navset_card_underline(', fixed = TRUE)
+  expect_match(ui, 'id = ns("main_tabs")', fixed = TRUE)
+
+  # `sc_pipeline` is deliberately UNCHANGED: its plan opens the auto-pipeline
+  # accordion and its own reader is the log/status inside that panel, not a
+  # results tab. Pinning it keeps this slice from quietly widening.
+  p <- ts_drive_nav_plan("sc_pipeline")
+  expect_null(p$tab)
+  expect_identical(p$panel, "0_autopipeline")
+
+  # ...and the Bulk and Spatial plans are untouched by an SC change.
+  expect_null(ts_drive_nav_plan("import_bulk")$panel)
+  expect_null(ts_drive_nav_plan("bulk_de", "not-a-tab")$tab)
+})
+
+test_that("selecting the results tab is what makes an SC reader observable", {
+  # The honesty requirement behind the whole slice: the reader was never broken,
+  # it was never SHOWN. This pins the mechanism rather than the wish — bslib
+  # suspends an output in an unselected tab, so the drive has to select the tab.
+  # No bound button is introduced to fake a snapshot, and none is needed: the
+  # table renders from the result the run already produced.
+  #
+  # What is asserted here is the CONTRACT, and it is falsifiable by construction:
+  # drop `tab` from the plan and the sc_markers/sc_annotation blocks above go red.
+  for (m in c("sc_markers", "sc_pathways", "sc_annotation")) {
+    plan <- ts_drive_nav_plan(m)
+    expect_false(is.null(plan$tab))
+    expect_false(is.null(plan$tab_id))
+    # `ts_drive_perform_nav()` acts on `tab` before `sub_tab` and swallows every
+    # failure, so navigation can never turn a finished job into a failed one. The
+    # consequence is that a broken plan is INVISIBLE on the wire — which is why
+    # the cross-check above exists.
+    expect_identical(plan$sub_tab, NULL)
+  }
+})
+
 test_that("SC annotation has a closed nav plan, long job, and refused inputs", {
   plan <- ts_drive_nav_plan("sc_annotation")
   expect_identical(plan$top, "tab_sc")
-  expect_null(plan$tab)
-  expect_null(plan$tab_id)
+  # S5: `tab`/`tab_id` are NO LONGER NULL. These two assertions used to be
+  # `expect_null()`, and they were CORRECT when written — they described a plan
+  # that opened the CONTROLS accordion and stopped. The reader, though, lives in
+  # the "Résultats" navset (`sc-main_tabs`), a SIBLING of the accordions
+  # (mod_sc.R:693 closes the accordion first), so selecting the accordion left the
+  # reader suspended. MEASURED on a live session: bslib does not render an output
+  # in an unselected tab, so a drive-driven `sc_annotation` reported `done` while
+  # `#sc-annotation-...` was empty and `offsetParent === null`.
+  expect_identical(plan$tab, "tab_annotation")
+  expect_identical(plan$tab_id, "sc-main_tabs")
   expect_identical(plan$panel, "2_annotation")
   expect_identical(plan$accordion_id, c("sc-acc_workflow", "sc-acc_analyse"))
 
@@ -1279,8 +1359,11 @@ test_that("SC annotation has a closed nav plan, long job, and refused inputs", {
 test_that("SC markers have a closed nav plan, long job, and refused inputs", {
   plan <- ts_drive_nav_plan("sc_markers")
   expect_identical(plan$top, "tab_sc")
-  expect_null(plan$tab)
-  expect_null(plan$tab_id)
+  # S5: the reader lives in the `sc-main_tabs` RESULTS navset, a sibling of the
+  # accordions, so the plan must select it. See the sc_annotation block above for
+  # the live measurement that made `expect_null()` wrong here.
+  expect_identical(plan$tab, "tab_table")
+  expect_identical(plan$tab_id, "sc-main_tabs")
   expect_identical(plan$panel, "4_markers")
   expect_identical(plan$accordion_id, c("sc-acc_workflow", "sc-acc_analyse"))
 
@@ -2379,8 +2462,101 @@ test_that("the badge is OBSERVATIONAL: no gate reads data, plots or inputs", {
 # is a DIRECTORY containing a file of the same name. That is why the
 # directory case below is not hypothetical: it is the literal input.
 
-test_that("the import payload has a FROZEN key set", {
-  expect_setequal(TS_DRIVE_IMPORT_KEYS, c("counts_path", "metadata_path", "mode"))
+test_that("the import payload has a FROZEN, PER-MODULE key set", {
+  # Until 2026-09-26 (Phase F) this was ONE flat vector, which quietly assumed a
+  # single importer. The Spatial importer takes a data FOLDER where Bulk takes a
+  # counts FILE, so a global vector would accept `dir_path` for Bulk and hand a
+  # directory to `smart_read()`. The set is now per module, and BOTH halves are
+  # pinned — dropping the per-module split is a regression, not a simplification.
+  expect_setequal(TS_DRIVE_IMPORT_KEYS,
+                  c("counts_path", "metadata_path", "mode",
+                    "dir_path", "sample_name", "technology"))
+  expect_identical(TS_DRIVE_IMPORT_SCHEMA$import_bulk$required, "counts_path")
+  expect_setequal(TS_DRIVE_IMPORT_SCHEMA$import_bulk$optional,
+                  c("metadata_path", "mode"))
+  expect_identical(TS_DRIVE_IMPORT_SCHEMA$import_spatial$required, "dir_path")
+  expect_setequal(TS_DRIVE_IMPORT_SCHEMA$import_spatial$optional,
+                  c("sample_name", "technology"))
+  # The union must be exactly the keys, not a superset: an orphan key would be
+  # "known" to the refusal message and unknown to every schema.
+  expect_setequal(
+    TS_DRIVE_IMPORT_KEYS,
+    unlist(lapply(TS_DRIVE_IMPORT_SCHEMA, function(e) c(e$required, e$optional)),
+           use.names = FALSE))
+  # ⚠️ The "no two importers claim the same key" invariant is GONE, deliberately.
+  # It was true when there were two importers and it encoded a real rule — a flat
+  # key vector cannot describe two importers, or a Bulk payload could carry a
+  # folder. But `import_sc` legitimately shares `dir_path` and `sample_name` with
+  # `import_spatial`: they mean the SAME thing in both, and the MODULE is what
+  # routes. Preserving disjointness would have meant inventing `sc_dir` /
+  # `sc_sample` — two names for one concept, which is the ambiguity the rule
+  # existed to prevent, and it would have taught an agent that the key it just
+  # used for Spatial is somehow wrong for SC.
+  #
+  # What replaces it is the part of the rule that still carries the risk: the
+  # importer that takes a counts FILE must share no key with the ones that take a
+  # FOLDER. Asserted, not assumed.
+  bulk_keys <- c(TS_DRIVE_IMPORT_SCHEMA$import_bulk$required,
+                 TS_DRIVE_IMPORT_SCHEMA$import_bulk$optional)
+  for (m in setdiff(TS_DRIVE_IMPORT_MODULES, "import_bulk")) {
+    e <- TS_DRIVE_IMPORT_SCHEMA[[m]]
+    expect_length(intersect(bulk_keys, c(e$required, e$optional)), 0L)
+  }
+  # And a key that really IS shared must be reported as shared, naming EVERY
+  # owner. Naming one at random would send an agent to the wrong module with a
+  # payload that is valid there.
+  shared <- ts_drive_validate_import(list(sample_name = "P1"), roots = tempdir(),
+                                     module = "import_bulk")
+  expect_false(shared$ok)
+  expect_true(any(grepl("import_spatial", shared$errors, fixed = TRUE)))
+  expect_true(any(grepl("import_sc", shared$errors, fixed = TRUE)))
+  # The asymmetry that sharing hides, pinned explicitly: `sample_name` is
+  # OPTIONAL for Spatial (basename fallback) and REQUIRED for SC. The same key,
+  # two contracts — so if that ever flips, it is a visible edit and not a
+  # silently-relaxed rule.
+  expect_true("sample_name" %in% TS_DRIVE_IMPORT_SCHEMA$import_spatial$optional)
+  expect_true("sample_name" %in% TS_DRIVE_IMPORT_SCHEMA$import_sc$required)
+  # Every importer must be a reachable scenario module, or `import_file` could
+  # never route to it. This is the INVARIANT; the source-time guard enforces it
+  # on the shipped tables, and the rule's own text is locked below so deleting
+  # the check is detectable. (Mutating the constant from a test is NOT a valid
+  # falsification here: `ts_drive_allowlist_problems()` resolves it in the
+  # sourced file's own environment, so an assignment in the test frame would be
+  # invisible to it — a check that cannot see the change cannot be failed.)
+  for (m in TS_DRIVE_IMPORT_MODULES) expect_true(m %in% TS_DRIVE_MODULES)
+  body <- paste(deparse(ts_drive_allowlist_problems), collapse = "\n")
+  expect_match(body, "can never route to it", fixed = TRUE)
+})
+
+test_that("`import_file` names the MODULE's required key, not a hard-coded counts_path", {
+  # REGRESSION, measured on a live session 2026-09-26. The injector had a SECOND
+  # `counts_path` assumption of its own, independent of the key schema, so a
+  # Spatial import — which carries a `dir_path` — was refused before the module was
+  # consulted. Two copies of one rule is what a grep for the obvious spelling
+  # misses, so both are locked here: the message must name the module's REQUIRED
+  # key, and the injector must not name any payload key as a literal at all.
+  #
+  # The source is read, not `deparse()`d, because the guard's comment records the
+  # measurement and the reasoning — a `deparse()` assertion would only see code.
+  watcher <- paste(readLines(file.path(ts_project_root(), "R", "core", "drive_watcher.R"),
+                             warn = FALSE), collapse = "\n")
+  expect_match(watcher, "TS_DRIVE_IMPORT_SCHEMA[[module]]$required", fixed = TRUE)
+  # The gate LOOPS the required keys. `is.null(req[[need]])` was correct while
+  # `required` was a scalar and became a silent TOTAL MISS once it was a vector:
+  # `req[[c("dir_path","sample_name")]]` addresses nothing, so a payload carrying
+  # only `dir_path` would have reached the SC importer. The expression is locked
+  # so the subscript cannot go back to a vector.
+  expect_match(watcher, "vapply(need, function(k) is.null(req[[k]])", fixed = TRUE)
+  expect_false(grepl("is\\.null\\(req\\[\\[need\\]\\]\\)", watcher, perl = TRUE))
+  # No literal payload key survives in the injector's import branch.
+  expect_false(grepl("req\\$counts_path", watcher, perl = TRUE))
+  expect_false(grepl("is\\.null\\(req\\$counts_path\\)", watcher, perl = TRUE))
+  # And the refusal message carries the module name, so a refusal names its target.
+  expect_match(watcher, "`import_file` for '%s' needs an `import` block carrying `%s`",
+               fixed = TRUE)
+  # The schema is what supplies the names, for both importers.
+  expect_identical(TS_DRIVE_IMPORT_SCHEMA$import_bulk$required, "counts_path")
+  expect_identical(TS_DRIVE_IMPORT_SCHEMA$import_spatial$required, "dir_path")
 })
 
 test_that("a path containing a `..` component is refused (spec S11)", {
@@ -2452,6 +2628,13 @@ test_that("an unknown key inside `import` is refused, and only the frozen keys s
   ok <- ts_drive_validate_scenario(
     list(protocol = TS_DRIVE_PROTOCOL, seq = 2, action = "import_file",
          module = "import_bulk",
+         # `session_token` is REQUIRED here as of S3: `import_file` is one of
+         # `TS_DRIVE_TOKEN_PINNED_ACTIONS` because it replaces the session's
+         # primary object, and a scenario addressed to no session was measured
+         # doing exactly that. Without this line the valid case is refused for the
+         # token rather than for the key shape, which is not what this block is
+         # about — so the token is part of the fixture, not an assertion.
+         session_token = "tok",
          import = list(counts_path = f, mode = "merged_matrix")),
     "tok", 0L)
   expect_true(ok$ok)
@@ -2557,32 +2740,50 @@ test_that("a published IMPORTER is never listed as a button TOKEN", {
 })
 
 test_that("publishing an importer for an unknown module is refused, LOUDLY", {
-  # A SILENT refusal here would read as "G3 is wired for sc". The v1 allowlist is
-  # bulk-only (spec S3), so the warning is what makes the mistake visible in the
-  # console instead of at the first scenario.
+  # A SILENT refusal here would read as "G3 is wired for sc". The v1 allowlist was
+  # bulk-only (spec S3) and is now bulk + spatial, so the warning is what makes the
+  # mistake visible in the console instead of at the first scenario.
+  #
+  # The message names the IMPORT allowlist, not `TS_DRIVE_MODULES`: those are two
+  # different sets and conflating them was the defect the frozen
+  # `TS_DRIVE_IMPORT_MODULES` constant removed. The wording is asserted so a
+  # future edit cannot quietly point the reader at the wrong table.
   gd <- list(drive_registry = new.env(parent = emptyenv()))
   expect_warning(
     ok_sc <- ts_drive_publish_importer(gd, "sc", function(request) NULL),
-    "TS_DRIVE_MODULES")
+    "import allowlist")
   expect_false(isTRUE(ok_sc))
   expect_warning(
     ok_sp <- ts_drive_publish_importer(gd, "spatial", function(request) NULL),
-    "TS_DRIVE_MODULES")
+    "import allowlist")
   expect_false(isTRUE(ok_sp))
   expect_null(ts_drive_importer_of(gd, "sc"))
+  # And the message must LIST what is allowed, or the reader has to go looking.
+  expect_warning(
+    ts_drive_publish_importer(gd, "sc", function(request) NULL),
+    "import_bulk, import_spatial")
 })
 
 test_that("a token-ownable Spatial module still cannot publish an importer", {
+  # The invariant, not the snapshot: `spatial_pipeline` IS a drivable module but
+  # owns no importer, because `import_file` loads a DATASET and the pipeline
+  # consumes one. Adding it to `TS_DRIVE_IMPORT_SCHEMA` would make the drive
+  # answer `applied` for a load nothing performed.
   gd <- list(drive_registry = new.env(parent = emptyenv()))
   expect_warning(
     ok <- ts_drive_publish_importer(
       gd, "spatial_pipeline", function(request) NULL
     ),
-    "TS_DRIVE_MODULES"
+    "import allowlist"
   )
   expect_false(isTRUE(ok))
   expect_null(ts_drive_importer_of(gd, "spatial_pipeline"))
   expect_length(ls(gd$drive_registry), 0L)
+  # The inverse half: `import_spatial` IS an importer, so this is a real
+  # capability and not a gap the assertion above is papering over.
+  expect_true("import_spatial" %in% TS_DRIVE_IMPORT_MODULES)
+  expect_true(ts_drive_publish_importer(gd, "import_spatial", function(request) NULL))
+  expect_true(is.function(ts_drive_importer_of(gd, "import_spatial")))
 })
 
 test_that("only an OPERATOR can widen the import roots — never the scenario", {
@@ -3433,8 +3634,20 @@ test_that("a module that DECLARES a drive job has only ADDITIVE on.exit() calls"
 
     on_ids <- pd$id[pd$token == "SYMBOL_FUNCTION_CALL" & pd$text == "on.exit"]
     if (length(on_ids) == 0L) {
-      expect_true(grepl("mod_spatial_pipeline\\.R$", f) &&
-                    any(grepl(".close_drive_job <- function", src, fixed = TRUE)))
+      # A file that declares a drive job and calls `on.exit()` NOWHERE cannot be
+      # bitten by this hazard, so it is exempt. The exemption is a NAMED list, not
+      # a rule, because "no on.exit()" is a coincidence of a file's history and a
+      # later edit could add one:
+      #   * mod_spatial_pipeline.R closes its job through a `.close_drive_job`
+      #     helper declared before any Progress bar;
+      #   * mod_spatial_qc.R (Phase E) has had no `on.exit()` at all - its hotspot
+      #     action is synchronous and closes with no Progress bar, which is exactly
+      #     why its first drive job needed no fix.
+      expect_true(
+        (grepl("mod_spatial_pipeline\\.R$", f) &&
+           any(grepl(".close_drive_job <- function", src, fixed = TRUE))) ||
+        grepl("mod_spatial_qc\\.R$", f),
+        info = f)
       next
     }
 
@@ -3595,4 +3808,92 @@ test_that("the badge NAMES what ran: a DECLARED action/module is never redacted"
   expect_identical(ts_drive_badge_sanitize(tok), "<redacted>")
   # `error` is the one field with NO `known` set, so it keeps every rule.
   expect_match(ts_drive_badge_sanitize("C:/Users/x/secret/token.txt"), "<path>")
+})
+
+# =============================================================================
+# S1 (D2) — the Spatial QC nav plan reaches the hotspots panel.
+#
+# `ts_drive_nav_plan()` had three levels for every module: the navbar (`top`), a
+# results navset (`tab`) and a sidebar accordion (`panel`). The QC module has a
+# FOURTH: its own results `navset_card_underline()` inside
+# `modules/spatial/mod_spatial_qc.R`, which hosts the hotspot map, histogram,
+# table and CSV button. MEASURED on a live session, before the fix: the drive
+# stopped at `results_qc` and the inner navset was still on "overview", so the
+# three panel outputs were suspended and the download link was `disabled` — while
+# `hotspot_status_ui`, which lives in the SIDEBAR, rendered normally. That
+# asymmetry is the signature.
+#
+# The level is OPTIONAL and absent for every other module, so this block also
+# pins that: an absent `sub_tab` must not be invented, and a plan without one
+# must perform exactly the three navigations it did before.
+# =============================================================================
+
+test_that("the Spatial QC nav plan carries the hotspots panel as a FOURTH level", {
+  plan <- ts_drive_nav_plan(TS_DRIVE_SPATIAL_QC_MODULE)
+  # The three existing levels are untouched: the fix is additive, and a plan that
+  # moved them would silently break the Spatial pipeline's own navigation.
+  expect_identical(plan$top, "tab_spatial")
+  expect_identical(plan$tab, "results_qc")
+  expect_identical(plan$panel, "panel_qc")
+  expect_identical(plan$accordion_id, "spatial-steps")
+
+  # The fourth level, as DATA. Names only — a `nav_select()` on an id the module
+  # does not declare is a silent no-op, and the test in
+  # test-mod-spatial-qc-drive.R asserts the UI really carries this id.
+  expect_identical(plan$sub_tab, "hotspots")
+  expect_identical(plan$sub_tab_id, "spatial-qc-qc_results")
+})
+
+test_that("a nav plan WITHOUT a fourth level performs exactly the three it always did", {
+  # `spatial_pipeline` is the control: same navbar, same results navset, same
+  # accordion, one level fewer. If the performer started touching a
+  # `sub_tab_id` that is not there, this is where it would show.
+  sp <- ts_drive_nav_plan("spatial_pipeline")
+  expect_null(sp$sub_tab)
+  expect_null(sp$sub_tab_id)
+
+  # `ts_drive_perform_nav()` calls `bslib::nav_select()` NAMESPACE-qualified, so a
+  # globalenv patch cannot see it. `local_mocked_bindings(.package = "bslib")`
+  # can, and it restores the real binding when the frame exits.
+  library(bslib)
+  called <- character(0)
+  testthat::local_mocked_bindings(
+    nav_select = function(id, selected, session = NULL, ...) {
+      called <<- c(called, sprintf("%s=%s", id, selected))
+      invisible(TRUE)
+    },
+    .package = "bslib")
+
+  ts_drive_perform_nav(new.env(parent = emptyenv()), sp)
+  # MEASURED, not assumed: two `nav_select()` calls, the navbar (whose id is
+  # `TS_DRIVE_TOP_NAV_ID` = "main_nav", NOT the panel value) and the results
+  # navset. The panel is `accordion_panel_open()`, a different API, so it does not
+  # appear here at all. And no fourth level was fabricated.
+  expect_identical(called, c("main_nav=tab_spatial", "spatial-results=results_pipeline"))
+})
+
+test_that("a nav plan WITH a fourth level navigates it after the three", {
+  library(bslib)
+  called <- character(0)
+  testthat::local_mocked_bindings(
+    nav_select = function(id, selected, session = NULL, ...) {
+      called <<- c(called, sprintf("%s=%s", id, selected))
+      invisible(TRUE)
+    },
+    .package = "bslib")
+
+  ts_drive_perform_nav(new.env(parent = emptyenv()),
+                       ts_drive_nav_plan(TS_DRIVE_SPATIAL_QC_MODULE))
+  # ORDER is the assertion, not just membership: the fourth level is nested inside
+  # the third, so navigating it first would target a navset that is not in the DOM
+  # yet. A `nav_select()` on a missing id is a silent no-op, which is how the
+  # original defect stayed invisible.
+  expect_identical(called, c("main_nav=tab_spatial",
+                             "spatial-results=results_qc",
+                             "spatial-qc-qc_results=hotspots"))
+  # And the last one is the declared constant, not a literal: a spelling drift
+  # between the plan and the allowlist would show up here as a different value.
+  expect_identical(called[3],
+                   sprintf("%s=%s", TS_DRIVE_SPATIAL_QC_SUB_TABS_ID,
+                           TS_DRIVE_SPATIAL_QC_SUB_TAB))
 })

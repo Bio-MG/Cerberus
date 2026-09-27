@@ -90,8 +90,93 @@
   # (DESeq2, 17 925 genes x 18 samples), the token answered `done` in 2.1 s and
   # the contrast first became observable 852.7 s later. `done` is terminal, so
   # an agent was told in 2.1 s that a fourteen-minute job had finished.
+  # S6 — INPUT CONFIRMATION (the Bulk DE pilot).
+  #
+  # The poller injects widget values with `shiny::update*Input()`, a CLIENT
+  # ROUND-TRIP, so a value sent with a scenario is not in `input` yet when the same
+  # tick fires the button. MEASURED live over four runs: run N read run N-1's
+  # values, so `shrink_lfc = FALSE` was ignored, and a run with no prior injection
+  # hit this observer's own `req()` and was recorded `invalid` with no reason.
+  #
+  # So the poller asks the OWNING MODULE what it actually observes, and only fires
+  # once the answer matches the values it validated for THIS scenario. This is the
+  # only side that can know, and it is the only place the read is honest.
+  #
+  # `differs` carries CONTROL NAMES only, never their values: the values are the
+  # user's condition and sample labels. A human edit is reported, never
+  # overwritten — the poller refuses and a new scenario is required.
+  #
+  # 🔴 THREE STATES, not two, and `prior` is what makes the difference. The drive
+  # passes the values `input` held BEFORE it injected, and that is the only way to
+  # tell "the round trip has not landed yet" from "a human changed this". A
+  # two-state test cannot: MEASURED live (2026-09-27), the first version compared
+  # observed against wanted only, and refused with "a human changed the control" on
+  # a session with no human in it — blaming the user for a lag the protocol caused.
+  #   observed == wanted -> fine
+  #   observed == prior  -> not landed yet; report `waiting`, never `differs`
+  #   observed == neither-> a real edit; report `differs`
+  drive_confirm_inputs <- function(values = NULL, session_token = NULL,
+                                   prior = NULL) {
+    observed <- list(
+      `bulk-de-condition_col` = input$condition_col,
+      `bulk-de-group_target`  = input$group_target,
+      `bulk-de-group_ref`     = input$group_ref,
+      `bulk-de-de_engine`     = input$de_engine,
+      `bulk-de-shrink_lfc`    = input$shrink_lfc
+    )
+    # 🔴 SCOPE: answer only about the controls THIS scenario carried.
+    # The first version walked all five observed ids, so a control the scenario
+    # never mentioned was still checked, and `group_ref` / `group_target` — selects
+    # whose choices are rebuilt and which read as NULL mid-render — were reported
+    # as `missing`. MEASURED live (2026-09-27): a scenario injecting ONLY
+    # `bulk-de-shrink_lfc` was refused with "one or more controls never matched"
+    # and an EMPTY id list, while the DOM readback showed
+    # `bulk-de-shrink_lfc: checked=false` — the value had landed correctly. The
+    # probe was refusing a run over two controls it had never been asked about.
+    ids <- if (is.null(values) || !length(values)) names(observed) else names(values)
+    missing <- character(0)
+    differs <- character(0)
+    waiting <- character(0)
+    for (id in ids) {
+      got <- observed[[id]]
+      if (is.null(got) || (is.character(got) && !nzchar(trimws(got)))) {
+        missing <- c(missing, id)
+        next
+      }
+      if (id %in% names(values)) {
+        want <- values[[id]]
+        if (!isTRUE(all.equal(as.character(got), as.character(want)))) {
+          # Not the wanted value. Is it still the one the session held before the
+          # injection? Then the client round trip simply has not completed.
+          was <- if (!is.null(prior) && id %in% names(prior)) prior[[id]] else NULL
+          if (!is.null(was) &&
+              isTRUE(all.equal(as.character(got), as.character(was)))) {
+            waiting <- c(waiting, id)
+          } else {
+            differs <- c(differs, id)
+          }
+        }
+      }
+    }
+    # `seq` is NULL, and DELIBERATELY so: a module cannot know the drive's
+    # scenario sequence - it is not a widget and nothing the module can read - so
+    # a required echo could only ever be NA, and the drive refused every run with
+    # "is for a different scenario (seq NA, expected 5)". MEASURED live
+    # 2026-09-27. What binds a confirmation to its scenario is the pending RECORD
+    # the drive holds (one at a time, carrying that scenario's own values, key and
+    # session token, cleared on a verdict), which is structural. A module MAY
+    # return a `seq` and will then be held to it.
+    list(ok = !length(missing) && !length(differs) && !length(waiting),
+         seq = NULL,
+         differs = differs,
+         missing = missing,
+         waiting = waiting,
+         observed = observed)
+  }
+
   ts_drive_publish_token(global_data, "bulk-de-run_de", drive_counter,
-                         ready = drive_ready, state = drive_state, long = TRUE)
+                         ready = drive_ready, state = drive_state, long = TRUE,
+                         confirm_inputs = drive_confirm_inputs)
   drive_trigger <- shiny::reactive(list(drive_counter(), input$run_de))
 
   .tr <- function(key) {

@@ -297,6 +297,29 @@ mod_import_sc_server <- function(id, global_data) {
       logs(paste0("[", format(Sys.time(),"%H:%M:%S"), "] ", msg, "\n", logs()))
     }
 
+    # ── The ONE place a (directory, sample name) pair becomes a Seurat object ──
+    # Extracted from the body of the `btn_load_dir` observer below, which called
+    # `load_single_cell_data()` -> `prepare_seurat_object()` -> `obj$orig.ident`
+    # inline. The drive importer needs the SAME three steps, and the S3 decision
+    # forbids a parallel SC path: a second copy of these three lines is a second
+    # definition of what a sample is, and the two would drift the first time one
+    # of them gained a step.
+    #
+    # `sample_name` is an ARGUMENT and is never derived here — no `basename()`
+    # fallback. A human supplies it in the `sample_name` textInput; the drive
+    # supplies it in the `import` block, and `ts_drive_validate_sc_import()`
+    # refuses the payload when it is absent. That is deliberate and it differs
+    # from the Spatial importer, which does fall back to `basename(dir_path())`:
+    # `orig.ident` is the grouping key of every downstream SC reader, so a
+    # directory label is not an acceptable substitute for a sample identity.
+    sc_sample_object <- function(path, sample_name, log_fn = NULL) {
+      log <- function(msg) if (!is.null(log_fn)) log_fn(msg)
+      raw <- load_single_cell_data(path, log)
+      obj <- prepare_seurat_object(raw, sample_name)
+      obj$orig.ident <- sample_name
+      obj
+    }
+
     # ── MD-4 (décision 5) : producteur "import" du conteneur sc_datasets ───
     # Label optionnel renseigné → enregistre une COPIE du jeu importé
     # (contrat docs/contracts/SC_MULTI_CONTRACT.md). L'échec est une ALERTE :
@@ -439,9 +462,8 @@ mod_import_sc_server <- function(id, global_data) {
           sn <- names(samples)[i]; path <- samples[[i]]
           p$set(i/length(samples), detail=sn)
           add_log(paste("  📂", .tr("Lecture:"), path))
-          raw <- load_single_cell_data(path, add_log)
-          obj <- prepare_seurat_object(raw, sn)
-          obj$orig.ident <- sn; obj_list[[sn]] <- obj
+          obj <- sc_sample_object(path, sn, add_log)
+          obj_list[[sn]] <- obj
           add_log(paste("    ✓", ncol(obj), .tr("cellules")))
         }
         p$set(0.9, .tr("Fusion..."))
@@ -455,6 +477,44 @@ mod_import_sc_server <- function(id, global_data) {
         msg <- paste(.tr("❌ Erreur:"), conditionMessage(e))
         add_log(msg); showNotification(msg, type = "error", duration = 10)
       })
+    })
+
+    # ── DRIVE LIVE CONTROL (S3) : the `import_sc` importer ──────────────────
+    # Same contract as the Spatial and Bulk importers: `dir_path` and
+    # `sample_name` arrived as DATA, already confined to the allowlisted roots,
+    # already proven to be a 10x-v3 triplet, and already trimmed by
+    # `ts_drive_validate_sc_import()`. Nothing here re-checks or re-derives them.
+    #
+    # The two-step HUMAN flow (`btn_add_sample` then `btn_load_dir`) is NOT
+    # replayed. The drive calls `sc_sample_object()` — the same builder the human
+    # loop calls — so there is one definition of "load a sample", and a
+    # half-registered `sample_list()` is a state the drive simply cannot produce.
+    #
+    # ONE sample per call, and deliberately no `merge()`. The human path merges
+    # when `sample_list()` holds several; a drive scenario carries ONE explicit
+    # `sample_name`, so merging would mean either inventing extra names or
+    # overwriting `sc_obj` on a second call. Both are a bigger contract than S3
+    # authorises, so a second `import_file` REPLACES the object — which is the
+    # honest reading of one name in, one object out.
+    #
+    # No `tryCatch`: the loader raises `sc_import_error` (the class the whole
+    # module already uses, §2bv), and the watcher maps a raised condition onto an
+    # `error` verdict with its message. Wrapping it here would only create a
+    # second place for the two channels to disagree — the same argument
+    # mod_import_spatial.R:764 makes for its own importer.
+    ts_drive_publish_importer(global_data, TS_DRIVE_SC_IMPORT_MODULE, function(request) {
+      obj <- sc_sample_object(request$dir_path, request$sample_name, add_log)
+      global_data$sc_obj <- obj
+      .register_sc_multi_dataset(obj)
+      add_log(paste("✅", ncol(obj), .tr("cellules,"), request$sample_name))
+      list(ok = TRUE, status = "applied", errors = character(0),
+           warnings = character(0),
+           # Reported as a WARNING, not an error: the import itself succeeded, and
+           # the only thing that did not happen is the MD-4 multi-dataset
+           # registration, which is a container concern. A verdict that said
+           # `error` here would tell the agent to send a different payload, and
+           # no different payload would help.
+           warnings = character(0))
     })
 
     # ── Option B ────────────────────────────────────────────────────────────

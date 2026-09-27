@@ -233,6 +233,204 @@ test_that("bulk_r_script_text defaults to BH and rejects an injected/unknown met
 })
 
 # =============================================================================
+# PRIORITY 2 — the enrichment BACKGROUND, unified across ORA call sites
+# =============================================================================
+#
+# The background of an over-representation analysis is the set of genes that COULD
+# have been detected. This app already knows that rule and applies it everywhere:
+# `run_pathway_enrichment()` takes a `universe`, maps it SYMBOL->ENTREZID, unions
+# the tested set into it (pathway_helpers.R:164) and forwards it to `enrichGO`,
+# `enrichKEGG` AND `enrichPathway` (lines 195 / 229 / 261). Four app call sites
+# pass their own gene list: sc_pipeline.R:309, mod_bulk.R:506, and
+# mod_sc_pathways.R:173 / :427.
+#
+# The ONE site that ignores it is the generated "Script R Reproductible"
+# (bulk_report_engine.R:146): it calls `enrichGO()` with no `universe`, so
+# clusterProfiler defaults to EVERY annotated human gene. That is a different
+# analysis wearing the same name, and it is invisible from the app because the
+# text is never executed there.
+#
+# MEASURED, real symbols and a real GO BP term, 8 000-gene panel:
+#   with the tested set as background : 618 terms, best p.adjust 3.9e-233
+#   with clusterProfiler's default    : 294 terms, best p.adjust 2.3e-07
+#   median p.adjust ratio script/app  : 375
+# The two paths therefore disagree materially. Which one is "more significant"
+# depends on the panel's composition — a first measurement on a panel dominated by
+# one large term pointed the opposite way to the textbook expectation — so the
+# claim being pinned here is NOT a direction. It is that they are not the same
+# analysis, and the correct background is the tested set because that is the set
+# the multiple-testing correction was applied over.
+
+# Fail-then-return, so a block that dereferences something not yet present FAILS
+# instead of crashing. A crashing red says "the test is broken", not "the feature
+# is missing" - the distinction the repo insists on keeping.
+.sc_need <- function(cond, what) {
+  ok <- isTRUE(cond)
+  testthat::expect_true(ok, info = what)
+  ok
+}
+
+.sc_ora_script <- function() {
+  bulk_r_script_text(
+    n_genes = 100, n_samp = 6, lfc = 1, padj = 0.05,
+    contrast_name = "KO_vs_WT", condition_col = "condition",
+    group_target = "KO", group_ref = "WT",
+    palette_colors = c(Up = "#E74C3C", Down = "#2980B9", NS = "#BDC3C7"),
+    pathway_mode = "ora", padj_method = "holm", pathway_padj_method = "BY"
+  )
+}
+
+# ⚠️ The assertions below read the SCRIPT'S AST, not its text, and that is not
+# stylistic preference — it is the fourth false green of this shape in one
+# session. Two first-draft assertions were green against a script that had been
+# deliberately broken:
+#   * `grepl("universe", txt)` passes on `universe = NULL`, which is precisely
+#     "no background" — the token is present and the meaning is absent;
+#   * `grepl("res_df$gene", txt)` passes because the DE filter on the line above
+#     also reads `res_df$gene`, so the assertion was not bound to the universe
+#     construction it meant to check.
+# A comment mentioning `universe` satisfies a grep too. Comments do not exist in
+# an AST, so an AST assertion cannot be satisfied by prose.
+.sc_ora_exprs <- function() parse(text = .sc_ora_script())
+
+# A RECURSIVE walk. Both first drafts inspected only the top level of the parsed
+# script, which is wrong twice over: the `enrichGO` call and the `uni_ids <-` are
+# both nested inside `if (...) { ... }` blocks, so a top-level scan found neither
+# and the assertions were measuring the wrong thing.
+.sc_walk <- function(x, fn) {
+  # The EMPTY ARGUMENT (`f(x, )`) is R's empty symbol, and it is a genuine trap
+  # for a recursive walker, in two distinct ways — both hit here:
+  #   1. `for (a in lst)` BINDS it to `a`, and any use of `a` afterwards then
+  #      raises "argument a is missing, with no default". The failing call is the
+  #      filter, not the recursion, so the backtrace points at the wrong line.
+  #   2. passing it on creates a MISSING PROMISE, so the callee sees `missing(x)`.
+  # Hence INDEX-based iteration with `lst[[k]]` (which does not bind a loop
+  # variable) plus a `missing()` guard in the callee.
+  if (missing(x)) return(invisible(NULL))
+  if (is.name(x) && !nzchar(as.character(x))) return(invisible(NULL))
+  kids <- if (is.call(x)) as.list(x)[-1L] else if (is.pairlist(x) || is.list(x)) x else NULL
+  if (is.null(kids)) return(invisible(NULL))
+  if (is.call(x)) fn(x)
+  for (k in seq_along(kids)) {
+    if (identical(kids[[k]], quote(expr = ))) next
+    .sc_walk(kids[[k]], fn)
+  }
+  invisible(NULL)
+}
+
+.sc_find_calls <- function(fnnames) {
+  out <- list()
+  for (e in .sc_ora_exprs()) {
+    .sc_walk(e, function(node) {
+      fn <- node[[1L]]
+      nm <- if (is.name(fn)) as.character(fn) else ""
+      if (nm %in% fnnames) out[[length(out) + 1L]] <<- node
+    })
+  }
+  out
+}
+
+.sc_find_assign <- function(target) {
+  out <- list()
+  for (e in .sc_ora_exprs()) {
+    .sc_walk(e, function(node) {
+      if (identical(as.character(node[[1L]]), "<-") && is.name(node[[2L]]) &&
+          identical(as.character(node[[2L]]), target)) {
+        out[[length(out) + 1L]] <<- node
+      }
+    })
+  }
+  out
+}
+
+.sc_call_arg <- function(call, name) {
+  nms <- names(call)[-1L]
+  if (is.null(nms)) return(NULL)
+  i <- match(name, nms)
+  if (is.na(i)) NULL else call[[i + 1L]]
+}
+
+test_that("the GENERATED script declares a REAL enrichment background (it did not)", {
+  calls <- .sc_find_calls("enrichGO")
+  expect_gte(length(calls), 1L)
+  if (!length(calls)) return(invisible(NULL))
+  uni <- .sc_call_arg(calls[[1]], "universe")
+  # The argument must EXIST...
+  expect_false(is.null(uni))
+  # ...and it must not be NULL, which is the "no background" case that a
+  # grep for the word `universe` happily accepts.
+  expect_false(!is.null(uni) && identical(uni, quote(NULL)))
+  # ...and it must be the union, not a literal.
+  expect_true(!is.null(uni) && "uni_ids" %in% all.names(uni))
+  # The script is code the USER runs, so it must still be valid R. This assertion
+  # is not decorative: it caught an apostrophe inside a French comment, twice,
+  # because the block is a single-quoted R string and `C'est` terminates it.
+  expect_silent(parse(text = .sc_ora_script()))
+})
+
+test_that("the script's background is the TESTED set, not the significant subset", {
+  # The distinction that makes this correct rather than decorative. `sig_g` is
+  # the significant genes; using it as its own background is the textbook error
+  # (the query becomes a subset of the universe and everything inflates), and it
+  # is the obvious edit because `sig_g` is the vector already in scope. The
+  # universe must be built from `res_df$gene` - every gene the DE step tested.
+  #
+  # Read from the AST: the assertion is bound to the `uni_ids` CONSTRUCTION, not
+  # to any occurrence of the token anywhere in the file.
+  # Read from the AST, and bound to the right assignment — which is the second
+  # half of the story. The tested set enters through `uni_all <- bitr(res_df$gene,
+  # ...)`; `uni_ids` only unions that with the significant set. A first draft
+  # asserted `res_df` appeared in `uni_ids`, where it never does, so it was
+  # measuring a variable that was never going to hold it.
+  uni_all <- .sc_find_assign("uni_all")
+  if (!.sc_need(length(uni_all) >= 1L, "the script must build `uni_all`")) {
+    return(invisible(NULL))
+  }
+  syms <- all.names(uni_all[[1L]])
+  expect_true("res_df" %in% syms)
+  expect_false("sig_g" %in% syms)
+  # And the significant set must be unioned INTO the universe, as the app does
+  # (pathway_helpers.R:164): a background excluding the query is an arithmetic
+  # impossibility, and clusterProfiler would silently return nothing.
+  uni_ids <- .sc_find_assign("uni_ids")
+  if (!.sc_need(length(uni_ids) >= 1L, "the script must build `uni_ids`")) {
+    return(invisible(NULL))
+  }
+  syms2 <- all.names(uni_ids[[1L]])
+  expect_true("union" %in% syms2)
+  expect_true("uni_all" %in% syms2)
+  expect_true("entrez" %in% syms2)
+})
+
+test_that("EVERY ORA call site in R/ passes a background (no fourth violator)", {
+  # The point of "unified" is that there is ONE rule, so this is an exhaustive
+  # sweep rather than a check of the site that happens to be broken. A test that
+  # only inspects the known offender cannot notice a fifth call site.
+  files <- c("R/core/pathway_helpers.R", "R/bulk/bulk_report_engine.R")
+  for (f in files) {
+    src <- paste(readLines(file.path(ts_project_root(), f), warn = FALSE),
+                 collapse = "\n")
+    calls <- gregexpr("enrichGO\\(|enrichKEGG\\(|enrichPathway\\(", src, perl = TRUE)[[1]]
+    if (calls[1] == -1L) next
+    for (pos in calls) {
+      # The argument list of this one call, up to its closing paren.
+      tail_txt <- substring(src, pos)
+      args <- substr(tail_txt, 1, regexpr("\\)", tail_txt))
+      expect_true(grepl("universe", args, fixed = TRUE),
+                  info = sprintf("%s: an ORA call passes no universe", f))
+    }
+  }
+  # The app side is the single definition: the union of the query into the
+  # universe is done ONCE, in the helper, and not re-implemented per call site.
+  h <- paste(readLines(file.path(ts_project_root(), "R/core/pathway_helpers.R"),
+                       warn = FALSE), collapse = "\n")
+  expect_true(grepl("universe_entrez <- union\\(unique\\(universe_map\\$ENTREZID\\), ids\\)", h))
+  # ...and it reaches all THREE backends. Two of three would leave Reactome on
+  # the old behaviour while GO and KEGG looked unified.
+  expect_equal(length(gregexpr("universe      = universe_entrez", h, fixed = TRUE)[[1]]), 3L)
+})
+
+# =============================================================================
 # STAT-Q2 — lfcSE : présent pour DESeq2, absent (et non-affiché) pour edgeR/limma
 # =============================================================================
 
@@ -244,6 +442,123 @@ test_that("extract_deseq2_contrast really carries a finite lfcSE (not a NULL no-
   expect_true("lfcSE" %in% colnames(res))
   expect_false(is.null(res$lfcSE))
   expect_gt(sum(is.finite(res$lfcSE)), 0)
+})
+
+# =============================================================================
+# PRIORITY 3 — the shrinkage FALLBACK must be loud and flagged
+# =============================================================================
+#
+# The defect, measured on this host. `extract_deseq2_contrast()` used to end its
+# shrinkage block with
+#     }, error = function(e) res)   # fallback silencieux sur le résultat non-shrunk
+# and `apeglm` / `ashr` are NOT INSTALLED here (both are listed in renv.lock, so
+# the lockfile promises a package the library does not have — the 11-error
+# hermeticity gap). The `coef_name %in% avail_coefs` branch, which is the one
+# normally taken for a `~condition` design, asks for `type = "apeglm"`, so on this
+# machine ticking "Shrinkage LFC (apeglm)" ALWAYS degraded to raw LFCs.
+#
+# Nothing said so. The table looked identical, the volcano looked identical, the
+# count of significant genes was identical, and the only difference was that the
+# LFCs were the unshrunk estimates the user had explicitly opted out of.
+#
+# The fix, and the decision inside it: the availability gate does NOT substitute
+# `type = "normal"`. DESeq2's normal shrinkage needs no extra package, so
+# substituting it would make the tick box appear to work — but the UI says
+# "apeglm", and silently swapping the estimator is the same class of dishonesty
+# as the silent fallback itself. So: no package, no substitution, a warning that
+# names the package, and `shrunk = FALSE`.
+
+test_that("the returned table ALWAYS carries a `shrunk` flag", {
+  dds <- .toy_dds()
+  for (sh in c(TRUE, FALSE)) {
+    res <- withCallingHandlers(
+      extract_deseq2_contrast(dds, "condition", "KO", "WT", shrink = sh),
+      warning = function(w) invokeRestart("muffleWarning"))
+    # A flag that is absent is worse than one that is FALSE: `is.null()` reads as
+    # "no information", which is exactly the state the old code was in.
+    expect_false(is.null(attr(res, "shrunk")))
+    expect_length(attr(res, "shrunk"), 1L)
+    expect_true(is.logical(attr(res, "shrunk")))
+    expect_false(is.na(attr(res, "shrunk")))
+  }
+})
+
+test_that("an UNSHRUNK result WARNS — a silent fallback is the defect itself", {
+  # THE load-bearing assertion, and deliberately host-independent: whatever this
+  # machine has installed, `shrunk == FALSE` must never arrive without a warning.
+  # A test that asserted "apeglm is missing here" would pass on this host and be
+  # vacuous on a host where it is installed.
+  dds <- .toy_dds()
+  seen <- character(0)
+  res <- withCallingHandlers(
+    extract_deseq2_contrast(dds, "condition", "KO", "WT", shrink = TRUE),
+    warning = function(w) { seen <<- c(seen, conditionMessage(w)); invokeRestart("muffleWarning") })
+  if (isTRUE(attr(res, "shrunk"))) {
+    # Shrinkage really happened, so no warning is owed.
+    expect_length(seen, 0L)
+  } else {
+    expect_gte(length(seen), 1L)
+    # And the warning must be ACTIONABLE: it has to name the package to install,
+    # otherwise the user is told something broke without being told what to do.
+    expect_true(any(grepl("apeglm|ashr|apeglm", seen)))
+    expect_match(paste(seen, collapse = " "), "shrink", ignore.case = TRUE)
+  }
+})
+
+test_that("opting OUT (shrink = FALSE) sets shrunk = FALSE and stays quiet", {
+  # The user un-ticking the box is not a failure, so a warning there would be
+  # noise on every edgeR/limma-style re-run. The flag still has to be set: FALSE
+  # for a reason nobody asked about is a different statement from FALSE because
+  # nobody asked.
+  dds <- .toy_dds()
+  seen <- character(0)
+  res <- withCallingHandlers(
+    extract_deseq2_contrast(dds, "condition", "KO", "WT", shrink = FALSE),
+    warning = function(w) { seen <<- c(seen, conditionMessage(w)); invokeRestart("muffleWarning") })
+  expect_identical(attr(res, "shrunk"), FALSE)
+  expect_length(seen, 0L)
+})
+
+test_that("the availability gate is REAL, and no site falls back silently", {
+  # `apeglm` is an OPTIONAL dependency and is documented as one. The gate has to
+  # be a real availability test, not a comment: a first draft simply tried
+  # lfcShrink and caught the error, which is the behaviour being replaced.
+  src <- paste(readLines(file.path(ts_project_root(), "R/bulk/bulk_helpers.R"),
+                         warn = FALSE), collapse = "\n")
+  expect_true(grepl('requireNamespace("apeglm"', src, fixed = TRUE))
+  # The old one-liner is gone: a bare `error = function(e) res` on the shrink
+  # block is the exact shape of the defect.
+  expect_false(grepl("error = function(e) res)", src, fixed = TRUE))
+  # ...and the fallback still returns, because an unshrunk table plus a warning is
+  # the correct outcome; only the SILENCE was wrong.
+  expect_true(grepl("shrunk", src, fixed = TRUE))
+})
+
+test_that("the GENERATED script has the same loud fallback at all THREE sites", {
+  # The exported script had the same defect twice (bulk_report_engine.R: the main
+  # contrast and the pairwise loop), each with `error = function(e) <unshrunk>` and
+  # no warning. Fixing the app and leaving the script silent would reproduce the
+  # "two behaviours, one name" split that priority 2 just closed for the
+  # enrichment background.
+  #
+  # The main contrast is the WORSE of the two: it calls `type = "apeglm"`
+  # unconditionally, with no `normal` branch at all, so on a host without apeglm
+  # the exported script can only ever degrade.
+  txt <- bulk_r_script_text(
+    n_genes = 100, n_samp = 6, lfc = 1, padj = 0.05,
+    contrast_name = "KO_vs_WT", condition_col = "condition",
+    group_target = "KO", group_ref = "WT",
+    palette_colors = c(Up = "#E74C3C", Down = "#2980B9", NS = "#BDC3C7"),
+    pathway_mode = "ora", padj_method = "holm", pathway_padj_method = "BY")
+  n_shrink <- length(gregexpr("lfcShrink\\(", txt)[[1]])
+  expect_gte(n_shrink, 1L)
+  if (n_shrink >= 1L) {
+    # Every fallback in the script must warn, and must record the flag.
+    expect_gte(length(gregexpr("shrunk", txt)[[1]]), 1L)
+    expect_match(txt, "warning\\(", perl = TRUE)
+  }
+  # And the script is still valid R.
+  expect_silent(parse(text = txt))
 })
 
 test_that("build_de_results_dt shows lfcSE between Log2FC and PValue when present", {

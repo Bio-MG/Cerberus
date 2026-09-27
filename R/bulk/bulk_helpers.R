@@ -226,29 +226,105 @@ extract_deseq2_contrast <- function(dds, condition_col, group_target, group_ref,
 
 
 
+  shrunk <- FALSE
+
+  shrink_method <- NA_character_
+
+  shrink_reason <- NA_character_
+
+  shrink_error  <- NULL
+
   if (shrink) {
 
     coef_name    <- paste0(condition_col, "_", group_target, "_vs_", group_ref)
 
     avail_coefs  <- DESeq2::resultsNames(dds)
 
-    res <- tryCatch({
+    use_coef     <- coef_name %in% avail_coefs
 
-      if (coef_name %in% avail_coefs) {
+    shrink_method <- if (use_coef) "apeglm" else "normal"
 
-        DESeq2::lfcShrink(dds, coef = coef_name, res = res, type = "apeglm", quiet = TRUE)
+    # ── Le shrinker est une DÉPENDANCE OPTIONNELLE ─────────────────────────
+    # `apeglm` n'est PAS requis par DESeq2 : il est SUGGÉRÉ, donc absent d'une
+    # installation minimale. MESURÉ sur cet hôte : `apeglm` et `ashr` ne sont PAS
+    # installés (alors qu'ils sont listés dans renv.lock — l'écart d'herméticité
+    # connu). La branche `coef_name %in% avail_coefs`, celle normalmente prise
+    # pour un design `~condition`, demande `type = "apeglm"` : sans le paquet,
+    # elle échouait et retombait SILENCIEUSEMENT sur le résultat non-shrunk.
+    #
+    # ⚠️ PAS DE SUBSTITUTION par `type = "normal"`. Le shrinkage "normal" de
+    # DESeq2 ne demande aucun paquet, donc l'utiliser ici ferait MARCHER la case
+    # à cocher... en changeant l'estimateur que l'utilisateur a demandé. L'UI
+    # annonce « apeglm » ; substituer en silence est exactement la même
+    # malhonnêteté que le repli silencieux. Donc : pas de paquet, pas de
+    # substitution, un AVERTISSEMENT nomme le paquet, et `shrunk = FALSE`.
+    if (use_coef && !requireNamespace("apeglm", quietly = TRUE)) {
+
+      shrink_reason <- sprintf(paste0("le paquet optionnel 'apeglm' n'est pas installe : ",
+
+                                       "les log2FoldChange affiches sont ceux de results(), ",
+
+                                       "NON retrecis. Installez-le avec ",
+
+                                       "BiocManager::install('apeglm'), ou decochez 'Shrinkage LFC'."))
+
+    } else {
+
+      out <- tryCatch({
+
+        if (use_coef) {
+
+          DESeq2::lfcShrink(dds, coef = coef_name, res = res, type = "apeglm", quiet = TRUE)
+
+        } else {
+
+          DESeq2::lfcShrink(dds, contrast = contrast_vec, res = res, type = "normal", quiet = TRUE)
+
+        }
+
+      }, error = function(e) { shrink_error <<- e; NULL })
+
+      if (!is.null(out)) {
+
+        res <- out
+
+        shrunk <- TRUE
 
       } else {
 
-        DESeq2::lfcShrink(dds, contrast = contrast_vec, res = res, type = "normal", quiet = TRUE)
+        shrink_reason <- sprintf(paste0("le shrinkage '%s' a echoue : ",
+
+                                         "les log2FoldChange affiches sont ceux de results(), ",
+
+                                         "NON retrecis. Motif : %s"),
+
+                                 shrink_method, conditionMessage(shrink_error %||% "erreur inconnue"))
 
       }
 
-    }, error = function(e) res)  # fallback silencieux sur le résultat non-shrunk
+    }
 
   }
 
+  # ⚠️ L'AVERTISSEMENT EST LA CORRECTION. Le tableau reste renvoyé — un resultat
 
+  # non-retreci plus un avertissement est le bon resultat ; seul le SILENCE etait
+
+  # faux. `shrunk` est un ATTRIBUT, pas une colonne : une colonne par ligne
+
+  # mentirait (un seul appel, un seul appel possible) et fuirait dans write.csv().
+
+  if (shrink && !shrunk) {
+
+    warning(sprintf("Shrinkage LFC non applique : %s", shrink_reason), call. = FALSE)
+
+  }
+
+  attr(res, "shrunk")         <- shrunk
+
+  attr(res, "shrunk_method")  <- if (shrunk) shrink_method else NA_character_
+
+  attr(res, "shrunk_reason")  <- if (shrunk) NA_character_ else shrink_reason
 
   out <- as.data.frame(res)
 
@@ -257,6 +333,20 @@ extract_deseq2_contrast <- function(dds, condition_col, group_target, group_ref,
   out <- out[order(out$padj), ]
 
   rownames(out) <- NULL
+
+  # ⚠️ Les attributs sont reportes sur l'objet RENVOYE, pas poses sur `res` :
+
+  # `as.data.frame()` ne les propage pas. Les poser sur `res` donnerait un tableau
+
+  # corrige mais un drapeau absent — c'est-à-dire exactement le défaut que ce
+
+  # lot corrige, reintroduit trois lignes plus bas.
+
+  attr(out, "shrunk")        <- shrunk
+
+  attr(out, "shrunk_method") <- if (shrunk) shrink_method else NA_character_
+
+  attr(out, "shrunk_reason") <- if (shrunk) NA_character_ else shrink_reason
 
   out
 

@@ -132,16 +132,23 @@ test_that("the bound buttons are exactly the ones the spec names", {
   # Grown to NINE on 2026-09-25: the SC auto-pipeline, SC annotation, and SC
   # marker actions. Grown to TEN on 2026-09-25 (Phase C): the Bulk signature
   # scoring action. Grown to ELEVEN on 2026-09-25 (Phase D): Bulk profile
-  # clustering, whose one undeclared parameter is resolved by rule. The set
-  # remains closed and explicit.
+  # clustering, whose one undeclared parameter is resolved by rule. Grown to
+  # FOURTEEN on 2026-09-25 (Phase E): Bulk PCSF sub-network (no undeclared
+  # parameter at all), SC enrichment (a declared PREREQUISITE, not a rule) and
+  # Spatial local hotspots (a second rule-resolved parameter). Grown to FIFTEEN
+  # on 2026-09-26 (Phase F): the Spatial import confirm, the only new id that is
+  # a REAL DOM button again — it is the entry point of the third modality's
+  # chain, and it is the only way a session a HUMAN populated through the native
+  # folder picker becomes drivable. The set remains closed and explicit.
   expect_setequal(
     TS_DRIVE_BUTTONS,
-    c("import_bulk-btn_load", "bulk-de-run_de",
+    c("import_bulk-btn_load", "import_spatial-btn_import", "bulk-de-run_de",
       "bulk-pathways-run_pathway", "bulk-pathways-run_scores",
       "bulk-filter-run_filter_norm", "bulk-signatures-run_signatures",
-      "bulk-pattern-run_pattern", "spatial-pipeline-btn_run_all",
+      "bulk-pattern-run_pattern", "bulk-network-run_network",
+      "spatial-pipeline-btn_run_all", "spatial-qc-btn_hotspots",
       "sc-pipeline-run_auto_pipeline", "sc-annotation-run_annot",
-      "sc-markers-run_markers")
+      "sc-markers-run_markers", "sc-pathways-run_pathway")
   )
   # Every button must be in the allowlist with kind = "button", otherwise
   # run_pipeline would accept an id the injector cannot classify.
@@ -150,32 +157,57 @@ test_that("the bound buttons are exactly the ones the spec names", {
   }
 })
 
-test_that("Spatial drive exposure is exactly one owned pipeline button", {
-  button <- "spatial-pipeline-btn_run_all"
-  expect_true("spatial_pipeline" %in% TS_DRIVE_MODULES)
-  expect_true(ts_drive_allowlisted(button))
-  expect_identical(TS_DRIVE_ALLOWLIST[[button]]$kind, "button")
-  expect_identical(TS_DRIVE_ALLOWLIST[[button]]$module, "spatial_pipeline")
-  expect_identical(ts_drive_module_of(button), "spatial_pipeline")
-  expect_identical(ts_drive_button_module(button), "spatial_pipeline")
-  spatial_ids <- names(TS_DRIVE_ALLOWLIST)[
-    grepl("^(spatial|import_spatial)-", names(TS_DRIVE_ALLOWLIST))
-  ]
-  expect_identical(spatial_ids, button)
-})
-
-test_that("SC drive exposure is exactly three owned action buttons", {
-  buttons <- c("sc-pipeline-run_auto_pipeline", "sc-annotation-run_annot",
-               "sc-markers-run_markers")
-  modules <- c("sc_pipeline", "sc_annotation", "sc_markers")
+test_that("Spatial drive exposure is exactly THREE owned buttons", {
+  # TWO on 2026-09-25 (Phase E). THREE on 2026-09-26 (Phase F), when the Spatial
+  # import confirm was added — the entry point of the modality's chain, and the
+  # FIRST change to this set that is not a dispatched-counter action.
+  buttons <- c("spatial-pipeline-btn_run_all", "spatial-qc-btn_hotspots",
+               "import_spatial-btn_import")
+  modules <- c("spatial_pipeline", "spatial_qc", "import_spatial")
   expect_true(all(modules %in% TS_DRIVE_MODULES))
-  expect_setequal(TS_DRIVE_BUTTONS[startsWith(TS_DRIVE_BUTTONS, "sc-")], buttons)
-  for (button in buttons) {
+  # BOTH namespaces, not just `spatial-`: the Spatial import confirm lives under
+  # `import_spatial-` (its module is a top-level app.R module, so its ids carry no
+  # module prefix of their own — `mod_import_spatial_ui("import_spatial")`).
+  # Filtering on `spatial-` alone would have let a fourth `import_spatial-` id in
+  # unnoticed, which is exactly the silence the closed set exists to prevent.
+  expect_setequal(
+    TS_DRIVE_BUTTONS[grepl("^(spatial|import_spatial)-", TS_DRIVE_BUTTONS)],
+    buttons)
+  for (i in seq_along(buttons)) {
+    button <- buttons[[i]]
     expect_true(button %in% TS_DRIVE_BUTTONS)
     expect_true(ts_drive_allowlisted(button))
     expect_identical(TS_DRIVE_ALLOWLIST[[button]]$kind, "button")
-    expect_identical(ts_drive_module_of(button), modules[[match(button, buttons)]])
-    expect_identical(ts_drive_button_module(button), modules[[match(button, buttons)]])
+    expect_identical(ts_drive_module_of(button), modules[[i]])
+    expect_identical(ts_drive_button_module(button), modules[[i]])
+  }
+  spatial_ids <- names(TS_DRIVE_ALLOWLIST)[
+    grepl("^(spatial|import_spatial)-", names(TS_DRIVE_ALLOWLIST))
+  ]
+  expect_setequal(spatial_ids, buttons)
+  # A LYING module field buys no extra spatial key: the prefix alone refuses it.
+  liar <- list("spatial-qc-btn_cluster" = list(kind = "button", module = "spatial_pipeline"))
+  expect_true(any(grepl("out of scope", ts_drive_allowlist_problems(liar, character(0)))))
+  # And each declared id must declare ITS OWN module.
+  mixed <- setNames(list(list(kind = "button", module = "spatial_pipeline")),
+                    "spatial-qc-btn_hotspots")
+  expect_true(any(grepl("must declare module",
+                        ts_drive_allowlist_problems(mixed, character(0)))))
+})
+
+test_that("SC drive exposure is exactly four owned action buttons", {
+  buttons <- c("sc-pipeline-run_auto_pipeline", "sc-annotation-run_annot",
+               "sc-markers-run_markers", "sc-pathways-run_pathway")
+  modules <- c("sc_pipeline", "sc_annotation", "sc_markers", "sc_pathways")
+  expect_true(all(modules %in% TS_DRIVE_MODULES))
+  expect_setequal(TS_DRIVE_BUTTONS[startsWith(TS_DRIVE_BUTTONS, "sc-")], buttons)
+  for (i in seq_along(buttons)) {
+    button <- buttons[[i]]
+    expect_true(button %in% TS_DRIVE_BUTTONS)
+    expect_true(ts_drive_allowlisted(button))
+    expect_identical(TS_DRIVE_ALLOWLIST[[button]]$kind, "button")
+    expect_identical(ts_drive_module_of(button), modules[[i]])
+    expect_identical(ts_drive_button_module(button), modules[[i]])
   }
   sc_ids <- names(TS_DRIVE_ALLOWLIST)[startsWith(names(TS_DRIVE_ALLOWLIST), "sc-")]
   expect_setequal(sc_ids, buttons)
@@ -206,6 +238,14 @@ test_that("every other sc- key stays out of scope, and module 'sc' stays refused
 })
 
 test_that("Spatial child, pipeline-input, import, and daemon ids stay private", {
+  # `import_spatial-btn_import` LEFT this list on 2026-09-26 (Phase F), when the
+  # Spatial import confirm became drivable. The two `import_spatial-` ids that
+  # remain here are the ones that must stay private FOREVER, and the reason is
+  # spec S5 rather than taste: both are dataset INPUTS. `dir_select` is a
+  # `shinyDirButton` with no `update*` equivalent, and `shared_ref_file` is a
+  # `fileInput` — a path may only ever reach this module as `import_file` DATA
+  # (already confined to the allowlisted roots by `ts_drive_validate_import_dir`),
+  # never as an injected widget value.
   forbidden <- c(
     "spatial-pipeline-qc_min_count", "spatial-pipeline-compute_umap",
     "spatial-qc-btn_apply_qc", "spatial-cluster-btn_cluster",
@@ -213,13 +253,24 @@ test_that("Spatial child, pipeline-input, import, and daemon ids stay private", 
     "spatial-multi-btn_integrate", "spatial-niche-btn_niches",
     "spatial-niche-btn_enrichment", "spatial-niche-btn_ripley",
     "spatial-export-dl_bundle", "spatial-report-dl_report",
-    "spatial-btn_reset_daemons", "import_spatial-btn_import",
+    "spatial-btn_reset_daemons",
     "import_spatial-shared_ref_file", "import_spatial-dir_select"
   )
   for (id in forbidden) {
     expect_false(ts_drive_allowlisted(id), info = id)
     expect_null(ts_drive_allowlist_get(id), info = id)
   }
+  # The pin is not vacuous: the one `import_spatial-` id that IS exposed is
+  # exposed as a button, so a reader cannot conclude the namespace went dark.
+  expect_true(ts_drive_allowlisted("import_spatial-btn_import"))
+  expect_identical(TS_DRIVE_ALLOWLIST[["import_spatial-btn_import"]]$kind, "button")
+  # And the set of EXPOSED `import_spatial-` keys is exactly that one — a second
+  # one would be a silent widening of a namespace that has exactly one legitimate
+  # member.
+  expect_setequal(
+    names(TS_DRIVE_ALLOWLIST)[startsWith(names(TS_DRIVE_ALLOWLIST), "import_spatial-")],
+    "import_spatial-btn_import"
+  )
 })
 
 test_that("ts_drive_module_of prefers the declared module, and falls back on the LAST dash", {
