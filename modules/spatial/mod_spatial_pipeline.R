@@ -699,8 +699,14 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
           .fail_stage(8, paste("Etape 8/9 : Hotspots echoues --", detail))
           return()
         }
-        shared_rv$hotspot_result <- res
-        shared_rv$hotspot_params <- list(source = "qc", metric = metric, k_neighbors = input$k_neighbors_hotspot %||% 30)
+        # S1.5 : l'unique écrivain des slots hotspot est le store partagé
+        # (garde test-mod-spatial-qc-drive.R — la paire inlinée du pipeline
+        # était le refactor S1.5 committé à moitié sur main).
+        spatial_hotspot_store(
+          res,
+          list(source = "qc", metric = metric,
+               k_neighbors = input$k_neighbors_hotspot %||% 30),
+          shared_rv)
         write_mirai_log(log_file, "Etape 8/9 : Hotspots termines.", 8, TOTAL_STEPS)
       } else {
         write_mirai_log(log_file, "Etape 8/9 : Hotspots ignores (non coche).", 8, TOTAL_STEPS)

@@ -48,7 +48,9 @@ la QC par dataset : median_nFeature_RNA, median_nCount_RNA, median_percent_mt
 ## 6. Câblage (producteurs + consommation)
 
 - Producteur "import" : `modules/import/mod_import_sc.R`
-  (`.register_sc_multi_dataset`, 4 points d'appel, échec = alerte sans stop).
+  (`.register_sc_multi_dataset`, 5 points d'appel depuis le merge main —
+  4 chemins humains (picker .rda + options A/B/C) + le chemin drive
+  `import_file` du module import_sc ; échec = alerte sans stop).
 - Producteur "pipeline_save" : `modules/sc/mod_sc_datasets.R`
   (save / summary / delete / **activate**).
 - **Activation (amendé 2026-09-27, roadmap 4.1)** : le bouton « Activer ce

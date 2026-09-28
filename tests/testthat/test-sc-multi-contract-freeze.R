@@ -106,10 +106,12 @@ test_that("mod_import_sc.R registers via the pure API (producer = import)", {
   expect_match(imp, "multi_label", fixed = TRUE)
   expect_match(imp, "multi_relation", fixed = TRUE)
   expect_match(imp, ".register_sc_multi_dataset", fixed = TRUE)
-  # Exactement 4 points d'appel (picker .rda + options A/B/C).
+  # Exactement 5 points d'appel : picker .rda + options A/B/C (4 chemins
+  # humains) + le chemin drive `import_file` du module import_sc (merge main,
+  # docs/mcp_propagation.md §import_sc) — même contrat d'échec non bloquant.
   calls <- length(gregexpr(".register_sc_multi_dataset(", imp,
                            fixed = TRUE)[[1L]])
-  expect_identical(calls, 4L)
+  expect_identical(calls, 5L)
   expect_match(imp, 'producer = "import"', fixed = TRUE)
   expect_match(imp, 'inherits(res, "sc_multi_error")', fixed = TRUE)
   # L'échec d'enregistrement est une ALERTE, pas une interruption : le corps
