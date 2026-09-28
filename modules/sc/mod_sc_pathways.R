@@ -6,6 +6,104 @@
 #   of needing a manual i18n$t("Lancer Enrichissement") click (same class of bug as
 #   mod_sc_markers.R / mod_sc_corr.R).
 
+# ── Drive (docs/mcp_propagation.md §1.6/§9) ──────────────────────────────────
+.SC_PATHWAYS_DRIVE_MODULE <- "sc_pathways"
+.SC_PATHWAYS_DRIVE_BUTTON <- "sc-pathways-run_pathway"
+
+# Paramètres FIGÉS (aucun paramètre non déclaré) : valeurs par défaut de l'UI.
+.SC_PATHWAYS_DRIVE_INPUTS <- function() {
+  list(source = "markers", db = "GOBP", org = "human", pval = 0.05)
+}
+
+#' Readiness, in the same order as the human path: an SC object, then the
+#' marker table — the DECLARED prerequisite of the frozen "markers" source.
+#' Returning the reason (not FALSE) is what lets the poller report `not_ready`
+#' instead of dispatching a job that must fail.
+.sc_pathways_drive_ready <- function(shared_rv, global_data) {
+  if (is.null(tryCatch(shiny::isolate(global_data$sc_obj), error = function(e) NULL))) {
+    return("no SC object loaded (global_data$sc_obj is NULL)")
+  }
+  md <- tryCatch(shiny::isolate(shared_rv$markers_data), error = function(e) NULL)
+  if (is.null(md) || !is.data.frame(md) || !nrow(md)) {
+    return("Step 4 has not produced a marker table (shared_rv$markers_data is NULL)")
+  }
+  TRUE
+}
+
+#' State probe. `n_results` is the number of ENRICHED pathways of the last
+#' successful run (measured: 414 pathways on the live Phase E run, §9).
+.sc_pathways_drive_state <- function(shared_rv, global_data, run_state,
+                                     last_step = NULL) {
+  job <- tryCatch(ts_drive_job_state(), error = function(e) NULL)
+  pending <- tryCatch(ts_drive_job_pending(), error = function(e) NULL)
+  ready <- isTRUE(.sc_pathways_drive_ready(shared_rv, global_data))
+  obj <- tryCatch(shiny::isolate(global_data$sc_obj), error = function(e) NULL)
+  res <- tryCatch(shiny::isolate(shared_rv$pathway_results), error = function(e) NULL)
+  n_results <- if (is.data.frame(res)) nrow(res) else 0L
+  current <- if (is.function(run_state)) {
+    shiny::isolate(run_state())
+  } else {
+    as.character(run_state)
+  }
+  if (length(current) != 1L || is.na(current)) current <- "idle"
+  step <- if (is.null(last_step)) "skipped" else as.character(last_step)
+  if (length(step) != 1L || is.na(step) || !step %in% c("ran", "skipped", "error")) {
+    step <- "error"
+  }
+  list(
+    module = .SC_PATHWAYS_DRIVE_MODULE,
+    action = "run_pathway",
+    status = as.character(if (ready) current else "not_ready"),
+    elapsed_s = if (is.null(pending)) 0 else as.numeric(pending$elapsed_s),
+    seq = if (is.null(job)) 0L else as.integer(job$seq),
+    n_results = as.integer(n_results),
+    has_data = !is.null(obj),
+    ready = ready,
+    steps = list(pathways = step)
+  )
+}
+
+#' Drive run: the SAME steps in the SAME order as the human observer, on the
+#' FROZEN inputs (frozen source = markers), then the SAME two writes
+#' (`shared_rv$pathway_results` / `shared_rv$pathway_db`). The record comes
+#' back so the module-scoped observer can refresh its local table too.
+.sc_pathways_run_drive <- function(global_data, shared_rv, close_job) {
+  inp <- .SC_PATHWAYS_DRIVE_INPUTS()
+  res <- tryCatch({
+    md <- shiny::isolate(shared_rv$markers_data)
+    if (is.null(md) || !is.data.frame(md) || !nrow(md)) {
+      stop(errorCondition("no marker table — run Step 4 first",
+                          class = "sc_pathways_drive_error"))
+    }
+    genes_to_test <- head(md$gene, 100)
+    genes_to_test <- unique(trimws(genes_to_test[nchar(trimws(genes_to_test)) > 0]))
+    genes_to_test <- .remap_if_ensg(genes_to_test, inp$org, notify_fn = NULL)
+    genes_to_test <- unique(genes_to_test[nchar(genes_to_test) > 0])
+    if (length(genes_to_test) < 10) {
+      stop(errorCondition(sprintf("too few genes (%d); minimum 10", length(genes_to_test)),
+                          class = "sc_pathways_drive_error"))
+    }
+    out <- run_pathway_enrichment(
+      genes = genes_to_test, organism = inp$org, database = inp$db,
+      pval_cutoff = inp$pval,
+      universe = rownames(shiny::isolate(global_data$sc_obj)))
+    if (is.data.frame(out) && nrow(out) == 0) {
+      stop(errorCondition("no enriched pathway", class = "sc_pathways_drive_error"))
+    }
+    out
+  }, error = function(e) e)
+  if (inherits(res, "condition")) {
+    close_job("error", conditionMessage(res))
+    return(list(status = "error", n_results = 0L, step = "error", record = NULL))
+  }
+  shiny::isolate(shared_rv$pathway_results <- res)
+  shiny::isolate(shared_rv$pathway_db <- inp$db)
+  n_results <- nrow(res)
+  close_job("done", NULL)
+  list(status = if (n_results == 0L) "empty" else "done",
+       n_results = as.integer(n_results), step = "ran", record = res)
+}
+
 # ── Helper: remap ENSG IDs → Symbols if detected ─────────────────────────────
 .remap_if_ensg <- function(genes, organism = "human", notify_fn = NULL) {
   id_type <- tryCatch(detect_gene_id_type(genes), error = function(e) "unknown")
@@ -183,7 +281,9 @@ mod_sc_pathways_server <- function(id, global_data, shared_rv) {
                          type="warning"); return()
       }
 
-      p <- shiny::Progress$new(); on.exit(p$close())
+      # add = TRUE : le module DÉCLARE un job drive — un on.exit() nu
+      # effacerait la déclaration (garde test-drive-watcher.R §additive).
+      p <- shiny::Progress$new(); on.exit(p$close(), add = TRUE)
       p$set(message=.tr("Enrichissement..."), value=0.3)
 
       tryCatch({
@@ -205,6 +305,65 @@ mod_sc_pathways_server <- function(id, global_data, shared_rv) {
         pathway_rv(NULL)
       })
     })
+
+    # ── Drive (docs/mcp_propagation.md §1.6/§9) : « sc-pathways-run_pathway » ─
+    # La source de gènes est un PRÉREQUISITE DÉCLARÉ (la table des marqueurs,
+    # portée par la readiness — jamais un paramètre) ; tout le reste tourne sur
+    # les valeurs PAR DÉFAUT de l'UI, figées ICI une seule fois (GOBP : la seule
+    # base sans package optionnel au-delà de clusterProfiler + org.* — cf.
+    # R/core/drive_allowlist.R). Le chemin drive appelle les MÊMES fonctions
+    # R/ dans le même ordre que l'observateur humain, puis applique les MÊMES
+    # écritures — zéro ré-implémentation, zéro binding DOM.
+    sc_pathways_drive_counter <- shiny::reactiveVal(0L)
+    sc_pathways_drive_run_state <- shiny::reactiveVal("idle")
+    sc_pathways_drive_last_step <- new.env(parent = emptyenv())
+    sc_pathways_drive_last_step$value <- NULL
+    sc_pathways_drive_job <- new.env(parent = emptyenv())
+    sc_pathways_drive_job$id <- NULL
+
+    sc_pathways_drive_ready <- function() {
+      .sc_pathways_drive_ready(shared_rv, global_data)
+    }
+    sc_pathways_drive_state <- function() {
+      .sc_pathways_drive_state(shared_rv, global_data,
+                               sc_pathways_drive_run_state,
+                               sc_pathways_drive_last_step$value)
+    }
+
+    close_sc_pathways_drive_job <- function(status, error = NULL) {
+      if (is.null(sc_pathways_drive_job$id)) return(invisible(FALSE))
+      job <- tryCatch(ts_drive_job_state(), error = function(e) NULL)
+      if (is.null(job) || !identical(job$job_id, sc_pathways_drive_job$id)) {
+        return(invisible(FALSE))
+      }
+      ts_drive_job_finish(.SC_PATHWAYS_DRIVE_BUTTON, status = status,
+                          error = error)
+      sc_pathways_drive_job$id <- NULL
+      invisible(TRUE)
+    }
+
+    # 🔴 THE BUTTON ID IS A LITERAL HERE, not the constant:
+    # test-drive-watcher.R greps every TS_DRIVE_BUTTONS entry as a quoted
+    # literal next to a `ts_drive_publish_token(` call, with a readiness guard.
+    ts_drive_publish_token(global_data, "sc-pathways-run_pathway",
+      sc_pathways_drive_counter, ready = sc_pathways_drive_ready,
+      state = sc_pathways_drive_state, long = TRUE)
+
+    observeEvent(sc_pathways_drive_counter(), {
+      if (!isTRUE(sc_pathways_drive_ready())) return()
+      sc_pathways_drive_job$id <- NULL
+      job <- tryCatch(ts_drive_job_state(), error = function(e) NULL)
+      if (!is.null(job) && isTRUE(ts_drive_job_busy()) &&
+          identical(job$button, .SC_PATHWAYS_DRIVE_BUTTON)) {
+        sc_pathways_drive_job$id <- job$job_id
+      }
+      sc_pathways_drive_run_state("running")
+      res <- .sc_pathways_run_drive(global_data, shared_rv,
+                                    close_sc_pathways_drive_job)
+      sc_pathways_drive_last_step$value <- res$step
+      sc_pathways_drive_run_state(res$status)
+      if (!is.null(res$record)) pathway_rv(res$record)
+    }, ignoreInit = TRUE)
 
     output$pathway_status <- renderText({
       if (is.null(pathway_rv())) .tr("Aucune analyse en cours")
