@@ -3897,3 +3897,178 @@ test_that("a nav plan WITH a fourth level navigates it after the three", {
                    sprintf("%s=%s", TS_DRIVE_SPATIAL_QC_SUB_TABS_ID,
                            TS_DRIVE_SPATIAL_QC_SUB_TAB))
 })
+
+# ---------------------------------------------------------------------------
+# `job.elapsed_s` pendant que le job TOURNE
+# ---------------------------------------------------------------------------
+# 🔴 LE CONTRAT EXISTE, ET IL EST JUSTE CE QUI MANQUE. `ts_drive_job_view()`
+# publie deja `elapsed_s` — mais SEULEMENT `if (!is.null(pending))`, c'est-a-dire
+# une fois le job TERMINE. Pendant la fenetre qui compte, le champ vaut `null`.
+#
+# Measured live (2026-09-27) : pendant un job `long`, le travail bloque la boucle
+# reactive, `ready.json` cesse d'etre reecrit et `ts_drive_ready_fresh()` passe
+# FALSE sur 5 echantillons consecutifs (age max 19,5 s > seuil 15 s) — pendant que
+# `result.json` porte `running`. La regle operationnelle ecrite est alors « ne
+# JAMAIS conclure "session morte" de `ready_fresh() == FALSE` pendant qu'un job
+# est en vol ». Mais avec `elapsed_s` a `null`, l'agent n'a AUCUN moyen de
+# distinguer « 14 min dans un DESeq2 sur 17 925 genes, normal » de « bloque » :
+# la regle lui interdit de conclure, sans lui donner de quoi conclure.
+#
+# Le champ existe donc deja sur le fil. Ce lot ne l'AJOUTE pas : il arrete de le
+# retenir pendant que la reponse est utile.
+
+test_that("ts_drive_job_elapsed : un scalaire borne, jamais negatif, jamais absent", {
+  # 🔴 LA FONCTION N'EXISTE PAS ENCORE. Un appel direct d'un symbole absent lève
+  # « could not find function » et le fichier sort en ERROR — or un rouge qui
+  # PLANTE dit « le test est cassé », pas « la fonctionnalité manque »
+  # (CONVENTIONS.md). Le garde transforme l'absence en un FAIL net, et laisse
+  # toutes les assertions s'executer des que la fonction existe.
+  .el <- function(started, now = Sys.time()) {
+    if (!exists("ts_drive_job_elapsed", mode = "function")) return(NULL)
+    ts_drive_job_elapsed(started, now = now)
+  }
+  # 🔴 LE CHEMIN DE PRODUCTION, D'ABORD. Une suite qui ne passe qu'un double nu
+  # ne voit jamais ce cas : `now` vaut `Sys.time()` par defaut, un `POSIXct`, et
+  # `is.numeric(Sys.time())` est FAUX (un double classe). Un garde ecrit
+  # `!is.numeric(now)` renvoyait donc NULL sur chaque appel reel tout en laissant
+  # ce test vert — les deux|prenaient des chemins differents. Cet appel n'exerce
+  # pas la fonction injectable, il exerce celle que la production appelle.
+  live <- .el(Sys.time() - 5)
+  expect_true(is.numeric(live) && length(live) == 1L,
+              info = "le chemin par defaut (Sys.time()) doit produire un nombre")
+  if (is.numeric(live) && length(live) == 1L) {
+    expect_gte(live, 4.9)
+    expect_lte(live, 6)
+  }
+  # l'horloge qui recule, sur le chemin reel aussi
+  back_live <- .el(Sys.time() + 60)
+  expect_equal(back_live, 0)
+
+  # Le contrat de la fonction pure. `now` est injectable, donc aucun cas ne
+  # depend d'une horloge reelle — c'est ce qui permet d'ecrire « l'horloge
+  # recule » sans manipuler l'horloge systeme.
+  e <- .el(1000, 1002.5)
+  expect_true(is.numeric(e) && length(e) == 1L)
+  if (!is.numeric(e) || length(e) != 1L) return()
+  expect_equal(e, 2.5)
+
+  # 🔴 UNE HORLOGE QUI RECULE ne donne pas un job negatif. `Sys.time()` peut
+  # reculer (ajustement NTP, changement de fuseau) et un `elapsed_s` negatif est
+  # absurde : il se lirait comme un calcul faux, la ou la seule verite est
+  # « moins d'une seconde ». Zero est la seule reponse honnete.
+  expect_equal(.el(1000, 999), 0)
+
+  # ABSENT reste ABSENT : pas de `started` => pas d'ecoule, et surtout pas un 0
+  # qui se lirait comme « le job vient de demarrer ».
+  expect_null(.el(NULL, 1000))
+  expect_null(.el(NA_real_, 1000))
+  expect_null(.el(numeric(0), 1000))
+  expect_null(.el(c(1, 2), 1000))
+  expect_null(.el("1000", 1000))
+  # et un `now` illisible ne doit pas fabriquer un nombre
+  expect_null(.el(1000, NA))
+  expect_null(.el(1000, Inf))
+  # un `now` de plusieurs elements non plus : sans garde de longueur, un vecteur
+  # donnerait un `e` vectoriel et le fil porterait un tableau la ou il faut un
+  # scalaire
+  expect_null(.el(1000, c(1000, 1001)))
+  expect_null(.el(1000, numeric(0)))
+  # et le `started` POSIXct est ACCEPTE (voir le contrat de la fonction) : c'est
+  # un epoch legitime, pas un enregistrement corrompu. Ici il est posterieur a
+  # `now = 1000`, donc l'ecoule est borne a zero — ce qui prouve l'ACCUEIL, pas
+  # un refus : un refus aurait rendu NULL.
+  posix <- .el(Sys.time(), 1000)
+  expect_true(is.numeric(posix) && length(posix) == 1L)
+  if (is.numeric(posix) && length(posix) == 1L) expect_equal(posix, 0)
+
+  # arrondi au dixieme : le fil porte un scalaire borne, pas une precision qui
+  # promet le microseconde
+  expect_equal(.el(1000, 1000.123456), 0.1)
+})
+
+test_that("`job.elapsed_s` est PUBLIE pendant que le job tourne", {
+  .drv_local_root()
+  old <- options(ts.drive.hb_interval = 0.001)
+  on.exit(options(old), add = TRUE)
+  d <- ts_drive_attach(.drv_fake_session(new.env()), list())
+  .drv_write_arm(d$token)
+  .drv_write_scn(61L, action = "run_pipeline", module = "bulk_de",
+                 session_token = d$token)
+
+  d$on_tick(global_data = list(), effects = .drv_long_effects())
+  job <- ts_drive_job_state()
+  expect_identical(job$status, "running")
+
+  # 🔴 LE ROUGE. Pendant `running`, l'agent lisait `null` et n'avait rien.
+  running <- ts_drive_job_view(job)
+  # 🔴🔴 LA LONGUEUR EST DANS L'ASSERTION, PAS DANS LE GARDE. La mutation E1
+  # (suppression de la branche live) est RESTEE VERTE avec une assertion faible :
+  # `as.numeric(NULL)` vaut `numeric(0)`, `is.numeric(numeric(0))` vaut TRUE, et
+  # le `if (...) return()` placed SUR LIGNE SUIVANTE absorbait le defaut au lieu de
+  # le signaler. Le champ `elapsed_s` passe alors de « absent » a « tableau vide »
+  # et le test le declarait bon. Un garde de sortie rapide est une protection
+  # contre les ERROR, pas une permission de ne pas echouer.
+  expect_true(is.numeric(running$elapsed_s) && length(running$elapsed_s) == 1L,
+              info = "elapsed_s doit etre UN scalaire publie PENDANT que le job tourne")
+  if (!is.numeric(running$elapsed_s) || length(running$elapsed_s) != 1L) return()
+  expect_gte(running$elapsed_s, 0)
+
+  # et il doit GRANDIR : une valeur qui ne bouge pas ne distingue pas un job
+  # qui avance d'un job bloque.
+  Sys.sleep(0.35)
+  later <- ts_drive_job_view(ts_drive_job_state())
+  expect_true(is.numeric(later$elapsed_s) && length(later$elapsed_s) == 1L)
+  if (!is.numeric(later$elapsed_s) || length(later$elapsed_s) != 1L) return()
+  expect_gt(later$elapsed_s, running$elapsed_s)
+
+  expect_true(ts_drive_job_finish("bulk-de-run_de", status = "done",
+                                  job_id = job$job_id, owner_token = d$token))
+  d$on_tick(global_data = list(), effects = .drv_long_effects())
+  # 🔴 LE TERMINAL SE LIT DANS `result.json`, PAS DANS L'ETAT. Le tick publie le
+  # terminal PUIS vide le job, donc `ts_drive_job_state()` vaut NULL apres coup :
+  # une premiere version y lisait le statut et echouait sur NULL, en designant le
+  # test alors que la branche terminale etait deja verte.
+  expect_identical(as.character(ts_drive_read_result()$job$status), "done")
+  expect_false(ts_drive_job_busy())
+})
+
+test_that("la valeur TERMINALE reste celle du producteur, pas une horloge", {
+  # 🔴 REGRESSION, ET ELLE DOIT ETRE VERTE AVANT ET APRES CE LOT. C'est
+  # l'assertion qui interdit a ce lot de changer une valeur deja publiee :
+  # `pending$elapsed_s` fait foi, calculee a la cloture par le producteur du
+  # statut. Si le chemin terminal passait par l'horloge, la valeur publiee
+  # changerait et les agents qui l'ont deja lue deriveraient — une regression
+  # INVISIBLE pour « elapsed_s est-il present ? », qui est la seule question que
+  # poserait une suite ecrite pour le nouveau champ.
+  .drv_local_root()
+  old <- options(ts.drive.hb_interval = 0.001)
+  on.exit(options(old), add = TRUE)
+  d <- ts_drive_attach(.drv_fake_session(new.env()), list())
+  .drv_write_arm(d$token)
+  .drv_write_scn(62L, action = "run_pipeline", module = "bulk_de",
+                 session_token = d$token)
+  d$on_tick(global_data = list(), effects = .drv_long_effects())
+  job <- ts_drive_job_state()
+  expect_true(ts_drive_job_finish("bulk-de-run_de", status = "done",
+                                  job_id = job$job_id, owner_token = d$token))
+  # 🔴 LA VALEUR DU PRODUCTEUR, LUE AVANT LE TICK. Une premiere version la
+  # lisait apres, et obtenait `null` : le tick PUBLIE le terminal puis Vide le
+  # job, donc le cran a `pending` n'existe plus. Le rouge portait alors sur le
+  # test, pas sur la fonctionnalite — exactement la panne qu'un rouge doit
+  # permettre de distinguer.
+  recorded <- as.numeric(ts_drive_job_pending()$elapsed_s)
+  expect_true(is.numeric(recorded) && length(recorded) == 1L)
+  if (!is.numeric(recorded) || length(recorded) != 1L) return()
+  expect_gte(recorded, 0)
+  d$on_tick(global_data = list(), effects = .drv_long_effects())
+  published <- ts_drive_read_result()$job
+  # 🔴 EGALITE AU DIxiEME DU FIL, PAS IDENTITE BIT A BIT. Mesure : le producteur
+  # enregistre 0.0246xx, `result.json` le relit 0.0246 — l'ecart vient de
+  # `jsonlite::toJSON(..., digits = 4)`, le defaut de l'ecrivain (drive_watcher
+  # l.313), PAS de ce lot. Une premiere version exigeait `expect_identical` et
+  # echouait de 2.6e-05 : elle mesurait une propriete que le protocole n'a jamais
+  # promisee, et son echec designait le test, pas le code.
+  expect_equal(as.numeric(published$elapsed_s), round(recorded, 4))
+  expect_identical(as.character(published$status), "done")
+  expect_false(ts_drive_job_busy())
+})

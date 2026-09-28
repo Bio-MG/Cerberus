@@ -2876,9 +2876,80 @@ ts_drive_job_result_status <- function(status) {
   if (status %in% c("timeout", "session_lost")) "error" else status
 }
 
+#' Seconds elapsed since a job started, or `NULL` when that is not knowable.
+#'
+#' @description
+#' `ts_drive_job_view()` has always published `elapsed_s` — but only
+#' `if (!is.null(pending))`, i.e. only once the job had a TERMINAL record. So the
+#' field was `null` for exactly the window where an agent needs it.
+#'
+#' MEASURED live (2026-09-27): while a `long` job runs, the work blocks the
+#' reactive loop, `ready.json` stops being rewritten, and `ready_fresh()` goes
+#' FALSE on 5 consecutive samples (max age 19.5 s against a 15 s threshold) —
+#' while `result.json` carries `running`. The written operational rule is then
+#' "never conclude the session is dead from `ready_fresh() == FALSE` while a job
+#' is in flight". With `elapsed_s` null the agent had NO way to tell "14 minutes
+#' into a DESeq2 on 17 925 genes, normal" from "wedged": the rule forbade it to
+#' conclude, and gave it nothing to conclude FROM.
+#'
+#' Three properties this function must hold, each a decision rather than a
+#' convenience:
+#'
+#'   * `NULL` when `started` is unusable — never a fabricated `0`, which would
+#'     read as "the job just began" and is the same NULL-is-not-FALSE property
+#'     the descriptor and the packaging gate needed.
+#'   * A CLOCK THAT WENT BACKWARDS yields `0`, never a negative. `Sys.time()` can
+#'     step back (NTP, a timezone change), and a negative duration is not a fact
+#'     about the job — it is an artefact of the observer, reported as if it were
+#'     the former.
+#'   * Rounded to a tenth of a second: a bounded scalar on the wire, not a
+#'     precision that promises the microsecond.
+#'
+#' @param started Numeric epoch seconds, as stored by `ts_drive_job_begin()`.
+#' @param now Injectable clock, so no test depends on the wall clock.
+#' @return A single non-negative number, or `NULL`.
+#' @noRd
+ts_drive_job_elapsed <- function(started, now = Sys.time()) {
+  # `started` is stored as a plain numeric by `ts_drive_job_begin()`, but a
+  # POSIXct is a legitimate epoch too and refusing it would be a landmine: the
+  # caller would get a bare NULL with no explanation. A CHARACTER epoch, on the
+  # other hand, means a corrupted record, and is refused rather than coerced — an
+  # `as.numeric()` that quietly accepted "1000" would turn corruption into a
+  # plausible number.
+  if (is.null(started) || length(started) != 1L || is.character(started)) {
+    return(NULL)
+  }
+  s <- suppressWarnings(as.numeric(started))
+  if (is.na(s)) return(NULL)
+  # 🔴 `now` DEFAUT À `Sys.time()`, ET `is.numeric(Sys.time())` EST FAUX.
+  # MESURÉ : `class(Sys.time())` = `POSIXct POSIXt` — un double CLASSÉ — et
+  # `is.numeric()` renvoie FALSE pour tout objet classé. Un garde écrit
+  # `!is.numeric(now)` rejetait donc l'horloge de production et renvoyait NULL à
+  # CHAQUE appel, alors que le test unitaire — qui passait un double nu — restait
+  # VERT. Le test et la production prenaient des CHEMINS DIFFÉRENTS, ce qui est
+  # la seule façon dont cela passe inaperçu.
+  # D'où la coercition AVANT la validation : c'est elle qui transforme
+  # l'horloge légitime en nombre nu que le garde sait vérifier.
+  n <- suppressWarnings(as.numeric(now))
+  if (length(n) != 1L || is.na(n)) return(NULL)
+  e <- n - s
+  if (!is.finite(e)) return(NULL)
+  if (e < 0) e <- 0
+  round(e, 1L)
+}
+
 ts_drive_job_view <- function(job) {
   if (is.null(job)) return(NULL)
   pending <- job$pending
+  # 🔴 LIVE, then terminal. `pending$elapsed_s` is the PRODUCER's value, measured
+  # at closure, and stays authoritative — a consumer that has already read the
+  # terminal number must not see it drift. The live branch fills the window
+  # where there is no terminal value yet; it never overrides one.
+  elapsed <- if (!is.null(pending)) {
+    as.numeric(pending$elapsed_s)
+  } else {
+    ts_drive_job_elapsed(job$started)
+  }
   list(
     job_id     = as.character(job$job_id),
     seq        = suppressWarnings(as.numeric(job$seq)),
@@ -2888,7 +2959,7 @@ ts_drive_job_view <- function(job) {
     status     = as.character(job$status),
     started_at = as.character(job$started_at),
     ended_at   = if (is.null(pending)) NULL else as.character(pending$ended_at),
-    elapsed_s  = if (is.null(pending)) NULL else as.numeric(pending$elapsed_s),
+    elapsed_s  = elapsed,
     timeout_s  = if (is.null(job$timeout_s)) NULL else as.numeric(job$timeout_s)
   )
 }
