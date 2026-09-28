@@ -638,7 +638,10 @@ new_entries <- list(
   c("R\u00e9sultats obtenus avec une dispersion impos\u00e9e (edgeR, BCV d\u00e9clar\u00e9) : les p-values ne sont PAS inf\u00e9rentielles.",
     "Results obtained with an imposed dispersion (edgeR, declared BCV): p-values are NOT inferential."),
   c("Mode exploratoire sans r\u00e9plicat",
-    "Exploratory no-replicate mode")
+    "Exploratory no-replicate mode"),
+  # --- STAT-S2 V2 (réseau d'enrichissement interactif) ---
+  c("R\u00e9seau interactif (survol des n\u0153uds)",
+    "Interactive network (hover over nodes)")
 )
 
 fr_existing <- vapply(j$translation, function(x) x$fr %||% "", character(1))

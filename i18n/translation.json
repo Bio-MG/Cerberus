@@ -8889,11 +8889,11 @@
       "fr": "✓ Dataset « %s » supprimé.",
       "en": "✓ Dataset \"%s\" removed."
     },
-        {
+    {
       "fr": "mélange des lots : {b}% → {a}%",
       "en": "batch mixing: {b}% → {a}%"
     },
-{
+    {
       "fr": "Dataset à activer",
       "en": "Dataset to activate"
     },
@@ -10720,6 +10720,10 @@
     {
       "fr": "Aucun resultat de hotspots a exporter.",
       "en": "No hotspot results to export."
+    },
+    {
+      "fr": "Réseau interactif (survol des nœuds)",
+      "en": "Interactive network (hover over nodes)"
     }
   ]
 }

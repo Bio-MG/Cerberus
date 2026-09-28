@@ -87,3 +87,10 @@ TS_DECONV_MAX_CELLS_PER_TYPE <- 500L   # per-type subsample cap in artifact
 # --- Trajectory / velocity ---------------------------------------------------
 TS_TRAJECTORY_K_DEFAULT    <- 15L      # default kNN k for graph pseudotime
 TS_VELOCITY_OVERLAP_MIN    <- 0.80     # min cell overlap fraction (0-1)
+
+# --- STAT-S2 V2 — réseau d'enrichissement INTERACTIF (plotly + igraph) -------
+# Cadrage §2bd.5 #3 : tenue sous 200-300 termes. Le plafond est une GARDE
+# (repli demandé au-delà), pas la valeur par défaut de l'UI (100 au widget).
+TS_PATHWAY_NETWORK_MAX_TERMS     <- 300L  # hard cap de termes dans le réseau
+TS_PATHWAY_NET_MIN_SIM           <- 0.20  # similarité de Jaccard min pour une arête terme–terme (emap)
+TS_PATHWAY_NETWORK_LAYOUT_SEED   <- 42L   # graine figée — disposition Fruchterman-Reingold DÉTERMINISTE
