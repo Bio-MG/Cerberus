@@ -1718,7 +1718,7 @@
     },
     "Hmisc": {
       "Package": "Hmisc",
-      "Version": "5.2-6",
+      "Version": "5.3.0",
       "Source": "Repository",
       "Date": "2026-06-18",
       "Title": "Harrell Miscellaneous",
@@ -1886,7 +1886,7 @@
     },
     "litedown": {
       "Package": "litedown",
-      "Version": "0.10",
+      "Version": "0.11",
       "Source": "Repository",
       "Type": "Package",
       "Title": "A Lightweight Version of R Markdown",
@@ -4360,7 +4360,7 @@
     },
     "RcppArmadillo": {
       "Package": "RcppArmadillo",
-      "Version": "15.4.2-1",
+      "Version": "15.6.0.1",
       "Source": "Repository",
       "Type": "Package",
       "Title": "'Rcpp' Integration for the 'Armadillo' Templated Linear Algebra Library",
@@ -4465,7 +4465,7 @@
     },
     "RcppParallel": {
       "Package": "RcppParallel",
-      "Version": "6.2.0",
+      "Version": "6.2.1",
       "Source": "Repository",
       "Type": "Package",
       "Title": "Parallel Programming Tools for 'Rcpp'",
@@ -8170,7 +8170,7 @@
     },
     "diffobj": {
       "Package": "diffobj",
-      "Version": "0.3.8",
+      "Version": "0.3.9",
       "Source": "Repository",
       "Type": "Package",
       "Title": "Diffs for R Objects",
@@ -9755,21 +9755,24 @@
     },
     "ggthemes": {
       "Package": "ggthemes",
-      "Version": "5.2.0",
+      "Version": "6.0.0",
       "Source": "Repository",
       "Title": "Extra Themes, Scales and Geoms for 'ggplot2'",
       "Authors@R": "c(person(\"Jeffrey B.\", \"Arnold\", role = c(\"aut\", \"cre\"), email = \"jeffrey.arnold@gmail.com\",  comment = \"<https://orcid.org/0000-0001-9953-3904>\"), person(\"Gergely\", \"Daroczi\", role = \"ctb\"), person(\"Bo\", \"Werth\", role = \"ctb\"), person(\"Brian\", \"Weitzner\", role = \"ctb\"), person(\"Joshua\", \"Kunst\", role = \"ctb\"), person(\"Baptise\", \"Auguie\", role = \"ctb\"), person(\"Bob\", \"Rudis\", role = \"ctb\"), person(\"Hadley\", \"Wickham\", role = c(\"ctb\"), comment = \"Code from the ggplot2 package.\"), person(\"Justin\",  \"Talbot\", role = \"ctb\", comment = \"Code from the labeling package\"), person(\"Joshua\", \"London\", role = \"ctb\"))",
       "Depends": [
-        "R (>= 3.3.0)"
+        "R (>= 4.1.0)"
       ],
       "Imports": [
+        "cli",
         "ggplot2 (>= 3.0.0)",
         "graphics",
         "grid",
         "lifecycle",
         "methods",
         "purrr",
+        "rlang",
         "scales",
+        "stats",
         "stringr",
         "tibble"
       ],
@@ -9785,7 +9788,6 @@
         "mapproj",
         "pander",
         "quantreg",
-        "rlang",
         "rmarkdown",
         "spelling",
         "testthat (>= 3.2.0)",
@@ -10458,7 +10460,7 @@
     },
     "hdf5r": {
       "Package": "hdf5r",
-      "Version": "1.3.12",
+      "Version": "1.3.16",
       "Source": "Repository",
       "Type": "Package",
       "Title": "Interface to the 'HDF5' Binary Data Format",
@@ -10754,7 +10756,7 @@
     },
     "httr": {
       "Package": "httr",
-      "Version": "1.4.8",
+      "Version": "1.4.9",
       "Source": "Repository",
       "Title": "Tools for Working with URLs and HTTP",
       "Authors@R": "c( person(\"Hadley\", \"Wickham\", , \"hadley@posit.co\", role = c(\"aut\", \"cre\")), person(\"Posit Software, PBC\", role = c(\"cph\", \"fnd\")) )",
@@ -11181,7 +11183,7 @@
     },
     "knitr": {
       "Package": "knitr",
-      "Version": "1.51",
+      "Version": "1.52",
       "Source": "Repository",
       "Type": "Package",
       "Title": "A General-Purpose Package for Dynamic Report Generation in R",
@@ -11209,12 +11211,11 @@
         "jpeg",
         "JuliaCall (>= 0.11.1)",
         "magick",
-        "litedown",
-        "markdown (>= 1.3)",
+        "litedown (>= 0.10)",
         "otel",
         "otelsdk",
         "png",
-        "ragg",
+        "ragg (>= 1.5.0)",
         "reticulate (>= 1.4)",
         "rgl (>= 0.95.1201)",
         "rlang",
@@ -12142,7 +12143,7 @@
     },
     "metafor": {
       "Package": "metafor",
-      "Version": "5.0-1",
+      "Version": "5.2.1",
       "Source": "Repository",
       "Date": "2026-04-26",
       "Title": "Meta-Analysis Package for R",
@@ -12223,7 +12224,7 @@
     },
     "miloR": {
       "Package": "miloR",
-      "Version": "2.2.0",
+      "Version": "2.9.1",
       "Source": "Bioconductor",
       "Type": "Package",
       "Title": "Differential neighbourhood abundance testing on a graph",
@@ -12236,9 +12237,7 @@
       "biocViews": "SingleCell, MultipleComparison, FunctionalGenomics, Software",
       "LinkingTo": [
         "Rcpp",
-        "RcppArmadillo",
-        "RcppEigen",
-        "RcppML"
+        "RcppArmadillo"
       ],
       "Depends": [
         "R (>= 4.0.0)",
@@ -12646,7 +12645,7 @@
     },
     "mlr3pipelines": {
       "Package": "mlr3pipelines",
-      "Version": "0.11.0",
+      "Version": "0.12.0",
       "Source": "Repository",
       "Title": "Preprocessing Operators and Pipelines for 'mlr3'",
       "Authors@R": "c(person(given = \"Martin\", family = \"Binder\", role = c(\"aut\", \"cre\"), email = \"mlr.developer@mb706.com\"), person(given = \"Florian\", family = \"Pfisterer\", role = \"aut\", email = \"pfistererf@googlemail.com\", comment = c(ORCID = \"0000-0001-8867-762X\")), person(given = \"Lennart\", family = \"Schneider\", role = \"aut\", email = \"lennart.sch@web.de\", comment = c(ORCID = \"0000-0003-4152-5308\")), person(given = \"Bernd\", family = \"Bischl\", role = \"aut\", email = \"bernd_bischl@gmx.net\", comment = c(ORCID = \"0000-0001-6002-6980\")), person(given = \"Michel\", family = \"Lang\", role = \"aut\", email = \"michellang@gmail.com\", comment = c(ORCID = \"0000-0001-9754-0393\")), person(given = \"Sebastian\", family = \"Fischer\", role = \"aut\", email = \"sebf.fischer@gmail.com\", comment = c(ORCID = \"0000-0002-9609-3197\")), person(given = \"Susanne\", family = \"Dandl\", role = \"aut\", email = \"dandl.susanne@googlemail.com\"), person(given = \"Keno\", family = \"Mersmann\", role = \"ctb\", email = \"keno.mersmann@gmail.com\"), person(given = \"Maximilian\", family = \"Mücke\", role = \"ctb\", email = \"muecke.maximilian@gmail.com\", comment = c(ORCID = \"0009-0000-9432-9795\")), person(given = \"Lona\", family = \"Koers\", role = \"ctb\", email = \"lona.koers@gmail.com\"), person(given = \"Alexander\", family = \"Winterstetter\", role = \"ctb\", email = \"alexander.winterstetter@gmail.com\"))",
@@ -12655,7 +12654,7 @@
       "URL": "https://mlr3pipelines.mlr-org.com, https://github.com/mlr-org/mlr3pipelines",
       "BugReports": "https://github.com/mlr-org/mlr3pipelines/issues",
       "Depends": [
-        "R (>= 4.1.0)"
+        "R (>= 3.3.0)"
       ],
       "Imports": [
         "backports",
@@ -13088,7 +13087,7 @@
     },
     "openxlsx": {
       "Package": "openxlsx",
-      "Version": "4.2.8.1",
+      "Version": "4.2.9",
       "Source": "Repository",
       "Type": "Package",
       "Title": "Read, Write and Edit xlsx Files",
@@ -13113,8 +13112,11 @@
       "Suggests": [
         "curl",
         "formula.tools",
+        "ggplot2",
+        "jpeg",
         "knitr",
         "rmarkdown",
+        "survival",
         "testthat"
       ],
       "LinkingTo": [
@@ -13404,7 +13406,7 @@
     },
     "pbapply": {
       "Package": "pbapply",
-      "Version": "1.7-4",
+      "Version": "1.7.5",
       "Source": "Repository",
       "Type": "Package",
       "Title": "Adding Progress Bar to '*apply' Functions",
@@ -16976,7 +16978,7 @@
     },
     "terra": {
       "Package": "terra",
-      "Version": "1.9-46",
+      "Version": "1.9.50",
       "Source": "Repository",
       "Type": "Package",
       "Title": "Spatial Data Analysis",
@@ -17002,7 +17004,8 @@
         "Rcpp"
       ],
       "Imports": [
-        "Rcpp (>= 1.0-10)"
+        "Rcpp (>= 1.0-10)",
+        "stats"
       ],
       "SystemRequirements": "C++17, GDAL (>= 2.2.3), GEOS (>= 3.4.0), PROJ (>= 4.9.3), TBB, sqlite3",
       "Encoding": "UTF-8",
@@ -18461,7 +18464,7 @@
     },
     "yulab.utils": {
       "Package": "yulab.utils",
-      "Version": "0.2.4",
+      "Version": "0.2.5",
       "Source": "Repository",
       "Title": "Supporting Functions for Packages Maintained by 'YuLab-SMU'",
       "Authors@R": "c(person(\"Guangchuang\", \"Yu\", email = \"guangchuangyu@gmail.com\", role = c(\"aut\", \"cre\"), comment = c(ORCID = \"0000-0002-6485-8781\")))",
