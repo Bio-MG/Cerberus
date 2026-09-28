@@ -294,6 +294,21 @@ Anyone comparing a new value with `7b5adf06…` or `63357a01…` must add
 `tools/_drive/README.md` back, or compare entry counts against 327 rather than
 326.
 
+### 1.8 Post-merge `cline/8283c` — the branch reconciled with main and its declared actions wired
+
+| Measurement | Fingerprint | Entries | Composition |
+|---|---|---:|---|
+| **Post-merge**, commit `9f5cdac` (merge of main + the SC/Bulk audit work + the completed drive actions + the LIANA/OmniPathR pins), measured on the COMMITTED tree | `1fd17872c43cffa806900eef31727c4fd3ac7cfd39abede0d968d026c195a5cb` | **380** | full test suite at this commit: **0 FAIL / 10318 PASS / 3 SKIP** (shinytest2 e2e included, headless Chrome); `run_pipeline` covers the 14 modules / 15 buttons of Phase F — and the three buttons §1.6 declared but whose modules never shipped a `ts_drive_publish_token()` (`bulk-network-run_network`, `sc-pathways-run_pathway`, `import_spatial-btn_import`) are NOW WIRED in this tree |
+
+⚠️ **This anchor is COMMIT-SCOPED, not a verbatim §1 run on the working tree.**
+The working-tree algorithm on this host picks up untracked runtime artefacts
+(`omnipathr-log/`, `tests/testthat/tools/` — both now gitignored) and the
+`python_env_sccoda/` venv, so a verbatim run is polluted and unstable. The
+value above extracts `git archive 9f5cdac` and applies the §1 exclusions
+verbatim inside the extraction (the recipe of `tools/verify_committed_tree.R`:
+"measure the tree a COMMIT ships"). Entry counts are comparable across
+commit-scoped anchors; the hash is reproducible only for this exact commit.
+
 ## 2. Scope summary
 
 Tasks 1–3 covered, at a high level:
