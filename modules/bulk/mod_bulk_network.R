@@ -14,6 +14,128 @@
 # Le moteur est une HEURISTIQUE : l'UI l'écrit et ne promet aucun optimum.
 # =============================================================================
 
+# ── Drive (Phase E, docs/mcp_propagation.md §1.6/§8) ────────────────────────
+.BULK_NETWORK_DRIVE_MODULE <- "bulk_network"
+.BULK_NETWORK_DRIVE_BUTTON <- "bulk-network-run_network"
+
+# AUCUN paramètre non déclaré (§1.6) : le contraste actif est un PRÉREQUISITE
+# (porté par la readiness), jamais un paramètre. Tout le reste tourne sur les
+# valeurs PAR DÉFAUT de l'UI, figées ICI une seule fois — l'UI les déclare avec
+# les mêmes valeurs (espèce "hsapiens" gelée dans R/core/drive_allowlist.R).
+.BULK_NETWORK_DRIVE_INPUTS <- function() {
+  list(species = "hsapiens", source = "all_sig", prize = "padj",
+       threshold = 1.3, omega = 10, beta = 1, mu = 1)
+}
+
+#' Readiness, in the same order as the human path: a dataset, Step 1's VST
+#' matrix, then an active contrast from Step 2 (the PRIZE source). Returning the
+#' reason (not FALSE) is what lets the poller report `not_ready` instead of
+#' dispatching a job that must fail.
+.bulk_network_drive_ready <- function(shared_rv, global_data) {
+  if (is.null(tryCatch(shiny::isolate(global_data$bulk_obj), error = function(e) NULL))) {
+    return("no bulk object loaded (global_data$bulk_obj is NULL)")
+  }
+  if (is.null(tryCatch(shiny::isolate(shared_rv$vst_mat), error = function(e) NULL))) {
+    return("Step 1 has not produced a VST matrix (shared_rv$vst_mat is NULL)")
+  }
+  ac <- tryCatch(shiny::isolate(shared_rv$active_contrast), error = function(e) NULL)
+  contrasts <- tryCatch(shiny::isolate(shared_rv$contrasts), error = function(e) NULL)
+  if (is.null(ac) || is.null(contrasts) || !ac %in% names(contrasts)) {
+    return("Step 2 has not produced an active contrast")
+  }
+  TRUE
+}
+
+#' State probe. `n_results` is the count of RETAINED NODES of the last run —
+#' measured (docs/mcp_propagation.md §1.6): identical to `qc$n_nodes`, NOT a
+#' row count of a per-element table.
+.bulk_network_drive_state <- function(shared_rv, global_data, run_state,
+                                      last_step = NULL) {
+  job <- tryCatch(ts_drive_job_state(), error = function(e) NULL)
+  pending <- tryCatch(ts_drive_job_pending(), error = function(e) NULL)
+  ready <- isTRUE(.bulk_network_drive_ready(shared_rv, global_data))
+  obj <- tryCatch(shiny::isolate(global_data$bulk_obj), error = function(e) NULL)
+  res <- tryCatch(shiny::isolate(shared_rv$network_result), error = function(e) NULL)
+  n_results <- if (is.list(res) && !is.null(res$qc$n_nodes)) as.integer(res$qc$n_nodes) else 0L
+  current <- if (is.function(run_state)) {
+    shiny::isolate(run_state())
+  } else {
+    as.character(run_state)
+  }
+  if (length(current) != 1L || is.na(current)) current <- "idle"
+  step <- if (is.null(last_step)) "skipped" else as.character(last_step)
+  if (length(step) != 1L || is.na(step) || !step %in% c("ran", "skipped", "error")) {
+    step <- "error"
+  }
+  list(
+    module = .BULK_NETWORK_DRIVE_MODULE,
+    action = "run_network",
+    status = as.character(if (ready) current else "not_ready"),
+    elapsed_s = if (is.null(pending)) 0 else as.numeric(pending$elapsed_s),
+    seq = if (is.null(job)) 0L else as.integer(job$seq),
+    n_results = n_results,
+    has_data = !is.null(obj),
+    ready = ready,
+    steps = list(network = step)
+  )
+}
+
+#' Drive run: the SAME R/ calls in the SAME order as the human observer, on the
+#' FROZEN inputs, then the SAME single write (`shared_rv$network_result`). The
+#' human observer is NOT re-wired and NOT duplicated.
+.bulk_network_run_drive <- function(shared_rv, close_job) {
+  inp <- .BULK_NETWORK_DRIVE_INPUTS()
+  res <- tryCatch({
+    ac <- shiny::isolate(shared_rv$active_contrast)
+    res_de <- shiny::isolate(shared_rv$contrasts[[ac]])
+    if (is.null(res_de) || !is.data.frame(res_de) || !nrow(res_de)) {
+      stop(errorCondition("no active contrast result to derive prizes from",
+                          class = "bulk_network_error"))
+    }
+    sig <- res_de$padj < (shiny::isolate(shared_rv$padj_thresh) %||% 0.05) &
+      abs(res_de$log2FoldChange) > (shiny::isolate(shared_rv$lfc_thresh) %||% 1)
+    sig[is.na(sig)] <- FALSE
+    keep <- switch(inp$source,
+                   up      = sig & res_de$log2FoldChange > 0,
+                   down    = sig & res_de$log2FoldChange < 0,
+                   all_sig = sig)
+    keep[is.na(keep)] <- FALSE
+    genes <- unique(trimws(as.character(res_de$gene[keep])))
+    genes <- genes[nzchar(genes)]
+    if (!length(genes)) {
+      stop(errorCondition("no significant gene for the frozen source (all_sig) — widen the Step 2 thresholds",
+                          class = "bulk_network_error"))
+    }
+    pri <- if (identical(inp$prize, "lfc")) {
+      abs(res_de$log2FoldChange[match(genes, as.character(res_de$gene))])
+    } else {
+      -log10(res_de$padj[match(genes, as.character(res_de$gene))])
+    }
+    prizes <- stats::setNames(pri, genes)
+    prizes <- prizes[!is.na(prizes)]
+    net <- load_bulk_network(species = inp$species)
+    out <- run_bulk_network_pcsf(
+      prizes     = prizes,
+      network    = net,
+      species    = inp$species,
+      threshold  = inp$threshold,
+      params     = list(omega = inp$omega, beta = inp$beta, mu = inp$mu),
+      convert_ids = TRUE)
+    assert_bulk_network_result(out, context = "drive réseau PCSF")
+    out
+  }, error = function(e) e)
+  if (inherits(res, "condition")) {
+    close_job("error", conditionMessage(res))
+    return(list(status = "error", n_results = 0L, step = "error"))
+  }
+  shiny::isolate(shared_rv$network_result <- res)
+  n_results <- as.integer(res$qc$n_nodes %||% 0L)
+  if (length(n_results) != 1L || is.na(n_results) || n_results < 0L) n_results <- 0L
+  close_job("done", NULL)
+  list(status = if (n_results == 0L) "empty" else "done",
+       n_results = n_results, step = "ran")
+}
+
 mod_bulk_network_ui <- function(id) {
   ns <- NS(id)
   tagList(
@@ -161,7 +283,9 @@ mod_bulk_network_server <- function(id, global_data, shared_rv) {
                          type = "warning")
         return()
       }
-      p <- shiny::Progress$new(); on.exit(p$close())
+      # add = TRUE : le module DÉCLARE un job drive — un on.exit() nu
+      # effacerait la déclaration (garde test-drive-watcher.R §additive).
+      p <- shiny::Progress$new(); on.exit(p$close(), add = TRUE)
       tryCatch({
         # Primes : le seuil de significativité reste celui de l'app (padj/LFC),
         # le seuil de PRIME est celui déclaré ci-dessus — les deux sont distincts
@@ -221,6 +345,64 @@ mod_bulk_network_server <- function(id, global_data, shared_rv) {
         shared_rv$network_result <- NULL
       })
     })
+
+    # ── Drive (Phase E, docs/mcp_propagation.md §1.6/§8) : l'action ─────────
+    # « bulk-network-run_network » n'a AUCUN paramètre non déclaré (§1.6) : le
+    # contraste actif est un PRÉREQUISITE (porté par la readiness), jamais un
+    # paramètre, et tout le reste tourne sur les valeurs PAR DÉFAUT de l'UI —
+    # figées ICI, mesurées ci-dessus (espèce hsapiens gelée dans l'allowlist).
+    # Le chemin drive appelle les MÊMES fonctions R/ dans le même ordre que
+    # l'observateur humain, puis applique les MÊMES écritures — zéro
+    # ré-implémentation, zéro binding DOM.
+    net_drive_counter <- shiny::reactiveVal(0L)
+    net_drive_run_state <- shiny::reactiveVal("idle")
+    net_drive_last_step <- new.env(parent = emptyenv())
+    net_drive_last_step$value <- NULL
+    net_drive_job <- new.env(parent = emptyenv())
+    net_drive_job$id <- NULL
+
+    net_drive_ready <- function() {
+      .bulk_network_drive_ready(shared_rv, global_data)
+    }
+    net_drive_state <- function() {
+      .bulk_network_drive_state(shared_rv, global_data,
+                                net_drive_run_state,
+                                net_drive_last_step$value)
+    }
+
+    close_net_drive_job <- function(status, error = NULL) {
+      if (is.null(net_drive_job$id)) return(invisible(FALSE))
+      job <- tryCatch(ts_drive_job_state(), error = function(e) NULL)
+      if (is.null(job) || !identical(job$job_id, net_drive_job$id)) {
+        return(invisible(FALSE))
+      }
+      ts_drive_job_finish(.BULK_NETWORK_DRIVE_BUTTON, status = status,
+                          error = error)
+      net_drive_job$id <- NULL
+      invisible(TRUE)
+    }
+
+    # 🔴 THE BUTTON ID IS A LITERAL HERE, not the constant:
+    # test-drive-watcher.R greps every TS_DRIVE_BUTTONS entry as a quoted
+    # literal next to a `ts_drive_publish_token(` call — that shared check is
+    # what proves an allowlist entry is really wired, with a readiness guard.
+    ts_drive_publish_token(global_data, "bulk-network-run_network",
+      net_drive_counter, ready = net_drive_ready,
+      state = net_drive_state, long = TRUE)
+
+    observeEvent(net_drive_counter(), {
+      if (!isTRUE(net_drive_ready())) return()
+      net_drive_job$id <- NULL
+      job <- tryCatch(ts_drive_job_state(), error = function(e) NULL)
+      if (!is.null(job) && isTRUE(ts_drive_job_busy()) &&
+          identical(job$button, .BULK_NETWORK_DRIVE_BUTTON)) {
+        net_drive_job$id <- job$job_id
+      }
+      net_drive_run_state("running")
+      res <- .bulk_network_run_drive(shared_rv, close_net_drive_job)
+      net_drive_last_step$value <- res$step
+      net_drive_run_state(res$status)
+    }, ignoreInit = TRUE)
 
     output$network_plot <- renderPlot({
       global_data$language

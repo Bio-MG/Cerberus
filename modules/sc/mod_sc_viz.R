@@ -138,7 +138,14 @@ mod_sc_viz_ui <- function(id) {
           h6(i18n$t("Groupes de Comparaison"), style="font-weight:bold;"),
           selectInput(ns("volcano_group1"), i18n$t("Group 1 (Test)"),      choices = NULL),
           selectInput(ns("volcano_group2"), i18n$t("Group 2 (Reference)"), choices = c("All other cells"="rest")),
-          helpText("Compare Group 1 vs Group 2 (ou 'rest' pour vs tous les autres)")),
+          helpText("Compare Group 1 vs Group 2 (ou 'rest' pour vs tous les autres)"),
+          # Audit 2026-09-27 (feature 6×10X) : garde scientifique — le volcano
+          # traite chaque CELLULE comme une observation. Avec des réplicats
+          # biologiques, la voie valide est le pseudobulk (agrégation par
+          # échantillon, test au niveau réplicat).
+          div(class="alert alert-warning", style="font-size:0.76em;padding:5px;margin-bottom:5px;",
+              bsicons::bs_icon("exclamation-triangle"), " ",
+              i18n$t("Comparaison au niveau cellule : avec des réplicats biologiques (ex: 3 vs 3), préférez le Pseudobulk (Abondance cellulaire → Pseudobulk) pour éviter la pseudo-réplication."))),
       fluidRow(
         column(6, numericInput(ns("volcano_logfc"), i18n$t("Log2FC Threshold"), value=0.25, step=0.05)),
         column(6, numericInput(ns("volcano_pval"),  i18n$t("P-adj Threshold"),  value=0.05, step=0.001))

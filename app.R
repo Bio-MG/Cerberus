@@ -104,11 +104,14 @@ source("R/sc/sc_abundance_cross_views.R")  # Stage 16 (4E-3) : vues croisées Mi
 source("R/sc/sc_population_rarity.R")  # CCC 9 (question 1) : rareté par population annotée — DESCRIPTIF, aucun graphe (APRES sc_velocity.R : empreinte v2)
 source("R/sc/sc_pipeline.R")
 source("R/sc/sc_export.R")
+source("R/sc/sc_metadata.R")  # Design expérimental (condition/réplicat) — feature 6×10X, audit 2026-09-27 (PUR : aucun symbole Shiny)
+source("R/sc/sc_batch_metrics.R")  # Métrique de mélange des batchs (roadmap 4.3) — PUR : aucun symbole Shiny
 
 source("R/bulk/bulk_helpers.R")
 source("R/bulk/bulk_provenance.R")  # Bulk V2 M1 : manifeste bulk_obj$provenance (pur, testé)
 source("R/bulk/bulk_batch_qc.R")    # Bulk V2 M1 : diagnostics batch (pur, contrat gelé)
 source("R/bulk/batch_correction.R")  # STAT-S1 : correction de batch ComBat-seq (pur, contrat gelé)
+source("R/bulk/bulk_batch_metrics.R") # STAT-S1 : métrique de mélange des batchs avant/après ComBat (pur)
 source("R/bulk/bulk_gsva.R")          # Bulk V2 M2 : scores de voies par échantillon (pur, contrat gelé)
 source("R/bulk/bulk_signatures.R")    # Bulk V2 M3 : signatures cellulaires (pur, contrat gelé)
 # PLOT-S6b : jeux de genes NATIFS (bulk_gene_set_choices, bulk_load_gene_sets).
@@ -159,6 +162,7 @@ source("modules/import/mod_geo.R")
 
 # 5b. Single-Cell
 source("modules/sc/mod_sc_pipeline.R")
+source("modules/sc/mod_sc_metadata.R")  # 0.5 Métadonnées — design condition/réplicat (feature 6×10X, audit 2026-09-27)
 source("modules/sc/mod_sc_annotation.R")
 source("modules/sc/mod_sc_rarity.R")  # CCC 9 (Q1) : onglet « Rareté par population » (descriptif)
 source("modules/sc/mod_sc_viz.R")
@@ -456,10 +460,14 @@ server <- function(input, output, session) {
     
     sc_obj = NULL,      # Objet Seurat Single-Cell
 
+    sc_obj_epoch = 0L,  # incrémenté UNIQUEMENT au remplacement de jeu (imports) — déclenche la purge des résultats partagés (audit 2026-09-27 §1.5)
+
     sc_datasets = list(),  # MD-4 : jeux SC nommés (double jeu — modes 1/2 décision 5)
     # — docs/contracts/SC_MULTI_CONTRACT.md ; sc_obj reste le jeu "actif"
 
     bulk_obj = NULL,    # Objet Bulk (liste avec counts + metadata)
+
+    bulk_obj_epoch = 0L,  # incrémenté UNIQUEMENT au remplacement de jeu (imports/fusion/activation) — déclenche la purge des résultats partagés bulk (parité SC, audit 2026-09-27 §1.5)
 
     bulk_datasets = list(),  # MD-1 : jeux bulk nommés (comparaison multi-jeux)
     # — docs/contracts/BULK_MULTI_CONTRACT.md ; bulk_obj reste le jeu "actif"

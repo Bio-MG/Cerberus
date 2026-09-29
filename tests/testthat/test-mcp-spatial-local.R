@@ -22,15 +22,20 @@
   e
 }
 
-test_that("local MCP keeps seven tools and resolves only the Spatial pipeline button", {
+test_that("local MCP keeps EIGHT tools and resolves only the Spatial pipeline button", {
   e <- .mcp_local_env()
   tools <- e$.ts_tools()
-  expect_length(tools, 7L)
+  # Aligned on test-mcp-sc-local.R (S2): `transcripto_drive_export` is an
+  # EIGHTH tool for a new ACTION (`export_result`), not for a module — the
+  # invariant "a module never adds a tool" is untouched. The spatial copy of
+  # the pin had stayed at seven and contradicted its sibling on main; both
+  # now state the same inventory.
+  expect_length(tools, 8L)
   expect_setequal(vapply(tools, function(x) x$name, character(1)), c(
     "transcripto_drive_status", "transcripto_drive_read_result",
     "transcripto_drive_snapshot", "transcripto_drive_set_inputs",
     "transcripto_drive_run", "transcripto_drive_wait",
-    "transcripto_drive_set_armed"
+    "transcripto_drive_set_armed", "transcripto_drive_export"
   ))
   expect_length(e$.ts_mcp_run_problems(), 0L)
   expect_identical(e$TS_MCP_RUN_ACTIONS, "run_pipeline")
@@ -55,7 +60,13 @@ test_that("local MCP exposes Spatial for run and wait but not set_inputs", {
   expect_true("spatial_pipeline" %in% run_modules)
   expect_true("spatial_pipeline" %in% wait_modules)
   expect_true("spatial-pipeline-btn_run_all" %in% run_buttons)
-  expect_false(any(grepl("^(spatial-(qc|cluster|deconv|viz|multi|niche|export|report)|import_spatial)-",
+  # Phase E/F widened the Spatial run surface to THREE owned buttons (cf.
+  # test-drive-allowlist.R): the pipeline, the QC hotspots and the Spatial
+  # import confirm. The child modules below stay FORBIDDEN — they are dataset
+  # inputs or private ids, never drivable.
+  expect_true("spatial-qc-btn_hotspots" %in% run_buttons)
+  expect_true("import_spatial-btn_import" %in% run_buttons)
+  expect_false(any(grepl("^(spatial-(cluster|deconv|viz|multi|niche|export|report))-",
                          run_buttons)))
 })
 

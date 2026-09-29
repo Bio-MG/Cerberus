@@ -319,6 +319,7 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
         gene_id_type = tryCatch(detect_gene_id_type(rownames(counts)), error = function(e) "unknown")
       )
       global_data$bulk_obj <- obj
+      global_data$bulk_obj_epoch <- (global_data$bulk_obj_epoch %||% 0L) + 1L  # purge résultats partagés (jeu remplacé)
 
       # MD-1: also register in the bulk_datasets container (producer "import",
       # contract BULK_MULTI_CONTRACT.md §6). Mirrors mod_import_bulk: a failure

@@ -9,6 +9,15 @@
 #             R/sc/sc_trajectory.R
 # =============================================================================
 
+# Graine déclarée des étapes stochastiques (audit 2026-09-27 §1.8) — withr
+# restaure l'état du RNG après chaque appel : deux exécutions identiques
+# produisent les mêmes embeddings, sans fuiter la graine vers le reste de l'app.
+.SC_AP_SEED <- if (exists("TS_SC_PIPELINE_SEED")) TS_SC_PIPELINE_SEED else 989L
+
+.seeded_ap <- function(expr) {
+  withr::with_seed(.SC_AP_SEED, force(expr))
+}
+
 #' Execute the SC auto-pipeline (called inside observeEvent)
 #' @param input Shiny input object
 #' @param global_data Global reactiveValues
@@ -100,6 +109,14 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
           input$sc_ap_sketch_ncells_custom)
         use_sketch <- !identical(input$sc_ap_norm, "sct") &&
                       sketch_params$ncells < n_total_cells
+        # Intégration multi-échantillons (audit 2026-09-27 §1.3) : la
+        # correction de batch s'applique au dataset COMPLET, avant clustering
+        # — incompatible avec le sketch, qui est donc ignoré si demandée.
+        if (!identical(input$sc_ap_integration %||% "none", "none") &&
+            isTRUE(use_sketch)) {
+          use_sketch <- FALSE
+          log_sc(.tr("ℹ️ Intégration multi-échantillons demandée — sketch ignoré (incompatible), pipeline sur dataset complet."))
+        }
         pca_dim <- input$sc_ap_pca_dim  # fallback / full-dataset path
 
         if (sc_backend_status(obj) == "disk") {
@@ -119,8 +136,8 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
           DefaultAssay(obj) <- "RNA"
           obj <- NormalizeData(obj, verbose=FALSE)
           obj <- FindVariableFeatures(obj, nfeatures=2000, verbose=FALSE)
-          obj <- SketchData(object=obj, ncells=sketch_params$ncells,
-                            method="LeverageScore", sketched.assay="sketch")
+          obj <- .seeded_ap(SketchData(object=obj, ncells=sketch_params$ncells,
+                            method="LeverageScore", sketched.assay="sketch"))
           DefaultAssay(obj) <- "sketch"
           log_sc(sprintf(.tr("✓ Sketch OK (%.0fs)"), as.numeric(difftime(Sys.time(), .t_sketch, units="secs"))))
 
@@ -146,8 +163,8 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
           compute_umap_sketch <- isTRUE(input$sc_ap_compute_umap)
           if (compute_umap_sketch) {
             p$set(0.63,.tr("UMAP (sketch)..."))
-            obj <- RunUMAP(obj, dims=1:sketch_params$npcs, reduction="pca",
-                           return.model=TRUE, verbose=FALSE)
+            obj <- .seeded_ap(RunUMAP(obj, dims=1:sketch_params$npcs, reduction="pca",
+                           return.model=TRUE, verbose=FALSE))
             log_sc(.tr("✓ UMAP sketch OK"))
           } else {
             log_sc(.tr("ℹ️ UMAP désactivé (mode PCA seul, debug rapide) — previews/trajectoire utiliseront PCA."))
@@ -192,15 +209,50 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
           obj <- RunPCA(obj, verbose=FALSE, npcs=pca_dim)
           log_sc(sprintf(.tr("✓ PCA (%d dims)"), pca_dim))
 
+          # ── Step 4b: Intégration multi-échantillons — AVANT le clustering ──
+          # (audit 2026-09-27 §1.3 : l'auto-pipeline n'avait AUCUNE
+          # intégration — tout jeu multi-échantillons importé en un seul objet
+          # était clusterisé sans correction de batch, silencieusement.)
+          integ      <- input$sc_ap_integration %||% "none"
+          batch_var  <- input$sc_ap_batch_var %||% "orig.ident"
+          clust_red  <- "pca"
+          clust_dims <- pca_dim
+          if (identical(integ, "harmony")) {
+            if (!requireNamespace("harmony", quietly=TRUE)) {
+              log_sc(.tr("⚠️ Package 'harmony' non installé — clustering sur PCA brute."))
+            } else if (!batch_var %in% colnames(obj@meta.data) ||
+                       length(unique(obj@meta.data[[batch_var]])) < 2) {
+              log_sc(.tr("⚠️ Harmony non appliquée : 0 ou 1 batch — clustering sur PCA brute."))
+            } else {
+              p$set(0.48,.tr("Harmony (intégration avant clustering)..."))
+              log_sc(sprintf(.tr("Harmony (variable de batch : %s)..."), batch_var))
+              obj <- .seeded_ap(RunHarmony(obj, group.by.vars=batch_var,
+                                           dims.use=1:min(30, pca_dim), verbose=FALSE))
+              clust_red  <- "harmony"
+              clust_dims <- min(pca_dim, ncol(Seurat::Embeddings(obj, "harmony")))
+              log_sc(sprintf(.tr("✓ Harmony appliquée (%d dims) — clustering sur l'espace intégré"), clust_dims))
+              # Roadmap 4.3 : mélange des batchs chiffré avant/après.
+              mix_msg <- tryCatch({
+                before <- sc_batch_mixing_score(obj, reduction = "pca", batch_col = batch_var)
+                after  <- sc_batch_mixing_score(obj, reduction = "harmony", batch_col = batch_var)
+                sprintf(.tr("Mélange des batchs (0 = séparés, 1 = mélangés) : PCA brute %.0f%% → Harmony %.0f%%."),
+                        100 * before$score, 100 * after$score)
+              }, error = function(e) NULL)
+              if (!is.null(mix_msg)) log_sc(mix_msg)
+            }
+          } else if (identical(integ, "sct")) {
+            log_sc(.tr("⚠️ Intégration SCT-anchor non implémentée dans l'auto-pipeline — clustering sur PCA brute."))
+          }
+
           p$set(0.55,.tr("Clustering..."))
-          obj <- FindNeighbors(obj, dims=1:pca_dim, verbose=FALSE)
+          obj <- FindNeighbors(obj, reduction=clust_red, dims=1:clust_dims, verbose=FALSE)
           obj <- robust_find_clusters(obj, resolution=input$sc_ap_res, algo=input$sc_ap_cluster_algo,
                                       log_fn=function(m) log_sc(paste("\u26a0\ufe0f", m)))
           log_sc(sprintf(.tr("✓ %d clusters (res %.1f)"), length(unique(obj$seurat_clusters)), input$sc_ap_res))
 
           if (isTRUE(input$sc_ap_compute_umap)) {
             p$set(0.68,.tr("UMAP..."))
-            obj <- RunUMAP(obj, dims=1:pca_dim, verbose=FALSE)
+            obj <- .seeded_ap(RunUMAP(obj, reduction=clust_red, dims=1:clust_dims, verbose=FALSE))
             log_sc(.tr("✓ UMAP OK"))
           } else {
             log_sc(.tr("ℹ️ UMAP désactivé (mode PCA seul, debug rapide)."))
@@ -222,7 +274,7 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
             log_sc(sprintf(.tr("⚠️ t-SNE secondaire ignoré (%s cellules > %s max)."),
                            format(ncol(obj), big.mark=" "), format(.AUTO_TSNE_MAX_CELLS, big.mark=" ")))
           } else {
-            obj <- tryCatch(RunTSNE(obj, dims=1:pca_dim, verbose=FALSE),
+            obj <- tryCatch(.seeded_ap(RunTSNE(obj, dims=1:pca_dim, verbose=FALSE)),
                             error=function(e){ log_sc(paste(.tr("⚠️ t-SNE secondaire ignoré:"), e$message)); obj })
             log_sc(.tr("✓ t-SNE secondaire OK"))
           }
@@ -276,7 +328,15 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
             markers <- as.data.frame(markers); rownames(markers) <- NULL
             if (!"gene"       %in% colnames(markers)) markers$gene       <- rownames(markers)
             if (!"avg_log2FC" %in% colnames(markers)) markers$avg_log2FC <- markers$avg_logFC %||% 0
-            if (!"p_val_adj"  %in% colnames(markers)) markers$p_val_adj  <- 1
+            # Roadmap 5.3 (audit 2026-09-27 §1.4) : ne PAS fabriquer
+            # p_val_adj <- 1 — un classement arbitraire alimentait l'ORA et la
+            # corrélation sans avertissement. Sans la colonne : log explicite
+            # + ORA/corrélation sautés (table marqueurs conservée telle quelle).
+            has_padj <- "p_val_adj" %in% colnames(markers)
+            if (!has_padj) {
+              log_sc(.tr("⚠️ p_val_adj absent des marqueurs — ORA et corrélation sautés (aucun classement arbitraire fabriqué)."))
+              markers$p_val_adj <- NA_real_
+            }
             if (!"cluster"    %in% colnames(markers)) markers$cluster    <- "Unknown"
             if (!"pct.1"      %in% colnames(markers)) markers$pct.1      <- NA_real_
             if (!"pct.2"      %in% colnames(markers)) markers$pct.2      <- NA_real_
@@ -284,7 +344,7 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
             log_sc(sprintf(.tr("✓ %d marqueurs"), nrow(markers)))
 
             # Step 7b: Pathway ORA on top markers (optional)
-            if (isTRUE(input$sc_ap_pathway)) {
+            if (has_padj && isTRUE(input$sc_ap_pathway)) {
               .t_pathway <- Sys.time()
               log_sc(.tr("Pathway ORA..."))
               pathway_org <- input$sc_ap_pathway_org %||% "human"
@@ -330,8 +390,12 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
         if (isTRUE(input$sc_ap_correlation)) {
           p$set(0.90,.tr("Corrélation...")); log_sc(.tr("Gene Correlation..."))
           target_gene <- NULL
-          if (!is.null(shared_rv$markers_data) && nrow(shared_rv$markers_data) > 0) {
-            ranked      <- shared_rv$markers_data[order(shared_rv$markers_data$p_val_adj), ]
+          md <- shared_rv$markers_data
+          # Roadmap 5.3 : ne classer QUE si p_val_adj existe réellement —
+          # sans quoi le « top marqueur » serait arbitraire.
+          if (!is.null(md) && nrow(md) > 0 &&
+              "p_val_adj" %in% colnames(md) && any(!is.na(md$p_val_adj))) {
+            ranked      <- md[order(md$p_val_adj), ]
             target_gene <- ranked$gene[1]
           }
           if (is.null(target_gene)) {
@@ -408,5 +472,11 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
       }, error=function(e) {
         log_sc(paste(.tr("❌ Erreur:"), e$message))
         showNotification(paste(.tr("Erreur pipeline SC:"), e$message), type="error", duration=10)
+        # Roadmap 5.2 (audit 2026-09-27 §1.9) : l'erreur est journalisée ET
+        # notifiée, puis RELANCÉE — la classe sc_pipeline_error devient
+        # observable (le verrou source qui interdisait le stop est réécrit
+        # dans test-sc-pipeline.R). Les appelants UI enveloppent dans
+        # tryCatch (mod_sc.R) / .sc_ap_run_drive pour ne pas casser la session.
+        stop(e)
       })
 }

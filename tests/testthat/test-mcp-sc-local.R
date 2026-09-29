@@ -266,12 +266,15 @@ test_that("the export tool exposes only `seq` and `expect`, at both levels", {
                   c("pid", "started_at", "session_token", "session_id"))
   # And nothing in the schema could be read as a destination, a handler or a
   # format. Checked against the names rather than trusted from the description.
-  walk <- function(x) {
+  # Not an AST walker: a recursive collector of the character leaves of the
+  # schema. It avoids the reserved names walk()/visit() on purpose — the
+  # helper-ast-no-local-walk guard reserves them for the shared AST traversal.
+  collect_char_keys <- function(x) {
     if (is.character(x)) return(x)
     if (!is.list(x)) return(character(0))
-    unlist(lapply(x, walk), use.names = FALSE)
+    unlist(lapply(x, collect_char_keys), use.names = FALSE)
   }
-  keys <- walk(sch)
+  keys <- collect_char_keys(sch)
   banned <- c("path", "file", "filename", "dir", "dest", "where",
               "format", "type", "ext", "handler", "output", "output_id", "id")
   for (b in banned) {

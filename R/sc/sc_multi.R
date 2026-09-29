@@ -11,7 +11,8 @@
 # MIRROR of R/bulk/bulk_multi.R (MD-1) applied to the Single-Cell domain —
 # same structure, same error class, but:
 #   - obj is a Seurat object (not a bulk_obj list) — heavy: capacity default
-#     TS_SC_MULTI_MAX_DATASETS = 5 (RAM 32 GB budget);
+#     TS_SC_MULTI_MAX_DATASETS = 20 (RAM 32 GB budget; raised from 5 on
+#     2026-09-27 so a 6-replicate design fits — aligned with bulk);
 #   - NO pipeline capture: the SC pipeline state LIVES INSIDE the Seurat
 #     object itself (assays, reductions, clusters). Instead, each entry
 #     carries a DECLARED RELATION (décision 5, ROADMAP.md §4):
@@ -149,7 +150,7 @@ sc_multi_check_relation <- function(relation) {
     max_datasets <- if (exists("TS_SC_MULTI_MAX_DATASETS", inherits = TRUE)) {
       TS_SC_MULTI_MAX_DATASETS
     } else {
-      5L
+      20L
     }
   }
   if (!is.numeric(max_datasets) || length(max_datasets) != 1L ||
@@ -265,12 +266,16 @@ sc_multi_get <- function(datasets, label) {
 sc_multi_summary <- function(datasets) {
   .sc_multi_check_datasets(datasets)
   cols <- c("label", "producer", "relation", "n_cells", "n_genes",
-            "n_samples", "has_clusters", "registered_at", "updated_at")
+            "n_samples", "has_clusters", "median_nFeature_RNA",
+            "median_nCount_RNA", "median_percent_mt",
+            "registered_at", "updated_at")
   if (is.null(datasets) || length(datasets) == 0L) {
     empty <- data.frame(
       label = character(0), producer = character(0),
       relation = character(0), n_cells = integer(0), n_genes = integer(0),
       n_samples = integer(0), has_clusters = logical(0),
+      median_nFeature_RNA = integer(0), median_nCount_RNA = integer(0),
+      median_percent_mt = numeric(0),
       registered_at = character(0), updated_at = character(0),
       stringsAsFactors = FALSE
     )
@@ -292,6 +297,16 @@ sc_multi_summary <- function(datasets) {
     }, error = function(e) NULL)
     clusters <- tryCatch("seurat_clusters" %in% colnames(obj@meta.data),
                          error = function(e) FALSE)
+    # QC par dataset (roadmap 4.2, 2026-09-27) : médianes de nFeature_RNA /
+    # nCount_RNA / percent.mt — NA quand la métrique est absente de l'objet.
+    med <- tryCatch({
+      m <- obj@meta.data
+      c(
+        if ("nFeature_RNA" %in% colnames(m)) as.integer(stats::median(m$nFeature_RNA, na.rm = TRUE)) else NA_integer_,
+        if ("nCount_RNA" %in% colnames(m)) as.integer(stats::median(m$nCount_RNA, na.rm = TRUE)) else NA_integer_,
+        if ("percent.mt" %in% colnames(m)) round(as.numeric(stats::median(m$percent.mt, na.rm = TRUE)), 2) else NA_real_
+      )
+    }, error = function(e) c(NA_integer_, NA_integer_, NA_real_))
     data.frame(
       label         = nm,
       producer      = producer,
@@ -300,6 +315,9 @@ sc_multi_summary <- function(datasets) {
       n_genes       = n_genes,
       n_samples     = if (is.null(orig)) NA_integer_ else length(orig),
       has_clusters  = isTRUE(clusters),
+      median_nFeature_RNA = med[1],
+      median_nCount_RNA   = med[2],
+      median_percent_mt   = med[3],
       registered_at = format(e$registered_at, "%Y-%m-%d %H:%M"),
       updated_at    = format(e$updated_at, "%Y-%m-%d %H:%M"),
       stringsAsFactors = FALSE

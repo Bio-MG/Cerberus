@@ -663,6 +663,237 @@ plot_pathway_network <- function(df, db_label = "", top_n = 30,
 }
 
 
+# ── STAT-S2 V2 : réseau d'enrichissement INTERACTIF (plotly + igraph) ───────
+# Cadrage §2bd.5 #3 (2026-09-16) : la V1 (`plot_pathway_network()`) est
+# statique ; la V2 est un réseau INTERACTIF. Choix tranché le 2026-09-28
+# (décision utilisateur) : plotly + igraph — ZÉRO dépendance nouvelle (toutes
+# deux déjà au renv.lock et installées ; précédent PLOT-S6 pour le toggle
+# plotly). visNetwork est ÉCARTÉ pour cette version (dépendance nouvelle —
+# évaluation documentée dans `docs/mcp_propagation.md` §12 et le contrat).
+
+#' Enrichment network data — STAT-S2 V2 (structure figée)
+#'
+#' Construit la structure nœuds/arêtes consommée par
+#' `plot_pathway_network_interactive()`. R PUR, sans enrichplot : la
+#' similarité terme–terme (mode "emap") est un Jaccard ordinaire sur les jeux
+#' de gènes, ce qui rend le constructeur testable sans Bioconductor et
+#' reproductible indépendamment du rendu.
+#' Contrat : `docs/contracts/PATHWAY_NETWORK_CONTRACT.md`.
+#'
+#' @param df résultats portant l'attribut `enrich_obj` (même convention que
+#'   `plot_pathway_network()`).
+#' @param top_n nombre maximal de termes (triés sur `p.adjust`), plafonné à
+#'   `TS_PATHWAY_NETWORK_MAX_TERMS`.
+#' @param mode "emap" (termes ↔ termes) ou "cnet" (termes ↔ gènes).
+#' @return une liste de classe `pathway_network_data` : `nodes`
+#'   (id/label/kind/count/p.adjust), `edges` (from/to/weight), `meta`.
+#'
+#' @export
+build_pathway_network_data <- function(df, top_n = 30, mode = c("emap", "cnet")) {
+
+  mode <- match.arg(mode)
+
+  if (!is.data.frame(df)) {
+    stop(errorCondition(paste0("df doit être un data.frame de résultats de voies (reçu : ", class(df)[1], ")."),
+                        class = "pathway_error"))
+  }
+
+  enrich_obj <- attr(df, "enrich_obj")
+  if (is.null(enrich_obj)) {
+    stop(errorCondition("Aucun objet d'enrichissement brut attaché à ce résultat (attribut 'enrich_obj' absent). Relancez l'enrichissement pour produire le réseau.",
+                        class = "pathway_error"))
+  }
+
+  if (!is.numeric(top_n) || length(top_n) != 1L || is.na(top_n) || top_n < 2) {
+    stop(errorCondition("top_n doit être un nombre >= 2 (un réseau d'une seule voie n'a pas de sens).",
+                        class = "pathway_error"))
+  }
+  top_n <- min(as.integer(top_n), TS_PATHWAY_NETWORK_MAX_TERMS)
+
+  res <- as.data.frame(enrich_obj)
+  if (nrow(res) < 2) {
+    stop(errorCondition("Au moins deux voies enrichies sont nécessaires pour tracer un réseau.",
+                        class = "pathway_error"))
+  }
+
+  needed <- c("ID", "Description", "Count", "p.adjust", "geneID")
+  if (!all(needed %in% names(res))) {
+    stop(errorCondition(paste0("Colonnes manquantes dans l'objet d'enrichissement : ",
+                               paste(setdiff(needed, names(res)), collapse = ", "), "."),
+                        class = "pathway_error"))
+  }
+
+  terms <- res[order(res$p.adjust), ][seq_len(min(top_n, nrow(res))), ]
+
+  gene_sets <- strsplit(terms$geneID, "/", fixed = TRUE)
+  term_nodes <- data.frame(
+    id = as.character(terms$ID),
+    label = ifelse(is.na(terms$Description) | !nzchar(terms$Description),
+                   as.character(terms$ID), as.character(terms$Description)),
+    kind = "term",
+    count = as.integer(terms$Count),
+    p.adjust = as.numeric(terms$p.adjust),
+    stringsAsFactors = FALSE
+  )
+
+  if (mode == "emap") {
+    edges <- .pathway_emap_edges(term_nodes$id, gene_sets)
+    nodes <- term_nodes
+    min_sim <- TS_PATHWAY_NET_MIN_SIM
+  } else {
+    edges <- .pathway_cnet_edges(term_nodes$id, gene_sets)
+    gene_ids <- sort(unique(edges$to))
+    nodes <- rbind(term_nodes,
+                   data.frame(id = gene_ids, label = gene_ids, kind = "gene",
+                              count = NA_integer_, p.adjust = NA_real_,
+                              stringsAsFactors = FALSE))
+    min_sim <- NA_real_
+  }
+
+  structure(
+    list(
+      nodes = nodes,
+      edges = edges,
+      meta = list(mode = mode, top_n = nrow(term_nodes),
+                  n_edges = nrow(edges), min_similarity = min_sim,
+                  gene_separator = "/")
+    ),
+    class = "pathway_network_data"
+  )
+
+}
+
+#' Jaccard term–term edges (emap) — helper pur de `build_pathway_network_data`
+.pathway_emap_edges <- function(term_ids, gene_sets) {
+  n <- length(term_ids)
+  if (n < 2L) {
+    return(data.frame(from = character(0), to = character(0),
+                      weight = numeric(0), stringsAsFactors = FALSE))
+  }
+  from <- character(0); to <- character(0); w <- numeric(0)
+  for (i in seq_len(n - 1L)) {
+    for (j in seq(i + 1L, n)) {
+      inter <- length(intersect(gene_sets[[i]], gene_sets[[j]]))
+      if (inter == 0L) next
+      sim <- inter / length(union(gene_sets[[i]], gene_sets[[j]]))
+      if (sim >= TS_PATHWAY_NET_MIN_SIM) {
+        pair <- sort(c(term_ids[[i]], term_ids[[j]]))
+        from <- c(from, pair[[1]]); to <- c(to, pair[[2]]); w <- c(w, sim)
+      }
+    }
+  }
+  data.frame(from = from, to = to, weight = w, stringsAsFactors = FALSE)
+}
+
+#' Term–gene membership edges (cnet) — helper pur de `build_pathway_network_data`
+.pathway_cnet_edges <- function(term_ids, gene_sets) {
+  from <- unlist(Map(rep, term_ids, vapply(gene_sets, length, integer(1))), use.names = FALSE)
+  to <- unlist(gene_sets, use.names = FALSE)
+  data.frame(from = from, to = to, weight = 1,
+             stringsAsFactors = FALSE)
+}
+
+#' Deterministic network layout (Fruchterman-Reingold, graine figée)
+#'
+#' Séparé du rendu pour être testable : deux appels avec la même entrée
+#' rendent les MÊMES coordonnées (garantie par le contrat).
+#'
+#' @param net sortie de `build_pathway_network_data()`.
+#' @return le data.frame `nodes` de `net`, augmenté de `x`/`y`.
+#' @export
+pathway_network_layout <- function(net) {
+
+  if (!all(c("nodes", "edges") %in% names(net)) ||
+      !is.data.frame(net$nodes) || !is.data.frame(net$edges)) {
+    stop(errorCondition("net doit être la sortie de build_pathway_network_data().",
+                        class = "pathway_error"))
+  }
+
+  g <- igraph::graph_from_data_frame(net$edges, directed = FALSE,
+                                     vertices = net$nodes)
+  coords <- withr::with_seed(
+    TS_PATHWAY_NETWORK_LAYOUT_SEED,
+    igraph::layout_with_fr(g)
+  )
+  net$nodes$x <- coords[, 1]
+  net$nodes$y <- coords[, 2]
+  net$nodes
+}
+
+#' Interactive enrichment network — STAT-S2 V2 (plotly)
+#'
+#' Rendu plotly de la structure `pathway_network_data` : survol d'un terme →
+#' libellé, effectif et p.adjust ; survol d'un gène (mode cnet) →
+#' identifiant. La barre de mode plotly fournit l'export PNG. Le CLIC
+#' (filtrage du tableau par un terme cliqué) est l'item ouvert du contrat —
+#' non câblé dans cette version.
+#'
+#' @param net sortie de `build_pathway_network_data()`.
+#' @param title titre du tracé (peut être pré-traduit par l'appelant).
+#' @param tr fonction de traduction optionnelle.
+#' @return un widget plotly.
+#' @export
+plot_pathway_network_interactive <- function(net, title = "", tr = NULL) {
+
+  tr <- tr %||% function(x) x
+
+  if (!inherits(net, "pathway_network_data")) {
+    stop(errorCondition("net doit être la sortie de build_pathway_network_data().",
+                        class = "pathway_error"))
+  }
+
+  nodes <- pathway_network_layout(net)
+  edges <- net$edges
+
+  # arêtes : un seul trace de segments (x/y alternés, NA sépare les segments)
+  edge_x <- as.vector(t(cbind(nodes$x[match(edges$from, nodes$id)],
+                              nodes$x[match(edges$to, nodes$id)], NA)))
+  edge_y <- as.vector(t(cbind(nodes$y[match(edges$from, nodes$id)],
+                              nodes$y[match(edges$to, nodes$id)], NA)))
+
+  terms <- nodes[nodes$kind == "term", ]
+  genes <- nodes[nodes$kind == "gene", ]
+
+  term_hover <- paste0(
+    "<b>", terms$label, "</b><br>",
+    terms$count, " ", tr("g\u00e8nes"), "<br>",
+    "p.adjust = ", format.pval(terms$p.adjust, digits = 3)
+  )
+
+  p <- plotly::plot_ly(type = "scatter", mode = "lines")
+  if (nrow(edges) > 0) {
+    p <- plotly::add_trace(p, x = edge_x, y = edge_y, mode = "lines",
+                           line = list(color = "#cccccc", width = 1),
+                           hoverinfo = "none", showlegend = FALSE)
+  }
+  if (nrow(genes) > 0) {
+    p <- plotly::add_trace(p, data = genes, x = ~x, y = ~y, type = "scatter",
+                           mode = "markers", text = genes$label,
+                           hoverinfo = "text",
+                           marker = list(color = "#999999", size = 7),
+                           showlegend = FALSE)
+  }
+  p <- plotly::add_trace(p, data = terms, x = ~x, y = ~y, type = "scatter",
+                         mode = "markers", text = term_hover,
+                         hoverinfo = "text",
+                         marker = list(
+                           color = "#2c7fb8",
+                           size = pmax(8, 3.5 * sqrt(pmax(terms$count, 1)))
+                         ),
+                         showlegend = FALSE)
+  p <- plotly::layout(
+    p,
+    title = title,
+    showlegend = FALSE,
+    xaxis = list(visible = FALSE),
+    yaxis = list(visible = FALSE),
+    hoverlabel = list(bgcolor = "white"),
+    margin = list(t = 40)
+  )
+  p
+}
+
+
 
 #' Pathway results DT table (shared)
 

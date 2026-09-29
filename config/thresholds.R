@@ -62,7 +62,8 @@ TS_BULK_DOSE_CURVE_POINTS  <- 100L     # points de la grille de courbe ajustée
 TS_BULK_MULTI_MAX_DATASETS <- 20L      # plafond du conteneur (budget RAM 32 Go — chaque entrée duplique counts + filtré + VST)
 
 # --- MD-4 — conteneur sc_datasets (double jeu SC) -----------------------------
-TS_SC_MULTI_MAX_DATASETS   <- 5L       # plafond du conteneur (budget RAM 32 Go — chaque entrée est un objet Seurat complet, bien plus lourd qu'une matrice bulk)
+TS_SC_MULTI_MAX_DATASETS   <- 20L      # plafond du conteneur (budget RAM 32 Go) — relevé de 5 à 20 le
+                                       # 2026-09-27 (feature 6×10X : les 6 réplicats doivent tenir ; aligné bulk)
 
 # --- NEW-3 — interactome local (réseau dérivé des voies Reactome) -------------
 # La conversion UniProt -> SYMBOL perd des nœuds : le réseau est amputé en
@@ -86,3 +87,10 @@ TS_DECONV_MAX_CELLS_PER_TYPE <- 500L   # per-type subsample cap in artifact
 # --- Trajectory / velocity ---------------------------------------------------
 TS_TRAJECTORY_K_DEFAULT    <- 15L      # default kNN k for graph pseudotime
 TS_VELOCITY_OVERLAP_MIN    <- 0.80     # min cell overlap fraction (0-1)
+
+# --- STAT-S2 V2 — réseau d'enrichissement INTERACTIF (plotly + igraph) -------
+# Cadrage §2bd.5 #3 : tenue sous 200-300 termes. Le plafond est une GARDE
+# (repli demandé au-delà), pas la valeur par défaut de l'UI (100 au widget).
+TS_PATHWAY_NETWORK_MAX_TERMS     <- 300L  # hard cap de termes dans le réseau
+TS_PATHWAY_NET_MIN_SIM           <- 0.20  # similarité de Jaccard min pour une arête terme–terme (emap)
+TS_PATHWAY_NETWORK_LAYOUT_SEED   <- 42L   # graine figée — disposition Fruchterman-Reingold DÉTERMINISTE

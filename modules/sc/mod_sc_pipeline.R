@@ -23,6 +23,16 @@
   force(expr)
 }
 
+# Audit 2026-09-27 §1.8 : graine DÉCLARÉE pour les étapes stochastiques
+# (UMAP / t-SNE) — restaurée après chaque appel (withr::with_seed), donc deux
+# exécutions du pipeline produisent les mêmes embeddings sans fuiter l'état
+# du RNG global vers le reste de l'application.
+.SC_PIPELINE_SEED <- if (exists("TS_SC_PIPELINE_SEED")) TS_SC_PIPELINE_SEED else 989L
+
+.seeded <- function(expr) {
+  withr::with_seed(.SC_PIPELINE_SEED, force(expr))
+}
+
 .is_big_dataset <- function(obj) ncol(obj) > 100000
 
 # t-SNE is quadratic-ish in cost vs UMAP's approximate NN — cap the automatic
@@ -374,9 +384,61 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
         }, error = function(e) obj)
         clean_mem()
 
-        # ── Step 4 : Clustering ───────────────────────────────────────────
+        # ── Step 4 : Intégration Harmony — AVANT le clustering ─────────────
+        # (audit 2026-09-27 §1.1 : historiquement, Harmony était calculée
+        # APRÈS FindNeighbors/FindClusters — clusters, marqueurs, annotation
+        # SingleR et abondance différentielle dérivaient donc de l'espace PCA
+        # brut non corrigé du batch. Ordre correct :
+        #   Normalize → PCA → RunHarmony → FindNeighbors(harmony) →
+        #   FindClusters → UMAP(harmony).)
+        harmony_applied <- FALSE
+        if (identical(input$reduction_method, "harmony")) {
+          if (requireNamespace("harmony", quietly=TRUE)) {
+            library(harmony)
+            if ("orig.ident" %in% colnames(obj@meta.data) &&
+                length(unique(obj$orig.ident)) >= 2) {
+              p$set(0.55, .tr("Harmony (intégration avant clustering)..."))
+              .with_sequential_future({
+                if (.is_big_dataset(obj)) {
+                  showNotification(.tr("Large dataset: paramètres Harmony réduits."), type="info", duration=3)
+                  obj <- RunHarmony(obj, group.by.vars="orig.ident",
+                                    dims.use=1:min(30,input$pca_dim), max.iter.harmony=10, verbose=FALSE)
+                } else {
+                  obj <- RunHarmony(obj, group.by.vars="orig.ident", dims.use=1:input$pca_dim, verbose=FALSE)
+                }
+              })
+              harmony_applied <- TRUE
+              # Roadmap 4.3 : chiffre le mélange des batchs AVANT (pca brute)
+              # et APRÈS (harmony) — remplace le jugement « à l'œil » sur l'UMAP.
+              mix_msg <- tryCatch({
+                before <- sc_batch_mixing_score(obj, reduction = "pca", batch_col = "orig.ident")
+                after  <- sc_batch_mixing_score(obj, reduction = "harmony", batch_col = "orig.ident")
+                sprintf(.tr("Mélange des batchs (0 = séparés, 1 = mélangés) : PCA brute %.0f%% → Harmony %.0f%%."),
+                        100 * before$score, 100 * after$score)
+              }, error = function(e) NULL)
+              if (!is.null(mix_msg)) {
+                showNotification(mix_msg, type = "message", duration = 10)
+              }
+            } else {
+              showNotification(.tr("Harmony non appliquée : 0 ou 1 échantillon (orig.ident) — clustering et UMAP sur PCA brute."), type="warning", duration=8)
+            }
+          } else {
+            showNotification(.tr("Package 'harmony' introuvable — clustering et UMAP sur PCA brute."), type="warning", duration=8)
+          }
+        }
+
+        # Espace de clustering = Harmony si appliquée, sinon PCA brute. Dims
+        # plafonnées à la réduction réellement disponible (audit §1.2 : le
+        # slider va jusqu'à 50 mais RunHarmony gros dataset n'en produit que
+        # 30 — RunUMAP demandait alors des dims inexistantes, sans rattrapage).
+        clust_red  <- if (harmony_applied) "harmony" else "pca"
+        clust_dims <- if (harmony_applied)
+          min(input$pca_dim, ncol(Seurat::Embeddings(obj, "harmony")))
+        else input$pca_dim
+
+        # ── Step 5 : Clustering (sur l'espace intégré le cas échéant) ──────
         p$set(0.60, .tr("Clustering"))
-        obj <- FindNeighbors(obj, dims=1:input$pca_dim)
+        obj <- FindNeighbors(obj, reduction=clust_red, dims=1:clust_dims)
         algo <- suppressWarnings(as.integer(input$cluster_algo %||% "1"))
         obj <- tryCatch(
           FindClusters(obj, resolution=input$clust_res, algorithm=algo),
@@ -397,37 +459,20 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
           }
         )
 
-        # ── Step 5 : Réduction dimensionnelle (méthode principale) ────────
+        # ── Step 6 : Réduction dimensionnelle (méthode principale) ────────
         p$set(0.70, paste(.tr("Réduction:"), input$reduction_method))
 
-        if (input$reduction_method == "harmony") {
-          if (requireNamespace("harmony", quietly=TRUE)) {
-            library(harmony)
-            if ("orig.ident" %in% colnames(obj@meta.data)) {
-              n_batches <- length(unique(obj$orig.ident))
-              if (n_batches >= 2) {
-                .with_sequential_future({
-                  if (.is_big_dataset(obj)) {
-                    showNotification(.tr("Large dataset: paramètres Harmony réduits."), type="info", duration=3)
-                    obj <- RunHarmony(obj, group.by.vars="orig.ident",
-                                      dims.use=1:min(30,input$pca_dim), max.iter.harmony=10, verbose=FALSE)
-                  } else {
-                    obj <- RunHarmony(obj, group.by.vars="orig.ident", dims.use=1:input$pca_dim, verbose=FALSE)
-                  }
-                })
-                obj <- RunUMAP(obj, reduction="harmony", dims=1:input$pca_dim,
-                               verbose=FALSE, reduction.name="umap_harmony")
-              } else {
-                obj <- RunUMAP(obj, dims=1:input$pca_dim, verbose=FALSE)
-              }
-            }
-          } else {
-            obj <- RunUMAP(obj, dims=1:input$pca_dim, verbose=FALSE)
-          }
+        if (harmony_applied) {
+          obj <- .seeded(RunUMAP(obj, reduction="harmony", dims=1:clust_dims,
+                                 verbose=FALSE, reduction.name="umap_harmony"))
+        } else if (input$reduction_method == "harmony") {
+          # Harmony demandée mais non applicable (0/1 batch, package absent) :
+          # notification déjà émise au Step 4 — UMAP sur PCA brute.
+          obj <- .seeded(RunUMAP(obj, dims=1:input$pca_dim, verbose=FALSE))
         } else if (input$reduction_method == "umap") {
-          obj <- RunUMAP(obj, dims=1:input$pca_dim, verbose=FALSE)
+          obj <- .seeded(RunUMAP(obj, dims=1:input$pca_dim, verbose=FALSE))
         } else if (input$reduction_method == "tsne") {
-          obj <- RunTSNE(obj, dims=1:input$pca_dim, verbose=FALSE)
+          obj <- .seeded(RunTSNE(obj, dims=1:input$pca_dim, verbose=FALSE))
         } else if (input$reduction_method == "dm") {
           if (requireNamespace("destiny", quietly=TRUE)) {
             library(destiny)
@@ -436,7 +481,7 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
                                                 key="DM_", assay=DefaultAssay(obj))
           } else {
             showNotification(.tr("Package 'destiny' introuvable. UMAP utilisé."), type="warning", duration=4)
-            obj <- RunUMAP(obj, dims=1:input$pca_dim, verbose=FALSE)
+            obj <- .seeded(RunUMAP(obj, dims=1:input$pca_dim, verbose=FALSE))
           }
         }
         # pca: already computed in Step 3 — nothing extra
@@ -454,7 +499,7 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
               type = "info", duration = 5)
           } else {
             p$set(0.85, .tr("t-SNE (secondaire)..."))
-            obj <- tryCatch(RunTSNE(obj, dims = 1:input$pca_dim, verbose = FALSE),
+            obj <- tryCatch(.seeded(RunTSNE(obj, dims = 1:input$pca_dim, verbose = FALSE)),
                             error = function(e) {
                               showNotification(paste(.tr("t-SNE secondaire ignoré:"), e$message),
                                                type = "warning", duration = 5)

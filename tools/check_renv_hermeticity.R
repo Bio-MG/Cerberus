@@ -145,7 +145,12 @@ run_hermeticity_check <- function(root = getwd(), verbose = FALSE) {
   }
 
   .desc_index <- function() {
-    idx <- character(0)
+    # LISTE nommee, pas vecteur caractere : `idx[[p]]` sur un vecteur lève
+    # "subscript out of bounds" dès qu'un paquet du lock est ABSENT de la
+    # bibliothèque (mesuré 2026-09-28 : 20 paquets du lock absents sur
+    # `cline/8283c` — decoupleR, survminer, variancePartition, ...), alors que
+    # le contrat de `dep_of()` est de rendre NULL pour "non installé".
+    idx <- list()
     for (lib in .libPaths()) {
       if (!dir.exists(lib)) next
       for (d in list.dirs(lib, recursive = FALSE, full.names = TRUE)) {

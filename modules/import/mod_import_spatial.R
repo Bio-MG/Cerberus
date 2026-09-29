@@ -363,6 +363,20 @@ mod_import_spatial_server <- function(id, global_data) {
       path <- shinyFiles::parseDirPath(volumes, input$dir_select)
       if (length(path) > 0) { dir_path(path); add_log(paste(.tr("Dossier:"), path)) }
     })
+
+    # ── Drive token (parity with mod_import_bulk.R) : le VRAI bouton reste ──
+    # l'unique déclencheur (spec S5 : un fileInput/dirSelect n'est jamais
+    # simulé), et la readiness est une sonde BON MARCHÉ — le choix du dossier,
+    # sans toucher au système de fichiers.
+    drive_counter <- shiny::reactiveVal(0L)
+    drive_ready <- function() {
+      if (is.null(shiny::isolate(dir_path()))) {
+        "no directory selected (choose a folder first)"
+      } else TRUE
+    }
+    ts_drive_publish_token(global_data, "import_spatial-btn_import",
+                           drive_counter, ready = drive_ready)
+
     output$path_display <- renderText({
       global_data$language  # i18n: re-render on language switch
       if (is.null(dir_path())) .tr("Aucun dossier selectionne") else dir_path()

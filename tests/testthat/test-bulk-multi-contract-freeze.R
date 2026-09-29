@@ -276,6 +276,18 @@ test_that("mod_bulk_datasets.R is a thin consumer of the pure API", {
   }
   expect_match(mbd, 'producer = "pipeline_save"', fixed = TRUE)
   expect_match(mbd, "overwrite = TRUE", fixed = TRUE)
+  # Parité SC_MULTI roadmap 4.1 (2026-09-27) : l'ACTIVATION d'un dataset
+  # enregistré écrit global_data$bulk_obj via bulk_multi_get — SEULE écriture
+  # autorisée (contrat BULK_MULTI_CONTRACT.md §4, amended). Toute autre
+  # écriture reste interdite. Le bump de bulk_obj_epoch qui suit purge les
+  # résultats partagés (audit 2026-09-27 §1.5).
+  mbd_no_activation <- gsub("global_data\\$bulk_obj <- entry\\$obj", "", mbd,
+                            perl = TRUE)
+  expect_false(grepl("global_data\\$bulk_obj\\s*(<-|\\[\\[\\]\\s*<-)",
+                     mbd_no_activation, perl = TRUE),
+               info = "écriture interdite sur global_data$bulk_obj hors activation")
+  expect_match(mbd, "bulk_multi_get(", fixed = TRUE)
+  expect_match(mbd, "bulk_obj_epoch", fixed = TRUE)
 })
 
 # ── Sync code <-> contrat ──────────────────────────────────────────────────
@@ -318,7 +330,11 @@ test_that("MD-1 i18n keys exist in translation.json (no FR leak in EN UI)", {
     "Aucun dataset enregistré pour l'instant.",
     "Dataset à supprimer",
     "Supprimer le dataset",
-    "✓ Dataset « %s » supprimé."
+    "✓ Dataset « %s » supprimé.",
+    "Dataset à activer",
+    "✅ Activer ce dataset",
+    "Aucun dataset à activer.",
+    "✓ Jeu « %s » activé (%s) — objet actif remplacé, résultats purgés."
   )
   for (k in keys) {
     expect_true(k %in% fr_keys, info = paste("clé i18n absente :", k))

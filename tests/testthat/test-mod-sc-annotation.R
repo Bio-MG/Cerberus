@@ -84,3 +84,44 @@ test_that("mod_sc_annotation : messages IDENTIQUES et classe observable à l'ex�
   expect_identical(e108$msg, "Lancez le clustering (Pipeline) avant l'annotation.")
   expect_true("sc_annotation_error" %in% e108$class)
 })
+
+# ── Roadmap SC FUNCTION_TEST §7 — régressions D1 / D2 ────────────────────────
+# D1 : .run_singler_safe (chemin cluster) indexait cluster_labels par
+# as.character(obj$seurat_clusters) — facteur ⇒ noms barcodes perdus, le
+# résultat héritait des ids de cluster et obj[[col]] matchait 0 noms.
+# D2 : renommage AVANT subset ⇒ tous les NA devenaient "NA" et le garde
+# !duplicated() collapssait les gènes non-mappés en UNE ligne bogus.
+test_that("D1 : les étiquettes cluster->cellules portent les BARCODES comme noms", {
+  cells <- paste0("cell", 1:7)
+  cnt   <- Matrix::sparseMatrix(
+    i = rep(1:3, 7L), j = rep(1:7, each = 3L), x = 1,
+    dims = c(3L, 7L), dimnames = list(c("G1", "G2", "G3"), cells)
+  )
+  obj <- SeuratObject::CreateSeuratObject(counts = cnt)
+  # seurat_clusters en FACTEUR (c'est le type réel post-FindClusters)
+  obj$seurat_clusters <- factor(c("2", "0", "0", "1", "2", "1", "0"))
+
+  cluster_labels <- c("0" = "T cell", "1" = "B cell", "2" = "Mono")
+  out <- .annot_cluster_labels_to_cells(cluster_labels, obj)
+
+  expect_identical(names(out), cells)            # barcodes, PAS "0"/"1"/"2"
+  expect_identical(
+    unname(out),
+    c("Mono", "T cell", "T cell", "B cell", "Mono", "B cell", "T cell")
+  )
+  expect_equal(length(out), ncol(obj))           # une étiquette par cellule
+})
+
+test_that("D2 : subset par keep AVANT renommage — aucun gène mappé perdu", {
+  genes <- c("ENSGA", "ENSGNA1", "ENSGNA2", "ENSB")
+  sym   <- c("GeneA", NA, NA_character_, "GeneB")   # 2 non-mappés sur 4
+  mat   <- Matrix::Matrix(1:8, nrow = 4L, ncol = 2L, sparse = TRUE,
+                          dimnames = list(genes, c("c1", "c2")))
+
+  out <- .annot_subset_rename(mat, sym)
+
+  # les 2 gènes mappés restent présents (l'ancien ordre les réduisait à 1 ligne "NA")
+  expect_identical(rownames(out), c("GeneA", "GeneB"))
+  expect_identical(as.numeric(out[, "c1"]), c(1, 4))   # valeurs intactes
+  expect_identical(ncol(out), 2L)
+})

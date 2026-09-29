@@ -97,13 +97,14 @@ test_that("the drive input set is frozen, closed, and carries no modal-only key"
   expect_setequal(names(inputs), c(
     "sc_ap_mapping", "sc_ap_mapping_org", "sc_ap_bpcells",
     "sc_ap_min_gene", "sc_ap_max_gene", "sc_ap_mt", "sc_ap_norm",
-    "sc_ap_pca_dim", "sc_ap_res", "sc_ap_cluster_algo", "sc_ap_compute_umap",
+    "sc_ap_pca_dim", "sc_ap_res", "sc_ap_cluster_algo", "sc_ap_integration",
+    "sc_ap_batch_var", "sc_ap_compute_umap",
     "sc_ap_sketch_preset", "sc_ap_sketch_ncells_custom",
     "sc_ap_singler", "sc_ap_singler_ref", "sc_ap_singler_level",
     "sc_ap_markers", "sc_ap_pathway", "sc_ap_pathway_db", "sc_ap_pathway_org",
     "sc_ap_correlation", "sc_ap_trajectory"
   ))
-  expect_length(inputs, 22L)
+  expect_length(inputs, 24L)
   # Declared values. `sketch_preset = "max"` means FULL dataset: the drive never
   # depends on a hidden sub-sampling decision, and `bpcells = FALSE` keeps the
   # action free of any disk write.

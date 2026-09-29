@@ -638,7 +638,22 @@ new_entries <- list(
   c("R\u00e9sultats obtenus avec une dispersion impos\u00e9e (edgeR, BCV d\u00e9clar\u00e9) : les p-values ne sont PAS inf\u00e9rentielles.",
     "Results obtained with an imposed dispersion (edgeR, declared BCV): p-values are NOT inferential."),
   c("Mode exploratoire sans r\u00e9plicat",
-    "Exploratory no-replicate mode")
+    "Exploratory no-replicate mode"),
+  # --- STAT-S2 V2 (réseau d'enrichissement interactif) ---
+  c("R\u00e9seau interactif (survol des n\u0153uds)",
+    "Interactive network (hover over nodes)"),
+  # --- Roadmap SC FUNCTION_TEST (M1.1 / M1.3 / M1.4) ---
+  c("Option A (dossiers) — formats acceptés : barcodes.tsv(.gz), features.tsv(.gz) ou genes.tsv(.gz), matrix.mtx(.gz). L'Option B (fichiers) accepte .rds, .h5, .h5ad, .loom, .rda/.RData.",
+    "Option A (folders) — accepted formats: barcodes.tsv(.gz), features.tsv(.gz) or genes.tsv(.gz), matrix.mtx(.gz). Option B (files) accepts .rds, .h5, .h5ad, .loom, .rda/.RData."),
+  c("Intersection : %d gènes communs à TOUS les échantillons — %d gènes zéro-remplis dans au moins un échantillon.",
+    "Intersection: %d genes common to ALL samples — %d genes zero-filled in at least one sample."),
+  c("metadata.csv : %d cellules flaggées doublet/multiplets sur %d — colonne `multiplets` ajoutée (filtrable).",
+    "metadata.csv: %d cells flagged doublet/multiplets out of %d — `multiplets` column added (filterable)."),
+  # --- Roadmap SC FUNCTION_TEST M0 (lecteur loom/h5ad) ---
+  c("Loom / H5AD (velocyto, scVelo)", "Loom / H5AD (velocyto, scVelo)"),
+  c("Fichier velocity .loom / .h5ad", "Velocity .loom / .h5ad file"),
+  c("Lecture stricte des couches spliced/unspliced (+ ambiguous si present). Aucune inference ; les symboles de gènes dupliqués sont rendus uniques (avertissement affiché).",
+    "Strict reading of the spliced/unspliced layers (+ ambiguous when present). No inference; duplicated gene symbols are made unique (warning shown).")
 )
 
 fr_existing <- vapply(j$translation, function(x) x$fr %||% "", character(1))
