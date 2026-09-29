@@ -3130,8 +3130,23 @@ ts_drive_attach <- function(session, input, poll_ms = 800) {
   # `started_at` is fixed for the whole session and `hb_n` starts at 0; both are
   # handed to every later rewrite so neither can drift.
   started_at <- ts_drive_now_iso()
+  # 🔴 THE FLOOR IS RESUMED, NOT INVENTED. `ts_drive_read_result()` was documented
+  # as "used to resume `last_seq` after a reload" and had NO call site, so every
+  # session started at 0 — and with a floor of 0 the `seq <= last_seq` guard is
+  # FALSE for the PREVIOUS session's `scenario.json`, which is still on disk: the
+  # first tick APPLIED a dead session's scenario. That behaviour was even frozen by
+  # a test (`:3452`, where `d2` consumes the `seq = 72` scenario `d1` wrote).
+  # MEASURED 2026-09-29. The agent-facing half matters as much as the safety half:
+  # the floor is PUBLISHED in `ready.json`, so a first `seq` is read from the file
+  # instead of guessed — and `0` stays exactly what it should mean, an EMPTY
+  # channel, which is what the non-vacuity assertion pins.
+  resumed_ack <- suppressWarnings(as.integer(ts_drive_read_result()$ack_seq %||% 0L))
+  if (length(resumed_ack) != 1L || is.na(resumed_ack) || resumed_ack < 0L) {
+    resumed_ack <- 0L
+  }
   boot_ready <- ts_drive_write_ready(session, token, armed = FALSE,
-                                     started_at = started_at, hb_n = 0L)
+                                     started_at = started_at, hb_n = 0L,
+                                     last_seq = resumed_ack)
   # The FIRST write of a session is the one the agent needs to find the token,
   # so its failure is reported rather than assumed away. It used to be a bare
   # call whose result was discarded: a session whose handshake never landed
@@ -3166,7 +3181,7 @@ ts_drive_attach <- function(session, input, poll_ms = 800) {
   # Mutable cursor shared by the closure. Kept in the closure's environment,
   # not in a `reactiveVal`, precisely so `R/` stays free of reactivity.
     cursor <- new.env(parent = emptyenv())
-    cursor$last_seq <- 0L
+    cursor$last_seq <- resumed_ack
     cursor$armed    <- FALSE
     cursor$nav      <- NULL
     # S6: a run waiting for its injected inputs to be confirmed by the owning

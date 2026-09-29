@@ -4072,3 +4072,131 @@ test_that("la valeur TERMINALE reste celle du producteur, pas une horloge", {
   expect_identical(as.character(published$status), "done")
   expect_false(ts_drive_job_busy())
 })
+
+# =============================================================================
+# S8 — the SEQUENCE FLOOR: what a new session starts from, and what it PUBLISHES
+# =============================================================================
+# WHY THIS SECTION EXISTS (2026-09-29, offline, after a live run)
+#   A live run recorded a session whose `ready.json` published `last_seq: 42`
+#   while `ts_drive_boot()` seeds `cursor$last_seq <- 0L`, and the documented
+#   resume helper `ts_drive_read_result()` had NO call site in the package. Three
+#   beliefs, at least one wrong, none of them measured. The live observation
+#   itself was taken while TWO clients shared one `_drive` channel, so it settles
+#   nothing; this section settles the CODE, offline, and pins the two properties
+#   an agent actually depends on:
+#     (1) the floor a session ENFORCES, and
+#     (2) the floor it PUBLISHES,
+#   are the same number, and that number is not invented.
+#
+# 🔑 WHY A FLOOR OF 0 IS NOT ENOUGH. With `last_seq = 0` the previous session's
+# `scenario.json` is still on disk, and on the first tick `seq <= last_seq` is
+# FALSE for it, so a DEAD session's scenario is APPLIED — measured by an existing
+# test at :3452-3470, where `d2` consumes the `seq = 72` scenario `d1` wrote. That
+# is why "published == enforced" would be a vacuous assertion at 0, and why the
+# resume is the substance of this section rather than a nicety.
+#
+# ⚠️ WHAT THIS SECTION DELIBERATELY DOES NOT CHANGE: the refusal below the floor
+# stays SILENT on the wire. See the second test for the measured reason and for
+# the doc-vs-code divergence it exposes (`ignored` is computed, never written).
+# =============================================================================
+
+test_that("the floor is resumed from the last published verdict, and PUBLISHED at attach", {
+  .drv_local_root()
+  ts_drive_write_json(list(protocol = TS_DRIVE_PROTOCOL, ack_seq = 42L, status = "done"),
+                      ts_drive_path("result.json"))
+
+  d <- ts_drive_attach(.drv_fake_session(new.env()), list())
+
+  # ENFORCED …
+  expect_identical(as.integer(d$last_seq()), 42L)
+  # … and PUBLISHED, because the agent picks its first `seq` from this file and
+  # from nothing else.
+  expect_identical(as.integer(ts_drive_read_ready()$last_seq), 42L)
+})
+
+test_that("below the floor the refusal is ASSERTED SILENCE, and the PUBLISHED floor is what makes it survivable", {
+  # 🔴 THE SILENCE IS DELIBERATE, and this slice does not reverse it. An existing
+  # test freezes it at :585 — "a stale scenario produces no result and no
+  # consumption" — for a sound reason: the scenario file is UNCHANGED, so
+  # republishing the same verdict every 800 ms would be churn an agent can
+  # misread as activity. MEASURED consequence, worth writing down because the
+  # protocol's own docs get it wrong: `ignored` is COMPUTED by
+  # `ts_drive_validate_scenario()` and NEVER WRITTEN, so it is not a status an
+  # agent can ever observe, whatever the six-status list says. A stale write is
+  # therefore answered by NOTHING on the wire.
+  #
+  # What makes that survivable is the other half of this slice: the floor is
+  # PUBLISHED, so an agent reads where it must start instead of writing `seq = 1`
+  # and waiting out its own timeout. Silence plus a published floor is a contract;
+  # silence plus a hidden floor is the 200-second stall measured on 2026-09-28.
+  .drv_local_root()
+  ts_drive_write_json(list(protocol = TS_DRIVE_PROTOCOL, ack_seq = 42L, status = "done"),
+                      ts_drive_path("result.json"))
+  d <- ts_drive_attach(.drv_fake_session(new.env()), list())
+  .drv_write_arm(d$token)
+
+  .drv_write_scn(7L, action = "set_inputs", module = "bulk_de", session_token = d$token)
+  before <- readLines(ts_drive_path("result.json"), warn = FALSE)
+  tick <- d$on_tick(global_data = list(), effects = NULL)
+
+  expect_false(isTRUE(tick$consumed))                       # nothing consumed
+  expect_identical(readLines(ts_drive_path("result.json"), warn = FALSE), before)
+  expect_identical(as.integer(d$last_seq()), 42L)           # the floor did not move
+  expect_identical(as.integer(ts_drive_read_ready()$last_seq), 42L)   # … and it is PUBLISHED
+
+  # 🔑 NON-VACUITY: a seq ABOVE the floor is consumed. Without this, "refuse
+  # everything" would satisfy the four assertions above.
+  .drv_write_scn(43L, action = "set_inputs", module = "bulk_de", session_token = d$token)
+  d$on_tick(global_data = list(), effects = NULL)
+  expect_identical(as.integer(d$last_seq()), 43L)
+  expect_identical(as.integer(ts_drive_read_result()$ack_seq), 43L)
+})
+
+test_that("a FRESH channel still starts at 1: the floor is resumed, never invented", {
+  .drv_local_root()                      # no result.json at all
+  d <- ts_drive_attach(.drv_fake_session(new.env()), list())
+  expect_identical(as.integer(d$last_seq()), 0L)
+  expect_identical(as.integer(ts_drive_read_ready()$last_seq), 0L)
+
+  .drv_write_arm(d$token)
+  .drv_write_scn(1L, action = "set_inputs", module = "bulk_de", session_token = d$token)
+  d$on_tick(global_data = list(), effects = NULL)
+  expect_identical(as.integer(d$last_seq()), 1L)
+  expect_false("stale seq" %in%
+                 paste(unlist(ts_drive_read_result()$warnings), collapse = " "))
+})
+
+test_that("re-sending the SAME seq is ASSERTED SILENCE, and silence is not a lost verdict", {
+  .drv_local_root()
+  d <- ts_drive_attach(.drv_fake_session(new.env()), list())
+  .drv_write_arm(d$token)
+  .drv_write_scn(5L, action = "set_inputs", module = "bulk_de", session_token = d$token)
+  d$on_tick(global_data = list(), effects = NULL)
+  expect_identical(as.integer(ts_drive_read_result()$ack_seq), 5L)
+
+  # The scenario file has NOT changed, so every later beat must not republish the
+  # same verdict: the tick runs every ~800 ms and a republish is churn an agent
+  # can misread as activity. `drive_watcher.R:2674` returns before any write for
+  # exactly this case. The silence is therefore ASSERTED here, with its reason —
+  # the alternative, publishing `ignored` on every beat, would be worse.
+  before <- readLines(ts_drive_path("result.json"), warn = FALSE)
+  for (i in 1:3) d$on_tick(global_data = list(), effects = NULL)
+  expect_identical(readLines(ts_drive_path("result.json"), warn = FALSE), before)
+  expect_identical(as.integer(d$last_seq()), 5L)
+})
+
+test_that("the resume helper is WIRED, not a documented function nobody calls", {
+  # The comment on `ts_drive_read_result()` says "used to resume `last_seq` after
+  # a reload". Before this slice it had NO call site in the package: a documented
+  # promise with no implementation is the same name-not-content blindness rule 5
+  # exists to catch. Asserted BEHAVIOURALLY, because `expect_true(is.function())`
+  # would pass just as well on a function nothing calls.
+  .drv_local_root()
+  expect_true(is.function(ts_drive_read_result))
+  expect_null(ts_drive_read_result())            # empty channel
+  ts_drive_write_json(list(protocol = TS_DRIVE_PROTOCOL, ack_seq = 9L, status = "done"),
+                      ts_drive_path("result.json"))
+  expect_identical(as.integer(ts_drive_read_result()$ack_seq), 9L)
+  d <- ts_drive_attach(.drv_fake_session(new.env()), list())
+  expect_identical(as.integer(d$last_seq()), 9L)  # the helper is what feeds it
+})
