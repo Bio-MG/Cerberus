@@ -98,10 +98,24 @@ source_project_file("modules/import/mod_import_spatial.R")
 # source) ⇒ on peut l'assérer ENTIER sans dépendre de l'encodage.
 .MIS_MSG <- "Technologie inconnue."
 
-# --- AST : le BLOC (3ᵉ élément) de `observeEvent(input$btn_import, …)` ---------
-# Harnais partage `helper-ast.R` (§2dg) : ce fichier portait TROIS copies du
-# parcours recursif `walk()` — les trois sont remplacees ici (3 des 14 du depot).
-.mis_handler_expr <- function() ts_ast_observe_block(.MIS_FILE, "btn_import")
+# --- AST : le BLOC SOUS TEST est l'ÉCRIVAIN PARTAGÉ `run_spatial_import` -----
+# ⚠️ RETARGETED on 2026-09-26 (Phase F), and the retarget IMPROVES the test.
+# The four `test_that` blocks below assert properties of the import BODY — that
+# the guard is REACHED, that its class is SWALLOWED, that the guard is
+# CONDITIONAL, that the handler does not rethrow. That body used to BE the block
+# of `observeEvent(input$btn_import, …)`, so the harness evaluated that block.
+# Phase F extracted the body into `run_spatial_import(path, sample_name,
+# technology)` — one writer, two callers — and the button observer is now a
+# six-line adapter. Evaluating the adapter would have tested the ADAPTER (and
+# failed, `run_spatial_import` being absent from the fake env), i.e. it would
+# have measured nothing it claims to measure.
+#
+# So the harness now extracts the WRITER by name. `ts_ast_assignment()` evaluates
+# the right-hand side in the fake env, which makes that env the function's
+# CLOSURE — exactly the substitution the old block-eval achieved.
+.mis_handler_expr <- function(eval_env) {
+  ts_ast_assignment(.MIS_FILE, "run_spatial_import", eval_env)
+}
 
 # --- AST : le GESTIONNAIRE `error = function(e) …` qui porte « Erreur import
 # spatial » (L614-617). Sert à la justification falsifiable du verrou source.
@@ -147,10 +161,14 @@ source_project_file("modules/import/mod_import_spatial.R")
   e
 }
 
-# --- Exécution : le corps est un BLOC ⇒ on l'ÉVALUE (jamais on ne l'appelle).
-.mis_run <- function(envir) {
+# --- Exécution : l'ÉCRIVANT est une FONCTION ⇒ on l'APELLE (jamais on n'évalue
+# un bloc). `path` / `sample_name` sont passés en ARGUMENTS, comme la seconde
+# appelante (l'importeur du drive) le fait.
+.mis_run <- function(technology, rec = NULL, loader_throws = FALSE) {
+  envir <- .mis_env(technology, rec = rec, loader_throws = loader_throws)
+  fn <- .mis_handler_expr(envir)
   tryCatch({
-    eval(.mis_handler_expr(), envir = envir)
+    fn("FAKE_DIR", "s1", technology)
     NULL
   }, error = function(e) list(msg = conditionMessage(e), class = class(e)))
 }
@@ -160,7 +178,7 @@ source_project_file("modules/import/mod_import_spatial.R")
 # ---------------------------------------------------------------------------
 test_that("mod_import_spatial : le garde 481 est ATTEINT (temoin) puis AVALE", {
   steps <- character(0)
-  err <- .mis_run(.mis_env("INCONNU", rec = function(s) steps <<- c(steps, s)))
+  err <- .mis_run("INCONNU", rec = function(s) steps <<- c(steps, s))
 
   # 1) TÉMOIN DE TRAVERSÉE NON VACUANT : le gestionnaire L614-617 a journalisé le
   #    message DU GARDE ⇒ le garde s'est bien exécuté. Ce n'est pas une déduction,
@@ -177,7 +195,7 @@ test_that("mod_import_spatial : le garde 481 est ATTEINT (temoin) puis AVALE", {
 # ---------------------------------------------------------------------------
 test_that("mod_import_spatial : la classe spatial_import_error est INOBSERVABLE", {
   steps <- character(0)
-  err <- .mis_run(.mis_env("INCONNU", rec = function(s) steps <<- c(steps, s)))
+  err <- .mis_run("INCONNU", rec = function(s) steps <<- c(steps, s))
 
   # La classe n'apparaît dans AUCUN canal observable : ni en erreur remontée…
   expect_null(err)
@@ -190,8 +208,8 @@ test_that("mod_import_spatial : la classe spatial_import_error est INOBSERVABLE"
 # ---------------------------------------------------------------------------
 test_that("le garde 481 est conditionnel : technology='visium' => il ne tire pas", {
   steps <- character(0)
-  err <- .mis_run(.mis_env("visium", rec = function(s) steps <<- c(steps, s),
-                           loader_throws = TRUE))
+  err <- .mis_run("visium", rec = function(s) steps <<- c(steps, s),
+                  loader_throws = TRUE)
 
   # TÉMOIN DE TRAVERSÉE : le bras NOMMÉ « visium » a bien été atteint — le
   # chargeur a été appelé, et son échec est remonté au gestionnaire. Sans ce

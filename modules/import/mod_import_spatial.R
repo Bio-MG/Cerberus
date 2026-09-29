@@ -363,24 +363,79 @@ mod_import_spatial_server <- function(id, global_data) {
       path <- shinyFiles::parseDirPath(volumes, input$dir_select)
       if (length(path) > 0) { dir_path(path); add_log(paste(.tr("Dossier:"), path)) }
     })
-
-    # ── Drive token (parity with mod_import_bulk.R) : le VRAI bouton reste ──
-    # l'unique déclencheur (spec S5 : un fileInput/dirSelect n'est jamais
-    # simulé), et la readiness est une sonde BON MARCHÉ — le choix du dossier,
-    # sans toucher au système de fichiers.
-    drive_counter <- shiny::reactiveVal(0L)
-    drive_ready <- function() {
-      if (is.null(shiny::isolate(dir_path()))) {
-        "no directory selected (choose a folder first)"
-      } else TRUE
-    }
-    ts_drive_publish_token(global_data, "import_spatial-btn_import",
-                           drive_counter, ready = drive_ready)
-
     output$path_display <- renderText({
       global_data$language  # i18n: re-render on language switch
       if (is.null(dir_path())) .tr("Aucun dossier selectionne") else dir_path()
     })
+
+    # ── DRIVE LIVE CONTROL (Phase F) : the bound confirm button ───────────────
+    # `btn_import` is a REAL `actionButton`, so — unlike the seven dispatched
+    # actions — it needs no counter of its own and no declared parameter set: the
+    # folder and the technology are already in the module. `ts_drive_bind_button()`
+    # instruments it so a session a HUMAN populated through the native picker
+    # becomes drivable by an agent afterwards, which is the half of the flow that
+    # needs no `import_file` at all.
+    #
+    # With no `arm.json` the counter never moves: the binding is inert, exactly
+    # like `import_bulk`'s.
+    #
+    # READINESS GUARD, same reasoning as `import_bulk`'s: the observer below opens
+    # with `req(dir_path())` and would abort in SILENCE with no folder, so the
+    # poller would report `done` for an import that never happened. The guard
+    # tests the module's own PICKED PATH, never a path string from a scenario, and
+    # it stays cheap — it reads a `reactiveVal`, it does not stat a 10X tree.
+    drive_btn <- ts_drive_bind_button(TS_DRIVE_SPATIAL_IMPORT_BUTTON)
+    drive_counter <- shiny::reactiveVal(0L)
+    drive_ready <- function() {
+      if (is.null(shiny::isolate(dir_path()))) {
+        "no data folder selected (the native picker is empty)"
+      } else TRUE
+    }
+    # ── STATE PROBE (gap 1) ───────────────────────────────────────────────
+    # Same gap, same fix, same bound as `mod_import_bulk.R`: without this the
+    # module published NO `snapshot.modules` entry, so an `import_file` that
+    # reported `done` was indistinguishable from one that loaded nothing. The
+    # `technology` field is the importer-specific one — it is the value that
+    # SELECTS the loader (`switch()` with no fallthrough), so an agent cannot
+    # infer which loader ran from the dimensions alone.
+    #
+    # Every reactive read is `isolate()`d: the probe runs inside the poller's
+    # beat, and an un-isolated read would enrol this module's data in the
+    # poller's dependency set (the rule `ts_drive_module_states()` states).
+    #
+    # The dimensions are read from `$sketch` and NOT from a `$counts` field: the
+    # Spatial object carries `sketch` / `coords` / `bpcells_dir` / `n_total` and no
+    # counts matrix (:805-807 reads the same three), so a probe written against
+    # `obj$counts` would publish NULL forever and look like a working probe that
+    # reports nothing. `n_total` is the on-disk spot count and `n_samples` the
+    # spots in the sketch: two DIFFERENT numbers by design.
+    drive_state <- function() {
+      obj  <- tryCatch(shiny::isolate(global_data$spatial_obj), error = function(e) NULL)
+      sk   <- tryCatch(obj$sketch, error = function(e) NULL)
+      list(module = "import_spatial", has_data = !is.null(obj),
+           n_genes = if (is.null(sk)) NULL else suppressWarnings(as.integer(nrow(sk))),
+           n_samples = if (is.null(sk)) NULL else suppressWarnings(as.integer(ncol(sk))),
+           # ⚠️ `as.integer(NULL)` is `integer(0)`, which serialises as `[]` — a
+           # SECOND shape for one field, the exact trap `ts_drive_module_states()`
+           # documents for `columns` (drive_watcher.R:1174-1180).
+           n_total = if (is.null(obj) || is.null(obj$n_total)) NULL else
+             suppressWarnings(as.integer(obj$n_total)),
+           technology = tryCatch(shiny::isolate(input$technology),
+                                 error = function(e) NULL))
+    }
+    # The button id is a LITERAL here on purpose: test-drive-watcher.R greps every
+    # TS_DRIVE_BUTTONS entry as a quoted literal beside a `ts_drive_publish_token(`
+    # call, and that shared check is what proves an allowlist entry is really
+    # wired. The assertions keep the literal and the constant from drifting.
+    ts_drive_publish_token(global_data, "import_spatial-btn_import",
+                           drive_counter, ready = drive_ready, state = drive_state)
+    # A `reactive()` is the trigger type that respects BOTH a reactiveVal counter
+    # and an actionButton counter, so the human's click and the drive's click share
+    # ONE observer. Same idiom as `mod_import_bulk.R:326`, and the reason is not
+    # stylistic: two observers on the same button would mean two bodies to keep in
+    # step, and `check_duplication.R` counts repeated `observeEvent` triggers in one
+    # file as a copy-paste risk.
+    drive_trigger <- shiny::reactive(list(drive_counter(), input$btn_import))
 
     # ── Visium import mode: SINGLE source of truth (Chantier 1 refonte) ───
     # get_visium_import_mode() (helpers_io.R) is the exact same function the
@@ -448,72 +503,127 @@ mod_import_spatial_server <- function(id, global_data) {
       )
     })
     
-    observeEvent(input$btn_import, {
-      req(dir_path())
-      sample_name <- if (nchar(trimws(input$sample_name))) trimws(input$sample_name) else basename(dir_path())
+    # ── THE ONE IMPORT WRITER (Phase F) ────────────────────────────────────
+    # Extracted verbatim from what used to be the body of the confirm-button
+    # observer, with exactly THREE substitutions: `dir_path()` -> `path`,
+    # `input$technology` -> `technology`, and every remaining widget read wrapped in
+    # `shiny::isolate()`.
+    #
+    # ⚠️ The comment above deliberately does NOT quote the trigger expression
+    # verbatim. `check_duplication.R` counts `observeEvent(<same trigger>, ...)`
+    # occurrences per file, and it matches inside COMMENTS — so a comment naming
+    # the old trigger made the gate report a duplicate observer that does not
+    # exist. A warning that describes the code inaccurately costs the next reader
+    # more than the sentence was worth.
+    #
+    # WHY (spec G3 / S5, the same rule `import_bulk` follows): the folder this
+    # module imports is the ONE dataset input Shiny offers no way to set from the
+    # server — `shinyDirButton` has no `update*` equivalent, and the only widget
+    # that could carry it is a `webkitdirectory` input behind a native dialog an
+    # automated client cannot answer. Faking the widget is forbidden, and
+    # duplicating 180 lines of loader + BPCells conversion so a second caller can
+    # reach it is how the two copies drift. So the body became a FUNCTION both
+    # callers use, and the drive's `import_file` reaches it by name.
+    #
+    # `shiny::isolate()` is load-bearing in BOTH directions and is NOT a no-op in
+    # the reactive case: it is what makes the same expression legal from a
+    # non-reactive context (the importer) without changing the reactive one. The
+    # observer only ever re-ran on the confirm click, and it still
+    # does — the body no longer contributes dependencies to the observer, so the
+    # handler cannot be dragged into re-running by a widget it merely reads.
+    #
+    # @return list(ok, status, error, name, technology, n_total, n_sketch).
+    #   A verdict rather than an exception, because the two callers translate it
+    #   differently: the UI shows a notification and moves on, while the drive
+    #   must tell `invalid` (a refusal) from `error` (a loader failure).
+    run_spatial_import <- function(path, sample_name, technology) {
+      # ⚠️ THE NEVER-RAISE CONTRACT. Everything below — including this guard —
+      # returns a verdict instead of raising, and the path guard sits INSIDE the
+      # `tryCatch` precisely so that it does too. The first version raised it, which
+      # made the writer the ONE caller that could throw, and the drive importer had
+      # to wrap it in a second `tryCatch` purely to convert an exception into the
+      # `error` verdict its sibling already produced. Two error channels for one
+      # operation is exactly the ambiguity the verdict contract exists to remove.
+      min_counts   <- shiny::isolate(input$min_counts)   %||% 100
+      min_features <- shiny::isolate(input$min_features) %||% 200
+      max_sketch   <- shiny::isolate(input$max_sketch)   %||% 50000
+      norm_method  <- shiny::isolate(input$norm_method)  %||% "lognorm"
+      simplify_tol <- shiny::isolate(input$simplify_tol) %||% 20
+      load_raw_also <- isTRUE(shiny::isolate(input$load_raw_also))
+      orient_swap_xy <- isTRUE(shiny::isolate(input$orient_swap_xy))
+      orient_flip_x  <- isTRUE(shiny::isolate(input$orient_flip_x))
+      orient_flip_y  <- isTRUE(shiny::isolate(input$orient_flip_y))
+      hd_bin_size    <- shiny::isolate(input$hd_bin_size)
+      min_counts_ss  <- shiny::isolate(input$min_counts_ss)   %||% 100
+      min_features_ss <- shiny::isolate(input$min_features_ss) %||% 200
 
-      mode <- if (identical(input$technology, "visium")) {
-        tryCatch(get_visium_import_mode(dir_path()), error = function(e) "visium")
+      mode <- if (identical(technology, "visium")) {
+        tryCatch(get_visium_import_mode(path), error = function(e) "visium")
       } else {
         NA_character_
       }
       is_hd <- identical(mode, "visium_hd_binned")
-      
+
       withProgress(message = .tr("Import spatial..."), value = 0, {
         tryCatch({
+          # The one guard that belongs to the WRITER rather than to a caller: an
+          # empty path can only come from a caller that skipped its own `req()`.
+          if (is.null(path) || !nzchar(path)) {
+            stop(.tr("Aucun dossier selectionne"), call. = FALSE)
+          }
           # Fail fast, before touching any progress UI, for the one mode we
           # know in advance can never succeed -- same message the loader
           # itself would raise, but skips a pointless withProgress cycle.
           if (identical(mode, "visium_hd_flat")) {
             stop(.hd_flat_unsupported_message(), call. = FALSE)
           }
-          if (is_hd && (is.null(input$hd_bin_size) || !nzchar(input$hd_bin_size))) {
+          if (is_hd && (is.null(hd_bin_size) || !nzchar(hd_bin_size))) {
             stop(.tr("Aucune resolution de binning selectionnee (voir le panneau Visium HD ci-dessus)."),
                  call. = FALSE)
           }
 
           incProgress(0.1, detail = .tr("Lecture des fichiers bruts..."))
-          raw_obj <- switch(input$technology,
+          raw_obj <- switch(technology,
                             "visium" = {
                               if (is_hd) {
-                                add_log(sprintf("  Visium HD detecte -- import du binning %sum.", input$hd_bin_size))
-                                load_spatial_visium_hd(dir_path(), bin_size = as.integer(input$hd_bin_size),
+                                add_log(sprintf("  Visium HD detecte -- import du binning %sum.", hd_bin_size))
+                                load_spatial_visium_hd(path, bin_size = as.integer(hd_bin_size),
                                                        sample_name = sample_name,
-                                                       min_counts = input$min_counts,
-                                                       min_features = input$min_features)
+                                                       min_counts = min_counts,
+                                                       min_features = min_features)
                               } else {
-                                load_spatial_visium(dir_path(), sample_name = sample_name,
-                                                    min_counts = input$min_counts,
-                                                    min_features = input$min_features)
+                                load_spatial_visium(path, sample_name = sample_name,
+                                                    min_counts = min_counts,
+                                                    min_features = min_features)
                               }
                             },
-                            "xenium" = Seurat::LoadXenium(dir_path(), fov = "fov"),
-                            "cosmx"  = Seurat::LoadNanostring(dir_path(), fov = "fov", assay = "Nanostring"),
-                            "slideseq" = load_spatial_slideseq(dir_path(), sample_name = sample_name,
-                                                               min_counts = input$min_counts_ss %||% 100,
-                                                               min_features = input$min_features_ss %||% 200),
+                            "xenium" = Seurat::LoadXenium(path, fov = "fov"),
+                            "cosmx"  = Seurat::LoadNanostring(path, fov = "fov", assay = "Nanostring"),
+                            "slideseq" = load_spatial_slideseq(path, sample_name = sample_name,
+                                                               min_counts = min_counts_ss,
+                                                               min_features = min_features_ss),
                             stop(errorCondition(.tr("Technologie inconnue."), class = "spatial_import_error"))
           )
           if (isTRUE(attr(raw_obj, "ts_manual_hd_loader"))) {
             add_log(paste0(
-              "  \u26a0 Chargeur HD degrade utilise (pas de package Parquet complet) : ",
+              "  ⚠ Chargeur HD degrade utilise (pas de package Parquet complet) : ",
               "coordonnees et comptages disponibles, PAS de fond histologique natif ",
               "pour cet echantillon (le fond depuis 'spatial/' racine reste tente separement)."
             ))
           }
           add_log(sprintf("  ✓ Objet brut charge : %d genes x %d %s%s",
                           nrow(raw_obj), ncol(raw_obj),
-                          if (input$technology == "visium") "spots" else "cellules",
-                          if (is_hd) sprintf(" (bin %sum)", input$hd_bin_size) else ""))
+                          if (technology == "visium") "spots" else "cellules",
+                          if (is_hd) sprintf(" (bin %sum)", hd_bin_size) else ""))
 
           # ── v7 (backlog #4) : matrice brute (raw) OPTIONNELLE, Visium
           # classique (non-HD) uniquement — chargee EN PLUS, jamais a la
           # place, de la matrice filtree ci-dessus. Best-effort : un echec
           # ici ne bloque jamais l'import filtre.
           raw_bg_obj <- NULL
-          if (identical(input$technology, "visium") && !is_hd && isTRUE(input$load_raw_also)) {
+          if (identical(technology, "visium") && !is_hd && load_raw_also) {
             incProgress(0.05, detail = .tr("Lecture de la matrice brute (raw)..."))
-            raw_bg_obj <- tryCatch(load_spatial_visium_raw(dir_path()), error = function(e) {
+            raw_bg_obj <- tryCatch(load_spatial_visium_raw(path), error = function(e) {
               add_log(paste("  \u26a0 Lecture matrice brute (raw) echouee :", conditionMessage(e)))
               NULL
             })
@@ -526,9 +636,9 @@ mod_import_spatial_server <- function(id, global_data) {
           }
           
           incProgress(0.3, detail = .tr("Conversion BPCells (disque)..."))
-          norm_label <- if (input$norm_method == "sct") "SCTransform" else "LogNormalize"
+          norm_label <- if (norm_method == "sct") "SCTransform" else "LogNormalize"
           add_log(sprintf("  Normalisation du sketch : %s", norm_label))
-          if (input$norm_method == "sct") {
+          if (norm_method == "sct") {
             incProgress(0.1, detail = .tr("SCTransform sur le sketch (synchrone, peut prendre du temps)..."))
           }
           
@@ -538,26 +648,26 @@ mod_import_spatial_server <- function(id, global_data) {
           # internally, see utils_spatial_io.R header for the full
           # diagnosis. Also thread the manual orientation correction
           # through (Visium only -- these inputs don't exist in the DOM for
-          # xenium/cosmx, so input$orient_* is NULL there and isTRUE(NULL)
+          # xenium/cosmx, so the reads below are FALSE there, and isTRUE(NULL)
           # safely defaults to FALSE). For Visium HD, raw_dir is STILL the
           # root "outs" folder (not the bin-specific subfolder) — see this
           # file's header for why (symlinked per-bin histology images are a
-          # documented Visium HD fragility point; the root copy is canonical).
-          orient_applied <- isTRUE(input$orient_swap_xy) || isTRUE(input$orient_flip_x) || isTRUE(input$orient_flip_y)
+          # documented Visium HD fragility point, the root copy is canonical).
+          orient_applied <- orient_swap_xy || orient_flip_x || orient_flip_y
           if (orient_applied) {
             add_log(sprintf("  Correction manuelle d'orientation : swap_xy=%s, flip_x=%s, flip_y=%s",
-                            isTRUE(input$orient_swap_xy), isTRUE(input$orient_flip_x), isTRUE(input$orient_flip_y)))
+                            orient_swap_xy, orient_flip_x, orient_flip_y))
           }
           
           spatial_pkg <- convert_to_bpcells_and_fov(
-            raw_obj, dataset_id = sample_name, technology = input$technology,
-            simplify_tol = input$simplify_tol %||% 20,
-            max_sketch = input$max_sketch,
-            norm_method = input$norm_method,
-            raw_dir = dir_path(),
-            swap_xy = isTRUE(input$orient_swap_xy),
-            flip_x  = isTRUE(input$orient_flip_x),
-            flip_y  = isTRUE(input$orient_flip_y),
+            raw_obj, dataset_id = sample_name, technology = technology,
+            simplify_tol = simplify_tol,
+            max_sketch = max_sketch,
+            norm_method = norm_method,
+            raw_dir = path,
+            swap_xy = orient_swap_xy,
+            flip_x  = orient_flip_x,
+            flip_y  = orient_flip_y,
             raw_bg_obj = raw_bg_obj
           )
           add_log(sprintf("  ✓ BPCells: %s", spatial_pkg$bpcells_dir))
@@ -615,8 +725,8 @@ mod_import_spatial_server <- function(id, global_data) {
           }
           
           add_log(.t_fmt(.tr("✅ Import termine : {name} ({tech}{hd}) — {n} echantillon(s) au total"),
-                          name = sample_name, tech = input$technology,
-                          hd = if (is_hd) sprintf(" HD %sum", input$hd_bin_size) else "",
+                          name = sample_name, tech = technology,
+                          hd = if (is_hd) sprintf(" HD %sum", hd_bin_size) else "",
                           n = length(global_data$spatial_datasets)))
           showNotification(.t_fmt(.tr("✅ Import spatial reussi : {n} elements ({sk} en sketch RAM, {norm}){extra}"),
                                   n = spatial_pkg$n_total, sk = ncol(spatial_pkg$sketch), norm = norm_label,
@@ -625,11 +735,82 @@ mod_import_spatial_server <- function(id, global_data) {
                                             length(global_data$spatial_datasets))
                                   } else ""),
                            type = "message", duration = 6)
+          # The verdict the drive importer returns. Deliberately SCALARS only: it
+          # is published through `result.json`, and the module's own `n_results`
+          # projection reads the same shape. `n_total` counts disk elements and
+          # `n_sketch` the RAM sketch, which are the two numbers the module's own
+          # value boxes show — so an agent reads the same figures a human does.
+          list(ok = TRUE, status = "applied", error = NULL,
+               name = sample_name, technology = technology,
+               n_total = as.integer(spatial_pkg$n_total),
+               n_sketch = as.integer(ncol(spatial_pkg$sketch)),
+               n_datasets = length(global_data$spatial_datasets))
         }, error = function(e) {
           msg <- paste(.tr("❌ Erreur import spatial:"), conditionMessage(e))
           add_log(msg); showNotification(msg, type = "error", duration = 10)
+          # `error`, not `invalid`: the payload was ACCEPTED (the watcher already
+          # validated the folder against the allowlisted roots) and the LOADER is
+          # what failed. The two must stay distinguishable, exactly as they are for
+          # the Bulk importer.
+          list(ok = FALSE, status = "error", error = conditionMessage(e),
+               name = sample_name, technology = technology,
+               n_total = NA_integer_, n_sketch = NA_integer_,
+               n_datasets = length(global_data$spatial_datasets))
         })
       })
+    }
+
+    # ── The UI's own click path, now a two-line adapter over the shared writer ──
+    # The folder and the name come from the widgets; the writer takes them as
+    # ARGUMENTS precisely so the drive path never has to fake them.
+    #
+    # ONE observer, TWO triggers (`drive_trigger`). Declared HERE, after the
+    # writer, not beside the binding: an observer body naming a function defined
+    # further down would be correct by accident, and only until someone reordered
+    # the two blocks. `req(dir_path())` is the human's guard — with no folder
+    # picked, a drive click aborts in silence rather than dispatching an import
+    # that can only fail.
+    observeEvent(drive_trigger(), {
+      req(dir_path())
+      run_spatial_import(
+        dir_path(),
+        if (nchar(trimws(input$sample_name))) trimws(input$sample_name) else basename(dir_path()),
+        input$technology
+      )
+    })
+
+    # ── DRIVE LIVE CONTROL (Phase F) : the Spatial importer for `import_file` ───
+    # Same contract as modules/import/mod_import_bulk.R:620, and the same rule —
+    # reuse the loader the UI uses, never fake a widget. `dir_path` arrived as
+    # DATA, already confined to the allowlisted roots and already `dir.exists()`
+    # by `ts_drive_validate_import_dir()` (spec S11), and `technology` /
+    # `sample_name` arrived as validated scalars, so nothing here has to be
+    # re-checked or guessed.
+    #
+    # The parameters the widgets own (min_counts, max_sketch, norm_method, …) are
+    # read by `run_spatial_import()` through `isolate()`, so the drive honours the
+    # widget state a human may have set, and an agent that never opened the panel
+    # gets the declared defaults. They are DEFAULTS, not derived values: no
+    # session-derived parameter enters this function.
+    #
+    # No `tryCatch` around the writer: it RETURNS its verdict (see the never-raise
+    # contract on `run_spatial_import`) and this is a straight translation of it. An
+    # exception here would have to be mapped onto the same `error` status anyway, so
+    # the wrapper bought nothing but a second place for the two channels to
+    # disagree.
+    ts_drive_publish_importer(global_data, TS_DRIVE_SPATIAL_IMPORT_MODULE, function(request) {
+      res <- run_spatial_import(request$dir_path, request$sample_name, request$technology)
+      if (!isTRUE(res$ok)) {
+        # `error`, not `invalid`: the payload was ACCEPTED (the watcher already
+        # validated the folder against the allowlisted roots) and the LOADER is
+        # what failed. The two must stay distinguishable, exactly as they are for
+        # the Bulk importer — an `invalid` here would tell the agent to send a
+        # different payload, and no different payload would help.
+        return(list(ok = FALSE, status = res$status %||% "error",
+                    errors = res$error %||% "the Spatial import failed",
+                    warnings = character(0)))
+      }
+      list(ok = TRUE, status = "applied", errors = character(0), warnings = character(0))
     })
     
     # ── Outputs ────────────────────────────────────────────────────────
