@@ -29,6 +29,10 @@
 # locks, so this file needs neither Seurat nor a session.
 source_project_file("R/core/drive_allowlist.R")
 source_project_file("R/core/drive_watcher.R")
+# `%||%` lives in io_helpers.R and the probe section at the end of this file needs
+# it: the closures it lifts out of the module use it (`input$multi_label %||% ""`).
+# Sourced rather than redefined, for the reason the two lines above give.
+source_project_file("R/core/io_helpers.R")
 
 .sc_src <- function() {
   readLines(file.path(ts_project_root(), "modules", "import", "mod_import_sc.R"),
@@ -530,4 +534,272 @@ test_that("the sample identity is the EXPLICIT name, never a basename", {
   expect_false(grepl("basename(", pub, fixed = TRUE))
   expect_true(grepl("sc_sample_object(", pub, fixed = TRUE))
   expect_true(grepl("sample_name", pub, fixed = TRUE))
+})
+
+# =============================================================================
+# The `import_sc` STATE PROBE — closing the S3 gap the handoff §2.3 called BLOCKED
+# =============================================================================
+# WHY THIS SECTION IS DIFFERENT FROM EVERYTHING ABOVE
+#   `import_sc` deliberately binds NO button ("a bound button that lies",
+#   drive_allowlist.R:555-561), so it cannot publish state the way
+#   `import_bulk` and `import_spatial` do — those two pass `state =` to their own
+#   `ts_drive_publish_token()`. The IMPORTER seam is the only honest place left,
+#   and it stored a BARE FUNCTION, so the collector — which reads `entry$state`
+#   from a LIST entry — published nothing for this module. That is the whole
+#   "BLOCKED, do not force" verdict, and it is a SHAPE problem, not a missing
+#   capability: no button, no action and no export is invented here.
+#
+# WHY THE PROBE IS A LIST AND NOT NULL ON AN EMPTY SESSION
+#   The two delivered probes return a list whose dimensions are NULL when nothing
+#   is loaded, and this one does the same. Returning NULL would be worse than
+#   useless: the collector assigns `out[[mod]] <- ans`, and assigning NULL
+#   REMOVES the key, so "this module has no state" and "this module's probe
+#   returned nothing" would become the SAME answer on the wire — the exact
+#   confusion `ts_drive_module_states()` documents against. A failed import must
+#   read as `has_data = FALSE` with NULL dimensions: never a phantom success, and
+#   never an absent module.
+# =============================================================================
+
+.SCF <- "modules/import/mod_import_sc.R"
+
+# A REAL 10x-v3 triplet: `.sc_triplet()` above writes EMPTY files, which is right
+# for a validator (it decides on NAMES) and useless for a loader. `Read10X()`
+# needs a parseable MatrixMarket body, so this writes one — 4 genes x 4 cells, all
+# counts strictly positive, because a sparse toy is the shape most likely to be
+# filtered down to nothing by a default QC threshold, which would turn a probe test
+# into a fixture test.
+.sc_real_triplet <- function(dir, n_genes = 4L, n_cells = 4L) {
+  unlink(dir, recursive = TRUE, force = TRUE)
+  dir.create(dir, recursive = TRUE, showWarnings = FALSE)
+  m <- matrix(as.integer(seq_len(n_genes * n_cells)), nrow = n_genes, ncol = n_cells)
+  mtx <- c("%%MatrixMarket matrix coordinate integer general", "%",
+           sprintf("%d %d %d", n_genes, n_cells, length(m)),
+           sprintf("%d %d %d", rep(seq_len(n_genes), each = n_cells),
+                   rep(seq_len(n_cells), times = n_genes), as.integer(m)))
+  gz <- function(txt, file) {
+    con <- gzfile(file.path(dir, file), open = "wt")
+    writeLines(txt, con); close(con)
+  }
+  gz(mtx, "matrix.mtx.gz")
+  gz(sprintf("ENSG%05d\tGene%d", seq_len(n_genes), seq_len(n_genes)), "features.tsv.gz")
+  gz(sprintf("CELL%02d-1", seq_len(n_cells)), "barcodes.tsv.gz")
+  dir
+}
+
+# The environment the published importer runs in. Every DATA-path closure is
+# lifted out of the REAL source (`ts_ast_assignment`) rather than retyped, for
+# the reason the Bulk sibling states: a test that exercised a copy would measure
+# the copy. The only stubs are the two i18n shims, and neither is on the data path.
+.sc_env <- function() {
+  e <- new.env(parent = globalenv())
+  e$.ensure_10x_features      <- ts_ast_assignment(.SCF, ".ensure_10x_features", e)
+  e$load_single_cell_data     <- ts_ast_assignment(.SCF, "load_single_cell_data", e)
+  e$prepare_seurat_object     <- ts_ast_assignment(.SCF, "prepare_seurat_object", e)
+  e$sc_sample_object          <- ts_ast_assignment(.SCF, "sc_sample_object", e)
+  e$.register_sc_multi_dataset <- ts_ast_assignment(.SCF, ".register_sc_multi_dataset", e)
+  e$global_data <- new.env(parent = emptyenv())
+  # The REGISTRY has to exist before anything can be published into it: both
+  # `ts_drive_publish_importer()` and `ts_drive_module_states()` reach it through
+  # `ts_drive_registry()`, which answers NULL — not an error — when it is absent.
+  # MEASURED: without this seed the probe itself was correct and the WIRE
+  # assertions failed with an empty `published`, which reads like a product defect
+  # and is not one.
+  e$global_data$drive_registry <- new.env(parent = emptyenv())
+  e$input <- list(multi_label = "")     # an empty label short-circuits MD-4
+  e$add_log <- function(msg) invisible(NULL)
+  e$.tr <- function(x) x                 # i18n shim: a log line, not data
+  e$.tr_plain <- function(x) x           # i18n shim: an error message, not data
+  e$Read10X <- Seurat::Read10X
+  e$CreateSeuratObject <- Seurat::CreateSeuratObject
+  e
+}
+
+# The published importer is an ANONYMOUS function inside the
+# `ts_drive_publish_importer()` call, so it is lifted out of the real source.
+.sc_importer <- function(envir) {
+  p <- ts_ast_parse(.SCF)
+  found <- NULL
+  for (i in seq_along(p)) {
+    ts_ast_walk(p[[i]], function(x) {
+      if (!ts_ast_is_call_to(x, "ts_drive_publish_importer")) return(FALSE)
+      l <- as.list(x)
+      if (length(l) < 4L) return(FALSE)
+      # The module argument is the CONSTANT `TS_DRIVE_SC_IMPORT_MODULE`, not a
+      # string literal, so it is EVALUATED. MEASURED: the first version compared
+      # `as.character(l[[3]])` and found no importer at all — the Bulk call site
+      # uses a literal and this one does not, so a matcher that only knows about
+      # literals reports "no importer" where the real answer is "wrong matcher".
+      mod <- tryCatch(eval(l[[3]], envir = envir), error = function(e) "")
+      if (!identical(as.character(mod), TS_DRIVE_SC_IMPORT_MODULE)) return(FALSE)
+      found <<- eval(l[[4]], envir = envir)
+      return(TRUE)
+    })
+    if (!is.null(found)) break
+  }
+  if (is.null(found)) stop("no published importer for import_sc", call. = FALSE)
+  found
+}
+
+# `ts_ast_assignment()` ERRORS on an absent assignment rather than returning NULL,
+# so a probe that does not exist yet would abort the test instead of failing it —
+# and a red that crashes says "the test is broken", not "the feature is missing".
+# MEASURED: the first version called it directly and both tests ERRORED.
+.sc_assign <- function(name, envir) {
+  tryCatch(ts_ast_assignment(.SCF, name, envir), error = function(e) NULL)
+}
+
+test_that("import_sc publishes a BOUNDED state probe through the IMPORTER seam", {
+  dir <- .sc_real_triplet(file.path(tempdir(), "ts-sc-probe"))
+  on.exit(unlink(dir, recursive = TRUE, force = TRUE), add = TRUE)
+  envir <- .sc_env()
+  gd <- envir$global_data
+  ts_drive_boot(file.path(tempdir(), "ts-sc-probe-root"))
+
+  # (a) THE REAL ENTRY POINT, on a real 10x-v3 corpus.
+  importer <- .sc_importer(envir)
+  expect_true(is.function(importer))
+  res <- importer(list(dir_path = dir, sample_name = "Patient1"))
+  expect_true(res$ok, info = paste(res$errors, collapse = "; "))
+  # It really wrote into the ENVIRONMENT it was given: a list would have accepted
+  # a copy here and every assertion below would have been theatre.
+  obj <- gd$sc_obj
+  expect_false(is.null(obj))
+  expect_identical(as.integer(ncol(obj)), 4L)
+  expect_identical(as.character(obj$orig.ident[1]), "Patient1")
+
+  # The probe itself, lifted from the real source.
+  probe <- .sc_assign("drive_state", envir)
+  if (!.sc_need(is.function(probe), "the module must define a `drive_state` probe")) {
+    return(invisible(NULL))
+  }
+
+  # 🔑 THE WIRING, asserted on the source — and this is the assertion the slice
+  # actually turns on. Everything below proves the SEAM works; only this proves
+  # the MODULE uses it. MEASURED: with the module passing `state = NULL` and the
+  # test publishing the probe itself, the whole file stayed GREEN — the test was
+  # measuring its own publication, and the product defect it was written for was
+  # still present. A test that calls the API itself cannot fail when the caller
+  # forgets.
+  expect_match(paste(.sc_code(), collapse = "\n"), "state = drive_state", fixed = TRUE)
+
+  # (b) PRESENT, and correctly shaped, on success.
+  st <- probe()
+  expect_type(st, "list")
+  expect_identical(st$module, "import_sc")
+  expect_true(st$has_data)
+  expect_identical(st$n_cells, 4L)
+  expect_identical(st$n_genes, 4L)
+  expect_identical(st$sample_name, "Patient1")
+  # BOUNDED: the collector projects only `descriptor` and passes every other field
+  # through whole, so keeping this small is the MODULE's obligation.
+  expect_setequal(names(st), c("module", "has_data", "n_cells", "n_genes", "sample_name"))
+  for (f in st) {
+    expect_true(is.atomic(f) || is.null(f),
+                info = "a probe field must be a scalar, never a matrix or a list")
+  }
+
+  # 🔑 THE WIRE. This is the slice: before it, `ts_drive_module_states()` published
+  # nothing at all for `import_sc`, so a `done` on an import was indistinguishable
+  # from a `done` on an import that loaded nothing — the handoff's §2.2 finding.
+  ts_drive_publish_importer(gd, TS_DRIVE_SC_IMPORT_MODULE, importer, state = probe)
+  published <- ts_drive_module_states(gd)
+  expect_true("import_sc" %in% names(published))
+  expect_identical(published$import_sc$has_data, TRUE)
+  expect_identical(as.integer(published$import_sc$n_cells), 4L)
+  expect_false("probe_error" %in% names(published$import_sc))
+
+  # 🔑 THE LIVE IMPORT PATH SURVIVES THE ELEMENT-SHAPE CHANGE. An entry is a LIST
+  # when a probe is attached, and the poller reads the importer out of it; without
+  # that branch a `list` entry would read as "no importer" and the import would
+  # stop working for ALL THREE modalities. The bare-function form is the two other
+  # importers' form and must keep answering.
+  expect_true(is.function(ts_drive_importer_of(gd, TS_DRIVE_SC_IMPORT_MODULE)))
+  ts_drive_publish_importer(gd, "import_bulk", function(request) list(ok = TRUE))
+  expect_true(is.function(ts_drive_importer_of(gd, "import_bulk")))
+
+  # EMPTY SESSION: `has_data = FALSE` and NULL dimensions. NOT a NULL probe — see
+  # the section header for why that would be the worse answer.
+  gd$sc_obj <- NULL
+  st0 <- probe()
+  expect_type(st0, "list")
+  expect_false(st0$has_data)
+  expect_null(st0$n_cells)
+  expect_null(st0$n_genes)
+  expect_null(st0$sample_name)
+
+  # (c) FALSIFICATION — a mutated record must stop satisfying the verdict.
+  # `module` is part of the verdict: a probe relabelled as another module is wrong
+  # even when every number is right, and a first version of this predicate omitted
+  # it, so the `s$module <- "import_bulk"` mutation was ACCEPTED and the
+  # falsification suite reported zero failures.
+  ok <- function(s) identical(s$module, "import_sc") && isTRUE(s$has_data) &&
+    identical(s$n_cells, 4L) && identical(s$n_genes, 4L) &&
+    identical(s$sample_name, "Patient1")
+  expect_true(ok(st))
+  for (mut in list(
+    function(s) { s$n_cells <- 1L; s },
+    function(s) { s$has_data <- FALSE; s },
+    function(s) { s$n_genes <- NULL; s },
+    function(s) { s$sample_name <- "basename"; s },
+    function(s) { s$module <- "import_bulk"; s }
+  )) {
+    expect_failure(expect_true(ok(mut(st))), label = "a mutated probe record was accepted")
+  }
+})
+
+test_that("a FAILED import_sc never makes the probe claim the sample it failed to load", {
+  # The invariant is NOT "an empty probe after a failure" — MEASURED, and a first
+  # version of this test asserted exactly that and was wrong. A failed import
+  # leaves the PREVIOUS object in `global_data$sc_obj` (the human flow does the
+  # same: a refused load does not unload what is already there), so the honest
+  # invariant is the sharper one: the probe must name the sample that IS loaded,
+  # never the one that was ATTEMPTED. "Empty probe" is the right answer only when
+  # nothing was ever loaded, and the first test pins that case separately.
+  envir <- .sc_env()
+  gd <- envir$global_data
+  ts_drive_boot(file.path(tempdir(), "ts-sc-probe-root2"))
+  importer <- .sc_importer(envir)
+  probe <- .sc_assign("drive_state", envir)
+  if (!.sc_need(is.function(probe), "the module must define a `drive_state` probe")) {
+    return(invisible(NULL))
+  }
+  ts_drive_publish_importer(gd, TS_DRIVE_SC_IMPORT_MODULE, importer, state = probe)
+
+  # A first, GOOD import …
+  good <- .sc_real_triplet(file.path(tempdir(), "ts-sc-probe-ok"))
+  on.exit(unlink(good, recursive = TRUE, force = TRUE), add = TRUE)
+  expect_true(importer(list(dir_path = good, sample_name = "P1"))$ok)
+  expect_true(probe()$has_data)
+  expect_identical(probe()$sample_name, "P1")
+
+  # … then a corpus whose matrix.mtx.gz is NOT MatrixMarket: the LOADER raises,
+  # `sc_obj` keeps P1, and the probe must still name P1 — never P2.
+  bad <- .sc_real_triplet(file.path(tempdir(), "ts-sc-probe-bad"))
+  writeLines("not a matrix at all", gzfile(file.path(bad, "matrix.mtx.gz"), open = "wt"))
+  on.exit(unlink(bad, recursive = TRUE, force = TRUE), add = TRUE)
+  err <- tryCatch(importer(list(dir_path = bad, sample_name = "P2")),
+                  condition = function(e) e)
+  expect_s3_class(err, "condition")
+  # The class is `Read10X`'s own, not the module's: the importer deliberately has
+  # no `tryCatch`, and the WATCHER maps a raised condition onto an `error` verdict
+  # with its message. Asserting `sc_import_error` here would demand a class the
+  # module does not control — measured, and the wrong expectation.
+  expect_identical(as.character(gd$sc_obj$orig.ident[1]), "P1")   # untouched
+  st <- probe()
+  expect_true(st$has_data)
+  expect_identical(st$sample_name, "P1")
+  expect_false(identical(st$sample_name, "P2"))
+  expect_identical(as.integer(st$n_cells), 4L)
+
+  # A REFUSED payload — a directory that is not a triplet at all — never reaches
+  # the writer, so the probe is not even called with it and nothing changes.
+  nottriplet <- file.path(tempdir(), "ts-sc-probe-nontriplet")
+  unlink(nottriplet, recursive = TRUE, force = TRUE)
+  dir.create(nottriplet, recursive = TRUE, showWarnings = FALSE)
+  on.exit(unlink(nottriplet, recursive = TRUE, force = TRUE), add = TRUE)
+  v <- ts_drive_validate_import(list(dir_path = nottriplet, sample_name = "P3"),
+                                roots = file.path(tempdir(), "ts-sc-probe-root2"),
+                                module = "import_sc")
+  expect_false(v$ok)
+  expect_identical(probe()$sample_name, "P1")
 })

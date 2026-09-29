@@ -479,6 +479,41 @@ mod_import_sc_server <- function(id, global_data) {
       })
     })
 
+    # ── STATE PROBE (gap 1, the S3 blocker) ──────────────────────────────────
+    # The other two importers publish their probe on a bound token
+    # (`ts_drive_publish_token(..., state = )`). `import_sc` binds NO button, on
+    # purpose (drive_allowlist.R:555-561), so it had no token to carry one and
+    # published no `snapshot.modules` entry at all: a `done` on an import was
+    # indistinguishable from a `done` on an import that loaded nothing. The probe
+    # therefore rides the IMPORTER seam, and the registry entry becomes a list
+    # only when a probe is attached — the bare-function form the other two use is
+    # untouched.
+    #
+    # BOUNDED is the module's obligation, not the collector's: it projects only
+    # `descriptor` and passes every other field through whole. Five scalars, no
+    # object, no path, no matrix.
+    #
+    # `has_data` FALSE + NULL dimensions is how "nothing imported" is spelled.
+    # ⚠️ Hence `if (is.null(x)) NULL` and never `as.integer(x)`: `as.integer(NULL)`
+    # is `integer(0)`, which serialises as `[]` — a SECOND shape for one field.
+    # A probe returning `NULL` itself would be dropped by the collector
+    # (`out[[mod]] <- NULL` REMOVES the key), making "no state" and "the probe
+    # returned nothing" the same answer on the wire.
+    drive_state <- function() {
+      obj <- tryCatch(shiny::isolate(global_data$sc_obj), error = function(e) NULL)
+      nc <- tryCatch(ncol(obj), error = function(e) NULL)
+      ng <- tryCatch(nrow(obj), error = function(e) NULL)
+      list(module = "import_sc", has_data = !is.null(obj),
+           n_cells = if (is.null(nc)) NULL else suppressWarnings(as.integer(nc)),
+           n_genes = if (is.null(ng)) NULL else suppressWarnings(as.integer(ng)),
+           # `orig.ident` is the identity the importer was GIVEN, so the probe
+           # reports the sample that is actually loaded, never a directory label.
+           sample_name = if (is.null(obj)) NULL else {
+             sid <- tryCatch(as.character(obj$orig.ident[1]), error = function(e) NULL)
+             if (is.null(sid) || !length(sid)) NULL else sid
+           })
+    }
+
     # ── DRIVE LIVE CONTROL (S3) : the `import_sc` importer ──────────────────
     # Same contract as the Spatial and Bulk importers: `dir_path` and
     # `sample_name` arrived as DATA, already confined to the allowlisted roots,
@@ -515,7 +550,7 @@ mod_import_sc_server <- function(id, global_data) {
            # `error` here would tell the agent to send a different payload, and
            # no different payload would help.
            warnings = character(0))
-    })
+    }, state = drive_state)
 
     # ── Option B ────────────────────────────────────────────────────────────
     output$file_list_display <- renderUI({

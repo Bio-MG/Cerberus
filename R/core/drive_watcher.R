@@ -1153,7 +1153,10 @@ ts_drive_module_states <- function(global_data) {
     entry <- reg[[id]]
     probe <- if (is.list(entry)) entry$state else NULL
     if (!is.function(probe)) next
-    mod <- ts_drive_module_of(id)
+    # An IMPORTER entry is named `tsdrive-importer-<module>`, which is not an
+    # allowlisted input id; the lexical fallback would answer
+    # `tsdrive-importer-import`. The mapping is DATA (drive_allowlist.R).
+    mod <- ts_drive_module_of_registry(id)
     if (is.na(mod)) next
     ans <- tryCatch(probe(), error = function(e) e)
     out[[mod]] <- if (inherits(ans, "condition")) {

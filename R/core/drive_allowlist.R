@@ -1423,7 +1423,13 @@ ts_drive_validate_sc_import <- function(block, roots = ts_drive_import_roots()) 
 
 #' @param module One of `TS_DRIVE_IMPORT_MODULES`.
 #' @param importer `function(request)` -> list(ok, status, errors, warnings).
-ts_drive_publish_importer <- function(global_data, module, importer) {
+#' @param state Optional bounded probe, `function()` -> named list. Only the
+#'   `import_sc` module uses it: it binds no button, so it has no token to carry
+#'   a probe, and the IMPORTER seam is the only honest place left. The registry
+#'   entry becomes a LIST only when a probe is attached, so the bare-function form
+#'   the other two importers use — and `ts_drive_importer_of()`'s reading of it —
+#'   are untouched.
+ts_drive_publish_importer <- function(global_data, module, importer, state = NULL) {
   if (!is.character(module) || length(module) != 1L || is.na(module) ||
       !module %in% TS_DRIVE_IMPORT_MODULES) {
     warning(sprintf("ts_drive_publish_importer(): '%s' has no importer in the import allowlist (%s) - ignored.",
@@ -1435,19 +1441,50 @@ ts_drive_publish_importer <- function(global_data, module, importer) {
     warning("ts_drive_publish_importer(): the importer must be a function — ignored.")
     return(invisible(FALSE))
   }
+  # A non-function `state` is REFUSED, not stored: a list entry whose `state` is
+  # not callable would be skipped by the collector exactly like a missing probe,
+  # so accepting one would make a typo indistinguishable from "no probe".
+  if (!is.null(state) && !is.function(state)) {
+    warning("ts_drive_publish_importer(): `state` must be a function or NULL — ignored.")
+    state <- NULL
+  }
   reg <- ts_drive_registry(global_data)
   if (is.null(reg)) return(invisible(FALSE))
-  reg[[paste0(TS_DRIVE_IMPORTER_PREFIX, module)]] <- importer
+  reg[[paste0(TS_DRIVE_IMPORTER_PREFIX, module)]] <-
+    if (is.null(state)) importer else list(importer = importer, state = state)
   invisible(TRUE)
 }
 
+#' The MODULE a REGISTRY entry belongs to.
+#'
+#' The collector walks the registry by id, and an importer entry is named
+#' `tsdrive-importer-<module>`, which is NOT an allowlisted input id. The lexical
+#' fallback of `ts_drive_module_of()` would split it on the LAST dash and answer
+#' `tsdrive-importer-import`, a module that does not exist. The prefix is stripped
+#' instead — from the DATA, not from a guess.
+#' @noRd
+ts_drive_module_of_registry <- function(id) {
+  if (is.character(id) && length(id) == 1L && !is.na(id) &&
+      startsWith(id, TS_DRIVE_IMPORTER_PREFIX)) {
+    mod <- substring(id, nchar(TS_DRIVE_IMPORTER_PREFIX) + 1L)
+    return(if (nzchar(mod)) mod else NA_character_)
+  }
+  ts_drive_module_of(id)
+}
+
 #' Read a module's published importer (used by the poller through `effects`).
+#'
+#' Reads EITHER shape: a bare function (the two button-bound importers) or a
+#' `list(importer, state)` entry (an importer that also publishes a probe). The
+#' second branch is what keeps the live import path working for all three
+#' modalities after that shape was introduced.
 #'
 #' @return The importer function, or NULL when none was published.
 ts_drive_importer_of <- function(global_data, module) {
   reg <- ts_drive_registry(global_data)
   if (is.null(reg)) return(NULL)
-  fn <- reg[[paste0(TS_DRIVE_IMPORTER_PREFIX, module)]]
+  entry <- reg[[paste0(TS_DRIVE_IMPORTER_PREFIX, module)]]
+  fn <- if (is.list(entry)) entry$importer else entry
   if (is.function(fn)) fn else NULL
 }
 
