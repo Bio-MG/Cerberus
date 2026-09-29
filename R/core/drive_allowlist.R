@@ -1082,8 +1082,20 @@ ts_drive_import_roots <- function(root = ts_drive_root(), extra = NULL) {
   roots <- tryCatch(normalizePath(roots, winslash = "/", mustWork = FALSE),
                     error = function(e) character(0))
   roots <- roots[!is.na(roots) & nzchar(roots)]
+  # 🔴 A PREFIX test is not a CONTAINMENT test. `.../roots-EVIL/secret.csv` shares
+  # every character of `.../roots`, so the raw comparison ACCEPTED a path outside
+  # every allowlisted root — MEASURED 2026-09-29, one predicate, both public
+  # wrappers (`_import_path` and `_import_dir`) and therefore every importer. `..`
+  # was already refused, so this was the whole remaining hole.
+  # Containment is equality OR a match that ends at a SEPARATOR. Each root has its
+  # trailing separator trimmed first, so appending one cannot produce a "//" that
+  # refuses everything inside a root written as `.../roots/`, and a drive-letter
+  # root — which already ends in "/" — keeps working. Fails CLOSED: a root that
+  # trims to nothing is dropped rather than turned into a match-everything prefix.
+  roots <- sub("[/\\\\]+$", "", roots)
+  roots <- roots[!is.na(roots) & nzchar(roots)]
   inside <- any(vapply(roots, function(r)
-    identical(substr(full, 1L, nchar(r)), r), logical(1)))
+    identical(full, r) || startsWith(full, paste0(r, "/")), logical(1)))
   if (!inside) {
     return(list(ok = FALSE, path = NULL,
                 reason = sprintf("the path is outside every allowlisted root (%s)",
