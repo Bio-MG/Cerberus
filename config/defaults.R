@@ -24,6 +24,10 @@ TS_SC_AUTO_PIPELINE_TIMEOUT_S <- 4 * 60 * 60
 TS_SC_ANNOTATION_TIMEOUT_S <- TS_SC_AUTO_PIPELINE_TIMEOUT_S
 TS_SC_MARKERS_TIMEOUT_S <- TS_SC_AUTO_PIPELINE_TIMEOUT_S
 TS_MIRAI_N_DAEMONS         <- 6L
+# Facteur de projection du préflight RAM (M-4) : object.size × facteur ≈ besoin
+# du job (copies internes, travail). VOLONTAIREMENT à calibrer par benchmark
+# (MODE C direction 2 : le gouverneur exige une mesure avant ses constantes).
+TS_RAM_PREFLIGHT_FACTOR    <- 3
 
 # --- Single-Cell sketch presets (cells) ------------------------------------
 TS_SKETCH_FAST             <- 5000L

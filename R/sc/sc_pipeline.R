@@ -27,6 +27,17 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
 
       p <- shiny::Progress$new(); on.exit(p$close())
 
+      # ── Préflight RAM (M-4, 2026-09-30) : ALERTE dans le log, JAMAIS
+      # bloquante — le refus risquerait de bloquer des analyses légitimes
+      # (MODE C, direction 2). Facteur à calibrer par benchmark (§2dr).
+      ram_sys <- ts_system_ram_mb()
+      ram_budget <- ts_ram_budget_check(
+        object_bytes = as.numeric(object.size(state_get(global_data, "sc_obj"))),
+        factor = TS_RAM_PREFLIGHT_FACTOR,
+        available_mb = ram_sys$available_mb,
+        total_mb = ram_sys$total_mb)
+      if (ram_budget$level != "none") log_sc(ram_budget$message)
+
       tryCatch({
         obj <- state_get(global_data, "sc_obj")
 
