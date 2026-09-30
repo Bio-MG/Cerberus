@@ -74,18 +74,22 @@ if (!exists(".tr", envir = globalenv()))
 .scd_vals <- function(x) unname(unlist(x))
 
 # Runs the drive wrapper exactly as the observer does, on a MockShinySession.
-.scd_run_drive <- function(obj, seed_log = "", shared_rv = NULL) {
+.scd_run_drive <- function(obj, seed_log = "", shared_rv = NULL, inputs = NULL) {
   gd <- shiny::reactiveValues(sc_obj = obj)
   if (is.null(shared_rv)) shared_rv <- create_sc_shared_state()
   sc_log_rv <- shiny::reactiveVal(seed_log)
   closed <- list()
   mock <- shiny::MockShinySession$new()
+  # inputs = NULL → défauts drive canoniques ; sinon surcharge explicite
+  # (QW-2 : la fixture ne survit pas aux défauts QC canoniques).
+  if (is.null(inputs)) inputs <- .sc_ap_drive_inputs()
   res <- shiny::isolate(shiny:::withReactiveDomain(mock, {
     .sc_ap_run_drive(gd, shared_rv, mock, sc_log_rv,
                      function(status, error = NULL) {
                        closed[[length(closed) + 1L]] <<- list(status = status, error = error)
                        invisible(TRUE)
-                     })
+                     },
+                     inputs = inputs)
   }))
   list(res = res, closed = closed, shared_rv = shared_rv, log = shiny::isolate(sc_log_rv()))
 }
@@ -116,8 +120,11 @@ test_that("the drive input set is frozen, closed, and carries no modal-only key"
   expect_identical(inputs$sc_ap_singler, FALSE)
   expect_identical(inputs$sc_ap_correlation, FALSE)
   expect_identical(inputs$sc_ap_trajectory, TRUE)
-  expect_identical(inputs$sc_ap_min_gene, 10)
-  expect_identical(inputs$sc_ap_mt, 50)
+  # QW-2 (2026-09-30) : les défauts drive lisent la source unique config/ —
+  # les anciens 10/50 (plus permissifs que l'UI) créaient un fork de
+  # reproductibilité. Le pin suit désormais la constante, pas un littéral.
+  expect_identical(inputs$sc_ap_min_gene, TS_SC_QC_MIN_GENES)
+  expect_identical(inputs$sc_ap_mt, TS_SC_QC_MAX_PCT_MT)
   # `sc_ap_confirm` is the MODAL's own button: driving it would be the two-step
   # A2 design this scope rejected.
   expect_false(any(grepl("confirm", names(inputs), fixed = TRUE)))
@@ -162,8 +169,18 @@ test_that("per-step outcomes are derived from observable state, not from the req
   shared_rv <- create_sc_shared_state()
   sc_log_rv <- shiny::reactiveVal("")
   mock <- shiny::MockShinySession$new()
+  # QW-2 (2026-09-30) : les défauts drive canoniques (100 min gènes, 8000 max,
+  # 20 % mito) écrasent la fixture (123 gènes, rpois λ=1). Ce test exerce la
+  # MÉCANIQUE du pipeline, pas les défauts — épinglés plus haut et par
+  # test-sc-qc-defaults-parity.R. Le scénario surcharge donc le QC, comme le
+  # permet le contrat des entrées.
+  inputs <- .sc_ap_drive_inputs()
+  inputs$sc_ap_min_gene <- 10
+  inputs$sc_ap_max_gene <- 10000
+  inputs$sc_ap_mt <- 50
+  inputs$sc_ap_pca_dim <- 10
   shiny::isolate(shiny:::withReactiveDomain(mock, {
-    run_sc_auto_pipeline(.sc_ap_drive_inputs(), gd, shared_rv, mock, sc_log_rv)
+    run_sc_auto_pipeline(inputs, gd, shared_rv, mock, sc_log_rv)
   }))
   obj <- shiny::isolate(gd$sc_obj)
   expect_s4_class(obj, "Seurat")
@@ -226,7 +243,12 @@ test_that(".sc_ap_run_drive closes the job `done` and reports each step honestly
   library(Seurat)
   library(shiny)
 
-  out <- .scd_run_drive(.scd_make_obj())
+  out <- .scd_run_drive(.scd_make_obj(), inputs = {
+    d <- .sc_ap_drive_inputs()
+    d$sc_ap_min_gene <- 10; d$sc_ap_max_gene <- 10000
+    d$sc_ap_mt <- 50; d$sc_ap_pca_dim <- 10
+    d
+  })
   expect_identical(out$res$status, "done")
   expect_length(out$closed, 1L)
   expect_identical(out$closed[[1]]$status, "done")

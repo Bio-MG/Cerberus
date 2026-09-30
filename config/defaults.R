@@ -32,6 +32,15 @@ TS_SKETCH_MEDIUM           <- 25000L
 TS_SKETCH_STANDARD         <- 50000L
 TS_SKETCH_HIGH             <- 100000L
 
+# --- Single-Cell autopipeline QC defaults (SOURCE UNIQUE, jalon QW-2) -------
+# Audit externe 2026-09-30 (C-1) : l'UI et le canal drive codeaient des défauts
+# divergents (drive plus permissif : 10/10000/50/10) ⇒ fork de reproductibilité
+# entre un run humain et un run piloté par agent. UI et drive lisent CES valeurs.
+TS_SC_QC_MIN_GENES         <- 100    # min gènes/cellule
+TS_SC_QC_MAX_GENES         <- 8000   # max gènes/cellule
+TS_SC_QC_MAX_PCT_MT        <- 20     # % mitochondrial max
+TS_SC_QC_PCA_DIMS          <- 20     # dims PCA par défaut
+
 # --- Single-Cell analysis caps ---------------------------------------------
 TS_MAX_PER_CLUSTER_MARKERS <- 1000L   # subsample cap for FindAllMarkers
 TS_MAX_PER_SAMPLE_CORR     <- 5000L   # subsample cap for correlation

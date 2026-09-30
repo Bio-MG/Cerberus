@@ -62,11 +62,11 @@
     sc_ap_mapping              = FALSE,
     sc_ap_mapping_org          = "human",
     sc_ap_bpcells              = FALSE,
-    sc_ap_min_gene             = 10,
-    sc_ap_max_gene             = 10000,
-    sc_ap_mt                   = 50,
+    sc_ap_min_gene             = TS_SC_QC_MIN_GENES,
+    sc_ap_max_gene             = TS_SC_QC_MAX_GENES,
+    sc_ap_mt                   = TS_SC_QC_MAX_PCT_MT,
     sc_ap_norm                 = "log",
-    sc_ap_pca_dim              = 10,
+    sc_ap_pca_dim              = TS_SC_QC_PCA_DIMS,
     sc_ap_res                  = 0.5,
     sc_ap_cluster_algo         = "1",
     sc_ap_compute_umap         = TRUE,
@@ -261,7 +261,11 @@
 #' agent is left with a `running` job it can never resolve. `close_job` is the
 #' module's job-closing callback (it verifies the job id before writing, so a
 #' human click can never close an agent's job).
-.sc_ap_run_drive <- function(global_data, shared_rv, session, sc_log_rv, close_job) {
+# `inputs` : optionnel — défaut = les défauts drive canoniques. Paramètre de
+# test (QW-2) : les fixtures ne survivent pas aux défauts QC canoniques, et un
+# scénario drive a toujours le droit de surcharger le QC (contrat des entrées).
+.sc_ap_run_drive <- function(global_data, shared_rv, session, sc_log_rv, close_job,
+                             inputs = .sc_ap_drive_inputs()) {
   obj_before <- tryCatch(shiny::isolate(global_data$sc_obj), error = function(e) NULL)
   n_genes_before <- if (inherits(obj_before, "Seurat")) nrow(obj_before) else NA_integer_
   log_before <- tryCatch(as.character(shiny::isolate(sc_log_rv())),
@@ -269,7 +273,7 @@
 
   failed <- FALSE
   tryCatch(
-    run_sc_auto_pipeline(.sc_ap_drive_inputs(), global_data, shared_rv,
+    run_sc_auto_pipeline(inputs, global_data, shared_rv,
                          session, sc_log_rv),
     error = function(e) failed <<- TRUE
   )
@@ -1059,16 +1063,16 @@ mod_sc_server <- function(id, global_data) {
         fluidRow(
           column(6,
             h6(.tr("QC"), style="font-weight:bold;"),
-            numericInput(ns_m("sc_ap_min_gene"), .tr("Min gènes/cellule"),   100, min=0),
-            numericInput(ns_m("sc_ap_max_gene"), .tr("Max gènes/cellule"), 8000, min=0),
-            sliderInput(ns_m("sc_ap_mt"), .tr("% Mito max"), 0, 50, 20, step=1)
+            numericInput(ns_m("sc_ap_min_gene"), .tr("Min gènes/cellule"),   TS_SC_QC_MIN_GENES, min=0),
+            numericInput(ns_m("sc_ap_max_gene"), .tr("Max gènes/cellule"), TS_SC_QC_MAX_GENES, min=0),
+            sliderInput(ns_m("sc_ap_mt"), .tr("% Mito max"), 0, 50, TS_SC_QC_MAX_PCT_MT, step=1)
           ),
           column(6,
             h6(.tr("Normalisation & Réduction"), style="font-weight:bold;"),
             radioButtons(ns_m("sc_ap_norm"), .tr("Normalisation"),
                          stats::setNames(c("log","sct"),
                                          c(.tr("LogNormalize"), .tr("SCTransform")))),
-            sliderInput(ns_m("sc_ap_pca_dim"), .tr("Dims PCA"), 5, 50, 20),
+            sliderInput(ns_m("sc_ap_pca_dim"), .tr("Dims PCA"), 5, 50, TS_SC_QC_PCA_DIMS),
             numericInput(ns_m("sc_ap_res"), .tr("Résolution clustering"), 0.5, min=0.1, step=0.1),
             selectInput(ns_m("sc_ap_cluster_algo"), .tr("Algorithme de clustering"),
                        choices = stats::setNames(c("1","2","3","4"),
