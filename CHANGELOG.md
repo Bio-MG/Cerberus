@@ -30,6 +30,18 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > ⚠️ Les chiffres de garde de ces entrées sont ceux **consignés** dans `STATUS.md`
 > au moment du jalon ; en cas d'écart, **`STATUS.md` §0 et §6 font foi**.
 
+## [V1.x — M-4 phase 1 : préflight RAM (mesurer, projeter, alerter)] — 2026-09-30
+
+Audit externe J-8 : les pipelines lourds se lançaient sans aucune lecture
+de la RAM disponible (détail : journal archivé §2dr ; commit `6cbbaa9`).
+
+### Ajouté
+- `ts_system_ram_mb()` (ps, optionnel) et `ts_ram_budget_check()` — décision
+  PURE none/warn/block avec messages français ; câblée dans
+  `run_sc_auto_pipeline` via son canal de log. **N'bloque jamais** : le
+  gouverneur complet attend le benchmark de calibration (MODE C dir. 2).
+- Constante `TS_RAM_PREFLIGHT_FACTOR` (config, défaut 3) — à calibrer.
+
 ## [V1.x — M-3 : la règle d'accès à l'état est gardée (C17)] — 2026-09-30
 
 Arbitrage `docs/proposals/STATE_ACCESS_ARBITRATION.md`, **option B retenue**
