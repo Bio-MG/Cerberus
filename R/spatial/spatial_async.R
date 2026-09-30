@@ -73,7 +73,9 @@
 .spatial_async_env <- new.env(parent = emptyenv())
 .spatial_async_env$daemons_ready    <- FALSE
 .spatial_async_env$daemons_verified <- FALSE
-.spatial_async_env$n_daemons        <- 6L
+# QW-3 (2026-09-30) : le nombre de daemons se lit dans la config — la
+# constante TS_MIRAI_N_DAEMONS existait mais était ignorée (audit C-2).
+.spatial_async_env$n_daemons        <- if (exists("TS_MIRAI_N_DAEMONS")) TS_MIRAI_N_DAEMONS else 6L
 .spatial_async_env$base_dir         <- NULL
 .spatial_async_env$source_files_abs <- character(0)
 .spatial_async_env$last_diagnostics <- NULL
@@ -181,7 +183,7 @@ APP_DAEMON_SOURCE_FILES <- c(
 #'   because the pool is started once and its preload is frozen at that moment
 #'   (see the v6 changelog above).
 #' @return invisible(TRUE) on success, invisible(FALSE) if mirai is missing.
-init_spatial_daemons <- function(n_daemons = 6,
+init_spatial_daemons <- function(n_daemons = if (exists("TS_MIRAI_N_DAEMONS")) TS_MIRAI_N_DAEMONS else 6L,
                                  source_files = APP_DAEMON_SOURCE_FILES) {
   if (!requireNamespace("mirai", quietly = TRUE)) {
     warning("Package 'mirai' manquant : les calculs spatiaux asynchrones (clustering, ",
