@@ -30,6 +30,18 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > ⚠️ Les chiffres de garde de ces entrées sont ceux **consignés** dans `STATUS.md`
 > au moment du jalon ; en cas d'écart, **`STATUS.md` §0 et §6 font foi**.
 
+## [V1.x — M-1 phase 1 : les erreurs avalées sont journalisées] — 2026-09-30
+
+Audit externe J-4 : ≈ 586 des 776 handlers d'erreur ne relancent ni ne
+journalisent (détail : journal archivé §2dt ; commit `36473b7`).
+
+### Ajouté
+- `R/core/error_log.R` : `ts_log_swallow(context, condition)` — journal
+  daté `QC/swallowed_errors.log` (gitigné), append, **ne lève jamais**.
+- Pilote : 41 handlers silencieux de `report_collector.R` convertis,
+  contexte = fonction englobante ; les passes suivantes étendront aux
+  4 autres fichiers du top 5.
+
 ## [V1.x — M-2 phase 1 : normalisateur unique + cœur QC pur] — 2026-09-30
 
 Premier pas de l'extraction du cœur pur de l'autopipeline SC
