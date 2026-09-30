@@ -30,6 +30,27 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > ⚠️ Les chiffres de garde de ces entrées sont ceux **consignés** dans `STATUS.md`
 > au moment du jalon ; en cas d'écart, **`STATUS.md` §0 et §6 font foi**.
 
+## [V1.x — M-3 : la règle d'accès à l'état est gardée (C17)] — 2026-09-30
+
+Arbitrage `docs/proposals/STATE_ACCESS_ARBITRATION.md`, **option B retenue**
+par l'utilisateur (détail : journal archivé §2dq ; commit `a410dc2`).
+
+### Ajouté
+- **C17 (ERREUR)** dans `tools/check_conventions.R` : dans `R/` (hors couche
+  d'état), tout accès direct `global_data$champ` / `shared_rv$champ` échoue
+  à la garde — utiliser `state_get()/state_set()`.
+
+### Corrigé
+- **36 sites** de la couche pure `R/` convertis vers les accesseurs
+  (sémantique préservée : trace de dépendance en contexte réactif, repli
+  `isolate()` hors contexte). Les ~971 accès directs de `modules/` sont la
+  l'idiome réactif canonique : dette assumée chiffrée, pas un chantier.
+
+### Documenté
+- `CONVENTIONS.md` §12.8 + table §12 ; `AGENTS.md` règle 4 amendée
+  (portée `R/` uniquement) ; `test-conventions-c17-state-access.R`
+  (6 PASS, 4 directions dont 2 cas négatifs).
+
 ## [V1.x — audit externe : quick wins RAM / QC / daemons] — 2026-09-30
 
 Trois correctifs issus de l'analyse de l'audit externe MODE B/C
