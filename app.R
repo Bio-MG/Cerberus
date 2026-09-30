@@ -52,6 +52,7 @@ source("R/core/rdata_io.R")     # import .rda/.RData "Inspect & Select" (contrat
 source("R/core/validation.R")   # <-- NEW
 source("R/core/provenance.R")   # <-- CHRYSALIS 2C : manifeste de provenance
 source("R/core/jobs.R")         # <-- CHRYSALIS 2D : wrapper fin sync/async
+source("R/core/memory.R")       # <-- QW-1 : RSS résident du processus (indicateur RAM)
 source("R/core/caching.R")      # <-- CHRYSALIS 2D : memoisation a portee contrainte
 source("R/core/pathway_helpers.R")
 source("R/core/error_state.R")  # <-- §14.1 : ts_error_state(), l'accesseur generique d'etat d'erreur
@@ -1295,15 +1296,16 @@ server <- function(input, output, session) {
   # === GESTION RAM ===
   
   output$mem_usage <- renderText({
-    
+
     input$gc_btn
-    
-    invalidateLater(5000)  # Mise à jour toutes les 5 secondes
-    
-    mem_mb <- round(sum(gc()[, 2]) / 1024, 0)
-    
+
+    invalidateLater(10000)  # Mise à jour toutes les 10 s — plus de gc() forcé dans le chemin de rendu (QW-1)
+
+    mem_mb <- ts_process_rss_mb()
+    if (is.na(mem_mb)) mem_mb <- round(sum(gc(full = FALSE)[, 2]))  # repli : tas R seul — gc()[, 2] est DÉJÀ en Mo, ne PAS diviser
+
     paste0("💾 ", mem_mb, " MB")
-    
+
   })
   
   
