@@ -24,9 +24,9 @@ sc_r_script_text <- function(obj, shared_rv = NULL) {
   has_clusters <- "seurat_clusters" %in% colnames(meta)
   singler_cols <- grep("^SingleR_", colnames(meta), value=TRUE)
   has_singler  <- length(singler_cols) > 0
-  has_markers  <- !is.null(shared_rv) && !is.null(shared_rv$markers_data) &&
-                  nrow(shared_rv$markers_data) > 0
-  has_corr     <- !is.null(shared_rv) && !is.null(shared_rv$corr_target_gene)
+  has_markers  <- !is.null(shared_rv) && !is.null(state_get(shared_rv, "markers_data")) &&
+                  nrow(state_get(shared_rv, "markers_data")) > 0
+  has_corr     <- !is.null(shared_rv) && !is.null(state_get(shared_rv, "corr_target_gene"))
   has_traj     <- "pseudotime" %in% colnames(meta)
   # ⚠️ PREFIXE OBLIGATOIRE : `Embeddings()` est re-exporte par Seurat ET
   # SeuratObject, mais AUCUN `library(Seurat)` inconditionnel n'existe au boot
@@ -44,7 +44,7 @@ sc_r_script_text <- function(obj, shared_rv = NULL) {
   ', UMAP=', if(has_umap)"oui" else "non",
   ', clusters=', if(has_clusters) n_clusters else "non",
   ', SingleR=', if(has_singler) paste(singler_cols,collapse=",") else "non",
-  ', Corr=', if(has_corr) shared_rv$corr_target_gene else "non",
+  ', Corr=', if(has_corr) state_get(shared_rv, "corr_target_gene") else "non",
   ', Traj=', if(has_traj) "oui" else "non", '
 # =============================================================================
 
@@ -86,7 +86,7 @@ ggsave(paste0("umap_clusters_',date,'.png"), p_umap, width=8, height=6, dpi=300)
 
 # \u2500\u2500 4. Marqueurs ────────────────────────────────────────────────────────────────
 ',
-if (has_markers) paste0('# ', nrow(shared_rv$markers_data), ' marqueurs dans l\'app (recalculés ci-dessous, sur',
+if (has_markers) paste0('# ', nrow(state_get(shared_rv, "markers_data")), ' marqueurs dans l\'app (recalculés ci-dessous, sur',
   ' l\'objet complet — l\'app peut avoir sous-échantillonné pour accélérer le calcul) :') else '',
 '
 Idents(obj) <- obj$seurat_clusters
@@ -113,8 +113,8 @@ print(DimPlot(obj, group.by="', tail(singler_cols,1), '", label=TRUE, repel=TRUE
 # \u2500\u2500 6. Gene Correlation ──────────────────────────────────────────────────────────
 ',
 if (has_corr) paste0(
-'# Gène cible utilisé dans l\'app : ', shared_rv$corr_target_gene, '
-TARGET_GENE <- "', shared_rv$corr_target_gene, '"
+'# Gène cible utilisé dans l\'app : ', state_get(shared_rv, "corr_target_gene"), '
+TARGET_GENE <- "', state_get(shared_rv, "corr_target_gene"), '"
 # Corrélation (top 50 gènes les plus corrélés) :
 # corr_df <- find_correlated_genes(obj, TARGET_GENE, method="pearson", threshold=0.3, top_n=50)
 # print(plot_gene_correlation_network(corr_df, TARGET_GENE, top_n=20))'

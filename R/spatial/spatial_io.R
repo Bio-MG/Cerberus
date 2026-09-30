@@ -1065,7 +1065,7 @@ materialize_seurat_subset <- function(spatial_obj, cell_ids, project = NULL) {
 # -----------------------------------------------------------------------------
 
 debug_histology <- function(global_data) {
-  hist_data <- global_data$spatial_obj$histology
+  hist_data <- state_get(global_data, "spatial_obj")$histology
   cat("=== Histology Debug ===\n")
   cat("histology exists:", !is.null(hist_data), "\n")
   if (!is.null(hist_data)) {

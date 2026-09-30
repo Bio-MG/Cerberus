@@ -279,21 +279,21 @@ bulk_diverging_ramp <- function(domain, palette = "default", manual_colors = NUL
 spatial_discrete_colors <- function(levels, shared_rv, kind = "cluster") {
   levels <- sort(unique(stats::na.omit(as.character(levels))))
   if (length(levels) == 0) return(NULL)
-  pal <- shared_rv$color_palette %||% "default"
-  manual <- (shared_rv$manual_discrete %||% list())[[kind]]
+  pal <- state_get(shared_rv, "color_palette") %||% "default"
+  manual <- (state_get(shared_rv, "manual_discrete") %||% list())[[kind]]
   cols <- sc_discrete_colors(levels, palette = pal, manual_colors = manual)
   if (is.null(cols)) cols <- grDevices::hcl.colors(length(levels), palette = "Dark 3")
   stats::setNames(cols, levels)
 }
 
 spatial_continuous_scale <- function(shared_rv, aesthetic = "color", limits = NULL) {
-  sc_continuous_scale(palette = shared_rv$color_palette %||% "default", aesthetic = aesthetic,
-                      gradient = shared_rv$manual_gradient, limits = limits)
+  sc_continuous_scale(palette = state_get(shared_rv, "color_palette") %||% "default", aesthetic = aesthetic,
+                      gradient = state_get(shared_rv, "manual_gradient"), limits = limits)
 }
 
 spatial_diverging_scale <- function(shared_rv, aesthetic = "fill", na.value = "grey50", limits = NULL) {
-  sc <- sc_diverging_scale(palette = shared_rv$color_palette %||% "default", aesthetic = aesthetic,
-                           gradient = shared_rv$manual_gradient, na.value = na.value, limits = limits)
+  sc <- sc_diverging_scale(palette = state_get(shared_rv, "color_palette") %||% "default", aesthetic = aesthetic,
+                           gradient = state_get(shared_rv, "manual_gradient"), na.value = na.value, limits = limits)
   if (!is.null(sc)) return(sc)
   fn <- if (aesthetic == "color") ggplot2::scale_color_gradient2 else ggplot2::scale_fill_gradient2
   fn(low = "#2166AC", mid = "white", high = "#B2182B", midpoint = 0, na.value = na.value, limits = limits)
@@ -302,8 +302,8 @@ spatial_diverging_scale <- function(shared_rv, aesthetic = "fill", na.value = "g
 #' 256-stop hex ramp for leaflet::colorNumeric() — factors out logic
 #' previously duplicated between mod_spatial_viz.R and mod_spatial_multi.R.
 spatial_color_ramp_hex <- function(shared_rv) {
-  pal  <- shared_rv$color_palette %||% "default"
-  grad <- shared_rv$manual_gradient
+  pal  <- state_get(shared_rv, "color_palette") %||% "default"
+  grad <- state_get(shared_rv, "manual_gradient")
   switch(pal,
     manual   = grDevices::colorRampPalette(c(grad$low %||% "#2166AC", grad$high %||% "#B2182B"))(256),
     okabeito = grDevices::colorRampPalette(c("#FFFFFF", "#D55E00"))(256),
@@ -315,12 +315,12 @@ spatial_color_ramp_hex <- function(shared_rv) {
 
 spatial_hotspot_colors <- function(shared_rv) {
   role_colors_generic("Hotspot (chaud)", "Coldspot (froid)", "NS",
-                      palette = shared_rv$color_palette %||% "default")
+                      palette = state_get(shared_rv, "color_palette") %||% "default")
 }
 
 spatial_ripley_colors <- function(shared_rv) {
   role_colors_generic("Agregation", "Dispersion", "NS",
-                      palette = shared_rv$color_palette %||% "default")
+                      palette = state_get(shared_rv, "color_palette") %||% "default")
 }
 
 dynamic_manual_color_picker_ui <- function(ns, kind, levels, current_colors = NULL, defaults = NULL) {

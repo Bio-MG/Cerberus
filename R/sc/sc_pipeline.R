@@ -17,7 +17,7 @@
 #' @param sc_log_rv reactiveVal for log
 run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_rv) {
       removeModal()
-      req(global_data$sc_obj)
+      req(state_get(global_data, "sc_obj"))
 
       ll <- character(0)
       log_sc <- function(msg) {
@@ -28,7 +28,7 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
       p <- shiny::Progress$new(); on.exit(p$close())
 
       tryCatch({
-        obj <- global_data$sc_obj
+        obj <- state_get(global_data, "sc_obj")
 
         # ── Step 0: Mapping IDs ─────────────────────────────────────────────
         if (isTRUE(input$sc_ap_mapping)) {
@@ -260,7 +260,7 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
         # set in "1. Pipeline") — `obj` itself (UMAP/t-SNE/clusters) stays full-size.
         if (isTRUE(input$sc_ap_markers) || isTRUE(input$sc_ap_correlation)) {
           p$set(0.82,.tr("FindAllMarkers..."))
-          cap_m   <- shared_rv$max_cells_heavy %||% Inf
+          cap_m   <- state_get(shared_rv, "max_cells_heavy") %||% Inf
           sub_res <- subsample_seurat_for_analysis(obj, max_per_group = cap_m, group_col = "seurat_clusters")
           if (sub_res$was_subsampled)
             log_sc(sprintf(.tr("ℹ️ Sous-échantillonnage marqueurs : %d → %d cellules (max %d/cluster)"),
@@ -280,7 +280,7 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
             if (!"cluster"    %in% colnames(markers)) markers$cluster    <- "Unknown"
             if (!"pct.1"      %in% colnames(markers)) markers$pct.1      <- NA_real_
             if (!"pct.2"      %in% colnames(markers)) markers$pct.2      <- NA_real_
-            shared_rv$markers_data <- markers
+            state_set(shared_rv, "markers_data", markers)
             log_sc(sprintf(.tr("✓ %d marqueurs"), nrow(markers)))
 
             # Step 7b: Pathway ORA on top markers (optional)
@@ -312,8 +312,8 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
                                                     paste(head(top_g, 5), collapse=", "))); NULL }
                 )
                 if (!is.null(pw) && nrow(pw) > 0) {
-                  shared_rv$pathway_results <- pw
-                  shared_rv$pathway_db      <- input$sc_ap_pathway_db %||% "GOBP"
+                  state_set(shared_rv, "pathway_results", pw)
+                  state_set(shared_rv, "pathway_db", input$sc_ap_pathway_db %||% "GOBP")
                   log_sc(sprintf(.tr("✓ %d pathways (%d/%d gènes convertis, %.0fs)"), nrow(pw), length(top_g), length(top_g_raw),
                                  as.numeric(difftime(Sys.time(), .t_pathway, units="secs"))))
                 }
@@ -330,14 +330,15 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
         if (isTRUE(input$sc_ap_correlation)) {
           p$set(0.90,.tr("Corrélation...")); log_sc(.tr("Gene Correlation..."))
           target_gene <- NULL
-          if (!is.null(shared_rv$markers_data) && nrow(shared_rv$markers_data) > 0) {
-            ranked      <- shared_rv$markers_data[order(shared_rv$markers_data$p_val_adj), ]
+          markers_now <- state_get(shared_rv, "markers_data")
+            if (!is.null(markers_now) && nrow(markers_now) > 0) {
+            ranked      <- markers_now[order(markers_now$p_val_adj), ]
             target_gene <- ranked$gene[1]
           }
           if (is.null(target_gene)) {
             log_sc(.tr("⚠️ Corrélation ignorée : aucun marqueur disponible (cochez 'Marqueurs')."))
           } else {
-            cap_c     <- shared_rv$max_cells_heavy %||% Inf
+            cap_c     <- state_get(shared_rv, "max_cells_heavy") %||% Inf
             sub_res_c <- subsample_seurat_for_analysis(obj, max_per_group = cap_c, group_col = "orig.ident")
             if (sub_res_c$was_subsampled)
               log_sc(sprintf(.tr("ℹ️ Sous-échantillonnage corrélation : %d → %d cellules (max %d/échantillon)"),
@@ -348,8 +349,8 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
               error=function(e) { log_sc(paste(.tr("⚠️ Corrélation:"), e$message)); NULL }
             )
             if (!is.null(corr_res) && nrow(corr_res) > 0) {
-              shared_rv$correlated_genes <- corr_res
-              shared_rv$corr_target_gene <- target_gene
+              state_set(shared_rv, "correlated_genes", corr_res)
+              state_set(shared_rv, "corr_target_gene", target_gene)
               log_sc(sprintf(.tr("✓ %d gènes corrélés avec %s (top marqueur)"),
                              nrow(corr_res), target_gene))
             } else {
@@ -391,16 +392,16 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
               obj@meta.data$traj_root_cell             <- rep(traj_res$root_cell, ncol(obj))
               obj@meta.data$traj_root_cluster          <- rep(NA_character_, ncol(obj))
               obj@meta.data$traj_root_component_size   <- rep(traj_res$root_component_size, ncol(obj))
-              shared_rv$traj_reduction        <- traj_red_use
-              shared_rv$traj_method           <- "exploratory_knn"
+              state_set(shared_rv, "traj_reduction", traj_red_use)
+              state_set(shared_rv, "traj_method", "exploratory_knn")
               log_sc(sprintf(.tr("✓ Pseudotemps calculé (exploratoire kNN, racine auto/diamètre, réduction: %s)"), toupper(traj_red_use)))
             }
           }
         }
 
         # ── Commit ───────────────────────────────────────────────────────────
-        global_data$sc_obj   <- obj
-        shared_rv$active_tab <- "tab_viz"
+        state_set(global_data, "sc_obj", obj)
+        state_set(shared_rv, "active_tab", "tab_viz")
         showNotification(
           sprintf(.tr("✓ Pipeline SC : %d cellules, %d clusters"), ncol(obj), n_cl),
           type="message", duration=6)

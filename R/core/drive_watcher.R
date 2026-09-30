@@ -1114,7 +1114,7 @@ ts_drive_snapshot <- function(global_data) {
   # "Step 1 never ran", because both report the IMPORTED dimensions.
   out$modules <- ts_drive_module_states(global_data)
 
-  obj <- tryCatch(global_data$bulk_obj, error = function(e) NULL)
+  obj <- state_get(global_data, "bulk_obj")
   if (is.null(obj)) return(out)
 
   counts <- tryCatch(obj$counts, error = function(e) NULL)
@@ -1396,8 +1396,7 @@ ts_drive_read_token <- function(counter) {
 #'   that sources a module alone). Never throws.
 #' @noRd
 ts_drive_registry <- function(global_data) {
-  reg <- tryCatch(shiny::isolate(global_data$drive_registry),
-                  error = function(e) NULL)
+  reg <- state_get(global_data, "drive_registry")
   if (is.environment(reg)) reg else NULL
 }
 

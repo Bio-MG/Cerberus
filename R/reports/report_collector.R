@@ -450,7 +450,7 @@
   }
   # ── Domaines "global" (4F-EXT) : resultats plats auto-dates de global_data ─
   if (domain == "bulk_multi_comparison") {
-    res <- if (!is.null(global_data)) global_data$bulk_multi_comparison else NULL
+    res <- if (!is.null(global_data)) state_get(global_data, "bulk_multi_comparison") else NULL
     # Garde de forme (contrat BULK_MULTI_CONTRACT §10.4) : liste plate avec
     # per_dataset + concordance data.frames et ran_at horodaté — on ne
     # "répare" jamais un résultat partial, il est simplement absent.

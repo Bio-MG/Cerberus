@@ -1361,6 +1361,30 @@ check_c13_choices_named_values <- function(files) {
 #' ne lit que les canaux. Corriger `lvl` seul produirait un MENSONGE COSMIQUE
 #' (affiche `ERREUR`, ne bloque pas) - ce que verrouille
 #' `test-conventions-c16-arity.R`.
+# C17 (jalon M-3, arbitrage du 2026-09-30 — option B,
+# docs/proposals/STATE_ACCESS_ARBITRATION.md) : dans `R/` (hors couche d'état
+# `.STATE_LAYER`), l'accès direct à un conteneur d'état (`global_data$champ`,
+# `shared_rv$champ`) est interdit EN CODE — utiliser les accesseurs
+# `state_get(state, "champ")` / `state_set(state, "champ", valeur)` (règle 4
+# AGENTS.md). Pourquoi R/ seul : la mesure du 2026-09-30 compte 36 sites en
+# code dans `R/` (7 `global_data$` + 29 `shared_rv$`) contre ~971 dans
+# `modules/`, où `$` est l'idiome Shiny canonique en contexte réactif — la
+# dette de `modules/` est ASSUMÉE, chiffrée et re-mesurable, pas un chantier.
+# Les commentaires ne sont pas du code : `.read_code_lines()` les exclut déjà.
+check_c17_state_accessors <- function(r_files) {
+  for (f in r_files) {
+    rel_f <- .rel(f)
+    if (rel_f %in% .STATE_LAYER) next
+    ann <- .read_code_lines(f)
+    if (nrow(ann) == 0L) next
+    hits <- grepl("\\b(global_data|shared_rv)\\$[A-Za-z._]", ann$code, perl = TRUE)
+    for (i in which(hits)) {
+      .add("ERROR", "C17", rel_f, ann$line_no[i],
+           "accès direct à un conteneur d'état — utiliser state_get()/state_set() (règle 4 AGENTS.md, arbitrage M-3).")
+    }
+  }
+}
+
 check_c16_errorcondition_arity <- function(files) {
   for (f in files) {
     ann <- .read_code_lines(f)
@@ -1449,9 +1473,13 @@ run_check <- function(strict = FALSE, use_git = TRUE, list_all = FALSE) {
   check_c12_headers(r_files)
   check_c13_choices_named_values(c(r_files, m_files))
   check_c16_errorcondition_arity(c(r_files, m_files))
+  # C17 (M-3) — `r_files` SEUL : la règle porte sur la couche pure R/ ; les
+  # accès directs de modules/ sont l'idiome réactif canonique (décision B,
+  # dette assumée chiffrée ~971, cf. STATE_ACCESS_ARBITRATION.md).
+  check_c17_state_accessors(r_files)
 
   rules <- c("C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C9b", "C10",
-             "C11", "C12", "C13", "C16")
+             "C11", "C12", "C13", "C16", "C17")
 
   cat("\n--------------------------------------------------------------------\n")
   cat(sprintf("%-5s %-8s %s\n", "RÈGLE", "NIVEAU", "DESCRIPTION"))
@@ -1471,7 +1499,8 @@ run_check <- function(strict = FALSE, use_git = TRUE, list_all = FALSE) {
     C11 = "primitives parallèles à vérifier (mirai uniquement)",
     C12 = "en-tête commenté dans chaque fichier de R/ (dette)",
     C13 = "choices nommé : la valeur n'est jamais un appel traduit",
-    C16 = "errorCondition() : un SEUL argument positionnel (sinon message tronqué)"
+    C16 = "errorCondition() : un SEUL argument positionnel (sinon message tronqué)",
+    C17 = "état : accès via state_get()/state_set() dans R/ (hors couche d'état)"
   )
   lvl <- setNames(rep("ERREUR", length(rules)), rules)
   lvl[c("C6", "C8", "C9", "C9b", "C10", "C11", "C12")] <- "AVERT."
