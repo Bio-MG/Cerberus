@@ -58,30 +58,10 @@
 #' Every key run_sc_auto_pipeline() reads is present: a missing one would arrive
 #' as NULL and silently change a threshold.
 .sc_ap_drive_inputs <- function() {
-  list(
-    sc_ap_mapping              = FALSE,
-    sc_ap_mapping_org          = "human",
-    sc_ap_bpcells              = FALSE,
-    sc_ap_min_gene             = TS_SC_QC_MIN_GENES,
-    sc_ap_max_gene             = TS_SC_QC_MAX_GENES,
-    sc_ap_mt                   = TS_SC_QC_MAX_PCT_MT,
-    sc_ap_norm                 = "log",
-    sc_ap_pca_dim              = TS_SC_QC_PCA_DIMS,
-    sc_ap_res                  = 0.5,
-    sc_ap_cluster_algo         = "1",
-    sc_ap_compute_umap         = TRUE,
-    sc_ap_sketch_preset        = "max",
-    sc_ap_sketch_ncells_custom = NA,
-    sc_ap_singler              = FALSE,
-    sc_ap_singler_ref          = "hpca",
-    sc_ap_singler_level        = "main",
-    sc_ap_markers              = TRUE,
-    sc_ap_pathway              = FALSE,
-    sc_ap_pathway_db           = "GOBP",
-    sc_ap_pathway_org          = "human",
-    sc_ap_correlation          = FALSE,
-    sc_ap_trajectory           = TRUE
-  )
+  # M-2 phase 1 (2026-09-30) : DÉLÉGATION au normalisateur pur — les défauts
+  # vivent désormais dans R/sc/sc_pipeline.R (une seule source, le canal
+  # drive ne garde aucun littéral). Jeu de clés inchangé (22, test figé).
+  sc_ap_normalize_params(list())
 }
 
 #' Which steps the frozen set asks for. The always-on stages (QC, normalisation,

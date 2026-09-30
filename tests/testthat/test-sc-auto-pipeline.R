@@ -16,6 +16,7 @@ source_project_file("R/core/state.R")        # create_sc_shared_state
 source_project_file("R/sc/sc_helpers.R")     # resolve_sketch_preset, robust_find_clusters, subsample_*
 source_project_file("R/sc/sc_bpcells.R")     # smart_scale_data, sc_backend_status
 source_project_file("R/sc/sc_trajectory.R")  # calculate_pseudotime
+source_project_file("R/core/memory.R")       # preflight RAM (M-4) lu par le pipeline
 source_project_file("R/sc/sc_pipeline.R")    # run_sc_auto_pipeline
 source_project_file("modules/sc/mod_sc_pipeline.R")     # .AUTO_TSNE_MAX_CELLS, .BPCELLS_AUTO_THRESHOLD
 source_project_file("modules/sc/mod_sc_trajectory.R")   # .MAX_TRAJECTORY_CELLS
@@ -124,10 +125,11 @@ testthat::test_that("SC auto-pipeline fails gracefully when QC removes nearly al
 
   res <- .ap_run(bad, obj)
 
-  # Gracious failure: the error is logged (Seurat's subset throws "No cells
-  # found" before the pipeline's own "< 10 cells" guard fires) and the
-  # function returns without propagating.
-  testthat::expect_match(res$log, "Erreur: No cells found", fixed = TRUE)
+  # Gracious failure: the error is logged and the function returns without
+  # propagating. M-2 phase 1 (2026-09-30): Seurat's raw "No cells found" is
+  # now converted by sc_pipeline_qc into the classed French error (same key
+  # as the "< 10 cells" guard) - the user gets an actionable message.
+  testthat::expect_match(res$log, "Erreur: Seulement 0 cellule(s) apr", fixed = TRUE)
   # Original object untouched (commit never reached).
   testthat::expect_identical(dim(shiny::isolate(res$global_data$sc_obj)), dim(obj))
 })

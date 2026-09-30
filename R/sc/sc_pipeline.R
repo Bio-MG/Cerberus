@@ -9,6 +9,82 @@
 #             R/sc/sc_trajectory.R
 # =============================================================================
 
+# ── M-2 phase 1 (2026-09-30) : normalisation des paramètres + cœur QC pur ──
+
+#' Paramètres normalisés de l'autopipeline — LE point de passage unique
+#'
+#' Prend une liste brute (UI convertie, scénario drive, appel direct) et rend
+#' un jeu FERMÉ de 22 clés : défauts canoniques appliqués aux clés absentes,
+#' clés inconnues perdues. La classe « une clé manquante change silencieusement
+#' un seuil » (audit C-1) est fermée STRUCTURELLEMENT : le cœur ne voit jamais
+#' de NULL. Les défauts vivent ICI (couche pure) — le canal drive délègue.
+#'
+#' @param p Named list (ou vide). Les reactiveValues doivent être convertis
+#'   par l'appelant (`shiny::reactiveValuesToList(input)`).
+#' @return Named list de 22 clés `sc_ap_*`.
+sc_ap_normalize_params <- function(p = list()) {
+  d <- list(
+    sc_ap_mapping              = FALSE,
+    sc_ap_mapping_org          = "human",
+    sc_ap_bpcells              = FALSE,
+    sc_ap_min_gene             = TS_SC_QC_MIN_GENES,
+    sc_ap_max_gene             = TS_SC_QC_MAX_GENES,
+    sc_ap_mt                   = TS_SC_QC_MAX_PCT_MT,
+    sc_ap_norm                 = "log",
+    sc_ap_pca_dim              = TS_SC_QC_PCA_DIMS,
+    sc_ap_res                  = 0.5,
+    sc_ap_cluster_algo         = "1",
+    sc_ap_compute_umap         = TRUE,
+    sc_ap_sketch_preset        = "max",
+    sc_ap_sketch_ncells_custom = NA,
+    sc_ap_singler              = FALSE,
+    sc_ap_singler_ref          = "hpca",
+    sc_ap_singler_level        = "main",
+    sc_ap_markers              = TRUE,
+    sc_ap_pathway              = FALSE,
+    sc_ap_pathway_db           = "GOBP",
+    sc_ap_pathway_org          = "human",
+    sc_ap_correlation          = FALSE,
+    sc_ap_trajectory           = TRUE
+  )
+  for (k in names(d)) d[[k]] <- p[[k]] %||% d[[k]]
+  d
+}
+
+#' Cœur PUR de l'étape 1 (QC) de l'autopipeline — zéro Shiny
+#'
+#' Détection du pattern mito (humain `MT-` / souris `mt-`), calcul de
+#' `percent.mt`, filtrage par seuils, garde de survie. Utilisable hors app
+#' (tests, CLI) — c'est le premier pas de l'extraction du cœur pur (M-2).
+#'
+#' @param obj Seurat object brut.
+#' @param min_genes,max_genes,max_mt Seuils QC (paramètres normalisés).
+#' @param min_cells Plancher de survie (défaut 10, comportement historique).
+#' @return List `object` (Seurat filtré), `n_before`, `n_removed`.
+#' @raises Erreur classée `sc_pipeline_error` (message français) si moins de
+#'   `min_cells` cellules survivent.
+sc_pipeline_qc <- function(obj, min_genes, max_genes, max_mt, min_cells = 10) {
+  mt_pat <- if (any(grepl("^MT-", rownames(obj)))) "^MT-"
+            else if (any(grepl("^mt-", rownames(obj)))) "^mt-" else NULL
+  obj[["percent.mt"]] <- if (!is.null(mt_pat))
+    PercentageFeatureSet(obj, pattern = mt_pat) else 0
+  n_before <- ncol(obj)
+  # ⚠️ subset() lève sa propre erreur brute (« No cells found ») quand AUCUNE
+  # cellule ne survit — convertie ici en erreur classée française (sinon la
+  # garde min_cells ci-dessous n'est jamais atteinte ; trouvé par le test).
+  obj <- tryCatch(
+    subset(obj,
+           subset = nFeature_RNA > min_genes &
+                    nFeature_RNA < max_genes &
+                    percent.mt   < max_mt),
+    error = function(e) stop(errorCondition(sprintf(
+      .tr("Seulement %d cellule(s) après QC (départ: %d). Réduisez les seuils."), 0L, n_before),
+      class = "sc_pipeline_error")))
+  if (ncol(obj) < min_cells) stop(errorCondition(sprintf(
+    .tr("Seulement %d cellule(s) après QC (départ: %d). Réduisez les seuils."), ncol(obj), n_before), class = "sc_pipeline_error"))
+  list(object = obj, n_before = n_before, n_removed = n_before - ncol(obj))
+}
+
 #' Execute the SC auto-pipeline (called inside observeEvent)
 #' @param input Shiny input object
 #' @param global_data Global reactiveValues
@@ -16,6 +92,12 @@
 #' @param session Shiny session (for showNotification, log)
 #' @param sc_log_rv reactiveVal for log
 run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_rv) {
+      # ── M-2 phase 1 (2026-09-30) : les paramètres passent par le normalisateur PUR —
+      # liste fermée, défauts canoniques, clés inconnues perdues (la classe « une clé
+      # manquante change silencieusement un seuil » — audit C-1 — est fermée
+      # structurellement).
+      params <- sc_ap_normalize_params(
+        if (is.list(input)) input else shiny::reactiveValuesToList(input))
       removeModal()
       req(state_get(global_data, "sc_obj"))
 
@@ -42,7 +124,7 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
         obj <- state_get(global_data, "sc_obj")
 
         # ── Step 0: Mapping IDs ─────────────────────────────────────────────
-        if (isTRUE(input$sc_ap_mapping)) {
+        if (isTRUE(params$sc_ap_mapping)) {
           detected <- tryCatch(detect_gene_id_type(rownames(obj)),
                                error=function(e) "unknown")
           if (detected %in% c("ensembl","entrez")) {
@@ -51,7 +133,7 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
               withCallingHandlers(
                 remap_seurat_ids_to_symbol(obj,
                   from_type        = detected,
-                  organism         = input$sc_ap_mapping_org %||% "human",
+                  organism         = params$sc_ap_mapping_org %||% "human",
                   collapse_method  = "sum"),
                 warning = function(w) { log_sc(paste("\u2139\ufe0f", conditionMessage(w))); invokeRestart("muffleWarning") }
               ),
@@ -67,23 +149,17 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
           }
         }
 
-        # ── Step 1: QC ──────────────────────────────────────────────────────
+        # ── Step 1: QC (cœur pur extrait — M-2 phase 1) ───────────────────
         p$set(0.05,.tr("QC...")); log_sc(.tr("QC..."))
-        mt_pat <- if (any(grepl("^MT-",rownames(obj)))) "^MT-"
-                  else if (any(grepl("^mt-",rownames(obj)))) "^mt-" else NULL
-        obj[["percent.mt"]] <- if (!is.null(mt_pat))
-          PercentageFeatureSet(obj, pattern=mt_pat) else 0
-        n_before <- ncol(obj)
-        obj <- subset(obj,
-                      subset = nFeature_RNA > input$sc_ap_min_gene &
-                               nFeature_RNA < input$sc_ap_max_gene &
-                               percent.mt   < input$sc_ap_mt)
-        if (ncol(obj) < 10) stop(errorCondition(sprintf(
-          .tr("Seulement %d cellule(s) après QC (départ: %d). Réduisez les seuils."), ncol(obj), n_before), class = "sc_pipeline_error"))
-        log_sc(sprintf(.tr("✓ QC : %d cellules (retirées: %d)"), ncol(obj), n_before-ncol(obj)))
+        qcr <- sc_pipeline_qc(obj,
+                              min_genes = params$sc_ap_min_gene,
+                              max_genes = params$sc_ap_max_gene,
+                              max_mt    = params$sc_ap_mt)
+        obj <- qcr$object
+        log_sc(sprintf(.tr("✓ QC : %d cellules (retirées: %d)"), ncol(obj), qcr$n_removed))
 
         # ── Step 1b: Backend disque (BPCells) — Step-3.7A ────────────────────
-        if (isTRUE(input$sc_ap_bpcells) && ncol(obj) > .BPCELLS_AUTO_THRESHOLD &&
+        if (isTRUE(params$sc_ap_bpcells) && ncol(obj) > .BPCELLS_AUTO_THRESHOLD &&
             sc_backend_status(obj) == "memory") {
           if (!.bpcells_available()) {
             log_sc(.tr("⚠️ BPCells non installé — pipeline exécuté en RAM."))
@@ -107,11 +183,11 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
         # Voir resolve_sketch_preset()/standardize_sketch_reductions() (helpers_sc.R).
         n_total_cells <- ncol(obj)
         sketch_params <- resolve_sketch_preset(
-          input$sc_ap_sketch_preset %||% "standard", n_total_cells,
-          input$sc_ap_sketch_ncells_custom)
-        use_sketch <- !identical(input$sc_ap_norm, "sct") &&
+          params$sc_ap_sketch_preset %||% "standard", n_total_cells,
+          params$sc_ap_sketch_ncells_custom)
+        use_sketch <- !identical(params$sc_ap_norm, "sct") &&
                       sketch_params$ncells < n_total_cells
-        pca_dim <- input$sc_ap_pca_dim  # fallback / full-dataset path
+        pca_dim <- params$sc_ap_pca_dim  # fallback / full-dataset path
 
         if (sc_backend_status(obj) == "disk") {
           .ap_old_plan <- future::plan()
@@ -126,7 +202,7 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
           p$set(0.15,.tr("Sketch...")); log_sc(sprintf(
             .tr("Sketch : %s / %s cellules (preset '%s')..."),
             format(sketch_params$ncells, big.mark=" "), format(n_total_cells, big.mark=" "),
-            input$sc_ap_sketch_preset))
+            params$sc_ap_sketch_preset))
           DefaultAssay(obj) <- "RNA"
           obj <- NormalizeData(obj, verbose=FALSE)
           obj <- FindVariableFeatures(obj, nfeatures=2000, verbose=FALSE)
@@ -146,15 +222,15 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
 
           p$set(0.55,.tr("Clustering (sketch)..."))
           obj <- FindNeighbors(obj, dims=1:sketch_params$npcs, verbose=FALSE)
-          obj <- robust_find_clusters(obj, resolution=input$sc_ap_res, algo=input$sc_ap_cluster_algo,
+          obj <- robust_find_clusters(obj, resolution=params$sc_ap_res, algo=params$sc_ap_cluster_algo,
                                       log_fn=function(m) log_sc(paste("\u26a0\ufe0f", m)))
-          log_sc(sprintf(.tr("✓ Clustering sketch OK (res %.1f)"), input$sc_ap_res))
+          log_sc(sprintf(.tr("✓ Clustering sketch OK (res %.1f)"), params$sc_ap_res))
 
           # Step-3.8B: UMAP is the slowest step by far on large sketches --
           # skippable for fast debug iteration. When skipped, ProjectData()
           # below simply omits umap.model= (PCA-only projection); trajectory
           # (Step 9) and any live/report preview fall back to PCA automatically.
-          compute_umap_sketch <- isTRUE(input$sc_ap_compute_umap)
+          compute_umap_sketch <- isTRUE(params$sc_ap_compute_umap)
           if (compute_umap_sketch) {
             p$set(0.63,.tr("UMAP (sketch)..."))
             obj <- RunUMAP(obj, dims=1:sketch_params$npcs, reduction="pca",
@@ -183,13 +259,13 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
 
         } else {
           # ── Dataset complet (comportement existant, inchangé) ────────────
-          if (identical(input$sc_ap_norm, "sct"))
+          if (identical(params$sc_ap_norm, "sct"))
             log_sc(.tr("ℹ️ Sketch non supporté avec SCTransform — pipeline sur dataset complet."))
           else
             log_sc(.tr("ℹ️ Sketch ignoré : preset ≥ taille du dataset — pipeline sur dataset complet."))
 
           p$set(0.20,.tr("Normalisation...")); log_sc(.tr("Normalisation..."))
-          if (input$sc_ap_norm=="sct") {
+          if (params$sc_ap_norm=="sct") {
             obj <- SCTransform(obj, verbose=FALSE, vst.flavor="v2")
           } else {
             DefaultAssay(obj) <- "RNA"
@@ -205,11 +281,11 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
 
           p$set(0.55,.tr("Clustering..."))
           obj <- FindNeighbors(obj, dims=1:pca_dim, verbose=FALSE)
-          obj <- robust_find_clusters(obj, resolution=input$sc_ap_res, algo=input$sc_ap_cluster_algo,
+          obj <- robust_find_clusters(obj, resolution=params$sc_ap_res, algo=params$sc_ap_cluster_algo,
                                       log_fn=function(m) log_sc(paste("\u26a0\ufe0f", m)))
-          log_sc(sprintf(.tr("✓ %d clusters (res %.1f)"), length(unique(obj$seurat_clusters)), input$sc_ap_res))
+          log_sc(sprintf(.tr("✓ %d clusters (res %.1f)"), length(unique(obj$seurat_clusters)), params$sc_ap_res))
 
-          if (isTRUE(input$sc_ap_compute_umap)) {
+          if (isTRUE(params$sc_ap_compute_umap)) {
             p$set(0.68,.tr("UMAP..."))
             obj <- RunUMAP(obj, dims=1:pca_dim, verbose=FALSE)
             log_sc(.tr("✓ UMAP OK"))
@@ -225,7 +301,7 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
         # Toujours calculé (si dataset raisonnable) pour être disponible aux
         # côtés de PCA/UMAP dans le picker "Réduction à visualiser" — même
         # constante de garde que le module "1. Pipeline" (.AUTO_TSNE_MAX_CELLS).
-        if (!isTRUE(input$sc_ap_compute_umap)) {
+        if (!isTRUE(params$sc_ap_compute_umap)) {
           log_sc(.tr("ℹ️ t-SNE secondaire ignoré (UMAP désactivé, mode PCA seul)."))
         } else {
           p$set(0.72,.tr("t-SNE (secondaire)..."))
@@ -240,7 +316,7 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
         }
 
         # ── Step 6: SingleR (optional) ───────────────────────────────────────
-        if (isTRUE(input$sc_ap_singler)) {
+        if (isTRUE(params$sc_ap_singler)) {
           if (!requireNamespace("SingleR",quietly=TRUE) ||
               !requireNamespace("celldex",quietly=TRUE)) {
             log_sc(.tr("⚠️ SingleR/celldex non installés — annotation ignorée."))
@@ -249,7 +325,7 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
             p$set(0.76,.tr("Annotation SingleR..."))
             result <- tryCatch(
               withCallingHandlers(
-                .run_singler_safe(obj, input$sc_ap_singler_ref, input$sc_ap_singler_level),
+                .run_singler_safe(obj, params$sc_ap_singler_ref, params$sc_ap_singler_level),
                 warning=function(w) {
                   log_sc(paste(.tr("⚠️"), conditionMessage(w)))
                   invokeRestart("muffleWarning")
@@ -257,7 +333,7 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
               error=function(e) { log_sc(paste(.tr("⚠️ SingleR:"), e$message)); NULL }
             )
             if (!is.null(result)) {
-              col_name <- paste0("SingleR_", input$sc_ap_singler_ref, "_", input$sc_ap_singler_level)
+              col_name <- paste0("SingleR_", params$sc_ap_singler_ref, "_", params$sc_ap_singler_level)
               obj[[col_name]] <- result$labels
               log_sc(sprintf(.tr("✓ Annoté [%s] — %d types (%.0fs)"),
                              result$method, length(unique(result$labels)),
@@ -269,7 +345,7 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
         # ── Step 7: FindAllMarkers (optional, also needed for correlation) ───
         # Step-3.7: runs on a RAM-safety-capped subsample (shared_rv$max_cells_heavy,
         # set in "1. Pipeline") — `obj` itself (UMAP/t-SNE/clusters) stays full-size.
-        if (isTRUE(input$sc_ap_markers) || isTRUE(input$sc_ap_correlation)) {
+        if (isTRUE(params$sc_ap_markers) || isTRUE(params$sc_ap_correlation)) {
           p$set(0.82,.tr("FindAllMarkers..."))
           cap_m   <- state_get(shared_rv, "max_cells_heavy") %||% Inf
           sub_res <- subsample_seurat_for_analysis(obj, max_per_group = cap_m, group_col = "seurat_clusters")
@@ -295,10 +371,10 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
             log_sc(sprintf(.tr("✓ %d marqueurs"), nrow(markers)))
 
             # Step 7b: Pathway ORA on top markers (optional)
-            if (isTRUE(input$sc_ap_pathway)) {
+            if (isTRUE(params$sc_ap_pathway)) {
               .t_pathway <- Sys.time()
               log_sc(.tr("Pathway ORA..."))
-              pathway_org <- input$sc_ap_pathway_org %||% "human"
+              pathway_org <- params$sc_ap_pathway_org %||% "human"
               top_g_raw   <- head(markers$gene[order(markers$p_val_adj)], 100)
               # Step-3.8B: .remap_if_ensg() (mod_sc_pathways.R, globally
               # available -- sourced before this module in app.R) converts
@@ -315,7 +391,7 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
                 pw <- tryCatch(
                   run_pathway_enrichment(top_g,
                                          organism = pathway_org,
-                                         database = input$sc_ap_pathway_db %||% "GOBP",
+                                         database = params$sc_ap_pathway_db %||% "GOBP",
                                          pval_cutoff = 0.05,
                                          universe = rownames(obj)),
                   error=function(e) { log_sc(paste(.tr("⚠️ Pathway:"), e$message,
@@ -324,7 +400,7 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
                 )
                 if (!is.null(pw) && nrow(pw) > 0) {
                   state_set(shared_rv, "pathway_results", pw)
-                  state_set(shared_rv, "pathway_db", input$sc_ap_pathway_db %||% "GOBP")
+                  state_set(shared_rv, "pathway_db", params$sc_ap_pathway_db %||% "GOBP")
                   log_sc(sprintf(.tr("✓ %d pathways (%d/%d gènes convertis, %.0fs)"), nrow(pw), length(top_g), length(top_g_raw),
                                  as.numeric(difftime(Sys.time(), .t_pathway, units="secs"))))
                 }
@@ -338,7 +414,7 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
 
         # ── Step 8: Gene Correlation (optional) — top significant marker ─────
         # Step-3.7: also subsampled (stratified by orig.ident) with the same cap.
-        if (isTRUE(input$sc_ap_correlation)) {
+        if (isTRUE(params$sc_ap_correlation)) {
           p$set(0.90,.tr("Corrélation...")); log_sc(.tr("Gene Correlation..."))
           target_gene <- NULL
           markers_now <- state_get(shared_rv, "markers_data")
@@ -374,7 +450,7 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
         # Auto-pipeline stays EXPLICITLY exploratory (weighted kNN graph):
         # Slingshot is opt-in only from the Trajectory module UI. No method
         # switch ever happens silently here.
-        if (isTRUE(input$sc_ap_trajectory)) {
+        if (isTRUE(params$sc_ap_trajectory)) {
           p$set(0.95,.tr("Trajectoire...")); log_sc(.tr("Trajectory / Pseudotime..."))
           if (ncol(obj) > .MAX_TRAJECTORY_CELLS) {
             log_sc(sprintf(.tr("⚠️ Trajectoire ignorée : dataset trop grand (%d > %d)."),
