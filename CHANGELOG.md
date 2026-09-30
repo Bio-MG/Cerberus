@@ -18,14 +18,14 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > ✅ **Défaut de numérotation CORRIGÉ le 2026-09-16** : `STATUS.md` contenait
 > **deux** sections étiquetées `2aw` (`### 2aw.` « Garde C13 » et `## §2aw`
 > « PLOT-S6 »), `PLOT-S6` ayant repris un numéro déjà pris. Renumérotation
-> **chronologique** : `PLOT-S6` → **`§2ax`**, `4E-4` → **`§2ay`**. ⚠️ Le message
-> du commit `03951cb` cite encore `§2ax` pour 4E-4 : c'est l'état **avant** la
+> **chronologique** : `PLOT-S6` → **`[§2ax](docs/archive/STATUS_JOURNAL.md)`**, `4E-4` → **`[§2ay](docs/archive/STATUS_JOURNAL.md)`**. ⚠️ Le message
+> du commit `03951cb` cite encore `[§2ax](docs/archive/STATUS_JOURNAL.md)` pour 4E-4 : c'est l'état **avant** la
 > renumérotation. Détail : `STATUS.md` §6, item 6.
 >
 > ✅ **Trou de maintenance des incréments 21 → 45 COMBLÉ le 2026-09-20** : le
 > fichier s'arrêtait au **20ᵉ** incrément (2026-09-18) alors que `STATUS.md` en
 > comptait **45** ⇒ **25 jalons** n'avaient **aucune** entrée. Les 25 entrées ont
-> été **écrites d'après `STATUS.md`** (`§2cf`…`§2df`), **pas** d'après le message
+> été **écrites d'après `STATUS.md`** (`[§2cf](docs/archive/STATUS_JOURNAL.md)`…`[§2df](docs/archive/STATUS_JOURNAL.md)`), **pas** d'après le message
 > de commit : ce fichier est un **index**, il **cite**, il ne **re-mesure** pas.
 > ⚠️ Les chiffres de garde de ces entrées sont ceux **consignés** dans `STATUS.md`
 > au moment du jalon ; en cas d'écart, **`STATUS.md` §0 et §6 font foi**.
@@ -55,7 +55,7 @@ dont **aucune** fonction n'était citée. Le test a révélé un défaut **anté
 
 ### Constaté (listé, NON corrigé)
 - `Embeddings()` **non préfixé** en **4** sites (re-mesuré : `sc_export.R:31`, `sc_helpers.R:1238`,
-  `mod_sc_pipeline.R:434`, `mod_sc_viz.R:598`) — et non **1** comme l'affirmait §2dd.5.
+  `mod_sc_pipeline.R:434`, `mod_sc_viz.R:598`) — et non **1** comme l'affirmait [§2dd.5](docs/archive/STATUS_JOURNAL.md).
 
 ## [V1.x — dette de conventions, 44ᵉ incrément] — 2026-09-20 — C9 direct : `R/sc/sc_export.R` + **un P0 trouvé en chemin**
 
@@ -68,7 +68,7 @@ dont **aucune** fonction n'était citée. Le test a révélé un défaut **anté
 - 🟢 Test éponyme `test-sc-export.R` — **C9 21 → 20**, gardes **59 → 58**.
 
 ### 🔴 Une affirmation écrite TROIS fois, corrigée par la mesure
-« `sc_export.R` est le **seul** fichier dont aucune fonction n'est citée » (§2da.5, §2dc.3, §2dc.11.1) :
+« `sc_export.R` est le **seul** fichier dont aucune fonction n'est citée » ([§2da.5](docs/archive/STATUS_JOURNAL.md), [§2dc.3](docs/archive/STATUS_JOURNAL.md), [§2dc.11.1](docs/archive/STATUS_JOURNAL.md)) :
 ils sont **3** — `R/sc/sc_export.R` (**0/1**, soldé ici), `R/spatial/spatial_export.R` (**0/8**),
 `R/spatial/spatial_report.R` (**0/2**). ⚠️ **Un chiffre n'est pas une mesure parce qu'il est écrit.**
 
@@ -93,7 +93,7 @@ La sonde d'origine portait **deux** cécités **silencieuses**, dont une regex d
 **capturait jamais** un identifiant **commençant par `.`** ⇒ **195** fonctions **privées** invisibles
 (**36 %** des **762** fonctions possédées). Mesure réelle : **37** fichiers / **174** fonctions
 orphelines, chaque fois **re-confirmée** par recomputation indépendante (**34** ; l'écart de **3** est
-l'**alias de domaine** `plotting → plot`, §2cy).
+l'**alias de domaine** `plotting → plot`, [§2cy](docs/archive/STATUS_JOURNAL.md)).
 ⇒ **Verdict INVERSE de §14.3** (`C16`, lui, a **0** site sur **136** fichiers ⇒ **`ERREUR`**).
 🔑 *La sévérité se décide sur le COÛT MESURÉ, jamais sur la forme de la règle* — et **la mesure
 doit venir d'une sonde PROUVÉE SAINE**, sinon on grave dans la doctrine un chiffre faux.
@@ -187,7 +187,7 @@ lieu d'en changer une. ⚠️ **Aucun compteur de garde ne bouge** (C9 = 22, C10
 - `state`/`class` = **deux axes orthogonaux** + **UN** accesseur générique ⇒ **`R/` est DÉBLOQUÉ**
   (les 2 lots gelés redeviennent convertibles) ;
 - `C9b` = forme B **avec clause de non-superposition** (0 signal neuf) ;
-- `C16` = **promu `ERREUR`** et **codé** (§14.3, §2cz — au **source** de la sévérité) ;
+- `C16` = **promu `ERREUR`** et **codé** (§14.3, [§2cz](docs/archive/STATUS_JOURNAL.md) — au **source** de la sévérité) ;
 - portée de `C6` = **profondeur d'accolade 0**.
 
 ## [V1.x — dette de conventions, 33ᵉ incrément] — 2026-09-19 — `mod_bulk_de_multimethod.R` → `bulk_de_multimethod_error`
@@ -202,7 +202,7 @@ lieu d'en changer une. ⚠️ **Aucun compteur de garde ne bouge** (C9 = 22, C10
 - `modules/bulk/mod_bulk_report.R` → `bulk_report_error` — **C10 7 → 6**, dette **34 → 33**.
   Domaine `modules/bulk/` **bouclé**.
 
-### 🟢 Verdict INVERSE de §2cp/§2cq
+### 🟢 Verdict INVERSE de [§2cp](docs/archive/STATUS_JOURNAL.md)/[§2cq](docs/archive/STATUS_JOURNAL.md)
 - **La classe S'ÉCHAPPE** (aucun gestionnaire avaleur sur le chemin de sortie) : preuve
   **COMPORTEMENTALE**. Le **discriminant** est la présence d'un gestionnaire qui **retourne** une
   valeur, **pas** le dossier ni le construit.
@@ -230,7 +230,7 @@ lieu d'en changer une. ⚠️ **Aucun compteur de garde ne bouge** (C9 = 22, C10
 ### 🟢 Technique neuve et réutilisable
 - `shiny::withReactiveDomain(shiny::MockShinySession$new(), …)` **débloque les primitives à
   session** appelées via `::` (`Progress$new()`, `removeModal()`) — exactement le motif qui avait
-  fait conclure « injoignable » au §2cc.
+  fait conclure « injoignable » au [§2cc](docs/archive/STATUS_JOURNAL.md).
 
 ## [V1.x — dette de conventions, 29ᵉ incrément] — 2026-09-18 — `modules/sc/mod_sc.R` → `mod_sc_error` (lot « qui paie DEUX fois »)
 
@@ -348,7 +348,7 @@ derrière de nombreux prérequis ». Converti au 20ᵉ, il s'est révélé
    `BPCells::open_matrix_dir()` **avant toute garde** ; sans artefact réel,
    aucun site de la fonction n'est atteignable. `BPCells::write_matrix_dir()`
    sur une `dgCMatrix` 10 × 20 suffit (~1 s).
-2. **L'environnement enfant** (§2bz.3) force chaque garde de dépendance, alors
+2. **L'environnement enfant** ([§2bz.3](docs/archive/STATUS_JOURNAL.md)) force chaque garde de dépendance, alors
    que `spacexr`, `STdeconvolve`, `topicmodels`, `slam` **et** `BPCells` sont
    **tous installés**.
 3. **Un mode « tiers »** (`"stdeconvolve"`, ni `"rctd"` ni `"labeltransfer"`)
@@ -396,7 +396,7 @@ habitude.
 ## [V1.x — dette de conventions, 19ᵉ incrément] — 2026-09-18 — `spatial_niche.R` classé (`spatial_niche_error`)
 
 **5 sites sur 5 prouvés à l'exécution (100 %)** — le lot a été **choisi par le
-prédicteur** posé la veille au §2cc.2, et il a fonctionné. C10 **30 → 25**, C9
+prédicteur** posé la veille au [§2cc.2](docs/archive/STATUS_JOURNAL.md), et il a fonctionné. C10 **30 → 25**, C9
 **31 → 30**, dette **62 → 56** (−6 = 5 + 1).
 
 ### Modifié
@@ -450,7 +450,7 @@ repliés ⇒ `2+2+2+1+1 = 8` suppressions, `1×5 = 5` insertions. Conclusif :
 ## [V1.x — dette de conventions, 18ᵉ incrément] — 2026-09-17 — `spatial_io.R` classé (`spatial_io_error`)
 
 **7 sites sur 11 prouvés à l'exécution (64 %)** — 🟡 **la série de trois lots
-INTÉGRAUX s'arrête ici** (§2bz 16/16, §2ca 12/12, §2cb 7/7 = 100 %), et la
+INTÉGRAUX s'arrête ici** ([§2bz](docs/archive/STATUS_JOURNAL.md) 16/16, [§2ca](docs/archive/STATUS_JOURNAL.md) 12/12, [§2cb](docs/archive/STATUS_JOURNAL.md) 7/7 = 100 %), et la
 raison est **structurelle**, pas un manque d'effort. C10 **41 → 30**, C9
 **32 → 31**, dette **74 → 62** (−12 = 11 sites + 1 C9).
 
@@ -465,7 +465,7 @@ raison est **structurelle**, pas un manque d'effort. C10 **41 → 30**, C9
   dont le test a dû être ÉCRIT de zéro** : vérifié, **aucun** fichier de test ne
   porte ce nom **et** aucun ne `source()` `spatial_io.R` — à la différence des
   **quatre** lots précédents, où un test hérité existait sous un nom périmé
-  (§2bz.2, §2ca, §2cb.2).
+  ([§2bz.2](docs/archive/STATUS_JOURNAL.md), [§2ca](docs/archive/STATUS_JOURNAL.md), [§2cb.2](docs/archive/STATUS_JOURNAL.md)).
 
 ### 🔴 Les 4 sites non prouvés, et pourquoi c'est structurel
 
@@ -517,9 +517,9 @@ C10 **48 → 41**, C9 **33 → 32**, dette **82 → 74** (−8 = 7 + 1).
   bien que la garde signalait `io_helpers.R` « sans test éponyme » **alors que
   ce fichier le testait déjà (292 lignes, ~24 blocs)**. ⇒ **C9 baisse de 33 à
   32 sans écrire une seule ligne de test** (mesuré). Deuxième occurrence du
-  geste de §2bz.2.
+  geste de [§2bz.2](docs/archive/STATUS_JOURNAL.md).
 - Le fichier est **étendu** : 2 assertions **préfixe seul** montées au message
-  entier + classe (§2bx.3), 5 sites newly covered, garde-fou du mock, verrou
+  entier + classe ([§2bx.3](docs/archive/STATUS_JOURNAL.md)), 5 sites newly covered, garde-fou du mock, verrou
   source. Rouge **8 échecs** → vert **69 PASS**.
 
 ### 🔴 Un en-tête périmé DEUX FOIS, et une justification réfutée par la mesure
@@ -531,13 +531,13 @@ helpers_io.R` : **les deux noms sont faux**. Il déclarait surtout
 
 **Mesuré faux** : ses **4** sites C10 (1128, 1132, 1135, 1142) sont **tous**
 atteignables — 1128 et 1142 sans aucun paquet, 1132 et 1135 par la technique
-d'environnement enfant (§2bz.3). ⚠️ Même défaut qu'au §2bp : **une
+d'environnement enfant ([§2bz.3](docs/archive/STATUS_JOURNAL.md)). ⚠️ Même défaut qu'au [§2bp](docs/archive/STATUS_JOURNAL.md) : **une
 *justification* périmée est aussi dangereuse qu'un chiffre périmé**, et c'est
 la **technique disponible** qui décide de la portée, pas la présence du paquet.
 
 ### 🟢 Ce que le lot apporte
 
-- **Troisième lot d'affilée à 100 %** (après §2bz et §2ca) : la technique de
+- **Troisième lot d'affilée à 100 %** (après [§2bz](docs/archive/STATUS_JOURNAL.md) et [§2ca](docs/archive/STATUS_JOURNAL.md)) : la technique de
   mock des gardes de dépendance est devenue le levier principal de preuve.
 - **Le site 1142 vit dans un `switch()`** (`affy_probe = if (organism ==
   "human") "PROBEID" else stop(...)`) : un `stop()` en position
@@ -562,7 +562,7 @@ prouvé. C10 **60 → 48**, C9 **34 → 33**, dette **95 → 82** (−13 = 12 + 
   lignes** (deux littéraux accolés) ⇒ le compte de parenthèses doit être fait
   sur l'**appel**, pas sur la ligne.
 - Le site **60** (`stop(paste0(...), call. = FALSE)`, multi-ligne) est **laissé
-  en place** : déjà conforme, comme les 4 de `pathway_helpers.R` (§2bp).
+  en place** : déjà conforme, comme les 4 de `pathway_helpers.R` ([§2bp](docs/archive/STATUS_JOURNAL.md)).
 - `tests/testthat/test-spatial-reference.R` : **créé** — verrou source + **12
   preuves d'exécution**. Rouge mesuré **13 échecs** (12 classes + verrou
   `n = 12`) → vert **27 PASS**.
@@ -571,7 +571,7 @@ prouvé. C10 **60 → 48**, C9 **34 → 33**, dette **95 → 82** (−13 = 12 + 
 
 En lisant le fichier, le site **75** semblait être un **faux positif** : la
 ligne 60 porte `call. = FALSE` — que C10 **exempte** — et un angle mort
-« ligne par ligne » (le même que §2bg) l'aurait manqué.
+« ligne par ligne » (le même que [§2bg](docs/archive/STATUS_JOURNAL.md)) l'aurait manqué.
 
 **Mesure : 0 faux positif sur les 60 sites.** La ligne **60** est correctement
 **exemptée** et la ligne **75** — un `stop()` *distinct*, sans `call. = FALSE`
@@ -580,12 +580,12 @@ ligne 60 porte `call. = FALSE` — que C10 **exempte** — et un angle mort
 ⇒ **Un soupçon de défaut de garde se mesure comme une réduction de dette** :
 ici la mesure a **innocenté** la garde. C'est le 5ᵉ examen de ce type et le
 **premier dont le verdict est « la garde a raison »** — les quatre précédents
-(§2bg, §2bh, §2bi, §2br) l'avaient mise en défaut.
+([§2bg](docs/archive/STATUS_JOURNAL.md), [§2bh](docs/archive/STATUS_JOURNAL.md), [§2bi](docs/archive/STATUS_JOURNAL.md), [§2br](docs/archive/STATUS_JOURNAL.md)) l'avaient mise en défaut.
 
 ### 🟢 Ce que le lot apporte de plus
 
 - **Les gardes d'absence de dépendance sont devenues routinières** : 87, 93 et
-  106 sont atteintes par la technique d'environnement enfant (§2bz.3), avec le
+  106 sont atteintes par la technique d'environnement enfant ([§2bz.3](docs/archive/STATUS_JOURNAL.md)), avec le
   **garde-fou de non-fuite**. Deuxième lot d'affilée à **100 %**.
 - **Un `.RData` « à objet unique non exploitable »** atteint le site 75 — il
   faut écrire un objet d'une classe inattendue, sinon c'est la garde
@@ -666,7 +666,7 @@ et le deuxième lot qui paie **deux fois** (C9 −1 *et* C10 −17).
 un dispatcheur sur `cfg$type`. Chaque branche commence par une **garde**
 (`if (…) stop(…)`) ⇒ **une entrée triviale suffit**, et **aucun calcul Seurat**
 n'est atteint. C'est la forme la plus favorable du chantier : **94 %**, contre
-**71 %** pour `sc_trajectory.R` (§2bx) et **44 %** pour `sc_helpers.R` (§2bq).
+**71 %** pour `sc_trajectory.R` ([§2bx](docs/archive/STATUS_JOURNAL.md)) et **44 %** pour `sc_helpers.R` ([§2bq](docs/archive/STATUS_JOURNAL.md)).
 ⇒ **La forme du fichier prédit la joignabilité mieux que son domaine.**
 
 ### ⚠️ Deux leçons de mesure
@@ -717,7 +717,7 @@ n'est atteint. C'est la forme la plus favorable du chantier : **94 %**, contre
 
 **Le plus gros lot depuis le 7ᵉ** (21 sites) et **le premier qui paie deux fois** :
 le test éponyme exigé par C9 fait baisser **C9 et C10 à la fois**. 🟢 **Bascule
-vers `R/`** décidée par mesure (§2bw.6) : le front `modules/` est épuisé côté
+vers `R/`** décidée par mesure ([§2bw.6](docs/archive/STATUS_JOURNAL.md)) : le front `modules/` est épuisé côté
 preuve (14 sites restants, **tous** dans des serveurs réactifs — revérifié ici
 par une méthode **validée** sur un cas dont la vérité terrain est connue).
 
@@ -789,7 +789,7 @@ R pur, **sans** `testServer()` :
 
 ## [V1.x — dette de conventions, 12ᵉ incrément] — 2026-09-17 — `mod_sc_annotation.R` classé (`sc_annotation_error`)
 
-**Premier lot choisi par le critère de §2bv** (« expose-t-il des helpers purs ? »)
+**Premier lot choisi par le critère de [§2bv](docs/archive/STATUS_JOURNAL.md)** (« expose-t-il des helpers purs ? »)
 plutôt que par « a-t-il un test éponyme ? ». Et **le dernier lot de `modules/`
 prouvable à l'exécution** : après lui, les 14 sites restants sont **tous** dans
 des serveurs réactifs.
@@ -810,9 +810,9 @@ des serveurs réactifs.
 Qualifiée par le **domaine** (annotation SingleR), famille `sc_*` :
 `sc_import_error` · `sc_pseudobulk_error` · `sc_helpers_error` · `sc_multi_error`.
 
-### 🎯 Le critère §2bv a fonctionné — et il a prédit la suite
+### 🎯 Le critère [§2bv](docs/archive/STATUS_JOURNAL.md) a fonctionné — et il a prédit la suite
 
-Mesuré au §2bv.6 #4 : `mod_sc_annotation.R` était le **seul** des 13 fichiers
+Mesuré au [§2bv.6](docs/archive/STATUS_JOURNAL.md) #4 : `mod_sc_annotation.R` était le **seul** des 13 fichiers
 restants dont **tous** les sites vivent dans des **helpers purs** (`.load_ref`,
 `.run_singler_safe`), les 14 autres étant dans des serveurs réactifs. Le lot a
 donc été pris en premier — et il a livré ce que le critère promettait :
@@ -834,7 +834,7 @@ donc été pris en premier — et il a livré ce que le critère promettait :
   **org.Mm.eg.db** sont **installés** ⇒ elle ne s'exécute jamais ;
 - **144** exige `.load_ref()`, donc un **téléchargement celldex** (ExperimentHub)
   ⇒ **réseau**. **Non testé volontairement** : un test réseau pendrait (le dépôt
-  « live-gate » déjà le smoke GEO, §2ba).
+  « live-gate » déjà le smoke GEO, [§2ba](docs/archive/STATUS_JOURNAL.md)).
 
 ### ⚠️ Un piège d'écriture, pas de lecture
 
@@ -858,7 +858,7 @@ n'embarque **pas** la précédente.
 
 - **14** sites de `modules/` restants, **tous** dans des serveurs réactifs
   (`mod_sc.R` 2 · `mod_spatial_cluster.R` 2 · 10 fichiers à 1 site) ⇒
-  **inobservables** (§2bv.3) : le front `modules/` devient **verrou source seul**.
+  **inobservables** ([§2bv.3](docs/archive/STATUS_JOURNAL.md)) : le front `modules/` devient **verrou source seul**.
 - **100** sites de `R/` restants ⇒ **C9 + C10 simultanément**. ⚠️ **Le rapport
   coût/preuve bascule maintenant en faveur de `R/`** : c'est le seul front où
   l'on peut encore prouver la classe.
@@ -867,7 +867,7 @@ n'embarque **pas** la précédente.
 ## [V1.x — dette de conventions, 11ᵉ incrément] — 2026-09-17 — `mod_sc_pseudobulk.R` classé (`sc_pseudobulk_error`)
 
 **Le lot de `modules/` le mieux prouvé à ce jour** — et il renverse une
-conclusion tenue depuis §2bs : la classe d'erreur **n'est pas** inobservable
+conclusion tenue depuis [§2bs](docs/archive/STATUS_JOURNAL.md) : la classe d'erreur **n'est pas** inobservable
 dans `modules/`, elle l'était dans les fichiers qu'on avait traités.
 
 ### Modifié
@@ -883,11 +883,11 @@ dans `modules/`, elle l'était dans les fichiers qu'on avait traités.
 ### Classe : `sc_pseudobulk_error`
 
 Qualifiée par le **domaine** (pseudobulk côté SC), dans la famille `sc_*` déjà
-présente : `sc_import_error` (§2bu) · `sc_helpers_error` (§2bq) · `sc_multi_error`.
+présente : `sc_import_error` ([§2bu](docs/archive/STATUS_JOURNAL.md)) · `sc_helpers_error` ([§2bq](docs/archive/STATUS_JOURNAL.md)) · `sc_multi_error`.
 
 ### 🟢 La CLASSE est observable — première sur le front `modules/`
 
-Depuis §2bs, la règle était : *dans `modules/`, les réactifs **avalent**
+Depuis [§2bs](docs/archive/STATUS_JOURNAL.md), la règle était : *dans `modules/`, les réactifs **avalent**
 l'erreur, donc la classe n'est pas observable ; on prouve par verrou source +
 témoin de message*. Ce fichier **n'est pas** dans ce cas : il expose deux
 fonctions **top-level PURES** — `aggregate_pseudobulk_counts()` et
@@ -914,7 +914,7 @@ Ces 2 sites sont couverts par le **verrou source seul**.
 ### ⚠️ Dénombrer n'est toujours pas greper `stop(`
 
 **7** occurrences du token pour **6** sites : la ligne **149** est un **commentaire**
-roxygen qui mentionne `stop()` — le même piège qu'au §2bu.4, dans un fichier
+roxygen qui mentionne `stop()` — le même piège qu'au [§2bu.4](docs/archive/STATUS_JOURNAL.md), dans un fichier
 différent : il se répète, il n'était pas local.
 
 ### Vérifié
@@ -934,7 +934,7 @@ différent : il se répète, il n'était pas local.
 - **100** sites de `R/` restants (`sc_trajectory.R` 21 · `sc_plotting.R` 17 ·
   `spatial_stats.R` 16 …) : **C9 + C10 simultanément**.
 - 🔴 **0 des 14 fichiers de `modules/` alors restants n'avait de test éponyme**
-  (mesuré au §2bu.6 #4) : le critère est épuisé sur les **deux** fronts.
+  (mesuré au [§2bu.6](docs/archive/STATUS_JOURNAL.md) #4) : le critère est épuisé sur les **deux** fronts.
 
 
 ## [V1.x — dette de conventions, 10ᵉ incrément] — 2026-09-17 — `mod_import_sc.R` classé (`sc_import_error`)
@@ -1071,7 +1071,7 @@ sur la **valeur de l'extension** (`"unsupportedext"`, en ASCII pur) — elle
   `mod_spatial_cluster.R` 2 · puis 10 fichiers à 1 site.
 - ⚠️ **Le « test éponyme » n'existe que pour une minorité de `modules/`**
   (ici `test-mod-geo.R`) : `C9` ne couvre que `R/`, donc rien n'oblige à en
-  écrire un. Une **règle sœur** reste une décision à prendre (§2bs.6 #3).
+  écrire un. Une **règle sœur** reste une décision à prendre ([§2bs.6](docs/archive/STATUS_JOURNAL.md) #3).
 
 ## [V1.x — dette de conventions, 8ᵉ incrément] — 2026-09-17 — `mod_import_bulk.R` classé (`bulk_import_error`)
 
@@ -1110,7 +1110,7 @@ rien. Une assertion `expect_error(class = "bulk_import_error")` serait donc un
 mensonge.
 
 Le **message**, lui, est observable via `logs()` — et c'est exactement
-l'invariant de §2bn (`errorCondition()` tronque les arguments multiples, défaut
+l'invariant de [§2bn](docs/archive/STATUS_JOURNAL.md) (`errorCondition()` tronque les arguments multiples, défaut
 invisible dans le source). D'où :
 
 1. **Verrou source** — `check_c10_error_style()` sur le fichier rend **0** :
@@ -1211,8 +1211,8 @@ la couche était entièrement inconvertie, contrairement à `bulk_helpers.R` qui
 
 ## [V1.x — dette de conventions, 7ᵉ incrément] — 2026-09-17 — `sc_helpers.R` classé (`sc_helpers_error`)
 
-**Troisième fichier converti** (après `bulk_helpers.R` §2bl et
-`pathway_helpers.R` §2bp) — et le **plus gros lot** de ce chantier à ce jour :
+**Troisième fichier converti** (après `bulk_helpers.R` [§2bl](docs/archive/STATUS_JOURNAL.md) et
+`pathway_helpers.R` [§2bp](docs/archive/STATUS_JOURNAL.md)) — et le **plus gros lot** de ce chantier à ce jour :
 **34** sites d'un coup.
 
 ### Modifié
@@ -1246,7 +1246,7 @@ couche de helpers.
   14 `simpleError` au lieu de `sc_helpers_error` — les `expect_match` sur les
   messages passaient déjà, seul le **classement** manquait) ⇒ puis **vert** :
   `failed=0 passed=72`.
-- **Invariant au bon niveau** (§2bn) : les 15 déclencheurs rejoués ⇒ messages
+- **Invariant au bon niveau** ([§2bn](docs/archive/STATUS_JOURNAL.md)) : les 15 déclencheurs rejoués ⇒ messages
   **identiques 15/15** au caractère près ; classes `simpleError|error|condition`
   → `sc_helpers_error|error|condition`.
 - **Conversion par SPLICE ÉQUILIBRÉ PARENTHÈSE**, pas par regex de ligne : 6 sites
@@ -1274,7 +1274,7 @@ couche de helpers.
 ## [V1.x — dette de conventions, 6ᵉ incrément] — 2026-09-17 — `pathway_helpers.R` classé (`pathway_error`)
 
 **Deuxième fichier converti** du chantier de réduction de la dette C10 (après
-`bulk_helpers.R`, §2bl), et **premier lot choisi par un critère MESURÉ** : sur les
+`bulk_helpers.R`, [§2bl](docs/archive/STATUS_JOURNAL.md)), et **premier lot choisi par un critère MESURÉ** : sur les
 14 fichiers sans classe, **3 seulement** avaient un test éponyme.
 
 ### Modifié
@@ -1295,7 +1295,7 @@ couche de helpers.
 
 - **Test ROUGE d'abord** : **10 échecs** (`simpleError` au lieu de `pathway_error`,
   plus les 18 signalements C10) — puis **vert** : `failed=0 passed=37`.
-- **Invariant au bon niveau** (§2bn) : les 9 sites joignables rejoués ⇒ messages
+- **Invariant au bon niveau** ([§2bn](docs/archive/STATUS_JOURNAL.md)) : les 9 sites joignables rejoués ⇒ messages
   **identiques 9/9** au caractère près, classes passées de
   `simpleError|error|condition` à `pathway_error|error|condition`.
 - `parse()` **OK** (porte obligatoire après réécriture programmatique) ;
@@ -1406,7 +1406,7 @@ le message tient en plusieurs arguments doit passer par `paste0()`** — et
 
 Découvert par la **re-mesure de la suite complète** exigée par l'incrément de
 dette ci-dessous — **pas** par lui : le défaut est **antérieur** (introduit par
-`4abfc97`, le jalon « mode exploratoire sans réplicat »). Le §2bk.5 #3 disait
+`4abfc97`, le jalon « mode exploratoire sans réplicat »). Le [§2bk.5](docs/archive/STATUS_JOURNAL.md) #3 disait
 explicitement que la suite complète n'avait **pas** été rejouée ; c'est
 précisément ce trou que la re-mesure a comblé.
 
@@ -1414,7 +1414,7 @@ précisément ce trou que la re-mesure a comblé.
 
 - **`modules/sc/mod_sc_pseudobulk.R`** : `mod_sc_pseudobulk_server` appelle
   `ns("pb_no_rep_enable" / "pb_no_rep_bcv" / "pb_no_rep_attest")` dans un
-  `renderUI` (le panneau « plan sans réplicat » livré par §2bk) **sans lier**
+  `renderUI` (le panneau « plan sans réplicat » livré par [§2bk](docs/archive/STATUS_JOURNAL.md)) **sans lier**
   `ns`. Shiny lève alors « could not find function "ns"` **au moment où la
   branche s'affiche** — donc invisible au démarrage, et invisible aux tests
   ciblés. Correctif d'**une ligne**, au motif maison (**30** autres modules
@@ -1751,7 +1751,7 @@ compteur aggravé.
 ### Documentation
 
 `docs/CONVENTIONS.md` **§12.1** et **§12.2** (plafonds 324 → 319) ; `STATUS.md`
-**§2bg** + §0 ; `ROADMAP.md` **§5 #10** (décision close : réduction engagée).
+**[§2bg](docs/archive/STATUS_JOURNAL.md)** + §0 ; `ROADMAP.md` **§5 #10** (décision close : réduction engagée).
 
 ## [V1.x — NEW-3] — 2026-09-16 — interactome local + moteur PCSF heuristique (+ 3 prémisses corrigées, 3 défauts trouvés en exécutant)
 
@@ -1848,7 +1848,7 @@ Le moteur CellChat natif (CC-5) était présenté comme une **cinquième** optio
 placée **en fin de liste** et **non sélectionnée** : l'UI faisait donc passer
 l'import d'une table exportée pour la voie normale, alors que le **calcul dans
 l'application** est la voie voulue par l'utilisateur (demande consignée
-`STATUS.md` §2bd.5 #2).
+`STATUS.md` [§2bd.5](docs/archive/STATUS_JOURNAL.md) #2).
 
 ### Changement
 - `modules/sc/mod_sc_communication.R` : `cellchat_engine` passe **en tête** de
@@ -1884,7 +1884,7 @@ l'application** est la voie voulue par l'utilisateur (demande consignée
   n'a touché aucune dépendance) : ne pas s'appuyer dessus sans re-mesure.
 
 ### Documentation
-- `STATUS.md` **§2be** (nouveau) + §0 rafraîchi + §2bd.5 #2 **clos**.
+- `STATUS.md` **[§2be](docs/archive/STATUS_JOURNAL.md)** (nouveau) + §0 rafraîchi + [§2bd.5](docs/archive/STATUS_JOURNAL.md) #2 **clos**.
 - `ROADMAP.md` §2 (bandeau) et §6 (**autopipeline étendu débloqué**).
 - **Audit documentaire re-mesuré** : **0 erreur · 59 → 18 avertissements**. Les
   « 59 avertissements sur 8 fichiers » annoncés étaient **faux** : **41 des 59**
@@ -1899,7 +1899,7 @@ l'application** est la voie voulue par l'utilisateur (demande consignée
 ### Non fait — **listé, non exécuté** (règle 9)
 NEW-3 (5 décisions ; **D5 débloquée**) · LIANA natif (route (a), décision
 séparée) · autopipeline étendu (**débloqué**, à cadrer) · réseau d'enrichissement
-**interactif** (à cadrer) · dette `STATUS.md` §2bd.4.
+**interactif** (à cadrer) · dette `STATUS.md` [§2bd.4](docs/archive/STATUS_JOURNAL.md).
 
 ## [V1.x — doc] — 2026-09-16 — passe de nettoyage : `STATUS.md` 187 Ko → ~64 Ko, suite RE-MESURÉE à 5408 PASS
 
@@ -1932,7 +1932,7 @@ P0-sourcing, et avec deux fichiers e2e sautés. Nouvelle mesure : **95 fichiers,
 
 ⚠️ **La lenteur était un symptôme** : le « flake chromote »
 `test-shinytest2-import.R` **stallait ~15 min** (`handle_read_frame error`).
-Le correctif de locale supprime aussi ce stall. Détail : `STATUS.md` §2ba.
+Le correctif de locale supprime aussi ce stall. Détail : `STATUS.md` [§2ba](docs/archive/STATUS_JOURNAL.md).
 
 ## [V1.x — e2e] — 2026-09-16 — les 4 fichiers `test-shinytest2-*` étaient sautés : la couverture e2e était nulle
 
@@ -2150,7 +2150,7 @@ résultat), le backend parallèle (`SnowParam` des deux côtés) et `mc.cores`
 Tests ciblés : **255 PASS / 0 FAIL / 0 ERROR / 0 SKIP** (7 fichiers).
 `check_conventions.R` = 0 err / 324 avert. (baseline exacte) ;
 `check_duplication.R` = 0 err / 3 avert. ; arbre applicatif sourcé de bout en
-bout (124 fichiers, 0 échec). Détail : `docs/STATUS.md` §2ay, rapport
+bout (124 fichiers, 0 échec). Détail : `docs/STATUS.md` [§2ay](docs/archive/STATUS_JOURNAL.md), rapport
 `docs/ROADMAP_HANDOFF_STAGE_4E_4.md`.
 
 ## [V1.x — FERMETURE renv] — 2026-09-15 — fermeture de dépendances complète (447 → 482) + garde §4
