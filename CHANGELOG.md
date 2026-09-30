@@ -30,6 +30,25 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > ⚠️ Les chiffres de garde de ces entrées sont ceux **consignés** dans `STATUS.md`
 > au moment du jalon ; en cas d'écart, **`STATUS.md` §0 et §6 font foi**.
 
+## [V1.x — M-2 phase 1 : normalisateur unique + cœur QC pur] — 2026-09-30
+
+Premier pas de l'extraction du cœur pur de l'autopipeline SC
+(audit J-5 ; détail : journal archivé §2ds ; commit `e4b4d81`).
+
+### Ajouté
+- `sc_ap_normalize_params(p)` : LE point de passage des 22 paramètres
+  `sc_ap_*` — jeu fermé, défauts canoniques, clés inconnues perdues.
+  Le canal drive délègue au cœur (une seule source de défauts).
+- `sc_pipeline_qc(obj, ...)` : cœur pur de l'étape QC, testable hors app.
+
+### Corrigé
+- L'erreur brute de Seurat (« No cells found ») quand le QC élimine tout
+  est convertie en erreur classée française (`sc_pipeline_error`).
+
+### Refactoré
+- `run_sc_auto_pipeline` normalise ses paramètres en tête et ne lit plus
+  que `params$sc_ap_*` (32 lectures converties).
+
 ## [V1.x — M-4 phase 1 : préflight RAM (mesurer, projeter, alerter)] — 2026-09-30
 
 Audit externe J-8 : les pipelines lourds se lançaient sans aucune lecture
