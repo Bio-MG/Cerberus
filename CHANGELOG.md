@@ -42,6 +42,32 @@ journalisent (détail : journal archivé §2dt ; commit `36473b7`).
   contexte = fonction englobante ; les passes suivantes étendront aux
   4 autres fichiers du top 5.
 
+## [V1.x — M-1 phase 2 : 36 avaleurs converties + rotation du journal] — 2026-09-30
+
+Passe 2 de l'action J-4 : les 4 fichiers restants du top 5, triage sémantique
+des handlers (détail : journal archivé §2du ; commit `7d96df2`).
+
+### Ajouté
+- **Rotation du journal** `QC/swallowed_errors.log` : au-delà de 1 Mo
+  (`max_bytes`, paramètre de `ts_log_swallow`), le journal courant devient
+  `<log>.1` (une seule génération conservée) et l'append repart à neuf.
+  Contrat « ne lève jamais » couvre la rotation.
+- **36 handlers silencieux convertis** avec datation : moteur
+  CellChat/LIANA ×13, import spatial ×10, module SC ×7, drive watcher ×6.
+  Règle de triage : on journalise les échecs réels ; restent inchangées les
+  détections d'absence (présence-checks), les traducteurs qui re-signalent,
+  les captures-pour-inspection et les contrats d'avalaison documentés (UI).
+
+### Modifié
+- Les handlers d'import spatial qui émettaient déjà un `warning()` conservent
+  ce comportement et gagnent EN PLUS la trace persistante (un warning est
+  éphémère, surtout en worker mirai).
+
+### Validation
+- **Suite complète VERTE** sur l'arbre `391f8b6` (préalable à la passe) :
+  **failed=0 passed=10804 error=0 skipped=9** — tous les jalons de la séance
+  validés par la suite intégrale.
+
 ## [V1.x — M-2 phase 1 : normalisateur unique + cœur QC pur] — 2026-09-30
 
 Premier pas de l'extraction du cœur pur de l'autopipeline SC
