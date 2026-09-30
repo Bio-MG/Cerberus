@@ -157,6 +157,7 @@ extract_histology_image <- function(seurat_obj, technology, raw_dir = NULL) {
       
       NULL
     }, error = function(e) {
+      ts_log_swallow("spatial_io.read_histology_file", e)
       warning(
         sprintf(
           "Lecture impossible du fond histologique '%s' : %s",
@@ -388,6 +389,7 @@ extract_histology_image <- function(seurat_obj, technology, raw_dir = NULL) {
       spatial_dir = spatial_dir
     )
   }, error = function(e) {
+    ts_log_swallow("spatial_io.extract_histology_image", e)
     warning(
       "Extraction histologique echouee : ",
       conditionMessage(e),
@@ -778,6 +780,7 @@ convert_to_bpcells_and_fov <- function(seurat_obj, dataset_id,
       BPCells::write_matrix_dir(raw_counts, raw_bpcells_dir, overwrite = TRUE)
       n_raw_total <- ncol(raw_bg_obj)
     }, error = function(e) {
+      ts_log_swallow("spatial_io.convert_to_bpcells_and_fov", e)
       warning("Ecriture BPCells de la matrice brute (raw) echouee : ", conditionMessage(e),
               " — l'import se poursuit avec la matrice filtree seule.", call. = FALSE)
       raw_bpcells_dir <<- NULL
@@ -799,6 +802,7 @@ convert_to_bpcells_and_fov <- function(seurat_obj, dataset_id,
   coords <- tryCatch(
     get_spatial_coords(seurat_obj),
     error = function(e) {
+      ts_log_swallow("spatial_io.convert_to_bpcells_and_fov", e)
       warning("GetTissueCoordinates() a echoue : ", conditionMessage(e),
               " — le clustering spatial (BANKSY) sera indisponible pour ce jeu de donnees.")
       NULL
@@ -873,6 +877,7 @@ convert_to_bpcells_and_fov <- function(seurat_obj, dataset_id,
       seg_simple <- tryCatch(
         SeuratObject::Simplify(coords = seg, tol = tol),
         error = function(e) {
+          ts_log_swallow("spatial_io.simplify_all_fovs", e)
           warning(sprintf("Simplify() a echoue sur '%s'/'%s' : %s — polygone non simplifie.",
                           fv, bn, conditionMessage(e)))
           NULL
@@ -886,6 +891,7 @@ convert_to_bpcells_and_fov <- function(seurat_obj, dataset_id,
       methods::slot(fov_obj, "boundaries") <- boundaries_slot
       obj[[fv]] <- fov_obj
     }, error = function(e) {
+      ts_log_swallow("spatial_io.simplify_all_fovs", e)
       warning(sprintf("Impossible d'ecrire les polygones simplifies pour le FOV '%s' : %s",
                       fv, conditionMessage(e)))
     })
@@ -906,6 +912,7 @@ crop_fov_bbox <- function(obj, fov, x, y) {
     target <- if (inherits(obj, "Seurat")) obj[[fov]] else obj
     SeuratObject::Crop(target, x = x, y = y, coords = "plot")
   }, error = function(e) {
+    ts_log_swallow("spatial_io.crop_fov_bbox", e)
     warning("Crop() a echoue : ", conditionMessage(e))
     NULL
   })
@@ -942,6 +949,7 @@ build_sketch <- function(obj, max_cells = 50000, assay = NULL,
     Seurat::DefaultAssay(sk) <- "sketch"
     sk
   }, error = function(e) {
+    ts_log_swallow("spatial_io.build_sketch", e)
     warning("Seurat::SketchData() a echoue (", conditionMessage(e),
             ") — repli sur un sous-echantillonnage aleatoire simple.")
     n <- ncol(obj)
@@ -965,6 +973,7 @@ build_sketch <- function(obj, max_cells = 50000, assay = NULL,
       }
       run_sct()
     }, error = function(e) {
+      ts_log_swallow("spatial_io.build_sketch", e)
       warning("SCTransform() a echoue sur le sketch (", conditionMessage(e),
               ") — repli sur NormalizeData (LogNormalize) standard.")
       Seurat::NormalizeData(sk, assay = "sketch", verbose = FALSE)
@@ -979,7 +988,7 @@ build_sketch <- function(obj, max_cells = 50000, assay = NULL,
   }, error = function(e) FALSE)
   if (!has_data) {
     sk <- tryCatch(Seurat::NormalizeData(sk, verbose = FALSE),
-                   error = function(e) { warning("Normalisation du sketch echouee : ", conditionMessage(e)); sk })
+                   error = function(e) { ts_log_swallow("spatial_io.build_sketch", e); warning("Normalisation du sketch echouee : ", conditionMessage(e)); sk })
   }
   sk
 }

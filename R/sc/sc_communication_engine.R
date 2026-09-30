@@ -341,7 +341,7 @@ run_cellchat <- function(cellchat_input, seed, nboot = TS_CELLCHAT_NBOOT_DEFAULT
   .cellchat_engine_require()
 
   .progress <- function(msg) {
-    if (is.function(on_progress)) tryCatch(on_progress(msg), error = function(e) NULL)
+    if (is.function(on_progress)) tryCatch(on_progress(msg), error = function(e) { ts_log_swallow("sc_communication_engine.progress", e); NULL })
   }
 
   if (!exists("assert_cellchat_input", mode = "function")) {
@@ -398,8 +398,8 @@ run_cellchat <- function(cellchat_input, seed, nboot = TS_CELLCHAT_NBOOT_DEFAULT
   has_future <- requireNamespace("future", quietly = TRUE)
   if (has_future) {
     prev_plan <- tryCatch(future::plan(future::sequential),
-                          error = function(e) NULL)
-    on.exit(tryCatch(future::plan(prev_plan), error = function(e) NULL), add = TRUE)
+                          error = function(e) { ts_log_swallow("sc_communication_engine.cellchat_run", e); NULL })
+    on.exit(tryCatch(future::plan(prev_plan), error = function(e) { ts_log_swallow("sc_communication_engine.cellchat_run", e); NULL }), add = TRUE)
   }
 
   .progress("creation de l'objet CellChat")
@@ -433,7 +433,7 @@ run_cellchat <- function(cellchat_input, seed, nboot = TS_CELLCHAT_NBOOT_DEFAULT
   # on le trace, plutot que d'avorter sur un confort de calcul.
   .step <- function(label, fn) {
     .progress(label)
-    out <- tryCatch(fn(object), error = function(e) NULL)
+    out <- tryCatch(fn(object), error = function(e) { ts_log_swallow("sc_communication_engine.cellchat_step", e); NULL })
     if (!is.null(out)) object <<- out
     invisible(!is.null(out))
   }
@@ -475,7 +475,7 @@ run_cellchat <- function(cellchat_input, seed, nboot = TS_CELLCHAT_NBOOT_DEFAULT
   .progress("agrégation par voie de signalisation")
   n_pathways_significant <- NA_integer_
   netp <- tryCatch(CellChat::computeCommunProbPathway(object),
-                   error = function(e) NULL)
+                   error = function(e) { ts_log_swallow("sc_communication_engine.cellchat_netp", e); NULL })
   ran_netp <- !is.null(netp)
   if (ran_netp) {
     object <- netp
@@ -1029,7 +1029,7 @@ cellchat_engine_public_api <- function() {
     resource_path <- system.file("omni_resources.rds", package = "liana")
     resource <- tryCatch(
       readRDS(resource_path)[["Consensus"]],
-      error = function(e) NULL
+      error = function(e) { ts_log_swallow("sc_communication_engine.liana_resource", e); NULL }
     )
     if (!is.data.frame(resource) ||
         !all(c("source_genesymbol", "target_genesymbol") %in% colnames(resource))) {
@@ -1069,7 +1069,7 @@ cellchat_engine_public_api <- function() {
 }
 
 .liana_raw_to_canonical <- function(raw) {
-  tab <- tryCatch(as.data.frame(raw), error = function(e) NULL)
+  tab <- tryCatch(as.data.frame(raw), error = function(e) { ts_log_swallow("sc_communication_engine.liana_canonical", e); NULL })
   if (!is.data.frame(tab) || nrow(tab) == 0L) {
     .liana_engine_stop(
       "no_interactions",
@@ -1356,7 +1356,7 @@ run_liana <- function(obj, idents_col, method, resource, seed, min_cells = 1L,
   backend <- .liana_validate_backend(backend)
   progress <- function(message) {
     if (is.function(on_progress)) {
-      tryCatch(on_progress(message), error = function(e) NULL)
+      tryCatch(on_progress(message), error = function(e) { ts_log_swallow("sc_communication_engine.liana_progress", e); NULL })
     }
   }
   progress("construction du SCE sparse")
@@ -1419,7 +1419,7 @@ run_liana <- function(obj, idents_col, method, resource, seed, min_cells = 1L,
   }
   meta <- tryCatch(
     as.data.frame(obj[[]], stringsAsFactors = FALSE),
-    error = function(e) NULL
+    error = function(e) { ts_log_swallow("sc_communication_engine.liana_meta", e); NULL }
   )
   if (!is.data.frame(meta) || ncol(obj) < 1L || nrow(meta) != ncol(obj)) {
     .liana_engine_stop(
@@ -1551,7 +1551,7 @@ run_liana_by_sample <- function(obj, sample_col, condition_col, idents_col,
   backend <- .liana_validate_backend(backend)
   progress <- function(message) {
     if (is.function(on_progress)) {
-      tryCatch(on_progress(message), error = function(e) NULL)
+      tryCatch(on_progress(message), error = function(e) { ts_log_swallow("sc_communication_engine.liana_progress", e); NULL })
     }
   }
   sample_keys <- paste0(design$sample_conditions, "::", design$sample_order)
@@ -1569,7 +1569,7 @@ run_liana_by_sample <- function(obj, sample_col, condition_col, idents_col,
     progress(sprintf("execution LIANA pour l'echantillon %s", sample_keys[[i]]))
     subset_obj <- tryCatch(
       validated$obj[, cells, drop = FALSE],
-      error = function(e) NULL
+      error = function(e) { ts_log_swallow("sc_communication_engine.liana_subset", e); NULL }
     )
     if (is.null(subset_obj)) {
       .liana_engine_stop(
@@ -1884,7 +1884,7 @@ assert_liana_collection <- function(collection, seurat_obj = NULL) {
         nrow(result$canonical_table) > 0L &&
         all(c("sample_id", "condition", "sample_key") %in%
               colnames(result$canonical_table))
-    }, error = function(e) FALSE)
+    }, error = function(e) { ts_log_swallow("sc_communication_engine.liana_collection_valid", e); FALSE })
     if (!valid_result) invalid("un resultat de la collection est invalide.")
     if (!identical(as.character(unique(result$canonical_table$sample_key)),
                    names(results)[[i]]) ||
@@ -1924,7 +1924,7 @@ assert_liana_collection <- function(collection, seurat_obj = NULL) {
     }
     meta <- tryCatch(
       as.data.frame(seurat_obj[[]], stringsAsFactors = FALSE),
-      error = function(e) NULL
+      error = function(e) { ts_log_swallow("sc_communication_engine.liana_collection_meta", e); NULL }
     )
     sample_col <- collection$sample_col
     condition_col <- collection$condition_col

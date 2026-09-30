@@ -97,7 +97,7 @@ ts_drive_read_json <- function(path) {
   if (!file.exists(path)) return(NULL)
   tryCatch(
     jsonlite::fromJSON(path, simplifyVector = FALSE),
-    error = function(e) NULL
+    error = function(e) { ts_log_swallow("drive_watcher.ts_drive_read_json", e); NULL }
   )
 }
 
@@ -576,7 +576,7 @@ ts_drive_ready_age <- function(now = Sys.time()) {
   if (is.null(hb) || is.null(hb$hb_at)) return(Inf)
   t0 <- tryCatch(as.POSIXct(as.character(hb$hb_at),
                             format = "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
-                 error = function(e) NA)
+                 error = function(e) { ts_log_swallow("drive_watcher.heartbeat_age", e); NA })
   if (length(t0) != 1L || is.na(t0)) return(Inf)
   as.numeric(difftime(now, t0, units = "secs"))
 }
@@ -1117,13 +1117,13 @@ ts_drive_snapshot <- function(global_data) {
   obj <- state_get(global_data, "bulk_obj")
   if (is.null(obj)) return(out)
 
-  counts <- tryCatch(obj$counts, error = function(e) NULL)
+  counts <- tryCatch(obj$counts, error = function(e) { ts_log_swallow("drive_watcher.bulk_summary", e); NULL })
   out$has_data     <- TRUE
   out$object_class <- class(obj)[1]
-  out$n_genes      <- tryCatch(nrow(counts), error = function(e) NULL)
+  out$n_genes      <- tryCatch(nrow(counts), error = function(e) { ts_log_swallow("drive_watcher.bulk_summary", e); NULL })
   out$n_samples    <- tryCatch(ncol(counts), error = function(e) NULL)
   out$error_state  <- tryCatch(
-    ts_error_state(NULL, class = NULL), error = function(e) NULL)
+    ts_error_state(NULL, class = NULL), error = function(e) { ts_log_swallow("drive_watcher.bulk_summary", e); NULL })
   out
 }
 
@@ -2425,7 +2425,7 @@ ts_drive_apply <- function(session, input, scn, effects = NULL, owner_token = NU
 #' @noRd
 ts_drive_tokens_for <- function(module, effects) {
   if (is.null(effects)) return(list())
-  out <- tryCatch(effects(NULL, mode = "tokens", module = module), error = function(e) list())
+  out <- tryCatch(effects(NULL, mode = "tokens", module = module), error = function(e) { ts_log_swallow("drive_watcher.ts_drive_tokens_for", e); list() })
   if (is.list(out)) out else list()
 }
 

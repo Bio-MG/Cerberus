@@ -35,9 +35,16 @@ ts_swallowed_log_path <- function() {
 #'   (convention : `<fichier>.<fonction>`).
 #' @param condition La condition capturée (error/warning) — accepte tout
 #'   (une condition exotique ou même une chaîne est journalisée, pas un crash).
+#' @param max_bytes Seuil de rotation : quand le journal courant dépasse cette
+#'   taille (octets) AVANT l'append, il est renommé `<log>.1` — une seule
+#'   génération conservée, l'ancienne .1 est écrasée — et l'append repart à
+#'   neuf. Défaut 1 Mo. Politique volontairement minimale : le journal est un
+#'   artefact de session gitigné, pas une piste d'audit à long terme ; un seul
+#'   fichier de génération évite toute accumulation non bornée.
 #' @param log_path Chemin du journal (paramètre explicite : testabilité).
 #' @return `NULL` invisible, toujours.
-ts_log_swallow <- function(context, condition, log_path = ts_swallowed_log_path()) {
+ts_log_swallow <- function(context, condition, log_path = ts_swallowed_log_path(),
+                           max_bytes = 1048576L) {
   tryCatch({
     cls <- paste(class(condition), collapse = "/")
     txt <- if (inherits(condition, "condition")) {
@@ -49,6 +56,11 @@ ts_log_swallow <- function(context, condition, log_path = ts_swallowed_log_path(
                     format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
                     context, cls, txt)
     dir.create(dirname(log_path), recursive = TRUE, showWarnings = FALSE)
+    # Rotation AVANT l'append. isTRUE() car file.info()$size vaut NA quand le
+    # fichier manque — un `if (NA)` casserait, ce que le contrat interdit.
+    if (isTRUE(file.info(log_path)$size >= max_bytes)) {
+      suppressWarnings(file.rename(log_path, sprintf("%s.1", log_path)))
+    }
     # suppressWarnings : un chemin non ouvrable émet un warning de cat() — le
     # contrat « ne lève jamais » couvre les warnings aussi (l'erreur, elle, est
     # avalée par le tryCatch).

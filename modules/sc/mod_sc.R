@@ -255,7 +255,7 @@
   tryCatch(
     run_sc_auto_pipeline(inputs, global_data, shared_rv,
                          session, sc_log_rv),
-    error = function(e) failed <<- TRUE
+    error = function(e) { ts_log_swallow("mod_sc.sc_ap_run_drive", e); failed <<- TRUE }
   )
 
   # The swallowed error, recovered from the log. MEASURED in
@@ -389,7 +389,7 @@ run_annot <- function(input, global_data, shared_rv, session) {
 .sc_annot_run_drive <- function(global_data, shared_rv, session, close_job) {
   result <- tryCatch(
     run_annot(.sc_annot_drive_inputs(), global_data, shared_rv, session),
-    error = function(e) list(ok = FALSE, n_results = 0L)
+    error = function(e) { ts_log_swallow("mod_sc.sc_annot_run_drive", e); list(ok = FALSE, n_results = 0L) }
   )
   ok <- isTRUE(result$ok)
   n_results <- suppressWarnings(as.integer(result$n_results %||% 0L))
@@ -461,7 +461,7 @@ run_markers <- function(input, global_data, shared_rv, session) {
     shared_rv$markers_data <- markers
     shared_rv$active_tab <- "tab_table"
     list(ok = TRUE, n_results = as.integer(nrow(markers)))
-  }, error = function(e) list(ok = FALSE, n_results = 0L))
+  }, error = function(e) { ts_log_swallow("mod_sc.sc_markers_compute", e); list(ok = FALSE, n_results = 0L) })
 }
 
 #' The declared CONVENTION behind each SC module's `n_results`.
@@ -552,7 +552,7 @@ run_markers <- function(input, global_data, shared_rv, session) {
 .sc_markers_run_drive <- function(global_data, shared_rv, session, close_job) {
   result <- tryCatch(
     run_markers(.sc_markers_drive_inputs(), global_data, shared_rv, session),
-    error = function(e) list(ok = FALSE, n_results = 0L)
+    error = function(e) { ts_log_swallow("mod_sc.sc_markers_run_drive", e); list(ok = FALSE, n_results = 0L) }
   )
   ok <- isTRUE(result$ok)
   n_results <- suppressWarnings(as.integer(result$n_results %||% 0L))
@@ -826,7 +826,7 @@ mod_sc_server <- function(id, global_data) {
         Seurat::DimPlot(obj, reduction = red, group.by = group_by,
                         raster = ncol(obj) > 50000) +
           ggplot2::ggtitle(title),
-        error = function(e) NULL)
+        error = function(e) { ts_log_swallow("mod_sc.multisample_dimplot", e); NULL })
     }
     output$multisample_overview_ui <- renderUI({
       global_data$language
@@ -1020,7 +1020,7 @@ mod_sc_server <- function(id, global_data) {
       req(global_data$sc_obj)
       ns_m <- session$ns
       detected_map_org <- tryCatch(detect_organism_from_ids(rownames(global_data$sc_obj)),
-                                   error = function(e) NA_character_)
+                                   error = function(e) { ts_log_swallow("mod_sc.auto_pipeline_organism_detect", e); NA_character_ })
       mapping_org_selected <- if (!is.na(detected_map_org)) detected_map_org else "human"
       showModal(modalDialog(
         title=paste("\u25b6", .tr("Pipeline SC — Paramètres")), size="m", easyClose=TRUE,
@@ -1371,7 +1371,7 @@ mod_sc_server <- function(id, global_data) {
               as.list(s)
             } else NULL
           } else NULL
-        }, error = function(e) NULL)
+        }, error = function(e) { ts_log_swallow("mod_sc.report_params_parse", e); NULL })
 
         render_params <- list(
           sc_obj           = global_data$sc_obj,
