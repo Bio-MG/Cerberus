@@ -128,21 +128,19 @@ mod_bulk_server <- function(id, global_data) {
       tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
     }
 
-    shared_rv <- reactiveValues(
-      counts_mapped = NULL, counts_original = NULL,
-      mapping_applied = FALSE, mapping_summary = NULL,
-      filtered_counts = NULL, dds_blind = NULL, vst_mat = NULL,
-      dds_full = NULL, contrasts = list(), active_contrast = NULL,
-      pathway_results = NULL, active_tab = NULL,
-      pca_color_by = NULL, pca_shape_by = NULL,
-      pca_manual_colors = NULL,
-      volcano_role_colors = NULL,
-      active_condition_col = NULL,
-      multimethod_de = NULL,
-      lfc_thresh = 1, padj_thresh = 0.05,
-      heatmap_top_n = 30, heatmap_annot = NULL,
-      pathway_db = "GOBP", pathway_mode = "ora", bulk_palette = "default"
-    )
+    shared_rv <- create_bulk_shared_state()
+
+    # ── Invalidation des résultats quand le JEU DE DONNÉES est remplacé ──────
+    # (parité SC, audit 2026-09-27 §1.5 — handoff §4 : sans purge, un jeu B
+    # héritait des contrastes/voies/mapping du jeu A). L'epoch n'est
+    # incrémentée QUE par les remplacements de dataset (imports
+    # mod_import_bulk.R, GEO mod_geo.R, fusion mod_bulk_merge.R, activation
+    # d'un dataset enregistré) — les re-commits de même lignée (filtrage,
+    # ComBat, signatures, WGCNA, survie) ne purgent PAS, sinon chaque étape
+    # effacerait les résultats qu'elle vient de calculer.
+    observeEvent(global_data$bulk_obj_epoch, {
+      bulk_purge_shared_results(shared_rv)
+    }, ignoreInit = TRUE)
 
     auto_log_rv <- reactiveVal("")
     output$auto_pipeline_log <- renderText({ auto_log_rv() })

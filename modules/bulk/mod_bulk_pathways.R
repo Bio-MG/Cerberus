@@ -821,19 +821,34 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
       }
       tagList(
         fluidRow(
-          column(4, radioButtons(ns("network_mode"), .tr("Type de réseau"),
+          column(3, radioButtons(ns("network_mode"), .tr("Type de réseau"),
                                  choices = stats::setNames(
                                    c("emap", "cnet"),
                                    c(.tr("Voies ↔ voies (similarité de gènes)"),
                                      .tr("Voies ↔ gènes"))),
                                  inline = TRUE)),
-          column(4, numericInput(ns("network_top_n"), .tr("Voies affichées (réseau)"),
+          column(3, numericInput(ns("network_top_n"), .tr("Voies affichées (réseau)"),
                                  value = 30, min = 2, max = 100, step = 1)),
-          column(4, div(style = "margin-top:25px;",
+          column(3, div(style = "margin-top:25px;",
+                        checkboxInput(ns("network_interactive"),
+                                      .tr("Réseau interactif (survol des nœuds)"),
+                                      value = FALSE))),
+          column(3, div(style = "margin-top:25px;",
                         downloadButton(ns("dl_network_png"), .tr("Export PNG"), class = "btn-sm btn-secondary w-100")))
         ),
-        plotOutput(ns("network_plot"), height = "600px")
+        # STAT-S2 V2 : le rendu bascule statique (V1) / plotly interactif —
+        # même routeur que pca_interactive (mod_bulk_filter.R) ; défaut =
+        # statique, zéro changement de comportement à l'ouverture.
+        uiOutput(ns("network_plot_ui"))
       )
+    })
+
+    output$network_plot_ui <- renderUI({
+      if (isTRUE(input$network_interactive)) {
+        plotly::plotlyOutput(ns("network_plot_ly"), height = "600px")
+      } else {
+        plotOutput(ns("network_plot"), height = "600px")
+      }
     })
 
     .network_plot_fn <- function() {
@@ -845,6 +860,14 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
                            top_n = top_n, mode = input$network_mode, tr = .tr)
     }
 
+    .network_net_fn <- function() {
+      req(shared_rv$pathway_results)
+      top_n <- input$network_top_n
+      if (is.null(top_n) || is.na(top_n)) top_n <- 30
+      build_pathway_network_data(shared_rv$pathway_results,
+                                 top_n = top_n, mode = input$network_mode)
+    }
+
     output$network_plot <- renderPlot({
       global_data$language  # i18n
       tryCatch(
@@ -854,6 +877,21 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
             annotate("text", x = 1, y = 1, label = paste(.tr("Erreur:"), conditionMessage(e)), color = "red") +
             theme_void()
         }
+      )
+    })
+
+    output$network_plot_ly <- renderPlotly({
+      global_data$language  # i18n
+      tryCatch(
+        plot_pathway_network_interactive(
+          .network_net_fn(),
+          title = paste(.tr("Réseau d'enrichissement"), "-", input$pathway_db),
+          tr = .tr
+        ),
+        error = function(e) plotly::plot_ly(type = "scatter", mode = "markers") |>
+          plotly::layout(annotations = list(
+            text = paste(.tr("Erreur:"), conditionMessage(e)),
+            showarrow = FALSE))
       )
     })
 

@@ -22,9 +22,10 @@ mod_sc_velocity_ui <- function(id) {
         i18n$t("Aucune inference n'est effectuee dans l'application.")),
 
     radioButtons(ns("velocity_import_mode"), i18n$t("Source d'import"),
-                  choices = setNames(c("rds", "mtx"),
+                  choices = setNames(c("rds", "mtx", "loom"),
                               c(.tr_plain("RDS combine (spliced + unspliced)"),
-                                .tr_plain("Matrix Market (MTX + barcodes + features)"))),
+                                .tr_plain("Matrix Market (MTX + barcodes + features)"),
+                                .tr_plain("Loom / H5AD (velocyto, scVelo)"))),
                   selected = "rds"),
 
     conditionalPanel(
@@ -33,6 +34,17 @@ mod_sc_velocity_ui <- function(id) {
                 accept = c(".rds", ".RDS", ".rda", ".RData"), width = "100%"),
       div(class = "small text-muted mb-2",
            i18n$t("Le RDS doit être une liste nommée avec spliced et unspliced. Noms inattendus bloqués."))
+    ),
+
+    conditionalPanel(
+      condition = "input.velocity_import_mode == 'loom'", ns = ns,
+      # Roadmap SC FUNCTION_TEST M0 : lecteur loom/h5ad (hdf5r, pre-computed).
+      # Aucune inference : les couches spliced/unspliced du fichier sont
+      # lues telles quelles et passent la meme validation que RDS/MTX.
+      fileInput(ns("velocity_loom_file"), i18n$t("Fichier velocity .loom / .h5ad"),
+                accept = c(".loom", ".h5ad"), width = "100%"),
+      div(class = "small text-muted mb-2",
+           i18n$t("Lecture stricte des couches spliced/unspliced (+ ambiguous si present). Aucune inference ; les symboles de gènes dupliqués sont rendus uniques (avertissement affiché)."))
     ),
 
     conditionalPanel(
@@ -150,6 +162,10 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
         if (is.null(input$velocity_rds_file)) return(list())
         return(list(rds = input$velocity_rds_file$name))
       }
+      if (identical(mode, "loom")) {
+        if (is.null(input$velocity_loom_file)) return(list())
+        return(list(loom = input$velocity_loom_file$name))
+      }
       files <- list()
       for (slot in c("velocity_mtx_spliced", "velocity_mtx_spliced_barcodes",
                      "velocity_mtx_spliced_features", "velocity_mtx_unspliced",
@@ -210,8 +226,9 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       updateRadioButtons(session, "velocity_import_mode",
         label = .tr("Source d'import"),
         choices = setNames(
-          c("rds", "mtx"),
-          c(.tr("RDS combine (spliced + unspliced)"), .tr("Matrix Market (MTX + barcodes + features)"))
+          c("rds", "mtx", "loom"),
+          c(.tr("RDS combine (spliced + unspliced)"), .tr("Matrix Market (MTX + barcodes + features)"),
+            .tr("Loom / H5AD (velocyto, scVelo)"))
         ),
         selected = isolate(input$velocity_import_mode) %||% "rds"
       )
@@ -373,6 +390,29 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
           rds_meta <- velocity_input
           # BUG 3/BUG 8: ONLY these fields are dx/dy vectors in embedding
           # space. umap_embedding is coordinates and is NEVER routed here.
+          for (f in c("umap_velocity", "embedding_velocity", "umap_vectors", "vectors")) {
+            if (!is.null(velocity_input[[f]])) {
+              vector_field <- f
+              vector_matrix <- velocity_input[[f]]
+              break
+            }
+          }
+        } else if (identical(mode, "loom")) {
+          # Roadmap SC FUNCTION_TEST M0 : lecture .loom (velocyto) / .h5ad
+          # (scVelo, layout old-anndata). Meme chaine de validation que RDS :
+          # validate_velocity_matrices() s'applique tel quel plus bas.
+          req(input$velocity_loom_file)
+          # l'upload anonymise l'extension -> dispatcher sur le nom original
+          lname <- input$velocity_loom_file$name %||% ""
+          velocity_input <- if (grepl("\\.h5ad$", lname, ignore.case = TRUE)) {
+            read_velocity_h5ad(input$velocity_loom_file$datapath)
+          } else {
+            read_velocity_loom(input$velocity_loom_file$datapath)
+          }
+          spliced <- velocity_input$spliced
+          unspliced <- velocity_input$unspliced
+          ambiguous <- velocity_input$ambiguous %||% NULL
+          rds_meta <- velocity_input
           for (f in c("umap_velocity", "embedding_velocity", "umap_vectors", "vectors")) {
             if (!is.null(velocity_input[[f]])) {
               vector_field <- f

@@ -67,8 +67,107 @@ create_sc_shared_state <- function() {
     sc_manual_volcano_colors = NULL,
     communication_result = NULL,
     communication_collection = NULL,
-    active_communication_sample = NULL
+    active_communication_sample = NULL,
+    qc_snapshot = NULL,
+    velocity_result = NULL,
+    da_design_result = NULL,
+    da_milo_result = NULL,
+    da_sccoda_result = NULL,
+    population_rarity_result = NULL
   )
+}
+
+# -----------------------------------------------------------------------------
+# Invalidation des résultats au changement de JEU DE DONNÉES (audit 2026-09-27
+# §1.5). Les champs ci-dessous sont des RÉSULTATS dérivés de l'objet courant :
+# quand l'objet est remplacé par un nouveau jeu (import, activation d'un
+# dataset enregistré), les laisser en place fait mélanger au rapport le jeu B
+# avec les résultats du jeu A.
+#
+# L'invalidation est pilotée par un "epoch" (global_data$sc_obj_epoch) que
+# n'incrémentent QUE les remplacements de dataset. Les re-commits de même
+# lignée (pipeline, annotation, mapping, trajectoire) ne purgent PAS — sinon
+# l'auto-pipeline effacerait ses propres résultats (marqueurs/pathways)
+# calculés juste avant son commit final (sc_pipeline.R:402).
+# -----------------------------------------------------------------------------
+
+#' Champs résultats du domaine SC (purgés au changement de dataset)
+#' @return Character vector of reactiveValues field names.
+sc_shared_result_fields <- function() {
+  c("markers_data", "correlated_genes", "corr_target_gene",
+    "pathway_results", "pathway_db", "qc_snapshot",
+    "traj_reduction", "traj_method",
+    "velocity_result", "da_design_result", "da_milo_result",
+    "da_sccoda_result", "population_rarity_result")
+}
+
+#' Purger les champs résultats d'un état partagé SC
+#' @param state reactiveValues (create_sc_shared_state()).
+#' @return The state, invisible.
+sc_purge_shared_results <- function(state) {
+  for (fld in sc_shared_result_fields()) state[[fld]] <- NULL
+  invisible(state)
+}
+
+# -----------------------------------------------------------------------------
+# Domaine BULK — invalidation des résultats au changement de JEU DE DONNÉES
+# (parité SC, audit 2026-09-27 §1.5 transposé au domaine bulk — handoff §4).
+# Le schéma partagé bulk vivait à plat dans mod_bulk.R (shared_rv) ; il est
+# consolidé ICI sur le modèle de create_sc_shared_state() pour que la purge
+# soit testable hors application. Les champs ci-dessous sont des RÉSULTATS
+# dérivés de l'objet courant : quand bulk_obj est remplacé par un nouveau jeu
+# (imports mod_import_bulk.R / mod_geo.R, fusion mod_bulk_merge.R, activation
+# d'un dataset enregistré), les laisser en place fait mélanger le jeu B avec
+# les contrastes/voies/mapping du jeu A.
+#
+# L'invalidation est pilotée par un "epoch" (global_data$bulk_obj_epoch) que
+# n'incrémentent QUE les remplacements de dataset. Les re-commits de même
+# lignée (filtrage, correction ComBat, signatures, WGCNA, survie) ne purgent
+# PAS — sinon chaque étape effacerait les résultats qu'elle vient de calculer.
+# Les seuils et préférences d'affichage (lfc_thresh, pca_*, bulk_palette...)
+# sont des réglages UTILISATEUR, pas des résultats : ils survivent au
+# changement de jeu, comme active_tab / selected_genes côté SC.
+# -----------------------------------------------------------------------------
+
+#' Create the Bulk shared reactive state
+#' @return A reactiveValues object with all Bulk module fields initialized.
+create_bulk_shared_state <- function() {
+  shiny::reactiveValues(
+    counts_mapped = NULL, counts_original = NULL,
+    mapping_applied = FALSE, mapping_summary = NULL,
+    filtered_counts = NULL, dds_blind = NULL, vst_mat = NULL,
+    dds_full = NULL, contrasts = list(), active_contrast = NULL,
+    pathway_results = NULL, active_tab = NULL,
+    pca_color_by = NULL, pca_shape_by = NULL,
+    pca_manual_colors = NULL,
+    volcano_role_colors = NULL,
+    active_condition_col = NULL,
+    multimethod_de = NULL,
+    lfc_thresh = 1, padj_thresh = 0.05,
+    heatmap_top_n = 30, heatmap_annot = NULL,
+    pathway_db = "GOBP", pathway_mode = "ora", bulk_palette = "default",
+    # écrit dynamiquement par le pipeline auto (mod_bulk.R) en mode exploratoire
+    # sans réplicat ; déclaré ici pour que la purge couvre un champ du schéma
+    de_bypass = NULL
+  )
+}
+
+#' Champs résultats du domaine Bulk (purgés au changement de dataset)
+#' @return Character vector of reactiveValues field names.
+bulk_shared_result_fields <- function() {
+  c("counts_mapped", "counts_original", "mapping_applied", "mapping_summary",
+    "filtered_counts", "dds_blind", "vst_mat", "dds_full",
+    "contrasts", "active_contrast", "active_condition_col",
+    "pathway_results", "pathway_db", "pathway_mode", "multimethod_de",
+    "de_bypass")
+}
+
+#' Purger les champs résultats d'un état partagé Bulk
+#' @param state reactiveValues (create_bulk_shared_state()).
+#' @return The state, invisible.
+bulk_purge_shared_results <- function(state) {
+  for (fld in bulk_shared_result_fields()) state[[fld]] <- NULL
+  invisible(state)
 }
 
 #' Create the Spatial shared reactive state

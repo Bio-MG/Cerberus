@@ -110,3 +110,58 @@ test_that("mod_import_sc : message du site 700 IDENTIQUE a l'execution", {
 })
 
 unlink(.mis_tmp, recursive = TRUE, force = TRUE)
+
+# ── Roadmap SC FUNCTION_TEST M1.4 : surface des doublets (metadata.csv) ──────
+# Un triplet 10X accompagné d'un metadata.csv portant `multiplets`
+# (singlet/doublet/ambs — ex: GSE96583 by_sample/) doit EXPOSER les doublets
+# (colonne méta.data + log), jamais les inclure ou les retirer silencieusement.
+.m4_tmp <- tempfile("m4_"); dir.create(.m4_tmp, showWarnings = FALSE, recursive = TRUE)
+.m4_obj <- function() {
+  cells <- c("AAAC-1", "AAAD-1", "AAAE-1", "AAF-1")
+  cnt <- Matrix::sparseMatrix(
+    i = rep(1:2, 4L), j = rep(1:4, each = 2L), x = 1,
+    dims = c(2L, 4L), dimnames = list(c("G1", "G2"), cells)
+  )
+  SeuratObject::CreateSeuratObject(counts = cnt)
+}
+.m4_md <- data.frame(
+  barcode    = c("AAAC-1", "AAAD-1", "AAAE-1", "AAF-1"),
+  donor      = 1015,
+  condition  = "control",
+  multiplets = c("singlet", "doublet", "ambs", "singlet"),
+  stringsAsFactors = FALSE
+)
+write.csv(.m4_md, file.path(.m4_tmp, "metadata.csv"), row.names = FALSE)
+
+test_that("M1.4 : les doublets documentés sont surfacés dans le méta.data + log", {
+  logs <- character(0)
+  out  <- .sc_surface_multiplets(.m4_obj(), .m4_tmp, log_fn = function(m) logs <<- c(logs, m))
+  expect_true("multiplets" %in% colnames(out@meta.data))
+  expect_identical(
+    as.character(out$multiplets),
+    c("singlet", "doublet", "ambs", "singlet")   # appariement PAR BARCODE
+  )
+  expect_match(paste(logs, collapse = "\n"), "2 cellules flaggées doublet/multiplets sur 4", fixed = TRUE)
+})
+
+test_that("M1.4 : sans metadata.csv (ou sans colonne multiplets) — objet inchangé", {
+  obj <- .m4_obj()
+  out1 <- .sc_surface_multiplets(obj, tempfile("m4_empty_"))
+  expect_false("multiplets" %in% colnames(out1@meta.data))
+
+  dir2 <- file.path(.m4_tmp, "nomults"); dir.create(dir2)
+  write.csv(data.frame(barcode = .m4_md$barcode, cluster = 1:4),
+            file.path(dir2, "metadata.csv"), row.names = FALSE)
+  out2 <- .sc_surface_multiplets(obj, dir2)
+  expect_false("multiplets" %in% colnames(out2@meta.data))
+})
+
+test_that("M1.4 : metadata.csv SANS les barcodes de l'objet — aucune colonne fabriquée", {
+  dir3 <- file.path(.m4_tmp, "bcbien"); dir.create(dir3)
+  write.csv(transform(.m4_md, barcode = c("XXX-1", "XXY-1", "XXZ-1", "XW-1")),
+            file.path(dir3, "metadata.csv"), row.names = FALSE)
+  out <- .sc_surface_multiplets(.m4_obj(), dir3)
+  expect_false("multiplets" %in% colnames(out@meta.data))
+})
+
+unlink(.m4_tmp, recursive = TRUE, force = TRUE)

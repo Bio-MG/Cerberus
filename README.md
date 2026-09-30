@@ -242,6 +242,41 @@ Vous pouvez aussi ouvrir `app.R` dans RStudio puis cliquer sur **Run App**.
 6. Visualisez les résultats avec superpositions histologiques, vues liées et sélection de ROI au lasso.
 7. Réalisez facultativement une intégration multi-échantillons par sketch ou une analyse de composition des niches.
 
+## Métadonnées expérimentales (condition / réplicat)
+
+Les analyses A-vs-B du domaine Single-Cell — pseudobulk DE, Milo, scCODA, et tous
+les plots par condition — exigent que **chaque échantillon porte une CONDITION et
+un RÉPLICAT**. Une CONDITION est une propriété de l'*échantillon* (ex. « contrôle »
+vs « traité »), jamais de la cellule ; le RÉPLICAT distingue les échantillons
+biologiques d'un même groupe et fait de l'échantillon l'unité de réplication.
+
+Le panneau **« 0.5 Métadonnées — condition / réplicat »** de l'onglet Single-Cell
+remplit ce contrat :
+
+1. **Table design éditable** — un échantillon par ligne (détecté depuis
+   `orig.ident`) ; les colonnes condition / replicate sont éditables directement
+   dans la table.
+2. **« Déduire depuis les noms »** — parse automatique des conventions
+   `A_1` / `A-1` / `A.1` / `B2` (condition en préfixe) ou `1a` / `2b`
+   (condition en suffixe). Le découpage « collé » ne s'applique qu'aux codes de
+   condition d'**une seule lettre** : un nom comme `patient1` est déclaré
+   indéductible (condition = nom, réplicat vide à compléter) plutôt que de
+   fabriquer un réplicat.
+3. **Jointure CSV** — « …ou joindre un CSV de design » : un fichier
+   `sample,condition[,replicate]` rempli la table ; tout échantillon manquant
+   est signalé (aucune valeur fabriquée).
+4. **Récapitulatif + application unique** — le récap liste les bloqueurs
+   (condition constante, réplicat unique = pseudo-réplication…) ; le bouton
+   « ✅ Appliquer le design à l'objet SC » commit l'ensemble en une fois, purge
+   les résultats dépendants et alimente le récap pseudobulk (comptes
+   pseudo-échantillons par condition, alerte plan saturé) ainsi que la bannière
+   du Volcano.
+
+Sans design appliqué, les analyses conditionnelles restent volontairement
+inaccessibles (l'application ne devine jamais un plan expérimental). Avec des
+réplicats biologiques (ex. 3 vs 3), préférez le **Pseudobulk** à la comparaison
+au niveau cellule pour éviter la pseudo-réplication.
+
 ## Travailler avec de grands jeux de données
 
 TranscriptoShiny intègre des garde-fous spécifiques pour gérer les limites de mémoire et de calcul sur des stations de travail :

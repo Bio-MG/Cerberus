@@ -58,3 +58,7 @@ repomix.config.json
 # committed. Only tools/_drive/README.md is tracked — it documents the channel.
 tools/_drive/*.json
 tools/_drive/*.tmp
+
+# Runtime artefacts (OmnipathR logger, drive IPC tests)
+/omnipathr-log/
+tests/testthat/tools/

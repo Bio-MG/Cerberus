@@ -238,6 +238,7 @@ mod_bulk_merge_server <- function(id, global_data) {
         return()
       }
       global_data$bulk_obj <- obj
+      global_data$bulk_obj_epoch <- (global_data$bulk_obj_epoch %||% 0L) + 1L  # purge résultats partagés (jeu remplacé)
       last_merge(res)
 
       msg <- sprintf(.tr("✓ Fusion chargée : %d gènes communs × %d échantillons (%s)."),

@@ -8890,6 +8890,26 @@
       "en": "✓ Dataset \"%s\" removed."
     },
     {
+      "fr": "mélange des lots : {b}% → {a}%",
+      "en": "batch mixing: {b}% → {a}%"
+    },
+    {
+      "fr": "Dataset à activer",
+      "en": "Dataset to activate"
+    },
+    {
+      "fr": "✅ Activer ce dataset",
+      "en": "✅ Activate this dataset"
+    },
+    {
+      "fr": "Aucun dataset à activer.",
+      "en": "No dataset to activate yet."
+    },
+    {
+      "fr": "✓ Jeu « %s » activé (%s) — objet actif remplacé, résultats purgés.",
+      "en": "✓ Dataset « %s » activated (%s) — active object replaced, results purged."
+    },
+    {
       "fr": "Comparaison multi-jeux",
       "en": "Multi-dataset comparison"
     },
@@ -10456,6 +10476,278 @@
     {
       "fr": "Les sources natives ne sont pas importables : utilisez « Lancer le calcul CellChat » ou « Lancer le calcul LIANA ».",
       "en": "Native sources cannot be imported: use “Run CellChat computation” or “Run LIANA computation”."
+    },
+    {
+      "fr": "%s",
+      "en": "%s"
+    },
+    {
+      "fr": "\\U0001F41B Fond brut (debug PNG)",
+      "en": "🐛 Raw background (debug PNG)"
+    },
+    {
+      "fr": "…ou joindre un CSV de design (colonnes : sample, condition[, replicate])",
+      "en": "...or join a design CSV (columns: sample, condition[, replicate])"
+    },
+    {
+      "fr": "✓ Design appliqué : %d condition(s) déclarée(s) sur %d échantillon(s).",
+      "en": "✓ Design applied: %d condition(s) declared over %d sample(s)."
+    },
+    {
+      "fr": "✓ Design exploitable pour une analyse A-vs-B.\n",
+      "en": "✓ Design usable for an A-vs-B analysis.\n"
+    },
+    {
+      "fr": "✓ Harmony appliquée (%d dims) — clustering sur l'espace intégré",
+      "en": "✓ Harmony applied (%d dims) — clustering on the integrated space"
+    },
+    {
+      "fr": "✓ Jeu « %s » activé (%s cellules) — objet actif remplacé, résultats purgés.",
+      "en": "✓ Dataset « %s » activated (%s cells) — active object replaced, results purged."
+    },
+    {
+      "fr": "✅ Appliquer le design à l'objet SC",
+      "en": "✅ Apply the design to the SC object"
+    },
+    {
+      "fr": "⚠️ Blocages :\n",
+      "en": "⚠️ Blockers:\n"
+    },
+    {
+      "fr": "⚠️ Harmony non appliquée : 0 ou 1 batch — clustering sur PCA brute.",
+      "en": "⚠️ Harmony not applied: 0 or 1 batch — clustering on raw PCA."
+    },
+    {
+      "fr": "⚠️ Intégration SCT-anchor non implémentée dans l'auto-pipeline — clustering sur PCA brute.",
+      "en": "⚠️ SCT-anchor integration not implemented in the auto-pipeline — clustering on raw PCA."
+    },
+    {
+      "fr": "⚠️ p_val_adj absent des marqueurs — ORA et corrélation sautés (aucun classement arbitraire fabriqué).",
+      "en": "⚠️ p_val_adj missing from markers — ORA and correlation skipped (no fabricated ranking)."
+    },
+    {
+      "fr": "⚠️ Package 'harmony' non installé — clustering sur PCA brute.",
+      "en": "⚠️ Package 'harmony' not installed — clustering on raw PCA."
+    },
+    {
+      "fr": "⚡ %d échantillon(s) 10X détecté(s) et ajouté(s) : %s",
+      "en": "⚡ %d 10X sample(s) detected and added: %s"
+    },
+    {
+      "fr": "⚡ Scanner un dossier parent (auto-découverte des échantillons)",
+      "en": "⚡ Scan a parent folder (sample auto-discovery)"
+    },
+    {
+      "fr": "⛔ Annuler l'import",
+      "en": "⛔ Cancel the import"
+    },
+    {
+      "fr": "⛔ Import annulé par l'utilisateur.",
+      "en": "⛔ Import cancelled by the user."
+    },
+    {
+      "fr": "0.5 Métadonnées — condition / réplicat",
+      "en": "0.5 Metadata — condition / replicate"
+    },
+    {
+      "fr": "Activer un dataset enregistré",
+      "en": "Activate a saved dataset"
+    },
+    {
+      "fr": "Aucun échantillon à traiter — importez d'abord un objet SC.",
+      "en": "No sample to process — import an SC object first."
+    },
+    {
+      "fr": "Aucun fichier sélectionné — cochez au moins un fichier.",
+      "en": "No file selected — tick at least one file."
+    },
+    {
+      "fr": "Aucun objet SC actif — importez d'abord un jeu.",
+      "en": "No active SC object — import a dataset first."
+    },
+    {
+      "fr": "Aucun sous-dossier contenant matrix.mtx(.gz) trouvé — utilisez « Ajouter un Dossier » manuellement.",
+      "en": "No subfolder containing matrix.mtx(.gz) found — use “Add a Folder” manually."
+    },
+    {
+      "fr": "Aucune (PCA brute)",
+      "en": "None (raw PCA)"
+    },
+    {
+      "fr": "Charge le jeu sélectionné comme objet actif (les résultats calculés sur l'ancien jeu sont purgés).",
+      "en": "Loads the selected dataset as the active object (results computed on the previous dataset are purged)."
+    },
+    {
+      "fr": "Colonne échantillon",
+      "en": "Sample column"
+    },
+    {
+      "fr": "Comparaison au niveau cellule : avec des réplicats biologiques (ex: 3 vs 3), préférez le Pseudobulk (Abondance cellulaire → Pseudobulk) pour éviter la pseudo-réplication.",
+      "en": "Cell-level comparison: with biological replicates (e.g. 3 vs 3), prefer Pseudobulk (Cell abundance → Pseudobulk) to avoid pseudo-replication."
+    },
+    {
+      "fr": "Conditions/réplicats déduits des noms — vérifiez et éditez la table si besoin.",
+      "en": "Conditions/replicates inferred from names — check and edit the table if needed."
+    },
+    {
+      "fr": "CSV de design chargé en aperçu — vérifiez la table puis appliquez.",
+      "en": "Design CSV loaded as preview — check the table then apply."
+    },
+    {
+      "fr": "Déclarez la condition et le réplicat de chaque échantillon. Une CONDITION est une propriété de l'échantillon (pas de la cellule). Sans elle, les analyses A-vs-B (pseudobulk, Milo/scCODA, plots par condition) restent inaccessibles.",
+      "en": "Declare the condition and replicate of each sample. A CONDITION is a sample-level property (not per cell). Without it, A-vs-B analyses (pseudobulk, Milo/scCODA, per-condition plots) stay unavailable."
+    },
+    {
+      "fr": "Déduire depuis les noms",
+      "en": "Infer from names"
+    },
+    {
+      "fr": "déjà dans la liste, ignoré",
+      "en": "already in the list, ignored"
+    },
+    {
+      "fr": "Design pseudobulk déclaré :\n",
+      "en": "Pseudobulk design declared:\n"
+    },
+    {
+      "fr": "échantillon(s) détecté(s):",
+      "en": "sample(s) detected:"
+    },
+    {
+      "fr": "Éditez directement les cellules condition / replicate dans le tableau. Réplicat vide = l'échantillon EST le réplicat.",
+      "en": "Edit the condition / replicate cells directly in the table. Empty replicate = the sample IS the replicate."
+    },
+    {
+      "fr": "En attente d'un objet SC.",
+      "en": "Waiting for an SC object."
+    },
+    {
+      "fr": "Fichiers à charger (décochez pour exclure)",
+      "en": "Files to load (untick to exclude)"
+    },
+    {
+      "fr": "gènes absents = zéro-remplis (aucune suppression)",
+      "en": "missing genes = zero-filled (nothing removed)"
+    },
+    {
+      "fr": "Gènes par échantillon :",
+      "en": "Genes per sample:"
+    },
+    {
+      "fr": "Harmony (correction de batch avant clustering)",
+      "en": "Harmony (batch correction before clustering)"
+    },
+    {
+      "fr": "Harmony (intégration avant clustering)...",
+      "en": "Harmony (integration before clustering)..."
+    },
+    {
+      "fr": "Harmony (variable de batch : %s)...",
+      "en": "Harmony (batch variable: %s)..."
+    },
+    {
+      "fr": "Harmony corrige le batch AVANT le clustering (clusters, marqueurs et DA dérivent de l'espace intégré). Recommandé dès 2 échantillons ; ignoré si < 2 batchs.",
+      "en": "Harmony corrects batch BEFORE clustering (clusters, markers and DA derive from the integrated space). Recommended from 2 samples on; ignored if < 2 batches."
+    },
+    {
+      "fr": "Harmony non appliquée : 0 ou 1 échantillon (orig.ident) — clustering et UMAP sur PCA brute.",
+      "en": "Harmony not applied: 0 or 1 sample (orig.ident) — clustering and UMAP on raw PCA."
+    },
+    {
+      "fr": "Import annulé.",
+      "en": "Import cancelled."
+    },
+    {
+      "fr": "Intégration multi-échantillons",
+      "en": "Multi-sample integration"
+    },
+    {
+      "fr": "ℹ️ Intégration multi-échantillons demandée — sketch ignoré (incompatible), pipeline sur dataset complet.",
+      "en": "ℹ️ Multi-sample integration requested — sketch skipped (incompatible), pipeline on the full dataset."
+    },
+    {
+      "fr": "Mélange des batchs (0 = séparés, 1 = mélangés) : PCA brute %.0f%% → Harmony %.0f%%.",
+      "en": "Batch mixing (0 = separated, 1 = mixed): raw PCA %.0f%% → Harmony %.0f%%."
+    },
+    {
+      "fr": "Nom du design (optionnel)",
+      "en": "Design name (optional)"
+    },
+    {
+      "fr": "Package 'harmony' introuvable — clustering et UMAP sur PCA brute.",
+      "en": "Package 'harmony' not found — clustering and UMAP on raw PCA."
+    },
+    {
+      "fr": "Position de la condition dans le nom",
+      "en": "Position of the condition in the name"
+    },
+    {
+      "fr": "Récapitulatif du design (avant application) :\n",
+      "en": "Design recap (before applying):\n"
+    },
+    {
+      "fr": "Réplicat",
+      "en": "Replicate"
+    },
+    {
+      "fr": "Sélectionner le dossier parent contenant UN sous-dossier par échantillon (chaque sous-dossier = triplets 10X)",
+      "en": "Select the parent folder holding ONE subfolder per sample (each subfolder = 10X triplets)"
+    },
+    {
+      "fr": "Table design (éditable)",
+      "en": "Design table (editable)"
+    },
+    {
+      "fr": "Table design vide — rien à appliquer.",
+      "en": "Empty design table — nothing to apply."
+    },
+    {
+      "fr": "Union au merge :",
+      "en": "Union at merge:"
+    },
+    {
+      "fr": "Variable de batch",
+      "en": "Batch variable"
+    },
+    {
+      "fr": "Voies voies",
+      "en": "Pathways"
+    },
+    {
+      "fr": "🔍 Scan du dossier parent:",
+      "en": "🔍 Parent folder scan:"
+    },
+    {
+      "fr": "Aucun resultat de hotspots a exporter.",
+      "en": "No hotspot results to export."
+    },
+    {
+      "fr": "Réseau interactif (survol des nœuds)",
+      "en": "Interactive network (hover over nodes)"
+    },
+    {
+      "fr": "Option A (dossiers) — formats acceptés : barcodes.tsv(.gz), features.tsv(.gz) ou genes.tsv(.gz), matrix.mtx(.gz). L'Option B (fichiers) accepte .rds, .h5, .h5ad, .loom, .rda/.RData.",
+      "en": "Option A (folders) — accepted formats: barcodes.tsv(.gz), features.tsv(.gz) or genes.tsv(.gz), matrix.mtx(.gz). Option B (files) accepts .rds, .h5, .h5ad, .loom, .rda/.RData."
+    },
+    {
+      "fr": "Intersection : %d gènes communs à TOUS les échantillons — %d gènes zéro-remplis dans au moins un échantillon.",
+      "en": "Intersection: %d genes common to ALL samples — %d genes zero-filled in at least one sample."
+    },
+    {
+      "fr": "metadata.csv : %d cellules flaggées doublet/multiplets sur %d — colonne `multiplets` ajoutée (filtrable).",
+      "en": "metadata.csv: %d cells flagged doublet/multiplets out of %d — `multiplets` column added (filterable)."
+    },
+    {
+      "fr": "Loom / H5AD (velocyto, scVelo)",
+      "en": "Loom / H5AD (velocyto, scVelo)"
+    },
+    {
+      "fr": "Fichier velocity .loom / .h5ad",
+      "en": "Velocity .loom / .h5ad file"
+    },
+    {
+      "fr": "Lecture stricte des couches spliced/unspliced (+ ambiguous si present). Aucune inference ; les symboles de gènes dupliqués sont rendus uniques (avertissement affiché).",
+      "en": "Strict reading of the spliced/unspliced layers (+ ambiguous when present). No inference; duplicated gene symbols are made unique (warning shown)."
     }
   ]
 }

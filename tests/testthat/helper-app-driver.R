@@ -34,8 +34,16 @@ app_root_dir <- function() {
 # des chaines, donc potentiellement des resultats de tests.
 
 #' Candidate UTF-8 locale names accepted by R on Windows
+#'
+#' ⚠️ « fr_FR.UTF-8 » a été retiré des candidats MESURÉ le 2026-09-28 : Windows
+#' ACCEPTE le nom (setlocale ne lève pas) mais le résout vers le code page
+#' ANSI — le grepl("UTF-8") du test d'acceptation passe alors à tort, et la
+#' sortie stderr UTF-8 de l'app devient « chaîne de charactères multioctets
+#' incorrecte / input string invalid in this locale » dans le poller de
+#' shinytest2. « French_France.utf8 » (forme Windows native) est le premier
+#' candidat réellement UTF-8.
 ts_e2e_locale_candidates <- function() {
-  c("fr_FR.UTF-8", "French_France.utf8", "English_United States.utf8", "en_US.UTF-8")
+  c("French_France.utf8", "English_United States.utf8", "en_US.UTF-8")
 }
 
 #' Set LC_CTYPE to the first candidate R actually accepts; return its name
@@ -66,7 +74,17 @@ ts_e2e_with_child_locale <- function(expr) {
   # sinon on laisse l'etat initial (l'echec reste visible et honnetement
   # rapporte) plutot que d'echanger un probleme d'encodage contre un autre.
   if (!is.na(ts_e2e_first_valid_utf8_locale())) {
-    Sys.unsetenv(c("LC_ALL", "LANG"))
+    # MESURÉ le 2026-09-28 (cette machine) : poser SEULEMENT LC_CTYPE ne suffit
+    # pas — avec LC_ALL/LANG désettés, un composant de la pile écrit du
+    # cp1252 sur stderr et le poller du parent (UTF-8) meurt sur
+    # « input string N is invalid in this locale ». LC_ALL = le même candidat
+    # UTF-8 que LC_CTYPE rend le boot fiable. Le coût annoncé plus bas
+    # (LC_COLLATE/LC_TIME héritent du candidat) est accepté : les e2e sont des
+    # smoke tests, pas des tests sensibles au tri.
+    locale <- ts_e2e_first_valid_utf8_locale()
+    Sys.setenv(LC_ALL = locale)
+    Sys.setenv(LC_CTYPE = locale)
+    Sys.unsetenv("LANG")
   }
   force(expr)
 }

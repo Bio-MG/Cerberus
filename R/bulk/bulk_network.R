@@ -1013,17 +1013,9 @@ plot_bulk_network <- function(result, tr = function(k) k, max_label_nodes = 60L,
                           stringsAsFactors = FALSE))
   # Placement stochastique : graine fixée PUIS état du générateur restauré —
   # sinon un tracé décalerait silencieusement les tirages de l'analyse suivante.
-  has_seed <- exists(".Random.seed", envir = globalenv(), inherits = FALSE)
-  old_seed <- if (has_seed) get(".Random.seed", envir = globalenv()) else NULL
-  on.exit({
-    if (has_seed) {
-      assign(".Random.seed", old_seed, envir = globalenv())
-    } else if (exists(".Random.seed", envir = globalenv(), inherits = FALSE)) {
-      rm(".Random.seed", envir = globalenv())
-    }
-  }, add = TRUE)
-  set.seed(layout_seed)
-  lay <- igraph::layout_with_fr(g)
+  # withr::with_seed remplace la sauvegarde manuelle de .Random.seed (même
+  # garantie, y compris quand .Random.seed n'existe pas encore — parité SC).
+  lay <- withr::with_seed(layout_seed, igraph::layout_with_fr(g))
 
   is_term <- igraph::V(g)$role == "terminal"
   pri <- igraph::V(g)$prize

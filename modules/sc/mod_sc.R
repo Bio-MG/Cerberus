@@ -598,6 +598,13 @@ mod_sc_ui <- function(id) {
             accordion_panel(i18n$t("1. Pipeline"), icon = icon("cogs"),
                             value = "1_pipeline",
                             mod_sc_pipeline_ui(ns("pipeline"))),
+            # Audit 2026-09-27 (feature 6×10X) : déclaration du design
+            # (condition / réplicat) — sans cette colonne, tout le volet
+            # A-vs-B (pseudobulk, Milo/scCODA, plots par condition) est
+            # structurellement inaccessible (mod_sc.R:798, da_design:152).
+            accordion_panel(i18n$t("0.5 Métadonnées — condition / réplicat"), icon = icon("table"),
+                            value = "0_metadata",
+                            mod_sc_metadata_ui(ns("metadata"))),
             # MD-4 (décision 5) : gestion du conteneur sc_datasets — enregistrer
             # l'objet SC courant (brut ou traité) sous un label avec relation
             # déclarée (mode 1 = paramètres partagés, mode 2 = distincts).
@@ -773,6 +780,17 @@ mod_sc_server <- function(id, global_data) {
     .tr <- function(key) { tr <- isolate(global_data$i18n); if (is.null(tr)) return(key); tryCatch(.strip_i18n_html(tr$t(key)), error=function(e) key) }
 
     shared_rv <- create_sc_shared_state()
+
+    # ── Invalidation des résultats quand le JEU DE DONNÉES est remplacé ──────
+    # (audit 2026-09-27 §1.5 : sans purge, le rapport mélangeait le jeu B avec
+    # les résultats du jeu A). L'epoch n'est incrémentée QUE par les
+    # remplacements de dataset (imports mod_import_sc.R, activation future
+    # d'un dataset enregistré) — les re-commits de même lignée (pipeline,
+    # annotation, mapping, trajectoire) ne purgent PAS, sinon l'auto-pipeline
+    # effacerait ses propres résultats au commit final (sc_pipeline.R:402).
+    observeEvent(global_data$sc_obj_epoch, {
+      sc_purge_shared_results(shared_rv)
+    }, ignoreInit = TRUE)
 
     # ── i18n: update report section choices on language switch ──────────────
     observeEvent(global_data$language, {
@@ -968,6 +986,7 @@ mod_sc_server <- function(id, global_data) {
     # ── Child servers ─────────────────────────────────────────────────────────
     mod_sc_mapping_server(   "mapping",   global_data)
     mod_sc_pipeline_server(  "pipeline",  global_data, shared_rv)
+    mod_sc_metadata_server(  "metadata", global_data)  # design condition/réplicat (feature 6×10X)
     mod_sc_datasets_server(  "sc_datasets", global_data)  # MD-4 : conteneur sc_datasets (lecture seule de sc_obj)
     mod_sc_annotation_server("annotation",global_data, shared_rv)
     mod_sc_rarity_server("rarity", global_data, shared_rv)
@@ -1022,6 +1041,15 @@ mod_sc_server <- function(id, global_data) {
       detected_map_org <- tryCatch(detect_organism_from_ids(rownames(global_data$sc_obj)),
                                    error = function(e) { ts_log_swallow("mod_sc.auto_pipeline_organism_detect", e); NA_character_ })
       mapping_org_selected <- if (!is.na(detected_map_org)) detected_map_org else "human"
+      # Variables de batch disponibles (catégorielles de l'objet courant) pour
+      # le sélecteur d'intégration Harmony (audit 2026-09-27 §1.3).
+      batch_var_choices <- tryCatch({
+        meta <- global_data$sc_obj@meta.data
+        mc <- colnames(meta)
+        cat_cols <- mc[vapply(mc, function(x) is.factor(meta[[x]]) || is.character(meta[[x]]), logical(1))]
+        if (!length(cat_cols)) cat_cols <- "orig.ident"
+        stats::setNames(cat_cols, cat_cols)
+      }, error = function(e) stats::setNames("orig.ident", "orig.ident"))
       showModal(modalDialog(
         title=paste("\u25b6", .tr("Pipeline SC — Paramètres")), size="m", easyClose=TRUE,
 
@@ -1063,6 +1091,17 @@ mod_sc_server <- function(id, global_data) {
                        selected="1")
           )
         ),
+        selectInput(ns_m("sc_ap_integration"), .tr("Intégration multi-échantillons"),
+                    choices = stats::setNames(c("none","harmony"),
+                                              c(.tr("Aucune (PCA brute)"),
+                                                .tr("Harmony (correction de batch avant clustering)"))),
+                    selected = "none"),
+        conditionalPanel(
+          condition = sprintf("input['%s'] == 'harmony'", ns_m("sc_ap_integration")),
+          selectInput(ns_m("sc_ap_batch_var"), .tr("Variable de batch"),
+                      choices = batch_var_choices, selected = "orig.ident")),
+        helpText(style="font-size:0.78em;color:#666;",
+                 .tr("Harmony corrige le batch AVANT le clustering (clusters, marqueurs et DA dérivent de l'espace intégré). Recommandé dès 2 échantillons ; ignoré si < 2 batchs.")),
         checkboxInput(ns_m("sc_ap_compute_umap"),
                      paste("\u2713", .tr("Calculer UMAP (décochez pour PCA seul — bien plus rapide, mode debug)")),
                      value = TRUE),
@@ -1143,7 +1182,14 @@ mod_sc_server <- function(id, global_data) {
     observeEvent(input$sc_ap_confirm, {
       removeModal()
       req(global_data$sc_obj)
-      run_sc_auto_pipeline(input, global_data, shared_rv, session, sc_log_rv)
+      # Roadmap 5.2 : run_sc_auto_pipeline relance maintenant son erreur
+      # (journalisée + notifiée en amont) — on l'avale ICI uniquement pour
+      # éviter un "Unhandled error" Shiny côté session ; le drive, lui,
+      # exploite la propagation pour marquer le job en échec.
+      tryCatch(
+        run_sc_auto_pipeline(input, global_data, shared_rv, session, sc_log_rv),
+        error = function(e) NULL
+      )
     })
 
     # =========================================================================

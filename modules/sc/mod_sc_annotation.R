@@ -73,9 +73,14 @@
         if (!is.null(sym)) {
           keep <- !is.na(sym) & nchar(sym) > 0
           if (sum(keep) > 0) {
-            mat          <- SummarizedExperiment::assay(sce, "logcounts")
-            rownames(mat) <- sym
-            mat          <- mat[!duplicated(rownames(mat)), , drop = FALSE]
+            # D2: subset by `keep` FIRST, then rename — renamer d'abord
+            # transformerait chaque NA non-mappe en chaine littérale "NA" que
+            # le garde !duplicated() ci-dessous collapserait en UNE seule ligne
+            # bogus. Discipline portée depuis map_ensembl_matrix_to_symbol()
+            # (R/sc/sc_helpers.R) ; testée par .annot_subset_rename() ci-dessous.
+            mat <- .annot_subset_rename(
+              SummarizedExperiment::assay(sce, "logcounts"), sym
+            )
             sce          <- SingleCellExperiment::SingleCellExperiment(
               assays  = list(logcounts = mat),
               colData = SummarizedExperiment::colData(sce)
@@ -99,7 +104,7 @@
     }
 
     pred <- SingleR::SingleR(test = sce, ref = ref, labels = ref[[label_col]])
-    return(list(labels = pred$labels, method = "full"))
+    return(list(labels = pred$labels, method = "full", organism = organism))
   }
 
   # ── Cluster-aggregate path (large / on-disk) ───────────────────────────────
@@ -157,8 +162,27 @@
 
   pred           <- SingleR::SingleR(test=profile_matrix, ref=ref, labels=ref[[label_col]])
   cluster_labels <- setNames(as.character(pred$labels), colnames(profile_matrix))
-  cell_labels    <- cluster_labels[as.character(obj$seurat_clusters)]
-  list(labels=cell_labels, method="cluster_aggregate")
+  cell_labels    <- .annot_cluster_labels_to_cells(cluster_labels, obj)
+  list(labels = cell_labels, method = "cluster_aggregate", organism = organism)
+}
+
+# D1 : les étiquettes par cluster ne portent que les ids de cluster ("0", "1",
+# ...) comme noms — les barcodes sont ré-attachés PAR POSITION depuis
+# obj$seurat_clusters (colonne meta.data, donc déjà dans l'ordre colnames(obj)).
+# Jamais indexé par les noms : as.character() sur un facteur les perd.
+.annot_cluster_labels_to_cells <- function(cluster_labels, obj) {
+  cell_labels <- cluster_labels[as.character(obj$seurat_clusters)]
+  setNames(unname(cell_labels), colnames(obj))
+}
+
+# D2 : subset par `keep` AVANT renommage — l'ordre inverse fabrique des noms
+# "NA" littéraux que le garde !duplicated() collapse en une ligne unique
+# (perte silencieuse de gènes réellement mappés).
+.annot_subset_rename <- function(mat, sym) {
+  keep <- !is.na(sym) & nchar(sym) > 0
+  mat <- mat[keep, , drop = FALSE]
+  rownames(mat) <- unname(sym[keep])
+  mat
 }
 
 # ── UI ────────────────────────────────────────────────────────────────────────
@@ -267,10 +291,17 @@ mod_sc_annotation_server <- function(id, global_data, shared_rv) {
         global_data$sc_obj   <- obj
         shared_rv$active_tab <- "tab_viz"
 
+        # Roadmap SC FUNCTION TEST (D1/D2 follow-up) : organisme détecté +
+        # référence affichés — un mismatch humain/souris doit être visible
+        # sans fouiller les logs.
         annot_status_rv(paste0("✓ [", result$method, "] — ",
-                               length(unique(result$labels)), " types cellulaires"))
+                               length(unique(result$labels)), " types cellulaires",
+                               " — organisme: ", result$organism %||% "?",
+                               " / réf: ", refcode))
         showNotification(paste("✓ Annotation [", result$method, "] —",
-                               length(unique(result$labels)), "types"), type="message", duration=5)
+                               length(unique(result$labels)), "types",
+                               "—", result$organism %||% "?", "/", refcode),
+                         type = "message", duration = 5)
 
       }, error=function(e) {
         annot_status_rv(paste(.tr("Erreur:"), e$message))

@@ -32,7 +32,15 @@ mod_sc_datasets_ui <- function(id) {
     hr(),
     h6(i18n$t("Datasets enregistrés"), style = "font-weight:bold;"),
     DTOutput(ns("ds_summary")),
-    uiOutput(ns("ds_delete_ui"))
+    uiOutput(ns("ds_delete_ui")),
+    # Roadmap 4.1 (feature 6×10X, audit 2026-09-27 §3.3) : le conteneur n'était
+    # qu'un puits sans robinet — enregistrer sans jamais relire ne sert à rien.
+    hr(),
+    h6(i18n$t("Activer un dataset enregistré"), style = "font-weight:bold;"),
+    div(class = "alert alert-light", style = "font-size:0.75rem;padding:4px;margin-bottom:5px;",
+        bsicons::bs_icon("info-circle"),
+        " ", i18n$t("Charge le jeu sélectionné comme objet actif (les résultats calculés sur l'ancien jeu sont purgés).")),
+    uiOutput(ns("ds_activate_ui"))
   )
 }
 
@@ -154,6 +162,45 @@ mod_sc_datasets_server <- function(id, global_data) {
         return(ts_datatable(sc_multi_summary(NULL), page_length = 6, buttons = FALSE))
       }
       ts_datatable(summary_df, page_length = 6, buttons = FALSE)
+    })
+
+    # ── Activation (roadmap 4.1) : relit un dataset enregistré et en fait ──
+    # l'objet actif. SEULE écriture autorisée sur global_data$sc_obj dans ce
+    # module (contrat SC_MULTI_CONTRACT.md §6 amended 2026-09-27). Le bump
+    # d'epoch déclenche la purge des résultats partagés (audit §1.5).
+    output$ds_activate_ui <- renderUI({
+      ds_names <- ds_names_rv()
+      if (length(ds_names) == 0L) {
+        return(tags$div(class = "small text-muted",
+                        .tr("Aucun dataset à activer.")))
+      }
+      tagList(
+        selectInput(ns("ds_to_activate"), .tr("Dataset à activer"),
+                    choices = ds_names, selected = ds_names[1L], width = "100%"),
+        actionButton(ns("ds_activate"), .tr("✅ Activer ce dataset"),
+                     icon = icon("circle-play"), class = "btn-outline-success w-100")
+      )
+    })
+
+    observeEvent(input$ds_activate, {
+      global_data$language  # i18n
+      lbl <- input$ds_to_activate
+      req(lbl, nzchar(lbl))
+      entry <- tryCatch(sc_multi_get(global_data$sc_datasets, lbl),
+                        sc_multi_error = function(e) e)
+      if (inherits(entry, "sc_multi_error")) {
+        showNotification(entry$message, type = "error", duration = 8)
+        return()
+      }
+      n_cells <- tryCatch(as.integer(length(SeuratObject::Cells(entry$obj))),
+                          error = function(e) NA_integer_)
+      global_data$sc_obj <- entry$obj
+      global_data$sc_obj_epoch <- (global_data$sc_obj_epoch %||% 0L) + 1L
+      showNotification(
+        sprintf(.tr("✓ Jeu « %s » activé (%s cellules) — objet actif remplacé, résultats purgés."),
+                lbl,
+                if (is.na(n_cells)) "?" else format(n_cells, big.mark = " ")),
+        type = "message", duration = 6)
     })
   })
 }

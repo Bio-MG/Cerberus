@@ -80,6 +80,7 @@ mod_sc_rarity_server <- function(id, global_data, shared_rv) {
     # synchronisation des choix depuis l'objet Seurat courant.
     observeEvent(global_data$sc_obj, {
       rarity_state$result <- NULL
+      if (!is.null(shared_rv)) shared_rv$population_rarity_result <- NULL  # purge champ partagé (audit §1.5 : résultat périmé exporté sinon)
       obj <- global_data$sc_obj
       if (is.null(obj)) {
         updateSelectInput(session, "rarity_identity", choices = character(0))
@@ -146,6 +147,7 @@ mod_sc_rarity_server <- function(id, global_data, shared_rv) {
                          type = "message", duration = 4)
       }, error = function(e) {
         rarity_state$result <- NULL
+        if (!is.null(shared_rv)) shared_rv$population_rarity_result <- NULL  # purge champ partagé aussi en cas d'échec
         showNotification(
           paste(.tr_plain("Erreur rareté :"), conditionMessage(e)),
           type = "error", duration = 10)

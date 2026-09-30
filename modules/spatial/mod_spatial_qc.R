@@ -334,6 +334,23 @@ run_spatial_hotspots <- function(coords, qc_metrics,
 mod_spatial_qc_ui <- function(id) {  ns <- NS(id)
   layout_sidebar(
     sidebar = sidebar(
+      # 🔴 CLOSED BY DEFAULT — the SECOND half of the same layout fix, and this one
+      # is what the two PLOTS need. MEASURED at 992x1323 after the module-level
+      # `open = "closed"` landed: this panel's column is 226 px, and its own 350 px
+      # sidebar takes `min(226 - 48, 350) = 178`, leaving main **48 px** — the
+      # hotspot map and histogram measured 49x5 and 16x14, i.e. crushed, while the
+      # TABLE (outside `layout_columns()`) rendered fine at 179x76 with 2 695
+      # entries. bslib's law says no width value fixes that: any sidebar at or above
+      # `column - 48` leaves exactly 48 px.
+      # `open = "closed"` is the same single supported argument, on `sidebar()`
+      # (`layout_sidebar()` has no `open` formal in bslib 0.11.0), it keeps the QC
+      # controls — title, thresholds, sliders, the hotspot button — one click away
+      # via bslib's own toggle, and it hands the panel its whole 226 px. No CSS is
+      # forced and no `!important` is added anywhere.
+      # Locked by test-mod-spatial-layout.R. 🔴 It does NOT by itself promise the
+      # plots become readable: 226 px split 7/5 is ~130 and ~93 px, and the measured
+      # card heights were 120 px. The live measurement owns that verdict.
+      open = "closed",
       title = i18n$t("QC & filtres"), width = 350,
 
       div(class = "alert alert-light", style = "font-size:0.8rem;",
@@ -458,8 +475,74 @@ mod_spatial_qc_ui <- function(id) {  ns <- NS(id)
       nav_panel(i18n$t("Hotspots locaux (Getis-Ord Gi*)"), value = "hotspots",
                 div(class = "alert alert-light small mb-2",
                     i18n$t("Rouge = hotspot (voisinage significativement eleve, p < 0.05) ; bleu = coldspot ; gris = non significatif.")),
+                # SLICE 3 (2026-09-29) — RESPONSIVE, scoped to THIS grid only.
+                # WHY a stylesheet rule and not a bslib argument: `col_widths` sets spans
+                # inside the 12-track template and cannot express "stack below N", and
+                # bslib's OWN stacking rule does not fire here. Measured in the browser:
+                # the rule that actually sets the span is
+                #     @media (min-width: 576px) .grid .g-col-sm-7 { grid-column: auto / span 7 }
+                # at specificity (0,2,0), while bslib's is
+                #     @media (max-width: 767.98px) bslib-layout-columns:where(.bslib-grid) > * { … }
+                # at (0,0,1) — `:where()` contributes ZERO by definition — so bslib LOSES
+                # and the cards stayed side by side down to 620 px (measured). The rule
+                # below is (0,3,0) and wins on specificity alone: no `!important`, no
+                # global override, no browser-injected CSS.
+                # BREAKPOINT 1400 px, from the measured widths (viewport -> hotspot grid ->
+                # the two plot widths), the app's 340 px module sidebar open as shipped:
+                #     1400 -> grid 597, plots 308 and 205   <- narrowest usable side-by-side
+                #     1360 -> grid 557, plots 284 and 189   <- marginal
+                #     1280 -> grid 477, plots 223 and 140   <- card body starts scrolling
+                #     1152 -> grid 349, plots 148 and  87   <- unusable
+                # A 12-track grid with `gap: 1rem` also spends 176 px on eleven gaps
+                # before any track gets a pixel, and each card carries (span - 1) internal
+                # gaps of dead space; 205 px clears the 190 px floor for a labelled plot
+                # and 189 px does not, hence 1400.
+                tags$style(HTML(
+                  "/* SLICE 3 + 4 — the hotspot panel, scoped to THIS panel only:",
+                  "   no global rule, no !important. Locked by test-mod-spatial-layout.R. */",
+                  "@media (max-width: 1399.98px) {",
+                  "  .bslib-grid.ts-qc-hotspot-grid > .bslib-grid-item {",
+                  "    grid-column: 1 / -1;",
+                  "  }",
+                  "  /* SLICE 4 — the hotspot table is a SIBLING of layout_columns(), so",
+                  "     `row_heights` cannot reach it. It is an html-fill-item with",
+                  "     flex: 1 1 400px; min-height: 0 inside a 319 px column, and it",
+                  "     measured 189x5 at 992 px with its DT instance complete (2 tables,",
+                  "     15 rows, 2695 entries). Its own inline style is `height: auto`, so",
+                  "     `height` cannot be set from a stylesheet at all without !important;",
+                  "     min-height is the only lever, and an id selector outranks the",
+                  "     (0,2,0) fill rule on specificity alone. 300 px is not arbitrary: it",
+                  "     sits inside the range this table already produces at wide widths",
+                  "     (263 px at 1400, 318 px at 1920), so the narrow case is made to look",
+                  "     like the wide one. It lives in this SAME narrow-only query, so the",
+                  "     wide widths keep DT's own internal scrolling untouched — the reason",
+                  "     the two rejected options were rejected: DTOutput(height=) measured",
+                  "     189x5 (no effect) and fill = FALSE measured 637x1056 with no internal",
+                  "     scroll at 1440. */",
+                  "  #spatial-qc-hotspot_table {",
+                  "    min-height: 300px;",
+                  "  }",
+                  "}")),
                 layout_columns(
                   col_widths = c(7, 5),
+                  # VERTICAL half of the same slice. `row_heights` is a bslib 0.11.0
+                  # argument of `layout_columns()`; it feeds
+                  # `--bslib-grid--row-heights`, i.e. `grid-auto-rows`, which is exactly
+                  # the declaration the collapsed `auto` row was resolving against.
+                  # bslib's `card()` has `fill = TRUE` BY DEFAULT, so the card, its body
+                  # and the `plotOutput()` are all `html-fill-item`
+                  # (`flex: 1 1 auto; min-height: 0`), and an `auto` row cannot derive a
+                  # height from a subtree whose every member may shrink to zero: measured
+                  # 11.7031 px at 992 px, card 104x12, plot 40x0, the card body an
+                  # `overflow: auto` window 32 px tall over 256 px of plot. "min-content"
+                  # makes the row follow its content, which restores the declared 520 px
+                  # with no card-body scrollbar; a fixed pixel value would clip the card
+                  # header as soon as the translated label wrapped, and a fixed grid
+                  # `height` was measured to REINTRODUCE the scrollbar it was meant to
+                  # remove. `min-content` is passed through untouched by bslib's
+                  # `row_heights_css_vars()`.
+                  row_heights = "min-content",
+                  class = "ts-qc-hotspot-grid",
                   card(full_screen = TRUE, card_header(i18n$t("Carte des hotspots")),
                        plotOutput(ns("hotspot_map"), height = "520px")),
                   card(full_screen = TRUE, card_header(i18n$t("Distribution du Gi*")),

@@ -114,6 +114,7 @@ velocity_public_api <- function() {
         "normalize_velocity_cell_barcodes", "normalize_velocity_gene_ids",
         "validate_velocity_matrices", "read_velocity_rds",
         "validate_velocity_rds_metadata", "read_velocity_mtx",
+        "read_velocity_loom", "read_velocity_h5ad",
         "validate_precomputed_velocity_vectors", "align_velocity_embedding",
         # Résultat canonique / identité / provenance
         "finalize_velocity_result", "velocity_object_fingerprint",
@@ -1334,6 +1335,364 @@ read_velocity_mtx <- function(
     mat
 }
 
+# ── Loom / H5AD (roadmap SC FUNCTION_TEST M0) ────────────────────────────────
+# Lecteurs hdf5r des formats velocity PRE-COMPUTES natifs (velocyto .loom,
+# scVelo .h5ad). Aucune inference : les couches spliced/unspliced sont lues
+# telles quelles et rendues dans la MÊME structure que read_velocity_rds()
+# (liste nommée au format whitelisté, validée par la même métavalidation),
+# puis passent par validate_velocity_matrices() comme les deux autres modes.
+# Lecture CHUNCKÉE : les couches loom sont denses mais compressées (ex:
+# WB_Lysis_3p_Introns_8kCells.loom = 8000 x 36601, 68 Mo) — on ne densifie
+# jamais le fichier entier en mémoire, on sparsifie bloc de gènes par bloc.
+
+.VELOCITY_LOOM_CHUNK_GENES <- 2048L
+
+# hdf5r::exists() PROPAGE une erreur HDF5 quand un groupe intermediaire est
+# absent (fichier etranger/malforme) — un noeud manquant est un CAS NORMAL
+# de validation, jamais une exception.
+.h5_node_exists <- function(f, node) {
+    tryCatch(f$exists(node), error = function(e) FALSE)
+}
+
+.loom_require_dataset <- function(f, node) {
+    if (!.h5_node_exists(f, node)) {
+        .velocity_stop(
+            "invalid_input",
+            sprintf("Fichier loom invalide : noeud '%s' absent.", node)
+        )
+    }
+    f[[node]]
+}
+
+.loom_read_attrs <- function(f) {
+    gene_ds <- .loom_require_dataset(f, "row_attrs/Gene")
+    cell_ds <- .loom_require_dataset(f, "col_attrs/CellID")
+    genes <- as.character(gene_ds[])
+    cells <- as.character(cell_ds[])
+    if (length(genes) == 0L || length(cells) == 0L) {
+        .velocity_stop(
+            "invalid_input",
+            "Fichier loom invalide : row_attrs/Gene ou col_attrs/CellID vide."
+        )
+    }
+    if (anyDuplicated(cells)) {
+        .velocity_stop(
+            "invalid_input",
+            "Fichier loom invalide : CellID dupliques (cle d'alignement)."
+        )
+    }
+    list(genes = genes, cells = cells)
+}
+
+# Lecture sparse d'une couche loom -> dgCMatrix genes x cells. La couche est
+# stockee (cells x genes) OU (genes x cells) selon l'outil d'origine : on
+# determine l'orientation avec les longueurs d'attributs (jamais supposee).
+.loom_read_layer_sparse <- function(ds, genes, cells, chunk = .VELOCITY_LOOM_CHUNK_GENES) {
+    n_g <- length(genes)
+    n_c <- length(cells)
+    dims <- ds$dims
+    stored_genes_x_cells <- if (identical(as.integer(dims[[1L]]), as.integer(n_g)) &&
+                                identical(as.integer(dims[[2L]]), as.integer(n_c))) {
+        TRUE
+    } else if (identical(as.integer(dims[[1L]]), as.integer(n_c)) &&
+               identical(as.integer(dims[[2L]]), as.integer(n_g))) {
+        FALSE
+    } else {
+        .velocity_stop(
+            "invalid_input",
+            sprintf(paste0(
+                "Couche loom de dimensions (%s) incompatibles avec les ",
+                "attributs (%d genes x %d cellules)."
+            ), paste(dims, collapse = "x"), n_g, n_c)
+        )
+    }
+    blocks <- vector("list", ceiling(n_g / chunk))
+    bi <- 0L
+    start <- 1L
+    while (start <= n_g) {
+        end <- min(start + chunk - 1L, n_g)
+        blk <- if (stored_genes_x_cells) ds[start:end, , drop = FALSE] else
+            t(ds[, start:end, drop = FALSE])
+        bi <- bi + 1L
+        blocks[[bi]] <- Matrix::Matrix(
+            as.numeric(blk),
+            nrow = end - start + 1L, ncol = n_c, sparse = TRUE
+        )
+        start <- end + 1L
+    }
+    mat <- do.call(rbind, blocks)
+    dimnames(mat) <- list(genes, cells)
+    mat
+}
+
+#' Read a velocyto `.loom` file as a velocity input (pre-computed layers)
+#'
+#' hdf5r-based, chunked, sparse-aware. Layers `spliced`/`unspliced` are
+#' required, `ambiguous` optional. `col_attrs` provides `CellID` (barcodes),
+#' optional `Clusters` and optional pre-computed embedding `_X`/`_Y`;
+#' `row_attrs/Gene` provides gene symbols — duplicated symbols are made
+#' unique (warning), the alignment key stays the Seurat side. No inference,
+#' no padding: the output feeds the SAME validation chain as the RDS mode.
+#'
+#' @param path Path to a `.loom` file.
+#' @return Named velocity input list (same whitelist as read_velocity_rds()).
+#' @export
+read_velocity_loom <- function(path) {
+    if (!requireNamespace("hdf5r", quietly = TRUE)) {
+        .velocity_stop(
+            "invalid_input",
+            "Lecture .loom indisponible : le paquet 'hdf5r' n'est pas installé."
+        )
+    }
+    if (!file.exists(path)) {
+        .velocity_stop("invalid_input", sprintf("Fichier loom introuvable : %s", path))
+    }
+    f <- tryCatch(hdf5r::h5file(path, mode = "r"),
+                  error = function(e) .velocity_stop(
+                      "invalid_input",
+                      sprintf("Ouverture HDF5 impossible (%s) : %s",
+                              basename(path), conditionMessage(e))))
+    on.exit(try(f$close_all(), silent = TRUE), add = TRUE)
+
+    attrs <- .loom_read_attrs(f)
+    spliced_ds <- .loom_require_dataset(f, "layers/spliced")
+    unspliced_ds <- .loom_require_dataset(f, "layers/unspliced")
+    has_ambiguous <- .h5_node_exists(f, "layers/ambiguous")
+
+    spliced <- .loom_read_layer_sparse(spliced_ds, attrs$genes, attrs$cells)
+    unspliced <- .loom_read_layer_sparse(unspliced_ds, attrs$genes, attrs$cells)
+    ambiguous <- if (has_ambiguous) {
+        .loom_read_layer_sparse(f[["layers/ambiguous"]], attrs$genes, attrs$cells)
+    } else {
+        NULL
+    }
+
+    # Symboles dupliqués (mesuré : le loom 10x neutrophiles en porte) — la
+    # validation aval refuse les identifiants dupliqués, on les rend uniques
+    # en le DISANT (l'alignement final reste à l'identifiant unique).
+    gene_names <- attrs$genes
+    n_dup_genes <- sum(duplicated(gene_names))
+    if (n_dup_genes > 0L) {
+        warning(sprintf(
+            "%s : %d symboles de gènes dupliqués rendus uniques (make.unique).",
+            basename(path), n_dup_genes
+        ))
+        gene_names <- make.unique(gene_names)
+        dimnames(spliced) <- list(gene_names, attrs$cells)
+        dimnames(unspliced) <- list(gene_names, attrs$cells)
+        if (!is.null(ambiguous)) dimnames(ambiguous) <- list(gene_names, attrs$cells)
+    }
+
+    clusters <- NULL
+    if (.h5_node_exists(f, "col_attrs/Clusters")) {
+        clusters <- as.character(f[["col_attrs/Clusters"]][] )
+    }
+    umap_embedding <- NULL
+    if (.h5_node_exists(f, "col_attrs/_X") && .h5_node_exists(f, "col_attrs/_Y")) {
+        umap_embedding <- cbind(
+            as.numeric(f[["col_attrs/_X"]][] ),
+            as.numeric(f[["col_attrs/_Y"]][] )
+        )
+        rownames(umap_embedding) <- attrs$cells
+    }
+
+    out <- list(
+        spliced = spliced,
+        unspliced = unspliced,
+        ambiguous = ambiguous,
+        cell_names = attrs$cells,
+        gene_names = gene_names,
+        orientation = "genes_x_cells",
+        velocity_source = "loom",
+        clusters = clusters,
+        umap_embedding = umap_embedding
+    )
+    validate_velocity_rds_metadata(out)
+    out
+}
+
+#' Read a scVelo `.h5ad` file as a velocity input (pre-computed layers)
+#'
+#' Targets the OLD-anndata layout measured in the wild (ex:
+#' endocrinogenesis_day15.h5ad): sparse layers under
+#' `/layers/{spliced,unspliced}` stored as `data`/`indices`/`indptr` groups
+#' (CSR or CSC — detected from `indptr` length), compound `/obs` and `/var`
+#' datasets whose first string field `index` carries barcodes / gene symbols,
+#' optional `/obsm/X_umap`. No inference, no padding: same validation chain.
+#'
+#' @param path Path to a `.h5ad` file.
+#' @return Named velocity input list (same whitelist as read_velocity_rds()).
+#' @export
+read_velocity_h5ad <- function(path) {
+    if (!requireNamespace("hdf5r", quietly = TRUE)) {
+        .velocity_stop(
+            "invalid_input",
+            "Lecture .h5ad indisponible : le paquet 'hdf5r' n'est pas installé."
+        )
+    }
+    if (!file.exists(path)) {
+        .velocity_stop("invalid_input", sprintf("Fichier h5ad introuvable : %s", path))
+    }
+    f <- tryCatch(hdf5r::h5file(path, mode = "r"),
+                  error = function(e) .velocity_stop(
+                      "invalid_input",
+                      sprintf("Ouverture HDF5 impossible (%s) : %s",
+                              basename(path), conditionMessage(e))))
+    on.exit(try(f$close_all(), silent = TRUE), add = TRUE)
+
+    .h5ad_layer <- function(node) {
+        if (!.h5_node_exists(f, file.path(node, "data"))) {
+            .velocity_stop(
+                "invalid_input",
+                sprintf("Fichier h5ad invalide : couche sparse '%s' absente.", node)
+            )
+        }
+        list(
+            data = f[[file.path(node, "data")]][] ,
+            indices = as.integer(f[[file.path(node, "indices")]][] ),
+            indptr = as.integer(f[[file.path(node, "indptr")]][] )
+        )
+    }
+
+    spliced <- .h5ad_layer("layers/spliced")
+    unspliced <- .h5ad_layer("layers/unspliced")
+
+    # /obs et /var : datasets COMPOUND (layout old-anndata) — le champ
+    # string 'index' porte les barcodes / symboles.
+    .h5ad_index <- function(node, what) {
+        if (!.h5_node_exists(f, node)) {
+            .velocity_stop(
+                "invalid_input",
+                sprintf("Fichier h5ad invalide : '%s' (%s) absent.", node, what)
+            )
+        }
+        tbl <- tryCatch(f[[node]][] , error = function(e) NULL)
+        idx <- if (!is.null(tbl) && is.data.frame(tbl) && "index" %in% names(tbl)) {
+            as.character(tbl$index)
+        } else {
+            NULL
+        }
+        if (is.null(idx)) {
+            .velocity_stop(
+                "invalid_input",
+                sprintf("Fichier h5ad invalide : champ 'index' illisible dans '%s'.", node)
+            )
+        }
+        idx
+    }
+    cell_names <- .h5ad_index("obs", "cellules")
+    gene_names <- .h5ad_index("var", "gènes")
+
+    n_cells <- length(cell_names)
+    n_genes <- length(gene_names)
+    if (anyDuplicated(cell_names)) {
+        .velocity_stop(
+            "invalid_input",
+            "Fichier h5ad invalide : barcodes dupliques dans /obs (cle d'alignement)."
+        )
+    }
+
+    # indptr détermine l'axe de la dimension compressée : longueur n_cells+1
+    # => CSR (cellules en lignes) ; n_genes+1 => CSC (gènes en lignes).
+    .h5ad_to_genes_x_cells <- function(layer) {
+        n_ptr <- length(layer$indptr)
+        n_nz <- length(layer$data)
+        if (length(layer$indices) != n_nz) {
+            .velocity_stop(
+                "invalid_input",
+                "Fichier h5ad invalide : longueur indices != longueur data."
+            )
+        }
+        if (identical(n_ptr, n_cells + 1L)) {
+            rows <- rep(seq_len(n_cells), diff(layer$indptr))
+            if (n_nz != length(rows)) {
+                .velocity_stop(
+                    "invalid_input",
+                    "Fichier h5ad invalide : longueur data != longueur indices."
+                )
+            }
+            cols <- layer$indices + 1L
+            Matrix::sparseMatrix(
+                i = cols, j = rows, x = as.numeric(layer$data),
+                dims = c(n_genes, n_cells), dimnames = list(gene_names, cell_names)
+            )
+        } else if (identical(n_ptr, n_genes + 1L)) {
+            cols <- rep(seq_len(n_genes), diff(layer$indptr))
+            if (n_nz != length(cols)) {
+                .velocity_stop(
+                    "invalid_input",
+                    "Fichier h5ad invalide : longueur data != longueur indices."
+                )
+            }
+            rows <- layer$indices + 1L
+            Matrix::sparseMatrix(
+                i = rows, j = cols, x = as.numeric(layer$data),
+                dims = c(n_genes, n_cells), dimnames = list(gene_names, cell_names)
+            )
+        } else {
+            .velocity_stop(
+                "invalid_input",
+                sprintf(paste0(
+                    "Fichier h5ad invalide : indptr (%d) incompatible avec ",
+                    "%d cellules / %d gènes."
+                ), n_ptr, n_cells, n_genes)
+            )
+        }
+    }
+
+    spliced_mat <- .h5ad_to_genes_x_cells(spliced)
+    unspliced_mat <- .h5ad_to_genes_x_cells(unspliced)
+
+    n_dup_genes <- sum(duplicated(gene_names))
+    if (n_dup_genes > 0L) {
+        warning(sprintf(
+            "%s : %d symboles de gènes dupliqués rendus uniques (make.unique).",
+            basename(path), n_dup_genes
+        ))
+        gene_names_unique <- make.unique(gene_names)
+        dimnames(spliced_mat) <- list(gene_names_unique, cell_names)
+        dimnames(unspliced_mat) <- list(gene_names_unique, cell_names)
+        gene_names <- gene_names_unique
+    }
+
+    clusters <- NULL
+    if (.h5_node_exists(f, "obs")) {
+        tbl <- tryCatch(f[["obs"]][] , error = function(e) NULL)
+        if (!is.null(tbl) && "clusters" %in% names(tbl)) {
+            clusters <- as.character(tbl$clusters)
+        }
+    }
+    umap_embedding <- NULL
+    if (.h5_node_exists(f, "obsm/X_umap")) {
+        # (dims x cells) mesuré sur scVelo ; hdf5r exige la liste d'indices
+        # complète pour un dataset 2-D ('[]' seul ne suffit pas ici)
+        um <- f[["obsm/X_umap"]][, , drop = FALSE]
+        um <- as.matrix(um)
+        if (nrow(um) == 2L && ncol(um) == n_cells) {
+            um <- t(um)
+        } else if (!(nrow(um) == n_cells && ncol(um) == 2L)) {
+            um <- NULL
+        }
+        if (!is.null(um)) {
+            umap_embedding <- um
+            rownames(umap_embedding) <- cell_names
+        }
+    }
+
+    out <- list(
+        spliced = spliced_mat,
+        unspliced = unspliced_mat,
+        cell_names = cell_names,
+        gene_names = gene_names,
+        orientation = "genes_x_cells",
+        velocity_source = "h5ad",
+        clusters = clusters,
+        umap_embedding = umap_embedding
+    )
+    validate_velocity_rds_metadata(out)
+    out
+}
+
 #' Plot an RNA velocity phase portrait (Stage 9)
 #'
 #' Descriptive scatter of spliced vs unspliced counts for one gene. ALL cells
@@ -1707,7 +2066,9 @@ velocity_result_is_stale <- function(velocity_result, seurat_obj) {
 #' @param validated Structure validee retournee par validate_velocity_matrices()
 #'   (enrichie des metadonnees RDS : velocity_source, velocity_method,
 #'   input_orientation, embedding_reduction, umap_embedding, clusters).
-#' @param input_mode Mode d'import declare : "rds" ou "mtx".
+#' @param input_mode Mode d'import declare : "rds", "mtx" ou "loom"
+#'   (.loom/.h5ad — roadmap SC FUNCTION_TEST M0 ; lecture pre-computed,
+#'   aucune inference).
 #' @param input_files Liste nommee decrivant la source (noms de fichiers
 #'   ORIGINAUX — jamais les chemins locaux complets — et options de lecture
 #'   comme feature_column).
@@ -1733,7 +2094,7 @@ velocity_result_is_stale <- function(velocity_result, seurat_obj) {
 #' @export
 finalize_velocity_result <- function(
     validated,
-    input_mode = c("rds", "mtx"),
+    input_mode = c("rds", "mtx", "loom"),
     input_files = NULL,
     seurat_obj = NULL,
     assay_used = NULL,

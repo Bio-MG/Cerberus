@@ -173,9 +173,10 @@ bulk_batch_design_check <- function(metadata, batch_col, condition_col = NULL) {
   ord <- order(rv, decreasing = TRUE, method = "radix")
   # Tirage déterministe parmi les 4×max_genes plus variables : favorise le
   # signal tout en évitant le biais des n premières lignes d'un tri à égalité.
+  # withr restaure l'état du RNG : la graine déclarée ne fuite pas vers le
+  # reste de l'app (parité withr des pipelines SC, audit 2026-09-27 §1.8).
   pool <- ord[seq_len(min(4L * max_genes, n_total))]
-  set.seed(seed)
-  keep <- sort(pool[sample.int(length(pool), max_genes)])
+  keep <- withr::with_seed(seed, sort(pool[sample.int(length(pool), max_genes)]))
   list(mat = mat[keep, , drop = FALSE], n_total = n_total,
        n_used = max_genes, seed = seed)
 }

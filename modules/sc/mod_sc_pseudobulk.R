@@ -231,6 +231,7 @@ mod_sc_pseudobulk_output_ui <- function(id) {
       nav_panel(i18n$t("QC Pseudobulk (PCA)"),
                 div(class = "small text-muted mt-2",
                     i18n$t("Chaque point = un pseudo-echantillon (cellules sommees par echantillon). Verifiez qu'il n'y a pas d'outlier/mauvais etiquetage avant d'interpreter le contraste.")),
+                verbatimTextOutput(ns("pb_design_recap")),
                 plotOutput(ns("pb_pca_plot"), height = "450px"),
                 DTOutput(ns("pb_summary_table"))),
       nav_panel(i18n$t("Volcano + MA-Plot"),
@@ -345,6 +346,30 @@ mod_sc_pseudobulk_server <- function(id, global_data, shared_rv) {
       ts_datatable(pb$metadata, page_length = 15L,
                    filename_base = "sc_pseudobulk_metadata", rownames = TRUE,
                    filter = "none")
+    })
+
+    # ── Récapitulatif du design déclaré (feature 6×10X, audit 2026-09-27) ──
+    # condition × n pseudo-échantillons × n cellules : rend visible, AVANT le
+    # run DE, le plan 3 réplicats vs 3 réplicats (et tout plan déséquilibré).
+    output$pb_design_recap <- renderText({
+      req(pb$metadata)
+      m <- pb$metadata
+      if (!"condition" %in% colnames(m)) return("")
+      n_pseudo <- stats::aggregate(cbind(n_pseudo = n_cells) ~ condition,
+                                   data = m, FUN = length)
+      n_cells  <- stats::aggregate(cbind(n_cells = n_cells) ~ condition,
+                                   data = m, FUN = sum)
+      n_pseudo$n_cells <- n_cells$n_cells[match(n_pseudo$condition, n_cells$condition)]
+      lines <- vapply(seq_len(nrow(n_pseudo)), function(i) {
+        sprintf("  condition « %s » : %d pseudo-échantillon(s), %d cellules",
+                n_pseudo$condition[i], n_pseudo$n_pseudo[i], n_pseudo$n_cells[i])
+      }, character(1))
+      txt <- paste0(.tr("Design pseudobulk déclaré :\n"), paste(lines, collapse = "\n"))
+      if (any(n_pseudo$n_pseudo < 2L)) {
+        txt <- paste0(txt, "\n⚠️ ", .tr(
+          "Au moins une condition n'a qu'UN pseudo-échantillon : le plan est saturé (aucune dispersion estimable). Vérifiez la colonne condition et les réplicats — sinon, seul le mode exploratoire sans réplicat (dispersion imposée) reste disponible."))
+      }
+      txt
     })
 
     output$pb_pca_plot <- renderPlot({
