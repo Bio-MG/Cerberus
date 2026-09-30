@@ -30,6 +30,29 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > ⚠️ Les chiffres de garde de ces entrées sont ceux **consignés** dans `STATUS.md`
 > au moment du jalon ; en cas d'écart, **`STATUS.md` §0 et §6 font foi**.
 
+## [V1.x — audit externe : quick wins RAM / QC / daemons] — 2026-09-30
+
+Trois correctifs issus de l'analyse de l'audit externe MODE B/C
+(`docs/archive/AUDIT_TRANSCRIPTOSHINY_MODE_B_C [resuslts meta prompt].md` ;
+détail mesuré : journal archivé §2dp). Tests écrits ROUGE d'abord ; conventions
+0 erreur / 59 avertissements (niveau de référence) après chaque jalon.
+
+### Corrigé
+- **QW-1** (`51e662d`) : indicateur RAM — `gc()[, 2]` est DÉJÀ en Mo, la
+  division par 1024 affichait ~1024× trop petit, avec un `gc()` complet forcé
+  dans le chemin de rendu. Helper `ts_process_rss_mb()` (`ps` optionnel,
+  déjà au renv.lock) ; repli tas R sans division ; rafraîchissement 10 s.
+- **QW-2** (`2cfa331`) : défauts QC de l'autopipeline SC en SOURCE UNIQUE —
+  `TS_SC_QC_MIN_GENES/MAX_GENES/MAX_PCT_MT/PCA_DIMS` dans `config/defaults.R`,
+  lus par l'UI ET par `.sc_ap_drive_inputs()`. Le canal drive codait
+  10/10000/50/10 contre 100/8000/20/20 côté UI (fork de reproductibilité,
+  audit C-1). `.sc_ap_run_drive()` gagne un paramètre `inputs` optionnel
+  (production inchangée) pour que les tests de mécanique surchargent le QC
+  de leur fixture, comme le permet le contrat des entrées.
+- **QW-3** (`1524a75`) : `TS_MIRAI_N_DAEMONS` réellement lue — la constante
+  était définie mais ignorée, `spatial_async.R` codait `6L` en dur à deux
+  sites (audit C-2). Repli `exists()` conforme à l'idiome de la maison.
+
 ## [V1.x — dette de conventions, 45ᵉ incrément] — 2026-09-20 — `R/spatial/spatial_report.R` : C9 payé, **et un 2ᵉ P0 de produit trouvé par le test**
 
 Écrit `test-spatial-report.R` (**17** blocs, **52** assertions) — le dernier fichier de `R/`
