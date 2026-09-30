@@ -53,6 +53,7 @@ source("R/core/validation.R")   # <-- NEW
 source("R/core/provenance.R")   # <-- CHRYSALIS 2C : manifeste de provenance
 source("R/core/jobs.R")         # <-- CHRYSALIS 2D : wrapper fin sync/async
 source("R/core/memory.R")       # <-- QW-1 : RSS résident du processus (indicateur RAM)
+source("R/core/error_log.R")
 source("R/core/caching.R")      # <-- CHRYSALIS 2D : memoisation a portee contrainte
 source("R/core/pathway_helpers.R")
 source("R/core/error_state.R")  # <-- §14.1 : ts_error_state(), l'accesseur generique d'etat d'erreur

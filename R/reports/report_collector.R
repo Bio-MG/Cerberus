@@ -117,7 +117,7 @@
         n_lignes = nrow(md), n_colonnes = ncol(md),
         groupes = tryCatch(
           if ("cluster" %in% names(md)) length(unique(md$cluster)) else NA_integer_,
-          error = function(e) NA_integer_)
+          error = function(e) { ts_log_swallow("report_collector.report_domain_summary", e); NA_integer_ })
       ))
       out$extras$table <- md
     }
@@ -131,7 +131,7 @@
       cor_max <- tryCatch({
         v <- cg$correlation
         if (is.null(v) || !is.numeric(v)) NA_real_ else round(max(abs(v), na.rm = TRUE), 3)
-      }, error = function(e) NA_real_)
+      }, error = function(e) { ts_log_swallow("report_collector.report_domain_summary", e); NA_real_ })
       out$summary <- .report_kv_df(c(
         gene_cible = tgt,
         n_lignes = nrow(cg),
@@ -171,7 +171,7 @@
     return(out)
   }
   if (domain == "trajectory") {
-    meta <- tryCatch(sc_obj@meta.data, error = function(e) NULL)
+    meta <- tryCatch(sc_obj@meta.data, error = function(e) { ts_log_swallow("report_collector.report_domain_summary", e); NULL })
     has_pt <- !is.null(meta) && "pseudotime" %in% colnames(meta)
     traj_red <- state_get(shared_rv, "traj_reduction")
     traj_mth <- state_get(shared_rv, "traj_method")
@@ -200,7 +200,7 @@
       out$identity_ok <- tryCatch({
         s <- velocity_result_is_stale(res, sc_obj)
         if (is.na(s)) NA else !s
-      }, error = function(e) NA)
+      }, error = function(e) { ts_log_swallow("report_collector.report_domain_summary", e); NA })
       dims <- res$dimensions %||% NULL
       out$summary <- .report_kv_df(c(
         statut = as.character(res$status %||% NA_character_),
@@ -249,7 +249,7 @@
         tryCatch({
           s <- communication_result_is_stale(res, sc_obj)
           if (is.na(s)) NA else !s
-        }, error = function(e) NA)
+        }, error = function(e) { ts_log_swallow("report_collector.report_domain_summary", e); NA })
       }
       inp <- res$input_summary %||% NULL
       rank_value <- function(field) {
@@ -321,7 +321,7 @@
       out$identity_ok <- tryCatch({
         s <- da_design_result_is_stale(res, sc_obj)
         if (is.na(s)) NA else !s
-      }, error = function(e) NA)
+      }, error = function(e) { ts_log_swallow("report_collector.rank_value", e); NA })
       cfg <- res$config %||% list()
       out$summary <- .report_kv_df(c(
         statut = as.character(res$status %||% NA_character_),
@@ -330,14 +330,14 @@
         colonne_condition = as.character(cfg$condition %||% NA_character_),
         n_conditions = tryCatch(
           if (is.data.frame(res$condition_summary)) nrow(res$condition_summary) else NA_integer_,
-          error = function(e) NA_integer_),
+          error = function(e) { ts_log_swallow("report_collector.rank_value", e); NA_integer_ }),
         n_echantillons = tryCatch(
           if (is.data.frame(res$sample_summary)) nrow(res$sample_summary) else NA_integer_,
-          error = function(e) NA_integer_),
+          error = function(e) { ts_log_swallow("report_collector.rank_value", e); NA_integer_ }),
         milo_eligible = tryCatch(
-          as.character(res$milo_eligibility$eligible), error = function(e) NA_character_),
+          as.character(res$milo_eligibility$eligible), error = function(e) { ts_log_swallow("report_collector.rank_value", e); NA_character_ }),
         sccoda_eligible = tryCatch(
-          as.character(res$sccoda_eligibility$eligible), error = function(e) NA_character_)
+          as.character(res$sccoda_eligibility$eligible), error = function(e) { ts_log_swallow("report_collector.rank_value", e); NA_character_ })
       ))
       out$extras$condition_summary <- res$condition_summary
       out$extras$sample_summary <- res$sample_summary
@@ -356,23 +356,23 @@
       out$identity_ok <- tryCatch({
         s <- milo_result_is_stale(res, sc_obj)
         if (is.na(s)) NA else !s
-      }, error = function(e) NA)
+      }, error = function(e) { ts_log_swallow("report_collector.rank_value", e); NA })
       tc <- res$tested_contrast %||% list()
       out$summary <- .report_kv_df(c(
         statut = as.character(res$status %||% NA_character_),
         condition_cible = as.character(tc$target %||% NA_character_),
         condition_reference = as.character(tc$reference %||% NA_character_),
         reduction = tryCatch(
-          as.character(res$parameters$reduction), error = function(e) NA_character_),
+          as.character(res$parameters$reduction), error = function(e) { ts_log_swallow("report_collector.rank_value", e); NA_character_ }),
         graine = tryCatch(
-          as.character(res$parameters$seed), error = function(e) NA_character_),
+          as.character(res$parameters$seed), error = function(e) { ts_log_swallow("report_collector.rank_value", e); NA_character_ }),
         n_voisinages = tryCatch(
           if (is.data.frame(res$DA_table)) nrow(res$DA_table) else NA_integer_,
-          error = function(e) NA_integer_),
+          error = function(e) { ts_log_swallow("report_collector.rank_value", e); NA_integer_ }),
         n_cellules_dans_voisinages = tryCatch(
           if (is.data.frame(res$neighbourhood_summary))
             res$neighbourhood_summary$n_cells_in_nhoods[1] else NA_integer_,
-          error = function(e) NA_integer_)
+          error = function(e) { ts_log_swallow("report_collector.rank_value", e); NA_integer_ })
       ))
       out$extras$DA_table <- res$DA_table
       out$extras$neighbourhood_summary <- res$neighbourhood_summary
@@ -391,17 +391,17 @@
       out$identity_ok <- tryCatch({
         s <- sccoda_result_is_stale(res, sc_obj)
         if (is.na(s)) NA else !s
-      }, error = function(e) NA)
+      }, error = function(e) { ts_log_swallow("report_collector.rank_value", e); NA })
       diag <- res$convergence_diagnostics %||% list()
       out$summary <- .report_kv_df(c(
         statut = as.character(res$status %||% NA_character_),
         identite_reference = as.character(res$reference_identity %||% NA_character_),
         effets_credibles = paste(res$credible_effects %||% character(0), collapse = "; "),
-        ess_min = tryCatch(as.character(diag$ess_min), error = function(e) NA_character_),
-        rhat_max = tryCatch(as.character(diag$rhat_max), error = function(e) NA_character_),
+        ess_min = tryCatch(as.character(diag$ess_min), error = function(e) { ts_log_swallow("report_collector.rank_value", e); NA_character_ }),
+        rhat_max = tryCatch(as.character(diag$rhat_max), error = function(e) { ts_log_swallow("report_collector.rank_value", e); NA_character_ }),
         n_lignes_effets = tryCatch(
           if (is.data.frame(res$effect_table)) nrow(res$effect_table) else NA_integer_,
-          error = function(e) NA_integer_)
+          error = function(e) { ts_log_swallow("report_collector.rank_value", e); NA_integer_ })
       ))
       out$extras$effect_table <- res$effect_table
       out$extras$composition_table <- res$composition_table
@@ -417,7 +417,7 @@
       # contrats") — AUCUNE methode DA reexecutee.
       sm <- tryCatch(
         build_da_cross_method_summary(milo, sccoda),
-        error = function(e) NULL)
+        error = function(e) { ts_log_swallow("report_collector.rank_value", e); NULL })
       if (!is.null(sm)) {
         out$present <- TRUE
         out$analysis_ids <- unique(c(
@@ -435,12 +435,12 @@
         out$summary <- .report_kv_df(c(
           n_identites_comparees = tryCatch(
             if (is.data.frame(conc)) nrow(conc) else NA_integer_,
-            error = function(e) NA_integer_),
+            error = function(e) { ts_log_swallow("report_collector.rank_value", e); NA_integer_ }),
           n_desaccords = tryCatch(
             if (is.data.frame(dis)) nrow(dis) else NA_integer_,
-            error = function(e) NA_integer_),
+            error = function(e) { ts_log_swallow("report_collector.rank_value", e); NA_integer_ }),
           entierement_comparables = tryCatch(
-            as.character(cmp$fully_comparable), error = function(e) NA_character_),
+            as.character(cmp$fully_comparable), error = function(e) { ts_log_swallow("report_collector.rank_value", e); NA_character_ }),
           reserves = paste(cmp$caveats %||% character(0), collapse = " | ")
         ))
         out$extras$method_summary <- sm
@@ -466,13 +466,13 @@
         "Résultat global auto-daté (ran_at) — comparaison CROSS-datasets,",
         "non liée à l'objet SC courant : pas d'empreinte v2 applicable.")
       out$summary <- .report_kv_df(c(
-        n_datasets = tryCatch(length(res$datasets), error = function(e) NA_integer_),
-        datasets = tryCatch(paste(res$datasets, collapse = "; "), error = function(e) NA_character_),
-        contraste = tryCatch(as.character(res$contrast), error = function(e) NA_character_),
-        seuil_lfc = tryCatch(as.numeric(res$lfc_thresh), error = function(e) NA_real_),
-        seuil_padj = tryCatch(as.numeric(res$padj_thresh), error = function(e) NA_real_),
+        n_datasets = tryCatch(length(res$datasets), error = function(e) { ts_log_swallow("report_collector.rank_value", e); NA_integer_ }),
+        datasets = tryCatch(paste(res$datasets, collapse = "; "), error = function(e) { ts_log_swallow("report_collector.rank_value", e); NA_character_ }),
+        contraste = tryCatch(as.character(res$contrast), error = function(e) { ts_log_swallow("report_collector.rank_value", e); NA_character_ }),
+        seuil_lfc = tryCatch(as.numeric(res$lfc_thresh), error = function(e) { ts_log_swallow("report_collector.rank_value", e); NA_real_ }),
+        seuil_padj = tryCatch(as.numeric(res$padj_thresh), error = function(e) { ts_log_swallow("report_collector.rank_value", e); NA_real_ }),
         date_calcul = tryCatch(format(res$ran_at, "%Y-%m-%d %H:%M:%S"),
-                               error = function(e) NA_character_)
+                               error = function(e) { ts_log_swallow("report_collector.rank_value", e); NA_character_ })
       ))
       out$extras$per_dataset <- res$per_dataset
       out$extras$concordance <- res$concordance
@@ -502,7 +502,7 @@
 collect_consolidated_report_input <- function(sc_obj, shared_rv = NULL,
                                               options = list(),
                                               global_data = NULL) {
-  if (is.null(sc_obj) || is.null(tryCatch(dim(sc_obj), error = function(e) NULL))) {
+  if (is.null(sc_obj) || is.null(tryCatch(dim(sc_obj), error = function(e) { ts_log_swallow("report_collector.collect_consolidated_report_input", e); NULL }))) {
     .rep_stop(paste0(
       "collect_consolidated_report_input() : aucun objet Single-Cell charge — ",
       "le rapport consolide compile un projet existant, il ne fabrique pas de ",
@@ -520,23 +520,23 @@ collect_consolidated_report_input <- function(sc_obj, shared_rv = NULL,
 
   # ── Jeu de donnees ──────────────────────────────────────────────────────────
   is_seurat <- inherits(sc_obj, "Seurat")
-  meta <- tryCatch(sc_obj@meta.data, error = function(e) NULL)
+  meta <- tryCatch(sc_obj@meta.data, error = function(e) { ts_log_swallow("report_collector.collect_consolidated_report_input", e); NULL })
   ds_idents <- tryCatch({
     if (is_seurat) as.data.frame(table(SeuratObject::Idents(sc_obj),
                                        dnn = c("identite", "n_cellules")))
     else NULL
-  }, error = function(e) NULL)
-  fingerprint <- tryCatch(build_object_identity_v2(sc_obj), error = function(e) NULL)
+  }, error = function(e) { ts_log_swallow("report_collector.collect_consolidated_report_input", e); NULL })
+  fingerprint <- tryCatch(build_object_identity_v2(sc_obj), error = function(e) { ts_log_swallow("report_collector.collect_consolidated_report_input", e); NULL })
   if (is.null(fingerprint)) {
     warns <- c(warns, "Empreinte d'objet indisponible — la vérification d'identité des résultats est dégradée.")
   }
   dataset <- list(
-    n_cells = tryCatch(as.integer(ncol(sc_obj)), error = function(e) NA_integer_),
-    n_genes = tryCatch(as.integer(nrow(sc_obj)), error = function(e) NA_integer_),
+    n_cells = tryCatch(as.integer(ncol(sc_obj)), error = function(e) { ts_log_swallow("report_collector.collect_consolidated_report_input", e); NA_integer_ }),
+    n_genes = tryCatch(as.integer(nrow(sc_obj)), error = function(e) { ts_log_swallow("report_collector.collect_consolidated_report_input", e); NA_integer_ }),
     is_seurat = is_seurat,
     assays = tryCatch(as.character(names(sc_obj@assays)), error = function(e) character(0)),
     default_assay = tryCatch(as.character(SeuratObject::DefaultAssay(sc_obj)),
-                              error = function(e) NA_character_),
+                              error = function(e) { ts_log_swallow("report_collector.collect_consolidated_report_input", e); NA_character_ }),
     reductions = tryCatch(as.character(names(sc_obj@reductions)), error = function(e) character(0)),
     identities = ds_idents,
     metadata_columns = if (!is.null(meta)) colnames(meta) else character(0),
@@ -547,11 +547,11 @@ collect_consolidated_report_input <- function(sc_obj, shared_rv = NULL,
   # ── Pipeline (snapshot deja produit — aucune relance) ─────────────────────
   qc_snapshot <- state_get(shared_rv, "qc_snapshot")
   vfeatures <- tryCatch(length(SeuratObject::VariableFeatures(sc_obj)),
-                        error = function(e) NA_integer_)
+                        error = function(e) { ts_log_swallow("report_collector.collect_consolidated_report_input", e); NA_integer_ })
   n_clusters <- tryCatch(
     if (!is.null(meta) && "seurat_clusters" %in% colnames(meta))
       length(levels(factor(meta$seurat_clusters))) else NA_integer_,
-    error = function(e) NA_integer_)
+    error = function(e) { ts_log_swallow("report_collector.collect_consolidated_report_input", e); NA_integer_ })
   pipeline <- list(
     qc_present = !is.null(qc_snapshot),
     qc_snapshot = qc_snapshot,
@@ -587,7 +587,7 @@ collect_consolidated_report_input <- function(sc_obj, shared_rv = NULL,
   provenance_df <- provenance_to_dataframe(shared_rv)
 
   # ── Script R reproductible (capture a la collection — bundle) ─────────────
-  r_script_text <- tryCatch(sc_r_script_text(sc_obj, shared_rv), error = function(e) NULL)
+  r_script_text <- tryCatch(sc_r_script_text(sc_obj, shared_rv), error = function(e) { ts_log_swallow("report_collector.collect_consolidated_report_input", e); NULL })
   if (is.null(r_script_text)) {
     warns <- c(warns, "Script R reproductible indisponible pour cet objet (il ne figurera pas dans le bundle).")
   }
@@ -597,7 +597,7 @@ collect_consolidated_report_input <- function(sc_obj, shared_rv = NULL,
                 "BPCells", "shiny", "shiny.i18n", "ggplot2", "rmarkdown",
                 "reticulate", "mirai", "digest")
   pkgs <- vapply(pkg_keys, function(p) {
-    tryCatch(as.character(utils::packageVersion(p)), error = function(e) NA_character_)
+    tryCatch(as.character(utils::packageVersion(p)), error = function(e) { ts_log_swallow("report_collector.collect_consolidated_report_input", e); NA_character_ })
   }, character(1))
   pkgs <- pkgs[!is.na(pkgs)]
   session_info <- list(
@@ -612,7 +612,7 @@ collect_consolidated_report_input <- function(sc_obj, shared_rv = NULL,
 
   # ── Snapshot des constantes TS_* (consommees, jamais recalculees) ─────────
   cfg_vals <- vapply(.report_config_keys, function(k) {
-    v <- tryCatch(get(k, envir = globalenv()), error = function(e) NULL)
+    v <- tryCatch(get(k, envir = globalenv()), error = function(e) { ts_log_swallow("report_collector.collect_consolidated_report_input", e); NULL })
     if (is.null(v)) "<absente>" else paste(format(v), collapse = ", ")
   }, character(1))
   config_snapshot <- data.frame(constante = names(cfg_vals), valeur = unname(cfg_vals),

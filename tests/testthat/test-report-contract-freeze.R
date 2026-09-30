@@ -11,6 +11,7 @@ CONTRACT_REPORT <- file.path("docs", "contracts", "CONSOLIDATED_REPORT_CONTRACT.
 # Le contrat est fige : on verifie la surface REELLEMENT chargee (pas
 # seulement le texte source).
 source_project_file("R/reports/report_collector.R")
+source_project_file("R/core/error_log.R")   # M-1 : journal des avalées
 source_project_file("R/reports/report_validator.R")
 source_project_file("R/reports/report_render.R")
 source_project_file("R/reports/report_bundle.R")
@@ -87,7 +88,10 @@ test_that("the global domain bulk_multi_comparison reads global_data additively"
   # Catégorie "global" figée : ni contrat (provenance), ni legacy SC.
   expect_setequal(.report_global_domains, "bulk_multi_comparison")
   src_col <- .rep_report_src("R/reports/report_collector.R")
-  expect_match(src_col, "global_data$bulk_multi_comparison", fixed = TRUE)
+  # M-3/C17 (2026-09-30) : l'accès direct `global_data$bulk_multi_comparison`
+  # passe désormais par l'accesseur — l'INTENTION du gel (lecture additive de
+  # l'état, jamais de ré-exécution) est inchangée.
+  expect_match(src_col, 'state_get(global_data, "bulk_multi_comparison")', fixed = TRUE)
   expect_match(src_col, "global_data = NULL", fixed = TRUE)
   # Le module 9b transmet global_data au collecteur.
   src_mod <- .rep_report_src("modules/sc/mod_sc_report_consolidated.R")

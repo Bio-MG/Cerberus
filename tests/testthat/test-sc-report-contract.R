@@ -15,6 +15,7 @@ source_project_file("R/sc/sc_abundance_design.R")    # design DA (finalizer)
 source_project_file("R/sc/sc_abundance_milo.R")      # staleness milo
 source_project_file("R/sc/sc_abundance_sccoda.R")    # staleness scCODA
 source_project_file("R/reports/report_collector.R")
+source_project_file("R/core/error_log.R")   # M-1 : journal des avalées
 source_project_file("R/reports/report_validator.R")
 source_project_file("R/reports/report_render.R")
 source_project_file("R/reports/report_bundle.R")
