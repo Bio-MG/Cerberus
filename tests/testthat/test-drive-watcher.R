@@ -66,6 +66,13 @@
 # The three functions under test that need no Shiny at all.
 .drv_source <- function() {
   source_project_file("R/core/drive_allowlist.R")
+  # R/core/drive_watcher.R calls ts_log_swallow() in six error handlers
+  # (ts_drive_read_json, heartbeat_age, the bulk summary, ...). Since M-1
+  # phase 2 those handlers LOG instead of throwing, so the logger must exist in
+  # this environment or a deliberately-provoked read error becomes
+  # "could not find function ts_log_swallow" instead of the NULL being asserted.
+  # app.R sources it (L56); a test that sources only drive_watcher.R must too.
+  source_project_file("R/core/error_log.R")
   source_project_file("R/core/drive_watcher.R")
 }
 
