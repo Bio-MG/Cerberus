@@ -30,6 +30,35 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > ⚠️ Les chiffres de garde de ces entrées sont ceux **consignés** dans `STATUS.md`
 > au moment du jalon ; en cas d'écart, **`STATUS.md` §0 et §6 font foi**.
 
+## [V1.x — Ré-application Phase F : les bits survivants de la sauvegarde WIP] — 2026-10-01
+
+Fusion tripartite (base `f96611d`, arbre mergé, backup Phase F SHA256-vérifié)
+re-jouée avec normalisation LF (les conflits « fichier entier » de la passe 1
+étaient un artefact de fins de ligne, pas du contenu). Verdict confirmé : les
+canaux drive de l'arbre mergé (Phase E, `docs/mcp_propagation.md`) gagnent pour
+`bulk_network` et `sc_pathways` — l'implémentation parallèle lowercase du WIP
+reste retirée. Détail : journal archivé §2dw ; commit `2f2106b`.
+
+### Ajouté
+- `modules/import/mod_import_bulk.R` : sonde d'état BORNÉE
+  (`module`/`has_data`/`n_genes`/`n_samples`/`import_mode`) publiée par la
+  couture `state =` existante — un import `done` n'est plus indiscernable d'un
+  import qui n'a rien chargé (même défaut §2dn que `bulk_pathways`).
+- Tests drive au niveau module : `test-mod-bulk-network-drive.R` et
+  `test-mod-sc-pathways-drive.R` réécrits contre l'API Phase E (ensembles
+  figés UPPER_CASE, seuils DE de session via `%||%`, plafond
+  `head(md$gene, 100)` codé en dur), `test-mod-import-bulk-drive.R` pilotant
+  le VRAI importeur sur un VRAI corpus (fermeture extraite par AST).
+
+### Corrigé
+- `modules/spatial/mod_spatial_pipeline.R` : un refus de
+  `spatial_hotspot_store()` échoue l'étape 8/9 avec message (comme toute
+  défaillance d'étape) au lieu d'une erreur non interceptée dans le worker.
+
+### Validation
+- Cibles : 11 fichiers, failed=0 passed=2132 error=0. Gardes à la référence :
+  conventions 0 err./59 avert., duplication 0/3, herméticité 0/1.
+
 ## [V1.x — M-1 phase 1 : les erreurs avalées sont journalisées] — 2026-09-30
 
 Audit externe J-4 : ≈ 586 des 776 handlers d'erreur ne relancent ni ne
