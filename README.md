@@ -7,7 +7,7 @@ Une plateforme R/Shiny modulaire, **local-first**, dédiée à l’exploration e
 
 **Langues :** [Français](#français) · [English](#english)
 
-**Statut :** `V1.1.0-rc` — plateforme transcriptomique locale couvrant le single-cell RNA-seq, le bulk RNA-seq et la transcriptomique spatiale, avec des analyses avancées disponibles selon les dépendances installées (vitesse ARN, communication cellule-cellule importée, abondance différentielle Milo/scCODA, déconvolution spatiale, rapports reproductibles). La V1.1 est une vague UX/UI (pipeline auto 1 clic mutualisé, regroupement des panneaux, conteneur Spatial) — **zéro changement de comportement scientifique**.
+**Statut :** `V1.x` (après la vague `V1.1.0-rc`) — plateforme transcriptomique locale couvrant le single-cell RNA-seq, le bulk RNA-seq et la transcriptomique spatiale, avec des analyses avancées disponibles selon les dépendances installées : vitesse ARN, communication cellule-cellule (import CellChat/CellPhoneDB/LIANA **ou moteurs natifs exécutés dans l'application**), abondance différentielle Milo/scCODA, déconvolution spatiale, vague Bulk V2 (scores de voies, WGCNA, survie, clustering de profils, dose-réponse, réseau PCSF), gestion multi-jeux et rapports reproductibles. La V1.1 était une vague UX/UI (pipeline auto 1 clic mutualisé, regroupement des panneaux, conteneur Spatial) — **zéro changement de comportement scientifique** ; les jalons V1.x sont des ajouts sous contrats gelés.
 > Certaines analyses avancées reposent sur des dépendances optionnelles, des paquets GitHub ou un environnement Python dédié. Consultez la section Installation avant de lancer un workflow.
 
 ---
@@ -33,7 +33,7 @@ L’application privilégie :
 TranscriptoShiny fournit des environnements modulaires dédiés à trois domaines transcriptomiques principaux :
 
 1. **Single-cell RNA-seq** : de l'import de données 10x ou de matrices jusqu'au clustering, à l'annotation, à la recherche de marqueurs et à l'analyse de voies — plus vitesse ARN, communication cellulaire, abondance différentielle (Milo/scCODA) et rapport consolidé.
-2. **Bulk RNA-seq** : des matrices de comptages bruts et métadonnées jusqu’à l’expression différentielle, à la comparaison multi-contrastes et à l’enrichissement fonctionnel.
+2. **Bulk RNA-seq** : des matrices de comptages bruts et métadonnées jusqu’à l’expression différentielle, à la comparaison multi-contrastes et à l’enrichissement fonctionnel — plus scores de voies, WGCNA, survie, clustering de profils, dose-réponse, réseau PCSF et gestion multi-jeux.
 3. **Transcriptomique spatiale** : des imports Visium/Xenium/CosMx/Slide-seq jusqu’au clustering spatial, à la déconvolution, à l’intégration multi-échantillons et à l’analyse de niches.
 
 ## Navigation dans l'application
@@ -41,8 +41,8 @@ TranscriptoShiny fournit des environnements modulaires dédiés à trois domaine
 | Onglet / zone | Rôle |
 | :--- | :--- |
 | Import Données | Charger des fichiers Single-Cell, Bulk RNA ou Spatial, ou depuis la **Source publique (GEO)** (dernière entrée du menu). Rappel « mapping des IDs » + bouton natif « Aller au mapping des IDs » dans les imports Single-Cell/Bulk/GEO. |
-| Analyse Single-Cell | Cinq sections parent : **Préparation** (mapping, pipelines), **Analyse** (annotation, visualisation, marqueurs, corrélation, voies), **Dynamique** (trajectoire, pseudobulk, vitesse ARN), **Abondance cellulaire** (onglets internes : A. design — B. Milo/scCODA — C. vues croisées), **Livrables** (rapports/exports). |
-| Analyse Bulk RNA | Étapes numérotées 1→4 : pipeline QC & filtrage (avec vue compacte « Résumé Pipeline Bulk »), mapping d'identifiants, expression différentielle & voies, puis « 4. Livrables — Rapport & Script R ». |
+| Analyse Single-Cell | Cinq sections parent : **Préparation** (mapping, pipeline auto 1 clic, pipeline guidé, datasets SC enregistrés — double jeu), **Analyse** (annotation, rareté par population, visualisation, marqueurs, corrélation, voies), **Dynamique** (trajectoire, vitesse ARN, communication cellule-cellule), **Abondance cellulaire** (pseudobulk ; onglets internes : A. design — B. Milo/scCODA — C. vues croisées), **Livrables** (rapports/exports). |
+| Analyse Bulk RNA | Accordéon de bout en bout : **Pipeline auto (1 clic)**, 0. Mapping IDs, 1. Pipeline Bulk — QC & filtrage (onglets PCA / QC Échantillons / QC Batch ComBat-seq), 2. Design & Contrastes, 3. Pathway Enrichment, panneaux avancés 3b–3g (signatures cellulaires, WGCNA, survie, clustering de profils, dose-réponse, réseau PCSF), « 4. Livrables — Rapport & Script R », puis les panneaux **Multi-jeux** (Datasets enregistrés, Fusion de jeux). |
 | Analyse Spatiale | Conteneur à sidebar : étapes numérotées en accordéon à gauche (une étape ouverte à la fois), résultats à droite ; dataset et statut des démons toujours visibles dans la sidebar. Pipeline spatial, QC, clustering, déconvolution, visualisation, intégration multi-échantillons, niches, rapport/export. |
 | Barre latérale système | Changement de langue, usage mémoire, nettoyage RAM, limites mémoire/upload, état des objets chargés, sauvegarde/chargement de session, aide intégrée. |
 
@@ -68,11 +68,13 @@ Le workflow Single-Cell est nativement multi-échantillons (ex: Contrôle vs Tra
 - **Import groupé** : plusieurs dossiers 10x, `.rds` ou `.h5` peuvent être importés dans une même session (Options A et B de l'import Single-Cell). Chaque import devient un échantillon distinct (`orig.ident`) ; dès que ≥ 2 échantillons sont chargés, un aperçu récapitulatif (échantillon, cellules, gènes, condition/batch si détectables) confirme visuellement la reconnaissance des entités.
 - **Correction de batch** : Harmony est appliquée automatiquement sur l'identité d'échantillon (`orig.ident`) dès que ≥ 2 échantillons sont détectés — choisir « Harmony » comme méthode de réduction du pipeline.
 - **Compatibilité aval** : pseudobulk, Milo et scCODA exploitent l'identité d'échantillon pour éviter la pseudo-réplication (l'unité de réplication est l'échantillon, jamais la cellule — voir la validation du plan expérimental dans « Abondance cellulaire »).
+- **Datasets SC enregistrés (double jeu)** : deux jeux single-cell nommés peuvent coexister dans la même session — analyses séparées, paramètres partagés (mode 1) ou distincts (mode 2) — pour exécuter deux traitements en parallèle sans ré-importer.
 
 - **Scalabilité consciente de la mémoire** : workflows de sketch Seurat v5 (`SketchData` avec LeverageScore, `ProjectData`), gestion compatible BPCells, mise à l’échelle ciblée des variables et sous-échantillonnage stratifié pour les explorations coûteuses.
 - **Annotation et exploration** : annotation automatique des types cellulaires via SingleR (références celldex), recherche de marqueurs (`FindAllMarkers`), corrélation génique, analyse de voies et visualisations variées (embeddings, FeaturePlots, violons, DotPlots, heatmaps, vues ridge/empilées).
+- **Rareté par population (panneau 2b)** : lecture descriptive, mono-condition, de la rareté des populations annotées (parts et effectifs par échantillon) — aucune comparaison inter-conditions, qui passerait par la porte « Abondance différentielle ».
 - **Vitesse ARN** : import strict de données de vélocité pré-préparées (matrices spliced/unspliced et résultats/vecteurs compatibles) alignées sur l'objet Seurat. L'application effectue des contrôles de cohérence multi-états, fournit des visualisations phase-portrait et vectorielles, et exporte PNG/PDF/CSV. Elle visualise des résultats validés sans recalculer silencieusement un modèle de vélocité.
-- **Communication cellule-cellule (panneau 8b)** : import-only de résultats externes (table/objet CellChat, means+p-values CellPhoneDB). Table canonique à 12 champs, appariement exact des identités, QC, vues exploratoires (dotplot, heatmap de pathways, réseau circulaire), centralité descriptive, filtres avec provenance. Pas de génération de novo depuis les comptages bruts (reste un item de parking futur).
+- **Communication cellule-cellule (panneau 8b)** : import de résultats externes (table/objet CellChat, means+p-values CellPhoneDB, rangs agrégés LIANA) **ou calcul natif dans l'application** via les moteurs intégrés (moteur CellChat épinglé ; moteur LIANA en rangs agrégés — aucun score reconstitué). Table canonique à 12 champs, appariement exact des identités, QC, vues exploratoires (dotplot, heatmap de pathways, réseau circulaire), centralité descriptive, filtres avec provenance. Vues de contexte **consommatrices pures** (aucun recalcul) : contexte spatial, contexte trajectoire, contexte vélocité, perturbation in silico.
 - **Abondance différentielle (panneaux 8c–8f)** :
 > Prérequis : les analyses d'abondance différentielle exigent des métadonnées identifiant l'unité de réplication biologique (ex. sample_id, donor_id, patient_id) et une condition expérimentale. Un cluster de cellules seul n'est pas un réplica biologique.
   - Validation du design expérimental qui **bloque la pseudo-réplication** (les cellules ne sont jamais traitées comme des réplicas biologiques ; planchers sur réplicas par condition, cellules par échantillon, etc.).
@@ -95,6 +97,15 @@ Le workflow Single-Cell est nativement multi-échantillons (ex: Contrôle vs Tra
 > DESeq2, edgeR et limma-voom sont fournis comme moteurs distincts. Les comparer aide à explorer la robustesse, mais les résultats doivent être interprétés avec un design, des filtres, des facteurs de normalisation et des contrastes clairement documentés.
 - **Garde-fous de design** : contrôles proactifs des covariables confondues, des valeurs manquantes invalidant le modèle et des covariables ne présentant qu’un seul niveau observé.
 - **Gestion des contrastes** : contrastes standards, définis par l’utilisateur et pairwise, avec comparaison multi-méthodes et exploration par consensus de rangs.
+- **Correction de batch** : ComBat-seq optionnel (onglet « QC Batch » de l'étape 1) sur le batch déclaré.
+- **Scores de voies par échantillon (3b. Signatures cellulaires)** : GSVA, ssGSEA, PLAGE et z-score sur jeux de gènes Hallmark, PROGENy, DoRothEA ou RDS local — scores relatifs, interprétés intra-échantillon.
+- **Réseau de co-expression WGCNA (3c)** : mode « safe » sur les échantillons déclarés, avec QC de batch dédié.
+- **Survie & association clinique (3d)** : Kaplan-Meier et Cox appariés aux métadonnées cliniques disponibles.
+- **Clustering de profils (3e)** : kmeans sur z-scores par gène, k déclaré entre 2 et 12, seed enregistrée.
+- **Dose-réponse / time-course (3f)** : ajustement `drm` par gène (paquet `drc`), EC50, doses strictement positives.
+- **Réseau PCSF (3g)** : interactome dérivé des voies Reactome par une heuristique Prize-Collecting Steiner Forest — un relais est un co-membre de voie prédit, **pas** une interaction PPI mesurée.
+- **Réseau d'enrichissement** : vue réseau interactive (igraph/plotly) des voies enrichies, disponible dans les modules bulk **et** single-cell.
+- **Multi-jeux** : enregistrement de jeux bulk nommés (import, pseudobulk, fusion), comparaison multi-jeux (volcanos à échelle partagée, recouvrement de DEGs, concordance de direction) et fusion de jeux (intersection exacte des gènes, ComBat-seq optionnel avec batch = jeu d'origine).
 - **Visualisation et enrichissement** : volcano plots, MA plots, heatmaps, comparaisons Venn/UpSet multi-contrastes et analyse de voies ORA/GSEA.
 - *Note scientifique* : les résultats d’analyse de voies doivent être interprétés au regard de l’univers de fond choisi et du mapping des identifiants. Le consensus de rangs multi-méthodes est une aide exploratoire, pas une méta-analyse formelle.
 
@@ -122,19 +133,31 @@ TranscriptoShiny/
 ├── config/          # defaults.R, thresholds.R (single source of truth)
 ├── i18n/            # translation.json (fr/en)
 ├── R/
-│   ├── core/        # state, validation, provenance, jobs, caching, io/pathway helpers
-│   ├── sc/          # velocity, communication, abundance (Milo/scCODA/design/cross), trajectory, pipeline, plotting, bpcells, export
-│   ├── bulk/        # import engine, report engine, helpers
+│   ├── core/        # state, validation, provenance, jobs, caching, io/pathway helpers, error_state, rdata_io, drive (watcher/allowlist)
+│   ├── sc/          # velocity, communication (import + native engines + contexts), abundance (Milo/scCODA/design/cross), rarity, trajectory, pipeline, plotting, bpcells, export
+│   ├── bulk/        # import/report engines, helpers, batch (ComBat-seq), batch_qc, gsva/signatures, gene_sets, wgcna, survival, pattern, dose_response, network (PCSF), multi (+compare), merge, provenance
 │   ├── spatial/     # async (mirai), io, deconv prep/tasks, multi, niche, plotting, report, reference, stats, export
 │   ├── reports/     # collector, validator, render, bundle
-│   └── plotting/    # shared palettes
-├── modules/         # import/, sc/, bulk/, bulk_de/, spatial/ (+ deconv sub-modules)
+│   └── plotting/    # themes, palettes, exports, heatmap, datatable
+├── modules/         # import/ (sc, bulk, spatial, geo, rdata picker), sc/, bulk/, bulk_de/, spatial/ (+ deconv sub-modules)
 ├── reports/         # Rmd templates (sc, bulk, spatial + child)
-├── scripts/         # renv bootstrap and development/benchmark scripts
+├── scripts/         # renv bootstrap, MCP server, release gates, development/benchmark scripts
 └── renv/            # lock + activate
 ```
 
 L'état inter-modules passe par le `reactiveValues` partagé (`global_data`) ; les calculs lourds spatiaux/async passent par le pool de démons `mirai`. Les modules lisent leurs paramètres dans `config/` et les seuils déclarés — aucune valeur magique en dur.
+
+## Serveur MCP local et pilotage par agent (optionnel)
+
+Pour le développement et l'audit, TranscriptoShiny embarque un **serveur MCP local** (Model Context Protocol) sur stdio — `scripts/mcp_server.R` — qui permet à un agent IA (ZCode, Claude Desktop, VS Code…) d'observer et, de façon strictement contrôlée, de piloter une session **vivante** de l'application :
+
+- **Transport** : JSON-RPC 2.0 natif sur stdio (`jsonlite` uniquement), lancé depuis la racine du projet avec `Rscript --no-init-file scripts/mcp_server.R` — le drapeau est obligatoire (le `.Rprofile` du projet écrirait sinon sur stdout et corromprait le transport). Diagnostic : `Rscript --no-init-file scripts/mcp_server.R --check`.
+- **8 outils** : lecture seule (`transcripto_drive_status`, `transcripto_drive_read_result`), armement contrôlé (`transcripto_drive_set_armed`), snapshot passif (`transcripto_drive_snapshot`), écritures contrôlées (`transcripto_drive_set_inputs`, `transcripto_drive_run`, `transcripto_drive_wait`, `transcripto_drive_export`).
+- **Toute écriture passe par un dépôt de fichiers `tools/_drive/*.json`** (file-drop) sous une allowlist gelée de modules, boutons et entrées — le serveur ne démarre jamais l'application et n'exécute jamais d'analyse lui-même.
+- **Deux modes de visibilité, un seul protocole** : `headless` ou `visible` (vrai onglet navigateur) — seul le client change, le contrat IPC reste identique.
+- Gabarits clients dans `mcp.examples/` (formats vérifiés pour les lanceurs actifs) ; plan et documentation détaillée dans `docs/`.
+
+> Le pilotage par agent est un outil de développement/validation, local-first : il ne contourne aucune validation de l'application et n'envoie aucune donnée hors de la machine.
 
 ## Installation
 
@@ -190,7 +213,7 @@ BiocManager::install(c("Seurat", "SeuratObject", "SingleR", "celldex",
 | scCODA | Environnement Python + dépendances scCODA | scCODA indisponible (erreur guidée) |
 | Vues spatiales WebGL | leafgl | Rendu de grands nuages de points dégradé |
 
-*Note : les workflows spatiaux peuvent exiger des packages supplémentaires tels que `BPCells`, `mirai`, `RANN` et `spacexr`. scCODA requiert un environnement **Python 3.13** dédié (`python_env_sccoda/` ou variable `TS_SCCODA_PYTHON`) — sans lui, une erreur classée avec guidance est levée, sans repli silencieux. Le PDF par domaine requiert TinyTeX ; le rapport consolidé 4F génère un HTML autonome sans pandoc.*
+*Note : les workflows spatiaux peuvent exiger des packages supplémentaires tels que `BPCells`, `mirai`, `RANN` et `spacexr`. scCODA requiert un environnement **Python 3.13** dédié (`python_env_sccoda/` ou variable `TS_SCCODA_PYTHON`) — sans lui, une erreur classée avec guidance est levée, sans repli silencieux. CellChat (épinglé), LIANA, `drc`, `GSVA` et `WGCNA` sont inclus dans `renv.lock` — aucune installation séparée ; en leur absence (installation manuelle), les moteurs de communication natifs restent indisponibles avec une erreur guidée, l'import de résultats externes restant disponible. Le PDF par domaine requiert TinyTeX ; le rapport consolidé 4F génère un HTML autonome sans pandoc.*
 
 ### 3. Lancer l’application
 
@@ -308,7 +331,7 @@ La barre latérale permet de sauvegarder/charger une session `.rds`. Les objets 
 
 TranscriptoShiny favorise la recherche reproductible grâce à l’export de rapports HTML/PDF paramétrés et de scripts R spécifiques à chaque domaine, qui récapitulent les étapes analytiques effectuées dans l’interface.
 
-Le **rapport consolidé (4F)** va plus loin : les rapports sont des **compilateurs d'état + provenance**, jamais des ré-exécuteurs d'analyses. Le compilateur agrège les résultats des domaines **sans ré-exécution**, produit un HTML autonome et un bundle d'export (manifeste, tables de résultats fidèles, script R reproductible, sessionInfo). Aucune donnée brute n'est embarquée par défaut. La provenance est obligatoire pour toute section du rapport consolidé — le validateur rejette la provenance incomplète. Le contrat consolidé couvre **11 domaines de résultats** (dont pseudobulk et corrélation génique) ; le rapport de domaine Single-Cell restitue en option les tables canoniques vitesse ARN, communication cellulaire et abondance différentielle (tables pures, aucun recalcul).
+Le **rapport consolidé (4F)** va plus loin : les rapports sont des **compilateurs d'état + provenance**, jamais des ré-exécuteurs d'analyses. Le compilateur agrège les résultats des domaines **sans ré-exécution**, produit un HTML autonome et un bundle d'export (manifeste, tables de résultats fidèles, script R reproductible, sessionInfo). Aucune donnée brute n'est embarquée par défaut. La provenance est obligatoire pour toute section du rapport consolidé — le validateur rejette la provenance incomplète. Le contrat consolidé couvre **12 domaines de résultats** (dont pseudobulk, corrélation génique et comparaison multi-jeux bulk) ; le rapport de domaine Single-Cell restitue en option les tables canoniques vitesse ARN, communication cellulaire et abondance différentielle (tables pures, aucun recalcul).
 
 **Environnement gelé :** `renv` est la voie supportée pour figer l'environnement (voir `RENV_SETUP.md` + `scripts/renv_bootstrap.R`). Les paquets GitHub-only (BPCells, spacexr, schard, …) s'installent via `renv::install()`.
 
@@ -339,9 +362,10 @@ La reproductibilité et la validité scientifique dépendent également :
 
 ## Qualité logicielle
 
-- **Tests** : suite `testthat` + `shinytest2` e2e (référence V1.1.0-rc : **1873 PASS / 0 FAIL / 0 ERROR**, e2e 13 PASS, ~14 min ; inclut un test fonctionnel du pipeline auto SC sur fixture minima).
+- **Tests** : suite `testthat` + `shinytest2` e2e (référence mesurée 2026-09-29 : **10 562 PASS / 0 FAIL / 0 ERROR / 1 SKIP** sur **155 fichiers**, ~2 h via `tools/run_full_suite.R` ; l'unique SKIP est le smoke GEO live, réseau). Pendant le développement : tests ciblés du périmètre modifié + gardes ; suite complète en fin de version.
 - **Garde anti-duplication** : `tools/check_duplication.R` (0 erreur).
-- **Contrats figés** : chaque contrat de résultat est couvert par un test de gel — toute modification = code + test + doc simultanément.
+- **Garde de conventions** : `tools/check_conventions.R` (règles C1–C16, 0 erreur obligatoire).
+- **Contrats figés** : une trentaine de contrats de résultats (`docs/contracts/`), chacun couvert par un test de gel — toute modification = code + test + doc simultanément.
 - **Gates release** : `scripts/verify_release_gates.R` (lock valide, i18n sans doublon, aucun chemin local dans les fichiers suivis).
 - **Docs release** : `docs/release/` (matrice de durcissement 14 catégories, limitations connues, compatibilité, baseline de performance).
 
@@ -352,9 +376,13 @@ La reproductibilité et la validité scientifique dépendent également :
 - [x] Option Slingshot pour l'inférence de lignées (quand le paquet est installé).
 - [x] Gates de release, suite de tests, renv, packaging V1.0.0.
 - [x] Refonte UX/UI V1.1 : pipeline auto 1 clic mutualisé (panneau 0 dans les trois domaines), SC en 5 sections parent avec DA nidifiée, conteneur Spatial (accordéon d'étapes + résultats à droite), étapes Bulk numérotées, saut « Aller au mapping des IDs », GEO « Source publique (GEO) » — zéro changement de comportement scientifique.
+- [x] Vague Bulk V2 : ComBat-seq, scores de voies & signatures cellulaires (GSVA/ssGSEA/PLAGE/z-score), WGCNA, survie KM/Cox, clustering de profils, dose-réponse, réseau PCSF, réseau d'enrichissement interactif.
+- [x] Multi-jeux : enregistrement, comparaison et fusion de jeux bulk, pont pseudobulk, double jeu SC.
+- [x] Communication cellule-cellule : moteurs natifs CellChat & LIANA (calcul dans l'app) + vues de contexte (spatial, trajectoire, vélocité, perturbation in silico).
+- [x] Rareté par population (analyse descriptive mono-condition).
+- [x] Serveur MCP local (8 outils) + protocole drive de pilotage contrôlé d'une session vivante par un agent.
 - [ ] Choix élargis d'intégration single-cell au-delà de Harmony.
 - [ ] Détection dédiée des doublets au sein du pipeline de QC.
-- [ ] Génération native de communication cellule-cellule à partir des données brutes (actuellement import-only).
 - [ ] Extension continue des workflows spatiaux et des analyses fondées sur des références.
 
 ## Contribuer
@@ -384,7 +412,7 @@ Ce projet est distribué sous licence MIT. Consultez le fichier `LICENSE` du dé
 
 # English
 
-**Status:** `V1.1.0-rc` — local transcriptomics platform covering single-cell RNA-seq, bulk RNA-seq, and spatial transcriptomics, with advanced analyses available depending on installed dependencies (RNA velocity, imported cell–cell communication, Milo/scCODA differential abundance, spatial deconvolution, reproducible reports). V1.1 is a UX/UI wave (mutualized 1-click auto pipeline, panel grouping, Spatial container) — **zero scientific behavior change**.
+**Status:** `V1.x` (after the `V1.1.0-rc` wave) — local transcriptomics platform covering single-cell RNA-seq, bulk RNA-seq, and spatial transcriptomics, with advanced analyses available depending on installed dependencies: RNA velocity, cell–cell communication (import CellChat/CellPhoneDB/LIANA **or native in-app engines**), Milo/scCODA differential abundance, spatial deconvolution, the Bulk V2 wave (pathway scores, WGCNA, survival, profile clustering, dose-response, PCSF network), multi-dataset management, and reproducible reports. V1.1 was a UX/UI wave (mutualized 1-click auto pipeline, panel grouping, Spatial container) — **zero scientific behavior change**; V1.x milestones are additive, contract-frozen features.
 > Some advanced analyses rely on optional dependencies, GitHub packages, or a dedicated Python environment. Check the Installation section before running a workflow.
 
 ## Why TranscriptoShiny?
@@ -404,7 +432,7 @@ The application prioritizes:
 
 TranscriptoShiny provides dedicated, modular environments for three primary transcriptomic domains:
 1. **Single-cell RNA-seq**: From raw 10x or matrix imports to clustering, annotation, marker discovery, and pathway analysis — plus RNA velocity, cell-cell communication, differential abundance (Milo/scCODA), and the consolidated report.
-2. **Bulk RNA-seq**: From raw count matrices and metadata to differential expression, multi-contrast comparison, and functional enrichment.
+2. **Bulk RNA-seq**: From raw count matrices and metadata to differential expression, multi-contrast comparison, and functional enrichment — plus per-sample pathway scores, WGCNA, survival, profile clustering, dose-response, PCSF network, and multi-dataset management.
 3. **Spatial transcriptomics**: From Visium/Xenium/CosMx/Slide-seq imports to spatial clustering, deconvolution, multi-sample integration, and niche analysis.
 
 ## Application navigation
@@ -412,8 +440,8 @@ TranscriptoShiny provides dedicated, modular environments for three primary tran
 | Tab / area | Role |
 | :--- | :--- |
 | Import Data | Load Single-Cell, Bulk RNA, or Spatial files, or from the **public source (GEO)** (last entry of the menu). ID-mapping reminder + native "Go to ID mapping" jump button in the Single-Cell/Bulk/GEO imports. |
-| Analyse Single-Cell | Five parent sections: **Preparation** (mapping, pipelines), **Analysis** (annotation, visualization, markers, correlation, pathways), **Dynamics** (trajectory, pseudobulk, RNA velocity), **Cell abundance** (inner tabs: A. design — B. Milo/scCODA — C. cross-views), **Deliverables** (reports/exports). |
-| Analyse Bulk RNA | Numbered steps 1→4: QC & filtering pipeline (with a compact "Bulk Pipeline Summary" view), ID mapping, differential expression & pathways, then "4. Deliverables — Report & R Script". |
+| Analyse Single-Cell | Five parent sections: **Preparation** (mapping, 1-click auto pipeline, guided pipeline, registered SC datasets — dual dataset), **Analysis** (annotation, population rarity, visualization, markers, correlation, pathways), **Dynamics** (trajectory, RNA velocity, cell–cell communication), **Cell abundance** (pseudobulk; inner tabs: A. design — B. Milo/scCODA — C. cross-views), **Deliverables** (reports/exports). |
+| Analyse Bulk RNA | Full-length accordion: **1-click auto pipeline**, 0. ID mapping, 1. Bulk pipeline — QC & filtering (PCA / sample QC / ComBat-seq batch QC tabs), 2. Design & contrasts, 3. Pathway enrichment, advanced panels 3b–3g (cell signatures, WGCNA, survival, profile clustering, dose-response, PCSF network), "4. Deliverables — Report & R Script", then the **Multi-dataset** panels (Registered datasets, Dataset merge). |
 | Analyse Spatial | Sidebar container: numbered accordion steps on the left (one step open at a time), results on the right; dataset and daemon status always visible in the sidebar. Spatial pipeline, QC, clustering, deconvolution, visualization, multi-sample integration, niches, report/export. |
 | System sidebar | Language switch, memory usage, RAM cleanup, memory/upload limits, loaded objects status, session save/load, built-in help. |
 
@@ -438,11 +466,13 @@ The Single-Cell workflow is natively multi-sample (e.g. Control vs Treatment, Da
 - **Batched import**: multiple 10x folders, `.rds`, or `.h5` files can be imported in one session (Options A and B of the Single-Cell import). Each import becomes a distinct sample (`orig.ident`); as soon as ≥ 2 samples are loaded, a summary overview (sample, cells, genes, condition/batch when detectable) provides immediate visual confirmation that samples are recognized as distinct entities.
 - **Batch correction**: Harmony is automatically applied on sample identity (`orig.ident`) as soon as ≥ 2 samples are detected — select "Harmony" as the pipeline reduction method.
 - **Downstream compatibility**: pseudobulk, Milo, and scCODA leverage sample identity to avoid pseudoreplication (the replication unit is the sample, never the cell — see the experimental-design validation in "Cell abundance").
+- **Registered SC datasets (dual dataset)**: two named single-cell datasets can coexist in the same session — separate analyses with shared (mode 1) or distinct (mode 2) parameters — to run two treatments in parallel without re-importing.
 
 - **Memory-aware scaling**: Seurat v5 sketch workflows (`SketchData` with LeverageScore, `ProjectData`), BPCells-aware handling, targeted feature scaling, and stratified subsampling for costly exploratory tasks.
 - **Annotation & exploration**: Automatic cell-type annotation via SingleR (celldex references), marker discovery (`FindAllMarkers`), gene correlation, pathway analysis, and diverse visualizations (embeddings, feature plots, violins, dot plots, heatmaps, ridge/stacked views).
+- **Population rarity (panel 2b)**: descriptive, single-condition reading of annotated-population rarity (shares and counts per sample) — no cross-condition comparison, which goes through the "Cell abundance" DA gate.
 - **RNA velocity**: strict import of pre-prepared velocity data (spliced/unspliced matrices and compatible results/vectors) aligned to the Seurat object. The app performs multi-state consistency checks, provides phase-portrait and vector visualizations, and exports PNG/PDF/CSV. It visualizes validated results without silently re-computing a velocity model.
-- **Cell–cell communication (panel 8b)**: import-only of external results (CellChat table / object, CellPhoneDB means+p-values). Canonical 12-field table, exact identity matching, QC, exploratory views (dotplot, pathway heatmap, circular network), descriptive centrality, filters with provenance. No de-novo generation from raw counts (remains a future parking item).
+- **Cell–cell communication (panel 8b)**: import of external results (CellChat table / object, CellPhoneDB means+p-values, aggregated LIANA ranks) **or native in-app computation** through built-in engines (pinned CellChat engine; LIANA engine on aggregated ranks — no reconstituted scores). Canonical 12-field table, exact identity matching, QC, exploratory views (dotplot, pathway heatmap, circular network), descriptive centrality, filters with provenance. **Pure-consumer** context views (no recomputation): spatial context, trajectory context, velocity context, in-silico perturbation.
 - **Differential abundance (panels 8c–8f)**:
 > Prerequisite: differential abundance analyses require metadata identifying the biological replication unit (e.g. sample_id, donor_id, patient_id) and an experimental condition. A cell cluster alone is not a biological replicate.
   - Experimental-design validation that **blocks pseudoreplication** (cells are never treated as biological replicates; hard floors on replicates per condition, cells per sample, etc.).
@@ -464,6 +494,15 @@ The Single-Cell workflow is natively multi-sample (e.g. Control vs Treatment, Da
 > DESeq2, edgeR, and limma-voom are provided as distinct engines. Comparing them is useful for exploring robustness, but results must be interpreted with a clearly documented design, filters, normalization factors, and contrasts.
 - **Design safeguards**: Proactive checks for confounding covariates, missing covariate values that invalidate the model, and covariates with only one observed level.
 - **Contrast management**: Standard, user-defined, and pairwise contrasts, alongside multi-method comparison and rank-consensus exploration.
+- **Batch correction**: optional ComBat-seq ("Batch QC" tab of step 1) on the declared batch.
+- **Per-sample pathway scores (3b. Cell signatures)**: GSVA, ssGSEA, PLAGE, and z-score over Hallmark, PROGENy, DoRothEA, or local RDS gene sets — relative scores, interpreted within-sample.
+- **WGCNA co-expression network (3c)**: safe mode over the declared samples, with a dedicated batch-QC view.
+- **Survival & clinical association (3d)**: Kaplan-Meier and Cox matched to the available clinical metadata.
+- **Profile clustering (3e)**: kmeans on per-gene z-scores, declared k between 2 and 12, seed recorded.
+- **Dose-response / time-course (3f)**: per-gene `drm` fitting (`drc` package), EC50, strictly positive doses.
+- **PCSF network (3g)**: interactome derived from Reactome pathways via a Prize-Collecting Steiner Forest heuristic — a relay is a predicted pathway co-member, **not** a measured PPI interaction.
+- **Enrichment network**: interactive network view (igraph/plotly) of enriched pathways, available in both bulk **and** single-cell modules.
+- **Multi-dataset**: registration of named bulk datasets (import, pseudobulk, merge), multi-dataset comparison (shared-scale volcanos, DEG overlap, direction concordance), and dataset merge (exact gene intersection, optional ComBat-seq with batch = dataset of origin).
 - **Visualization & enrichment**: Volcano plots, MA plots, heatmaps, multi-contrast Venn/UpSet comparisons, and ORA/GSEA pathway analysis.
 - *Scientific note*: Pathway analysis results should be interpreted in the context of the chosen background universe and identifier mapping. Multi-method rank consensus is an exploratory aid, not a formal meta-analysis.
 
@@ -490,19 +529,31 @@ TranscriptoShiny/
 ├── config/          # defaults.R, thresholds.R (single source of truth)
 ├── i18n/            # translation.json (fr/en)
 ├── R/
-│   ├── core/        # state, validation, provenance, jobs, caching, io/pathway helpers
-│   ├── sc/          # velocity, communication, abundance (Milo/scCODA/design/cross), trajectory, pipeline, plotting, bpcells, export
-│   ├── bulk/        # import engine, report engine, helpers
+│   ├── core/        # state, validation, provenance, jobs, caching, io/pathway helpers, error_state, rdata_io, drive (watcher/allowlist)
+│   ├── sc/          # velocity, communication (import + native engines + contexts), abundance (Milo/scCODA/design/cross), rarity, trajectory, pipeline, plotting, bpcells, export
+│   ├── bulk/        # import/report engines, helpers, batch (ComBat-seq), batch_qc, gsva/signatures, gene_sets, wgcna, survival, pattern, dose_response, network (PCSF), multi (+compare), merge, provenance
 │   ├── spatial/     # async (mirai), io, deconv prep/tasks, multi, niche, plotting, report, reference, stats, export
 │   ├── reports/     # collector, validator, render, bundle
-│   └── plotting/    # shared palettes
-├── modules/         # import/, sc/, bulk/, bulk_de/, spatial/ (+ deconv sub-modules)
+│   └── plotting/    # themes, palettes, exports, heatmap, datatable
+├── modules/         # import/ (sc, bulk, spatial, geo, rdata picker), sc/, bulk/, bulk_de/, spatial/ (+ deconv sub-modules)
 ├── reports/         # Rmd templates (sc, bulk, spatial + child)
-├── scripts/         # renv bootstrap and development/benchmark scripts
+├── scripts/         # renv bootstrap, MCP server, release gates, development/benchmark scripts
 └── renv/            # lock + activate
 ```
 
 Cross-module state flows through the shared `reactiveValues` (`global_data`); heavy spatial/async work runs on the `mirai` daemon pool. Modules read their parameters from `config/` and the declared thresholds — no hard-coded magic numbers.
+
+## Local MCP server & agent control (optional)
+
+For development and audit purposes, TranscriptoShiny ships a **local MCP server** (Model Context Protocol) over stdio — `scripts/mcp_server.R` — that lets an AI agent (ZCode, Claude Desktop, VS Code…) observe and, under strict control, drive a **live** session of the app:
+
+- **Transport**: native JSON-RPC 2.0 over stdio (`jsonlite` only), launched from the repository root with `Rscript --no-init-file scripts/mcp_server.R` — the flag is mandatory (the project `.Rprofile` would otherwise write to stdout and corrupt the transport). Diagnostic: `Rscript --no-init-file scripts/mcp_server.R --check`.
+- **8 tools**: read-only (`transcripto_drive_status`, `transcripto_drive_read_result`), controlled arming (`transcripto_drive_set_armed`), passive snapshot (`transcripto_drive_snapshot`), controlled writes (`transcripto_drive_set_inputs`, `transcripto_drive_run`, `transcripto_drive_wait`, `transcripto_drive_export`).
+- **Every write goes through `tools/_drive/*.json` file drops** under a frozen allowlist of modules, buttons, and inputs — the server never starts the app and never runs analysis code itself.
+- **Two visibility modes, one protocol**: `headless` or `visible` (a real browser tab) — only the client changes, the IPC contract stays identical.
+- Client templates in `mcp.examples/` (formats verified for the active launchers); plan and detailed documentation in `docs/`.
+
+> Agent control is a local-first development/validation tool: it bypasses no application validation and sends no data off the machine.
 
 ## Installation
 
@@ -555,7 +606,7 @@ BiocManager::install(c("Seurat", "SeuratObject", "SingleR", "celldex",
 | Lineage inference | slingshot | Trajectory limited to graph pseudotime |
 | scCODA | Python env + scCODA deps | scCODA unavailable (guided error) |
 | Spatial WebGL views | leafgl | Degraded large point-cloud rendering |
-*Note: Spatial workflows may require additional packages such as `BPCells`, `mirai`, `RANN`, and `spacexr`. scCODA requires a dedicated **Python 3.13** environment (`python_env_sccoda/` or the `TS_SCCODA_PYTHON` variable) — without it, a classed error with guidance is raised, with no silent fallback. Per-domain PDF requires TinyTeX; the consolidated 4F report produces standalone HTML without pandoc.*
+*Note: Spatial workflows may require additional packages such as `BPCells`, `mirai`, `RANN`, and `spacexr`. scCODA requires a dedicated **Python 3.13** environment (`python_env_sccoda/` or the `TS_SCCODA_PYTHON` variable) — without it, a classed error with guidance is raised, with no silent fallback. CellChat (pinned), LIANA, `drc`, `GSVA`, and `WGCNA` are included in `renv.lock` — no separate install; if absent (manual install), the native communication engines remain unavailable with a guided error while external result import stays available. Per-domain PDF requires TinyTeX; the consolidated 4F report produces standalone HTML without pandoc.*
 
 ### 3. Launch the application
 ```r
@@ -631,7 +682,7 @@ The sidebar allows saving/loading a `.rds` session. SC, Bulk, and the spatial sk
 
 TranscriptoShiny supports reproducible research by exporting parameterized HTML/PDF reports and domain-specific R scripts that recapitulate the analytical steps performed in the UI.
 
-The **consolidated report (4F)** goes further: reports are **compilers of state + provenance**, never re-runners of analyses. The compiler aggregates cross-domain results **without re-execution**, producing standalone HTML and an export bundle (manifest, faithful result tables, reproducible R script, sessionInfo). No raw data is embedded by default. Provenance is mandatory for any section that appears in a consolidated report — the validator rejects incomplete provenance. The consolidated contract covers **11 result domains** (including pseudobulk and gene correlation); the Single-Cell domain report optionally renders the canonical RNA velocity, cell–cell communication, and differential abundance tables (pure tables, no recomputation).
+The **consolidated report (4F)** goes further: reports are **compilers of state + provenance**, never re-runners of analyses. The compiler aggregates cross-domain results **without re-execution**, producing standalone HTML and an export bundle (manifest, faithful result tables, reproducible R script, sessionInfo). No raw data is embedded by default. Provenance is mandatory for any section that appears in a consolidated report — the validator rejects incomplete provenance. The consolidated contract covers **12 result domains** (including pseudobulk, gene correlation, and bulk multi-dataset comparison); the Single-Cell domain report optionally renders the canonical RNA velocity, cell–cell communication, and differential abundance tables (pure tables, no recomputation).
 
 **Frozen environment:** `renv` is the supported way to freeze the environment (see `RENV_SETUP.md` + `scripts/renv_bootstrap.R`). GitHub-only packages (BPCells, spacexr, schard, …) must be installed via `renv::install()`.
 
@@ -660,9 +711,10 @@ However, true reproducibility and scientific validity also depend on:
 
 ## Software quality
 
-- **Tests**: `testthat` suite + `shinytest2` e2e (V1.1.0-rc baseline: **1873 PASS / 0 FAIL / 0 ERROR**, e2e 13 PASS, ~14 min; includes a functional test of the SC auto pipeline on a minimal fixture).
+- **Tests**: `testthat` suite + `shinytest2` e2e (measured baseline 2026-09-29: **10,562 PASS / 0 FAIL / 0 ERROR / 1 SKIP** across **155 files**, ~2 h via `tools/run_full_suite.R`; the single SKIP is the live-network GEO smoke test). During development: targeted tests for the changed scope + gates; full suite at version end.
 - **Duplication gate**: `tools/check_duplication.R` (0 errors).
-- **Frozen contracts**: each result contract is covered by a freeze test — any change = code + test + doc simultaneously.
+- **Conventions gate**: `tools/check_conventions.R` (rules C1–C16, 0 errors mandatory).
+- **Frozen contracts**: some thirty result contracts (`docs/contracts/`), each covered by a freeze test — any change = code + test + doc simultaneously.
 - **Release gates**: `scripts/verify_release_gates.R` (valid lockfile, duplicate-free i18n, no local paths in tracked files).
 - **Release docs**: `docs/release/` (14-category hardening matrix, known limitations, compatibility, performance baseline).
 
@@ -673,9 +725,13 @@ However, true reproducibility and scientific validity also depend on:
 - [x] Slingshot option for lineage inference (when the package is installed).
 - [x] Release gates, test suite, renv, V1.0.0 packaging.
 - [x] V1.1 UX/UI overhaul: mutualized 1-click auto pipeline (panel 0 in all three domains), SC grouped into 5 parent sections with nested DA, Spatial container (step accordion + results on the right), numbered Bulk steps, "Go to ID mapping" jump, GEO as "Public source (GEO)" — zero scientific behavior change.
+- [x] Bulk V2 wave: ComBat-seq, pathway scores & cell signatures (GSVA/ssGSEA/PLAGE/z-score), WGCNA, KM/Cox survival, profile clustering, dose-response, PCSF network, interactive enrichment network.
+- [x] Multi-dataset: registration, comparison, and merge of bulk datasets, pseudobulk bridge, SC dual dataset.
+- [x] Cell–cell communication: native CellChat & LIANA engines (in-app computation) + context views (spatial, trajectory, velocity, in-silico perturbation).
+- [x] Population rarity (descriptive single-condition analysis).
+- [x] Local MCP server (8 tools) + drive protocol for controlled agent-driven live-session control.
 - [ ] Expanded single-cell integration choices beyond Harmony.
 - [ ] Dedicated doublet-detection support within the QC pipeline.
-- [ ] Native cell-cell communication generation from raw data (currently import-only).
 - [ ] Continued expansion of spatial workflows and reference-based analyses.
 
 ## Contributing
