@@ -51,6 +51,9 @@ _suite_stdout.log
 
 #repomix
 repomix.config.json
+repomix.core.config.json
+repomix-output.xml
+repomix-core-output.xml
 
 # --- DRIVE LIVE CONTROL (docs/DRIVE_LIVE_CONTROL_PLAN.md) ---
 # Runtime IPC between an agent and a LIVE session: the JSON handshake files are
