@@ -42,6 +42,30 @@ journalisent (détail : journal archivé §2dt ; commit `36473b7`).
   contexte = fonction englobante ; les passes suivantes étendront aux
   4 autres fichiers du top 5.
 
+## [V1.x — Réconciliation main ↔ origin/main + suite complète verte] — 2026-10-01
+
+Merge 2 parents (`85fca27`), résolution par blocs (RNG upstream + garde
+sketch conservés, refactor M-2 conservé), normalisateur 22→24 clés (défauts =
+fallbacks upstream), remède §7 (`626228c` : docs/ hors index, 108 sur disque).
+Détail : journal archivé §2dv ; commits `85fca27`/`a3a60d5`/`626228c`/`c16a7fb`.
+
+### Ajouté
+- Intégration multisample joignable depuis le drive : `sc_ap_integration`
+  (défaut `"none"`) et `sc_ap_batch_var` (défaut `"orig.ident"`) dans
+  `sc_ap_normalize_params` — extension du contrat gelé, invariants intacts.
+
+### Corrigé
+- Le harnais de test import_sc lève désormais `.sc_surface_multiplets`
+  (résidu de merge : symbole appelé, jamais levé, invisible aux gates
+  statiques).
+
+### Validation
+- **Suite complète VERTE** : failed=0 passed=10889 error=0 skipped=2
+  (baseline pré-merge : 0/10804/0/9 — deltas = 8 tests upstream nouveaux +
+  shinytest2 réellement exécuté). Gardes : 0 erreur / 59 avert. (référence).
+- **Ouverture connue** : herméticité 12 paquets hors lock (delta renv.lock
+  upstream, décision de ré-application à arbitrer).
+
 ## [V1.x — M-1 phase 2 : 36 avaleurs converties + rotation du journal] — 2026-09-30
 
 Passe 2 de l'action J-4 : les 4 fichiers restants du top 5, triage sémantique
