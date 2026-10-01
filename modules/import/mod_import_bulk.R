@@ -319,8 +319,32 @@ mod_import_bulk_server <- function(id, global_data) {
         "no counts file selected (fileInput `counts_file` is empty)"
       } else TRUE
     }
+    # ── STATE PROBE (gap 1) ───────────────────────────────────────────────
+    # `import_bulk` published NO entry in `snapshot.modules`, so `done` on an
+    # import was indistinguishable from `done` on an import that loaded nothing.
+    # Same defect §2dn closed for `bulk_pathways`, and the same fix: ONE bounded
+    # probe on the module's primary token, through the EXISTING `state =` seam.
+    #
+    # BOUNDED is a contract the collector does NOT enforce: `ts_drive_module_states()`
+    # projects only `descriptor` and passes every other field through whole
+    # (drive_watcher.R:1164-1185), so keeping this small and scalar is the
+    # module's job. Five scalars, no matrix, no object, no path.
+    #
+    # `has_data` FALSE + NULL dimensions is how "nothing imported" is spelled: a
+    # probe returning `NULL` would be reported as `probe_error`, not as absence.
+    # ⚠️ Hence `if (is.null(x)) NULL` and never `as.integer(x)` — `as.integer(NULL)`
+    # is `integer(0)`, which serialises as `[]`, i.e. a SECOND shape for one field.
+    drive_state <- function() {
+      obj <- tryCatch(shiny::isolate(global_data$bulk_obj), error = function(e) NULL)
+      cnt <- tryCatch(obj$counts, error = function(e) NULL)
+      list(module = "import_bulk", has_data = !is.null(obj),
+           n_genes = if (is.null(cnt)) NULL else suppressWarnings(as.integer(nrow(cnt))),
+           n_samples = if (is.null(cnt)) NULL else suppressWarnings(as.integer(ncol(cnt))),
+           import_mode = tryCatch(shiny::isolate(input$bulk_import_mode),
+                                  error = function(e) NULL))
+    }
     ts_drive_publish_token(global_data, "import_bulk-btn_load", drive_counter,
-                           ready = drive_ready)
+                           ready = drive_ready, state = drive_state)
     # A `reactive()` is the documented trigger type that respects both a
     # reactiveVal and an actionButton counter, so drag-and-click share one path.
     drive_trigger <- shiny::reactive(list(drive_counter(), input$btn_load))

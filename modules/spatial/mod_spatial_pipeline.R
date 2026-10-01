@@ -699,14 +699,39 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
           .fail_stage(8, paste("Etape 8/9 : Hotspots echoues --", detail))
           return()
         }
-        # S1.5 : l'unique écrivain des slots hotspot est le store partagé
-        # (garde test-mod-spatial-qc-drive.R — la paire inlinée du pipeline
-        # était le refactor S1.5 committé à moitié sur main).
-        spatial_hotspot_store(
-          res,
-          list(source = "qc", metric = metric,
-               k_neighbors = input$k_neighbors_hotspot %||% 30),
-          shared_rv)
+        # S1.5 — ONE writer. These two lines used to assign the slots DIRECTLY,
+        # which made this module a SECOND writer of a pair that three readers
+        # (`hotspot_status_ui`, `hotspot_hist`, `hotspot_table`), the drive state
+        # probe and the CSV export all share. What is unified is the GUARD, not
+        # the science:
+        #
+        # * `metric` is PASSED THROUGH unchanged. `log_nCount` is this module's own
+        #   DECLARED default — `selectInput(..., selected = "log_nCount")` at :228,
+        #   mirrored at :313 and at the `%||%` fallback on :680 — whereas the QC
+        #   module's control declares no `selected` and its rule therefore picks the
+        #   first choice, `nCount`. Both defaults are deliberate in their own
+        #   module. Harmonising them here would be a scientific default change and
+        #   is NOT this fix's to make; each caller's declared metric is stored as
+        #   given, and `test-mod-spatial-qc-drive.R` pins the difference so it
+        #   cannot be erased by a later refactor.
+        # * The store REFUSES a result that is not the Getis-Ord table, and a
+        #   params block without exactly one scalar metric. A direct assignment
+        #   validated neither, so a matrix could reach readers that call
+        #   `res$hotspot == "Hotspot (chaud)"` and `formatRound(c("value",
+        #   "gi_star", "p_value"), 3)`. A refusal now fails the STAGE, which is the
+        #   same treatment every other pipeline stage failure gets.
+        ok <- tryCatch({
+          spatial_hotspot_store(
+            res,
+            list(source = "qc", metric = metric,
+                 k_neighbors = input$k_neighbors_hotspot %||% 30),
+            shared_rv)
+          TRUE
+        }, condition = function(e) conditionMessage(e))
+        if (!isTRUE(ok)) {
+          .fail_stage(8, paste("Etape 8/9 : Hotspots echoues --", ok))
+          return()
+        }
         write_mirai_log(log_file, "Etape 8/9 : Hotspots termines.", 8, TOTAL_STEPS)
       } else {
         write_mirai_log(log_file, "Etape 8/9 : Hotspots ignores (non coche).", 8, TOTAL_STEPS)
