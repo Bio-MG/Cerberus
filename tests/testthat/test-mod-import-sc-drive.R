@@ -597,6 +597,11 @@ test_that("the sample identity is the EXPLICIT name, never a basename", {
   e$prepare_seurat_object     <- ts_ast_assignment(.SCF, "prepare_seurat_object", e)
   e$sc_sample_object          <- ts_ast_assignment(.SCF, "sc_sample_object", e)
   e$.register_sc_multi_dataset <- ts_ast_assignment(.SCF, ".register_sc_multi_dataset", e)
+  # Merge residue (upstream feature): sc_sample_object() now calls
+  # .sc_surface_multiplets() (metadata.csv multiplet surfacing). The lift list
+  # must carry it too, or the caller resolves a symbol that does not exist
+  # in this environment ("could not find function").
+  e$.sc_surface_multiplets   <- ts_ast_assignment(.SCF, ".sc_surface_multiplets", e)
   e$global_data <- new.env(parent = emptyenv())
   # The REGISTRY has to exist before anything can be published into it: both
   # `ts_drive_publish_importer()` and `ts_drive_module_states()` reach it through
