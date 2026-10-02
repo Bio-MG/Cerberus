@@ -688,11 +688,17 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
         return()
       }
 
+      # Univers ORA = gènes réellement mesurés du jeu chargé (aligne Bulk sur le
+      # chemin SC, qui passe déjà rownames(sc_obj)) ; NULL en saisie manuelle
+      # sans objet -> comportement inchangé (enrichissement pan-génome).
+      fc <- shiny::isolate(shared_rv$filtered_counts)
+      universe_genes <- if (is.null(fc)) NULL else rownames(fc)
       p$set(message = .tr("Enrichissement..."), value = 0.3)
       tryCatch({
         res <- run_pathway_enrichment(genes = genes_to_test, organism = input$pathway_org,
                                       database = input$pathway_db, pval_cutoff = input$pathway_pval,
-                                      p_adjust_method = input$pathway_padj_method %||% TS_PADJ_METHOD_DEFAULT)
+                                      p_adjust_method = input$pathway_padj_method %||% TS_PADJ_METHOD_DEFAULT,
+                                      universe = universe_genes)
         if (nrow(res) == 0) {
           showNotification(.tr("\u2139\ufe0f Aucun pathway enrichi trouv\u00e9."), type = "warning")
           shared_rv$pathway_results <- NULL
