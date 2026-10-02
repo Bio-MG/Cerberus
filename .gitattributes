@@ -1,0 +1,10 @@
+# Pin line endings for text sources so byte-probes (and git diff) stop lying
+# about LF/CRLF churn (audit 2026-10-01, extra). Normalization applies on
+# checkin; working-tree files are NOT renormalized in place without an
+# explicit `git add --renormalize` (deliberately NOT run — staging policy).
+*.R        text eol=lf
+*.Rd       text eol=lf
+*.yml      text eol=lf
+*.yaml     text eol=lf
+*.md       text eol=lf
+renv.lock  text eol=lf
