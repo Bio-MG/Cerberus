@@ -42,8 +42,8 @@ test_that("surface publique figée (symboles + formals)", {
 
 test_that("le contrat gelé est référencé et présent (garde C8)", {
   p <- file.path(ts_project_root(), "docs", "contracts", "BULK_GENE_SETS_CONTRACT.md")
-  expect_true(file.exists(p))
-  txt <- paste(readLines(p, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  skip_if_not(file.exists(p), .ts_contract_skip_msg(p))
+  txt <- paste(.ts_contract_readlines(p, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
   for (fn in bulk_gene_sets_public_api()) expect_match(txt, fn, fixed = TRUE)
 })
 

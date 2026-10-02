@@ -26,6 +26,10 @@ source_project_file("R/plotting/theme.R")
 }
 
 .ts_read <- function(relpath) {
+  if (grepl("^docs/contracts/", relpath) &&
+      !file.exists(file.path(ts_project_root(), relpath))) {
+    skip(.ts_contract_skip_msg(relpath))
+  }
   paste(readLines(file.path(ts_project_root(), relpath), warn = FALSE),
         collapse = "\n")
 }

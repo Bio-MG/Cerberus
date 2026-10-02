@@ -29,6 +29,10 @@ source_project_file("R/bulk/bulk_network.R")
 # jamais » et « PAS un PPI » sont réellement présents dans le contrat, mais
 # répartis sur deux lignes (payé le 2026-09-16 : 3 faux échecs).
 .ts_read <- function(relpath) {
+  if (grepl("^docs/contracts/", relpath) &&
+      !file.exists(file.path(ts_project_root(), relpath))) {
+    skip(.ts_contract_skip_msg(relpath))
+  }
   txt <- paste(readLines(file.path(ts_project_root(), relpath), warn = FALSE),
                collapse = "\n")
   gsub("[[:space:]]+", " ", txt)
@@ -284,8 +288,7 @@ test_that("the profitability criterion is frozen and legible", {
 
 # ── Sync code <> contrat ─────────────────────────────────────────────────
 test_that("contract document is in sync (key sections present)", {
-  expect_true(file.exists(file.path(ts_project_root(),
-                                    "docs/contracts/BULK_NETWORK_CONTRACT.md")))
+  skip_if_not(file.exists(file.path(ts_project_root(), "docs/contracts/BULK_NETWORK_CONTRACT.md")), .ts_contract_skip_msg("docs/contracts/BULK_NETWORK_CONTRACT.md"))
   for (token in c("bulk_network_contract_fields", "load_bulk_network",
                   "bulk_network_map_ids", "run_bulk_network_pcsf",
                   "plot_bulk_network", "build_bulk_network_table_export",

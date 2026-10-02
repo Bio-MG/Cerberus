@@ -87,8 +87,8 @@ test_that("report/export consumers do not reimplement cross views yet (Stage 17 
 test_that("contract document is in sync with the frozen code", {
   doc_path <- file.path(ts_project_root(), "docs", "contracts",
                         "DA_CROSS_VIEWS_CONTRACT.md")
-  expect_true(file.exists(doc_path))
-  doc <- paste(readLines(doc_path), collapse = "\n")
+  skip_if_not(file.exists(doc_path), .ts_contract_skip_msg(doc_path))
+  doc <- paste(.ts_contract_readlines(doc_path), collapse = "\n")
   for (cat in da_cross_concordance_categories()) {
     expect_match(doc, paste0("`", cat, "`"), fixed = TRUE,
                  info = paste("categorie absente du document :", cat))

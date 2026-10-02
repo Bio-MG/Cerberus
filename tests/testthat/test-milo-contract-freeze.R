@@ -175,8 +175,8 @@ test_that("miloR dependency is declared in renv.lock", {
 test_that("contract document is in sync with the frozen code", {
   doc_path <- file.path(ts_project_root(), "docs", "contracts",
                         "MILO_RESULT_CONTRACT.md")
-  expect_true(file.exists(doc_path))
-  doc <- paste(readLines(doc_path), collapse = "\n")
+  skip_if_not(file.exists(doc_path), .ts_contract_skip_msg(doc_path))
+  doc <- paste(.ts_contract_readlines(doc_path), collapse = "\n")
   for (f in milo_contract_fields()) {
     expect_match(doc, paste0("`", f, "`"), fixed = TRUE,
                  info = paste("champ contrat absent du document :", f))

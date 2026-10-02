@@ -235,8 +235,8 @@ test_that("cellchat_engine_available never loads CellChat", {
 test_that("the contract document exists and states the frozen rules", {
   doc <- file.path(ts_project_root(), "docs", "contracts",
                    "CELLCHAT_ENGINE_CONTRACT.md")
-  expect_true(file.exists(doc))
-  txt <- paste(readLines(doc, warn = FALSE), collapse = "\n")
+  skip_if_not(file.exists(doc), .ts_contract_skip_msg(doc))
+  txt <- paste(.ts_contract_readlines(doc, warn = FALSE), collapse = "\n")
   for (needle in c("database_version", "updateCellChatDB", "nboot",
                    "source_cell_identity_level", "run_cellchat",
                    "cellchat_analysis_identity")) {

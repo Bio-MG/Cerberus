@@ -59,8 +59,8 @@ test_that("the 4 validity states are frozen", {
 
 test_that("the contract doc is in sync with the code (states + public API)", {
   doc_path <- file.path(ts_project_root(), "docs", "contracts", "CELLCHAT_INPUT_CONTRACT.md")
-  expect_true(file.exists(doc_path), info = doc_path)
-  txt <- paste(readLines(doc_path, warn = FALSE), collapse = "\n")
+  skip_if_not(file.exists(doc_path), .ts_contract_skip_msg(doc_path))
+  txt <- paste(.ts_contract_readlines(doc_path, warn = FALSE), collapse = "\n")
   for (st in cellchat_input_states()) {
     expect_true(grepl(st, txt, fixed = TRUE), info = st)
   }

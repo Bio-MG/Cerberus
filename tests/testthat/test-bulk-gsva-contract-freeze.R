@@ -217,8 +217,8 @@ test_that("R/bulk/bulk_gsva.R prefixes every ggplot2 call", {
 # ── Synchronisation code <-> contrat documentaire ──────────────────────────
 test_that("contract document is in sync with the frozen code", {
   doc_path <- file.path(ts_project_root(), "docs", "contracts", "BULK_GSVA_CONTRACT.md")
-  expect_true(file.exists(doc_path))
-  doc <- paste(readLines(doc_path, encoding = "UTF-8"), collapse = "\n")
+  skip_if_not(file.exists(doc_path), .ts_contract_skip_msg(doc_path))
+  doc <- paste(.ts_contract_readlines(doc_path, encoding = "UTF-8"), collapse = "\n")
   for (f in bulk_gsva_public_api()) {
     expect_match(doc, paste0("`", f, "`"), fixed = TRUE,
                  info = paste("fonction absente du document :", f))

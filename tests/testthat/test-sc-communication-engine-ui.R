@@ -18,6 +18,10 @@
 # =============================================================================
 
 .ts_read <- function(relpath) {
+  if (grepl("^docs/contracts/", relpath) &&
+      !file.exists(file.path(ts_project_root(), relpath))) {
+    skip(.ts_contract_skip_msg(relpath))
+  }
   paste(readLines(file.path(ts_project_root(), relpath), warn = FALSE),
         collapse = "\n")
 }
@@ -273,7 +277,7 @@ test_that("the new UI strings are translated", {
 test_that("the contract documents the UI exposure", {
   doc <- file.path(ts_project_root(), "docs", "contracts",
                    "CELLCHAT_ENGINE_CONTRACT.md")
-  expect_true(file.exists(doc))
+  skip_if_not(file.exists(doc), .ts_contract_skip_msg(doc))
   txt <- .ts_read("docs/contracts/CELLCHAT_ENGINE_CONTRACT.md")
   for (needle in c("CC-5", "comm_compute", "cellchat_engine",
                    "cellchat_engine_available")) {

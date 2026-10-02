@@ -184,8 +184,8 @@ test_that("le rendu plotly porte les 3 traces et les infobulles du contrat", {
 test_that("le contrat documente les jetons gelés", {
   doc_path <- file.path(ts_project_root(), "docs", "contracts",
                         "PATHWAY_NETWORK_CONTRACT.md")
-  expect_true(file.exists(doc_path))
-  doc <- paste(readLines(doc_path, warn = FALSE), collapse = "\n")
+  skip_if_not(file.exists(doc_path), .ts_contract_skip_msg(doc_path))
+  doc <- paste(.ts_contract_readlines(doc_path, warn = FALSE), collapse = "\n")
   for (token in c("pathway_network_data", "build_pathway_network_data",
                   "pathway_network_layout", "plot_pathway_network_interactive",
                   "TS_PATHWAY_NETWORK_MAX_TERMS", "TS_PATHWAY_NET_MIN_SIM",

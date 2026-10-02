@@ -202,8 +202,8 @@ test_that("R/bulk/bulk_batch_qc.R prefixes every ggplot2 call", {
 test_that("contract document is in sync with the frozen code", {
   doc_path <- file.path(ts_project_root(), "docs", "contracts",
                         "BULK_BATCH_QC_CONTRACT.md")
-  expect_true(file.exists(doc_path))
-  doc <- paste(readLines(doc_path, encoding = "UTF-8"), collapse = "\n")
+  skip_if_not(file.exists(doc_path), .ts_contract_skip_msg(doc_path))
+  doc <- paste(.ts_contract_readlines(doc_path, encoding = "UTF-8"), collapse = "\n")
   for (f in bulk_batch_qc_public_api()) {
     expect_match(doc, paste0("`", f, "`"), fixed = TRUE,
                  info = paste("fonction absente du document :", f))

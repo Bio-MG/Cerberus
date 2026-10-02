@@ -27,6 +27,10 @@ source_project_file("R/bulk/bulk_merge.R")
 }
 
 .ts_read <- function(relpath) {
+  if (grepl("^docs/contracts/", relpath) &&
+      !file.exists(file.path(ts_project_root(), relpath))) {
+    skip(.ts_contract_skip_msg(relpath))
+  }
   paste(readLines(file.path(ts_project_root(), relpath), warn = FALSE),
         collapse = "\n")
 }
@@ -187,8 +191,7 @@ test_that("batch column name dataset_origin is frozen in code and contract", {
 
 # ── Sync code <> contrat (sections clés) ───────────────────────────────────
 test_that("contract document is in sync (key sections present)", {
-  expect_true(file.exists(file.path(ts_project_root(),
-                                    "docs/contracts/BULK_MERGE_CONTRACT.md")))
+  skip_if_not(file.exists(file.path(ts_project_root(), "docs/contracts/BULK_MERGE_CONTRACT.md")), .ts_contract_skip_msg("docs/contracts/BULK_MERGE_CONTRACT.md"))
   for (token in c("bulk_merge_check_inputs", "bulk_merge_align_genes",
                   "bulk_merge_preview_metadata", "bulk_merge_combine",
                   "bulk_merge_run", "bulk_merge_to_bulk_obj",

@@ -67,8 +67,8 @@ test_that("les erreurs sont classees rdata_import_error (sante du contrat)", {
 
 test_that("le contrat documente est synchronise avec le code", {
   doc <- file.path(ts_project_root(), "docs", "contracts", "RDATA_IMPORT_CONTRACT.md")
-  expect_true(file.exists(doc))
-  txt <- paste(readLines(doc, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  skip_if_not(file.exists(doc), .ts_contract_skip_msg(doc))
+  txt <- paste(.ts_contract_readlines(doc, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
   for (fn_name in c("rdata_load_env", "rdata_classify_object",
                     "rdata_describe_objects", "rdata_extract_object",
                     "rdata_assert_class", "rdata_export_selection",

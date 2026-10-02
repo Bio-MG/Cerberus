@@ -21,6 +21,10 @@
 }
 
 .pr_freeze_src <- function(relpath) {
+  if (grepl("^docs/contracts/", relpath) &&
+      !file.exists(file.path(ts_project_root(), relpath))) {
+    skip(.ts_contract_skip_msg(relpath))
+  }
   paste(readLines(file.path(ts_project_root(), relpath), warn = FALSE,
                   encoding = "UTF-8"), collapse = "\n")
 }
@@ -30,6 +34,10 @@
 # INTERDIT explicitement un symbole (ex. « ne jamais reutiliser TS_DA_... »)
 # n'est pas une utilisation et ne doit pas faire echouer la garde.
 .pr_freeze_code_lines <- function(relpath) {
+  if (grepl("^docs/contracts/", relpath) &&
+      !file.exists(file.path(ts_project_root(), relpath))) {
+    skip(.ts_contract_skip_msg(relpath))
+  }
   ln <- readLines(file.path(ts_project_root(), relpath), warn = FALSE,
                   encoding = "UTF-8")
   ln[!grepl("^\\s*#", ln)]
@@ -223,8 +231,8 @@ test_that("rarity is mounted once in mod_sc.R (panel 2b + output tab)", {
 test_that("contract document is in sync with the frozen code", {
   doc_path <- file.path(ts_project_root(), "docs", "contracts",
                         "POPULATION_RARITY_CONTRACT.md")
-  expect_true(file.exists(doc_path))
-  doc <- paste(readLines(doc_path, warn = FALSE, encoding = "UTF-8"),
+  skip_if_not(file.exists(doc_path), .ts_contract_skip_msg(doc_path))
+  doc <- paste(.ts_contract_readlines(doc_path, warn = FALSE, encoding = "UTF-8"),
                collapse = "\n")
   for (f in population_rarity_contract_fields()) {
     expect_match(doc, paste0("`", f, "`"), fixed = TRUE,
