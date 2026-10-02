@@ -6250,8 +6250,8 @@
       "en": "💾 Memory Management"
     },
     {
-      "fr": "Le bouton Nettoyer RAM permet de libérer la mémoire entre les analyses. Pour le Spatial, les calculs lourds (clustering, déconvolution, intégration multi-échantillons) s'exécutent dans des processus séparés (mirai) qui ne bloquent jamais votre session.",
-      "en": "The Clean RAM button frees memory between analyses. For Spatial, heavy computations (clustering, deconvolution, multi-sample integration) run in separate processes (mirai) that never block your session."
+      "fr": "Le bouton Nettoyer RAM permet de libérer la mémoire entre les analyses. Pour le Spatial, les calculs lourds (clustering, déconvolution, intégration multi-échantillons) s'exécutent dans des processus séparés (mirai).",
+      "en": "The Clean RAM button frees memory between analyses. For Spatial, heavy computations (clustering, deconvolution, multi-sample integration) run in separate processes (mirai)."
     },
     {
       "fr": "📚 Ressources",

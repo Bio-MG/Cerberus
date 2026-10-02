@@ -1200,7 +1200,7 @@ server <- function(input, output, session) {
         
         h5(.tr_h("💾 Gestion de la Mémoire")),
         
-        p(.tr_h("Le bouton Nettoyer RAM permet de libérer la mémoire entre les analyses. Pour le Spatial, les calculs lourds (clustering, déconvolution, intégration multi-échantillons) s'exécutent dans des processus séparés (mirai) qui ne bloquent jamais votre session.")),
+        p(.tr_h("Le bouton Nettoyer RAM permet de libérer la mémoire entre les analyses. Pour le Spatial, les calculs lourds (clustering, déconvolution, intégration multi-échantillons) s'exécutent dans des processus séparés (mirai).")),
         
         
         
