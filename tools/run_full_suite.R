@@ -48,6 +48,16 @@ for (f in files) {
   total_skipped <- total_skipped + getn("skip")
   rm(r)
 }
+# Census (audit 2026-10-01, R2): emit the exact list of test files that were
+# candidates for this run, next to the BILAN verdict, so the bilan can never be
+# read as covering a different population than it actually ran. Deterministic:
+# sorted, no timestamps, no locale-dependent values. NOTE: the pattern below is
+# DUPLICATED in tools/build_census.R on purpose — if you change one, change the
+# other (a shared helper was rejected to keep this crash-resilient script
+# free of source() dependencies).
+writeLines("CENSUS: begin", con)
+for (bn in basename(files)) writeLines(paste0("CENSUS: ", bn), con)
+writeLines(sprintf("CENSUS: total=%d", length(files)), con)
 writeLines(sprintf("BILAN: failed=%d passed=%d error=%d skipped=%d | %s",
                    total_failed, total_passed, total_error, total_skipped,
                    format(Sys.time(), "%H:%M:%S")), con)
