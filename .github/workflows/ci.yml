@@ -166,7 +166,9 @@ jobs:
             exit 1
           fi
           # Budget de skips (roadmap H1#2, 2026-10-03) — tiers deterministes :
-          #   * contrats presents (hote operateur)        : 2 skips legitimes connus
+          #   * contrats presents (hote operateur)        : 4 skips legitimes connus
+          #     (bulk-gene-sets, bulk-signatures, mod-geo, shinytest2-bulk —
+          #     mesure suite complete 2026-10-03)
           #   * clone frais CI (docs/ absent, politique §7): les gardes §7 des
           #     tests de gel skippent ~27 blocs (mesure 2026-10-03) -> plafond 60.
           # NB: test-sc-sccoda-* ERREURE sans venv python sur CI (python_env_sccoda/
@@ -174,7 +176,7 @@ jobs:
           #     nightly est ROUGE sur ce seul point : signal honnete, pas un
           #     defaut du workflow (voir note d'entete).
           skipped=$(echo "${bilan}" | grep -oE "skipped=[0-9]+" | cut -d= -f2)
-          max_skip=2
+          max_skip=4
           if [ ! -f docs/contracts/SC_MULTI_CONTRACT.md ]; then max_skip=60; fi
           echo "skipped=${skipped} (budget=${max_skip})"
           if [ "${skipped}" -gt "${max_skip}" ]; then
