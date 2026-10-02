@@ -232,7 +232,7 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
 
           p$set(0.30,.tr("Normalisation (sketch)...")); log_sc(.tr("Normalisation (sketch)..."))
           obj <- FindVariableFeatures(obj, nfeatures=2000, verbose=FALSE)
-          obj <- ScaleData(obj, verbose=FALSE)
+          obj <- smart_scale_data(obj)   # Step-3.7A: RAM-safe (branche sketch, VariableFeatures seulement)
           log_sc(.tr("✓ Normalisation OK"))
 
           p$set(0.40,.tr("PCA (sketch)..."))
