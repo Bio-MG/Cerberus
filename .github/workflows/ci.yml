@@ -1,0 +1,178 @@
+# =============================================================================
+# CI — TranscriptoShiny ("Cerberus")
+# =============================================================================
+# Contexte (audit MODE B 2026-10-01, §H) : le depot n'avait AUCUNE CI — tous les
+# verdicts n'existaient que sur la machine de l'operateur, et la suite complete
+# sort avec 139 (SIGSEGV) MEME en cas de succes, le verdict ne vivant que dans
+# full_suite_results.txt. Ce workflow palie aux deux :
+#
+#   * push/PR  -> gates statiques rapides + sous-suite ciblee (verdict en <15 min)
+#   * nightly  -> suite COMPLETE via tools/run_full_suite.R, avec lecture du
+#                 BILAN dans full_suite_results.txt (jamais du code de sortie).
+#
+# Notes de conception :
+#   - windows-latest + R 4.4.2 : la suite est calee sur l'hote Windows de
+#     l'operateur (renv/library/windows/..., processx, chromote). Un runner
+#     Linux ferait diverger les chemins renv et les sondes processx.
+#   - Locale : NE PAS exporter LC_ALL=C.UTF-8 dans les steps bash — c'est
+#     exactement le piege documente (§9 du master prompt, reproduit par
+#     l'audit du 2026-10-01) qui fait echouer le parse() de sources UTF-8
+#     accentuees sur un arbre propre. Les scripts du depot gerent leur locale
+#     eux-memes (tools/run_tests.R). Laisser le runner utiliser sa locale
+#     systeme.
+#   - renv : la restauration initiale de ~488 paquets peut prendre 30-60 min ;
+#     r-lib/actions/setup-renv met le resultat en cache sur l'empreinte du
+#     renv.lock, les runs suivants sont rapides.
+#   - scCODA est adosse a reticulate/python (python_env_sccoda/). Si les tests
+#     sccoda errorent en nightly faute d'env python, ajouter setup-python +
+#     creation de l'env ici — le job doit alors rester rouge, c'est le signal
+#     honnete, pas un defaut du workflow.
+# =============================================================================
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Nightly, 03:00 UTC — c'est le seul moment ou la suite complete tourne
+    # hors de la machine de l'operateur.
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1) Gates statiques + sous-suite ciblee (push / PR)
+  # ---------------------------------------------------------------------------
+  static-gates:
+    runs-on: windows-latest
+    # Premier run : la restauration renv (~488 paquets) peut prendre 30-60 min
+    # avant le premier cache ; les gates elles-memes sont base-R et rapides.
+    timeout-minutes: 90
+    env:
+      RENV_CONFIG_SANDBOX_ENABLED: FALSE
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: "4.4.2"
+
+      - uses: r-lib/actions/setup-renv@v2
+
+      - name: Garde des conventions (ERROR-level doit rester 0)
+        shell: bash
+        run: |
+          Rscript tools/check_conventions.R > conventions_output.txt 2>&1 || true
+          tail -5 conventions_output.txt
+          # Verdict = ligne "---- Resume : N erreur(s), M avertissement(s) ----"
+          errors=$(grep -oE "[0-9]+ erreur\(s\)" conventions_output.txt | grep -oE "[0-9]+" | head -1)
+          echo "conventions errors=${errors}"
+          if [ "${errors}" != "0" ]; then
+            echo "::error::check_conventions.R rapporte ${errors} erreur(s) (invariant: 0)"
+            exit 1
+          fi
+
+      - name: Garde de duplication (code produit)
+        shell: bash
+        run: |
+          Rscript tools/check_duplication.R modules R . --ext=R > duplication_output.txt 2>&1 || true
+          tail -5 duplication_output.txt
+          errors=$(grep -oE "[0-9]+ erreur\(s\)" duplication_output.txt | grep -oE "[0-9]+" | head -1)
+          echo "duplication errors=${errors}"
+          if [ "${errors}" != "0" ]; then
+            echo "::error::check_duplication.R rapporte ${errors} erreur(s)"
+            exit 1
+          fi
+
+      - name: Garde d'hermeticite renv
+        shell: bash
+        run: |
+          Rscript tools/check_renv_hermeticity.R > hermeticity_output.txt 2>&1 || true
+          tail -8 hermeticity_output.txt
+          errors=$(grep -oE "[0-9]+ erreur\(s\) d.hermeticite" hermeticity_output.txt | grep -oE "[0-9]+" | head -1)
+          echo "hermeticity errors=${errors}"
+          if [ -n "${errors}" ] && [ "${errors}" != "0" ]; then
+            echo "::error::check_renv_hermeticity.R rapporte ${errors} erreur(s)"
+            exit 1
+          fi
+
+      - name: Verificateur de l'arbre commite (audit 2026-10-01, R3)
+        shell: bash
+        # Volontairement STRICT (pas de continue-on-error) : l'outil cible
+        # git archive HEAD en interne, jamais l'arbre de travail. Premier run
+        # attendu : il peut flagger l'absence de docs/contracts/ — c'est le
+        # signal honnete, le sort de ces 28 documents est une decision
+        # explicite de l'operateur.
+        run: |
+          Rscript tools/verify_committed_tree.R
+
+      - name: Sous-suite ciblee (rapide, sans python)
+        shell: bash
+        run: |
+          # Filtre volontairement etroit : sourcing de l'app + garde de l'arbre
+          # commite + stats quickwins. tools/run_tests.R affiche desormais un
+          # bandeau "SOUS-ENSEMBLE" explicite (fix 2026-10-01).
+          Rscript tools/run_tests.R "app-sourcing|verify-committed-tree|stats-quickwins"
+
+      - name: Upload des sorties de gates
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gates-output
+          path: |
+            conventions_output.txt
+            duplication_output.txt
+            hermeticity_output.txt
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # 2) Suite complete (nightly / manuel). Verdict lu dans
+  #    full_suite_results.txt — JAMAIS dans le code de sortie, qui vaut 139
+  #    (SIGSEGV a la fermeture de R sur cet environnement) meme en succes.
+  # ---------------------------------------------------------------------------
+  full-suite:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    timeout-minutes: 150
+    env:
+      RENV_CONFIG_SANDBOX_ENABLED: FALSE
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: "4.4.2"
+
+      - uses: r-lib/actions/setup-renv@v2
+
+      - name: Suite complete (le code de sortie 139 est ATTENDU et ignore)
+        shell: bash
+        continue-on-error: true
+        run: |
+          Rscript tools/run_full_suite.R 2>&1 | tee full_suite_run.log
+
+      - name: Verdict depuis full_suite_results.txt (la seule source de verite)
+        shell: bash
+        run: |
+          tail -5 full_suite_results.txt
+          bilan=$(grep "^BILAN:" full_suite_results.txt | tail -1)
+          echo "BILAN line: ${bilan}"
+          failed=$(echo "${bilan}"  | grep -oE "failed=[0-9]+"  | cut -d= -f2)
+          error=$(echo "${bilan}"   | grep -oE "error=[0-9]+"   | cut -d= -f2)
+          if [ "${failed}" != "0" ] || [ "${error}" != "0" ]; then
+            echo "::error::Suite complete NON verte : ${bilan}"
+            exit 1
+          fi
+          echo "Suite complete verte : ${bilan}"
+
+      - name: Upload du verdict complet
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-suite-results
+          path: |
+            full_suite_results.txt
+            full_suite_run.log
+          if-no-files-found: warn
