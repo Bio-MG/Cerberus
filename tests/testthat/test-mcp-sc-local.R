@@ -19,6 +19,19 @@
     stop("mcp_server.R internal definition boundaries were not found")
   }
   for (i in seq.int(first, last - 1L)) eval(expressions[[i]], envir = e)
+  # HERMETICITY (audit 2026-10-03): the sandbox previously ran on the REAL
+  # project tools/_drive — arming a session wrote a real ready.json there, and
+  # the per-test `unlink(e$ts_drive_root(), recursive = TRUE)` DELETED the real
+  # directory, README included. A leftover real ready.json also tripped
+  # test-drive-watcher.R's "absent until written" on the next run (measured).
+  # The sandbox now boots on its OWN temp root: same functions, same protocol,
+  # zero contact with the operator's drive state. No pin changes — the tests'
+  # per-test unlink then cleans the temp root, which is what it always meant
+  # to do.
+  root <- file.path(tempdir(), paste0("tsdrive-mcp-", as.integer(runif(1, 1, 1e9))))
+  dir.create(file.path(root, "tools", "_drive"), recursive = TRUE, showWarnings = FALSE)
+  e$ts_drive_boot(root)
+  e$ts_drive_clear_write_error()
   e
 }
 
