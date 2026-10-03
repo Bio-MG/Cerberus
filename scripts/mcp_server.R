@@ -108,8 +108,7 @@ if ("--check" %in% .args) {
   .ts_stderr("                 transcripto_drive_run (M3c: controlled run, run_pipeline only)")
   .ts_stderr("                 transcripto_drive_wait (M4: bounded observation; <=1 snapshot, post-terminal)")
   .ts_stderr("                 transcripto_drive_set_armed (M2: arm/disarm; writes arm.json only)")
-  .ts_stderr("                 transcripto_drive_export (S2: the ONE artefact; no caller-selectable field)")
-  .ts_stderr("  export route : spatial_qc -> spatial_qc_hotspot_csv (app-chosen destination, filename, format)")
+  .ts_stderr("                 transcripto_drive_export (S2/S2b: the artefact of ONE declared route)")
   .ts_stderr("  dependencies : mcptools/btw/ellmer NOT required")
   # The tool-schema and reader checks need the drive files SOURCED, so they run
   # in a SECOND phase further down (section 1b). Everything above is
@@ -1397,18 +1396,125 @@ TS_MCP_SET_INPUT_MODULES <- setdiff(
   )
 
 # ── S2: the ONE export tool ──────────────────────────────────────────────────
-# This tool has NO export parameters. Not a handler, not an outputId, not a
-# destination, not a filename, not a format, not even a module: the route table
-# has one entry and the app resolves the module from it. The only fields are the
-# protocol envelope (`seq`, `expect`), which are counters and identity, not
-# choices about the artefact.
+# S2b AMENDMENT (2026-10-03): the route table grew a second entry, so the tool
+# now names WHICH closed route (`module`, enum = TS_DRIVE_EXPORT_ROUTES). This
+# is the one choice the caller gained, and it is a choice among declared routes,
+# not about the artefact: the handler, the outputId, the destination, the
+# filename and the format stay the APP's, per route, exactly as S2 promised.
+# The tool still writes a `scenario.json` of its own, exactly as `set_armed`
+# writes an `arm.json`.
 #
-# It writes a `scenario.json` of its own, exactly as `set_armed` writes an
-# `arm.json` — which is what makes it usable from a tool at all. `import_file`
-# needed a hand-placed scenario file for want of this, and the cost was that the
-# one action an agent most wants (get the data in) was the one action it could not
-# perform.
+# The schema and this strict field check are two halves of the same promise, and
+# both are needed: a schema a client ignores is not a boundary.
 TS_MCP_EXPORT_MODULE <- "spatial_qc"
+
+# ── S2c follow-up (option 1, 2026-10-03): the per-route column CONTRACT ──────
+# The descriptor's `columns` reaches the caller sanitised (8+-character
+# alphanumeric names arrive as <redacted>, positions preserved), so the tool
+# description now DECLARES each route's column contract instead of leaving the
+# agent to guess which redacted position is which. Server-side mirror of the
+# app's `TS_DRIVE_EXPORT_COLUMNS` (drive_allowlist.R), cross-checked against it
+# by `.ts_mcp_export_problems()` — surfaced by `--check`, exactly like the
+# import schema. Mirroring, not referencing, is the pattern for a reason: the
+# description must be buildable even if the app's drive files fail to source,
+# and a drift between the two copies must be a DIAGNOSTIC, not a crash.
+TS_MCP_EXPORT_COLUMNS <- list(
+  spatial_qc = list(
+    fixed      = c("id", "value", "gi_star", "p_value", "hotspot")
+  ),
+  bulk_de = list(
+    guaranteed = c("gene", "baseMean", "log2FoldChange", "pvalue", "padj")
+  ),
+  bulk_pathways = list(
+    guaranteed = c("ID", "Description", "pvalue", "p.adjust"),
+    mode_ora   = c("ID", "Description", "GeneRatio", "BgRatio", "pvalue",
+                   "p.adjust", "qvalue", "geneID", "Count"),
+    mode_gsea  = c("ID", "Description", "setSize", "enrichmentScore", "NES",
+                   "pvalue", "p.adjust", "qvalue", "rank", "core_enrichment",
+                   "Count", "GeneRatio")
+  ),
+  sc_markers = list(
+    guaranteed = c("gene", "cluster", "avg_log2FC", "p_val_adj", "pct.1", "pct.2")
+  ),
+  sc_pathways = list(
+    guaranteed = c("ID", "Description", "pvalue", "p.adjust"),
+    mode_ora   = c("ID", "Description", "GeneRatio", "BgRatio", "pvalue",
+                   "p.adjust", "qvalue", "geneID", "Count")
+  ),
+  bulk_filter = list(
+    guaranteed = c("gene")
+  ),
+  bulk_signatures = list(
+    fixed      = c("signature", "sample", "score", "method", "analysis_id",
+                   "disclaimer")
+  ),
+  bulk_pattern = list(
+    fixed      = c("gene", "cluster")
+  ),
+  bulk_network = list(
+    fixed      = c("node", "symbol", "role", "prize", "degree", "species",
+                   "source_db")
+  )
+)
+
+#' Render the per-route column contract as description text.
+#'
+#' `fixed`/`mode_*` routes promise the full list in wire order; `guaranteed`
+#' routes promise only the identity columns, because the engine extras and
+#' their order are the producer's business, not the contract's.
+.ts_export_contract_text <- function() {
+  paste(vapply(names(TS_MCP_EXPORT_COLUMNS), function(m) {
+    e <- TS_MCP_EXPORT_COLUMNS[[m]]
+    parts <- character(0)
+    if (!is.null(e$fixed))
+      parts <- c(parts, sprintf("full (in order): %s", paste(e$fixed, collapse = ", ")))
+    if (!is.null(e$mode_ora))
+      parts <- c(parts, sprintf("ORA full (in order): %s", paste(e$mode_ora, collapse = ", ")))
+    if (!is.null(e$mode_gsea))
+      parts <- c(parts, sprintf("GSEA full (in order): %s", paste(e$mode_gsea, collapse = ", ")))
+    if (!is.null(e$guaranteed))
+      parts <- c(parts, sprintf("guaranteed (extras/order vary): %s",
+                                paste(e$guaranteed, collapse = ", ")))
+    sprintf("%s -> %s", m, paste(parts, collapse = "; "))
+  }, character(1), USE.NAMES = FALSE), collapse = " | ")
+}
+
+#' Cross-check the server's column contract mirror against the APP's own
+#' `TS_DRIVE_EXPORT_COLUMNS`. Returns `character(0)` when consistent.
+#' Surfaced by `--check`.
+.ts_mcp_export_problems <- function() {
+  problems <- character(0)
+  for (m in names(TS_MCP_EXPORT_COLUMNS)) {
+    if (!m %in% names(TS_DRIVE_EXPORT_ROUTES)) {
+      problems <- c(problems, sprintf("%s: not a route in TS_DRIVE_EXPORT_ROUTES", m))
+      next
+    }
+    app <- TS_DRIVE_EXPORT_COLUMNS[[m]]
+    if (is.null(app)) {
+      problems <- c(problems, sprintf("%s: no contract in the app's TS_DRIVE_EXPORT_COLUMNS", m))
+      next
+    }
+    if (!identical(sort(names(TS_MCP_EXPORT_COLUMNS[[m]])), sort(names(app)))) {
+      problems <- c(problems, sprintf(
+        "%s: contract shapes differ (server: %s; app: %s)", m,
+        paste(names(TS_MCP_EXPORT_COLUMNS[[m]]), collapse = "/"),
+        paste(names(app), collapse = "/")))
+      next
+    }
+    for (k in names(app)) {
+      if (!identical(TS_MCP_EXPORT_COLUMNS[[m]][[k]], app[[k]])) {
+        problems <- c(problems, sprintf("%s$%s: column list differs from the app's", m, k))
+      }
+    }
+  }
+  for (m in names(TS_DRIVE_EXPORT_COLUMNS)) {
+    if (!m %in% names(TS_MCP_EXPORT_COLUMNS)) {
+      problems <- c(problems,
+        sprintf("%s: the app declares a column contract the server does not mirror", m))
+    }
+  }
+  problems
+}
 
 #' The scenario payload for `export_result`, as a REBUILT list.
 #'
@@ -1416,22 +1522,32 @@ TS_MCP_EXPORT_MODULE <- "spatial_qc"
 #' field this server did not put there cannot reach the app. `import` is absent
 #' entirely: the app-side validator refuses every key, so sending even an empty
 #' block would be a refusal waiting to happen.
-.ts_export_payload <- function(seq, token) {
+.ts_export_payload <- function(seq, token, module = TS_MCP_EXPORT_MODULE) {
   list(
     protocol      = TS_DRIVE_PROTOCOL,
     seq           = seq,
     session_token = token,
-    module        = TS_MCP_EXPORT_MODULE,
+    module        = module,
     action        = "export_result"
   )
 }
 
-.ts_tool_export <- function(seq, expect = NULL) {
+.ts_tool_export <- function(seq, module, expect = NULL) {
   if (!is.numeric(seq) || length(seq) != 1L || is.na(seq) || seq < 1 || seq != as.integer(seq)) {
     return(.ts_tool_err("PAYLOAD_REFUSED", "`seq` must be an integer >= 1.",
                         "The app ignores any scenario whose seq is not greater than its last_seq."))
   }
   seq <- as.integer(seq)
+  # The route must be one of the APP's declared routes: a module the table does
+  # not name has no exporter, and dispatching to it would produce a seam error
+  # the caller reads as a broken app. Refused HERE, before anything is written.
+  if (!is.character(module) || length(module) != 1L || is.na(module) ||
+      !module %in% names(TS_DRIVE_EXPORT_ROUTES)) {
+    return(.ts_tool_err(
+      "MODULE_NOT_ALLOWED",
+      sprintf("module '%s' has no export route.", .ts_clean(module %|NA|% "(absent)")),
+      sprintf("Declared routes: %s.", paste(names(TS_DRIVE_EXPORT_ROUTES), collapse = ", "))))
+  }
   asserted <- .ts_session_assert(expect, require_assertion = TRUE)
   if (!isTRUE(asserted$ok)) return(asserted$error)
   last_seq <- suppressWarnings(as.integer(.as_chr(asserted$hb$last_seq) %|NA|% 0L))
@@ -1441,7 +1557,7 @@ TS_MCP_EXPORT_MODULE <- "spatial_qc"
       "A replayed or stale scenario is ignored by the app; re-read the session and use a higher seq."))
   }
 
-  payload <- .ts_export_payload(seq, asserted$token)
+  payload <- .ts_export_payload(seq, asserted$token, module)
   if (nchar(.ts_json(payload), type = "bytes") > TS_MCP_MAX_PAYLOAD_BYTES) {
     return(.ts_tool_err("PAYLOAD_TOO_LARGE", "the serialised scenario is too large.",
                         "An export carries no values; this should not happen."))
@@ -1458,16 +1574,17 @@ TS_MCP_EXPORT_MODULE <- "spatial_qc"
 
   .ts_tool_ok(list(
     dispatched = "export_result",
-    module = TS_MCP_EXPORT_MODULE,
+    module = module,
     seq = seq,
-    chosen_by_caller = list(handler = NULL, output_id = NULL, destination = NULL,
+    chosen_by_caller = list(module = module, route = TS_DRIVE_EXPORT_ROUTES[[module]],
+                            handler = NULL, output_id = NULL, destination = NULL,
                             filename = NULL, format = NULL),
     note = paste("The app chose the route, the destination, the filename and the",
                  "format. Read the descriptor from transcripto_drive_read_result",
                  "once the app has acknowledged this seq."),
     disclosure = .ts_redaction_note(0L, FALSE)
-  ), paste0("export_result dispatched for module '", TS_MCP_EXPORT_MODULE,
-            "' at seq ", seq, ". The app picks the artefact; nothing was selectable."))
+  ), paste0("export_result dispatched for module '", module,
+            "' at seq ", seq, ". The app picks the artefact; nothing else was selectable."))
 }
 
 # ── S3: the controlled import tool ──────────────────────────────────────────
@@ -2432,15 +2549,21 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
     # artefact is written by the app into a directory the app controls.
     list(name = "transcripto_drive_export",
          description = paste0(
-           "Export the ONE artefact the protocol exposes: the Spatial hotspot ",
-           "table this session has already produced. Takes no handler, no ",
-           "outputId, no destination, no filename and no format - the app ",
-           "chooses all five, writes into an application-controlled bounded ",
-           "temporary directory, and returns a redacted descriptor (format, ",
-           "file basename, bytes, n_rows, n_cols, n_sig, column names). No ",
-           "sample name, no absolute path and no row data. Refuses a session ",
-           "with no result (INVALID), and refuses any field beyond `seq` and ",
-           "`expect`."),
+           "Export the artefact of ONE declared export route by writing ONE ",
+           "scenario.json with action=export_result, then stop. The caller names ",
+           "only WHICH closed route (`module`: ",
+           paste(names(TS_DRIVE_EXPORT_ROUTES), collapse = ", "),
+           ") - the app then chooses the handler, the outputId, the destination, ",
+           "the filename and the format, writes into an application-controlled ",
+           "bounded temporary directory, and returns a redacted descriptor ",
+           "(format, file basename, bytes, n_rows, n_cols, column names). No ",
+           "sample name, no contrast label, no absolute path and no row data. ",
+           "Column contracts (the app's declared schema; the wire sanitises ",
+           "8+-character alphanumeric names to <redacted> with positions ",
+           "preserved, so map hidden names by position): ",
+           .ts_export_contract_text(),
+           ". Refuses a session with no result (INVALID), and refuses any field ",
+           "beyond `seq`, `module` and `expect`."),
          inputSchema = list(
            type = "object",
            properties = list(
@@ -2450,6 +2573,11 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
                description = paste0(
                  "Protocol counter, must be greater than the session's last_seq. ",
                  "Required. It is a sequence number, not a choice about the file.")),
+             module = list(
+               type = "string", enum = as.list(names(TS_DRIVE_EXPORT_ROUTES)),
+               description = paste0(
+                 "WHICH declared route to export. Required since S2b: a choice ",
+                 "among the app's closed route table, never about the artefact.")),
              expect = list(
                type = "object",
                description = paste0(
@@ -2462,7 +2590,7 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
                  session_token = list(type = "string"),
                  session_id = list(type = "string")),
                additionalProperties = FALSE)),
-           required = c("seq", "expect"),
+           required = c("seq", "module", "expect"),
            additionalProperties = FALSE)),
     list(name = "transcripto_drive_import",
          description = paste0(
@@ -2754,7 +2882,8 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
       "(status, verdict, passive snapshot), one controlled import (import, ",
       "action=import_file only), one controlled input write (set_inputs), ",
       "one controlled run (run, action=run_pipeline only), one bounded observation ",
-      "(wait) and one controlled arm/disarm. Every write touches ONE file and is ",
+      "(wait), one controlled arm/disarm and one controlled export (export, the ",
+      "artefact of one app-declared route). Every write touches ONE file and is ",
       "acknowledged as a WRITE, never as a business outcome; `wait` never claims an ",
       "analysis finished. No code is executed, no session is selected and no ",
       "analysis is computed here.")
@@ -2952,13 +3081,17 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
       }
       return(.ts_result(id, .ts_tool_set_armed(isTRUE(armed), ex)))
     }
-    # S2 — the one export tool. Note what is NOT here: no handler, no outputId,
-    # no destination, no filename, no format, no module. The only fields are the
-    # protocol envelope. `additionalProperties = FALSE` in the schema and this
-    # strict field check are the two halves of the same promise, and both are
-    # needed: a schema a client ignores is not a boundary.
+    # S2/S2b — the export tool. The caller names only WHICH closed route; the
+    # route's handler, outputId, destination, filename and format are the APP's
+    # choice and are not parameters. `additionalProperties = FALSE` in the schema
+    # and this strict field check are the two halves of the same promise, and
+    # both are needed: a schema a client ignores is not a boundary.
     if (identical(nm, "transcripto_drive_export")) {
       args <- if (is.list(params$arguments)) params$arguments else list()
+      md <- args$module
+      if (!is.character(md) || length(md) != 1L || is.na(md)) {
+        return(.ts_error(id, -32602, "Invalid params: 'module' must be one string."))
+      }
       ex <- args$expect
       if (is.null(ex) || !is.list(ex) || length(ex) == 0L) {
         return(.ts_error(id, -32602,
@@ -2969,11 +3102,11 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
         return(.ts_error(id, -32602, sprintf(
           "Invalid params: unknown 'expect' field(s): %s", paste(bad, collapse = ", "))))
       }
-      unknown <- setdiff(names(args), c("seq", "expect"))
+      unknown <- setdiff(names(args), c("seq", "module", "expect"))
       if (length(unknown)) {
         return(.ts_error(id, -32602, sprintf(
-          paste("Invalid params: transcripto_drive_export takes only `seq` and `expect`;",
-                "unknown field(s): %s. The route, the destination, the filename and the",
+          paste("Invalid params: transcripto_drive_export takes only `seq`, `module` and `expect`;",
+                "unknown field(s): %s. The route's destination, the filename and the",
                 "format are the APP's choice and are not parameters."),
           paste(unknown, collapse = ", "))))
       }
@@ -2981,7 +3114,7 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
       if (is.null(sq) || !is.numeric(sq)) {
         return(.ts_error(id, -32602, "Invalid params: 'seq' must be an integer >= 1."))
       }
-      return(.ts_result(id, .ts_tool_export(sq, ex)))
+      return(.ts_result(id, .ts_tool_export(sq, md, ex)))
     }
     return(.ts_error(id, -32602, sprintf("Unknown tool: %s", nm)))
   }
@@ -3062,8 +3195,29 @@ if ("--check" %in% .args) {
              })
   .ts_stderr("  import schema: ", sum(vapply(TS_MCP_IMPORT_SCHEMA, length, integer(1))),
              " fields over ", length(TS_MCP_IMPORT_SCHEMA), " importers")
+  .ts_stderr("  export routes: ",
+             paste(sprintf("%s -> %s", names(TS_DRIVE_EXPORT_ROUTES),
+                           unlist(TS_DRIVE_EXPORT_ROUTES)), collapse = ", "))
+  .ts_export_problems <- .ts_mcp_export_problems()
+  .ts_stderr("  export columns: ", .ts_export_contract_text())
+  .ts_stderr("  export check : ",
+             if (length(.ts_export_problems)) {
+               paste0(length(.ts_export_problems), " PROBLEM(S): ",
+                      paste(.ts_export_problems, collapse = "; "))
+             } else {
+               "OK (every column contract matches the app's own declared table)"
+             })
+  .ts_stderr("  import check : ",
+             if (length(.ts_import_problems)) {
+               paste0(length(.ts_import_problems), " PROBLEM(S): ",
+                      paste(.ts_import_problems, collapse = "; "))
+             } else {
+               "OK (every key and required flag matches the app's own importer schema)"
+             })
   quit(status = if (.ts_have_jsonlite && drive_ok && !length(.ts_schema_problems) &&
-                    !length(.ts_run_problems)) 0L else 1L, save = "no")
+                    !length(.ts_run_problems) && !length(.ts_import_problems) &&
+                    !length(.ts_export_problems)) 0L else 1L,
+       save = "no")
 }
 
 .ts_stderr("mcp_server: serving 9 drive tools (3 read-only + import + set_inputs + run + wait + arm/disarm + export) (stdio, NDJSON, native JSON-RPC)")

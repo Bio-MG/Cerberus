@@ -69,5 +69,15 @@ mod_bulk_de_server <- function(id, global_data, shared_rv) {
     .de_venn_server(       input, output, session, ns, global_data, shared_rv)
     .de_multimethod_server(input, output, session, ns, global_data, shared_rv, helpers)
 
+    # S2b: publish THIS module's drive export route. Published as a closure over
+    # this module's own `shared_rv`, and published at all rather than bound to a
+    # button — the spatial_qc seam's reasons apply unchanged. The exporter itself
+    # is a module-level function in mod_bulk_de_export.R (NOT a closure declared
+    # here), so the offline tests can reach it; only the binding to this
+    # module's store happens in here.
+    ts_drive_publish_export(global_data, "bulk_de", function() {
+      bulk_de_export_results_csv(shared_rv, global_data)
+    })
+
   }) # /moduleServer
 }

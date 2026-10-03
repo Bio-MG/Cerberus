@@ -462,5 +462,13 @@ mod_sc_pathways_server <- function(id, global_data, shared_rv) {
     )
     output$dl_pathway        <- .dl()
     output$dl_pathway_header <- .dl()
+    # S2c: publish THIS module's drive export route. Same seam shape as the
+    # bulk_de / bulk_pathways / sc_markers ones: a closure over this session's
+    # own `shared_rv`, so the route exports the table THIS session produced.
+    # The exporter lives in mod_sc_pathways_export.R so the offline tests can
+    # reach it without a Shiny runtime.
+    ts_drive_publish_export(global_data, "sc_pathways", function() {
+      sc_pathways_export_enrichment_csv(shared_rv, global_data)
+    })
   })
 }

@@ -249,7 +249,7 @@ test_that("local MCP run writes the SC scenarios into an external fixture root",
 # `expect`, `additionalProperties = FALSE` at BOTH levels, and no property whose
 # name could carry a destination.
 # =============================================================================
-test_that("the export tool exposes only `seq` and `expect`, at both levels", {
+test_that("the export tool exposes only `seq`, `module` and `expect`, at both levels", {
   e <- .mcp_sc_local_env()
   tools <- e$.ts_tools()
   ex <- Filter(function(x) identical(x$name, "transcripto_drive_export"), tools)
@@ -257,14 +257,19 @@ test_that("the export tool exposes only `seq` and `expect`, at both levels", {
   if (!length(ex)) return(invisible(NULL))
   sch <- ex[[1]]$inputSchema
   expect_identical(sch$type, "object")
-  expect_setequal(names(sch$properties), c("seq", "expect"))
-  expect_setequal(sch$required, c("seq", "expect"))
+  expect_setequal(names(sch$properties), c("seq", "module", "expect"))
+  expect_setequal(sch$required, c("seq", "module", "expect"))
   # Closed at the top level and closed inside `expect`: a field smuggled into
   # `expect` would otherwise reach the session assertion unchecked.
   expect_false(sch$additionalProperties)
   expect_false(sch$properties$expect$additionalProperties)
   expect_setequal(names(sch$properties$expect$properties),
                   c("pid", "started_at", "session_token", "session_id"))
+  # `module` names WHICH declared route — and nothing else: its enum is the app's
+  # own route table, read as data, so a route the app did not declare is not
+  # reachable from here.
+  expect_setequal(unlist(sch$properties$module$enum),
+                  names(e$TS_DRIVE_EXPORT_ROUTES))
   # And nothing in the schema could be read as a destination, a handler or a
   # format. Checked against the names rather than trusted from the description.
   # Not an AST walker: a recursive collector of the character leaves of the
@@ -281,24 +286,27 @@ test_that("the export tool exposes only `seq` and `expect`, at both levels", {
   for (b in banned) {
     expect_false(b %in% keys, info = sprintf("the export schema must not expose `%s`", b))
   }
-  # The module is not a parameter either: the route table has one entry and the app
-  # resolves it. A `module` argument would be a caller choosing an artefact.
-  expect_false("module" %in% names(sch$properties))
 })
 
 test_that("the export scenario payload is REBUILT, and carries no import block", {
   e <- .mcp_sc_local_env()
-  p <- e$.ts_export_payload(7L, "sometoken")
+  p <- e$.ts_export_payload(7L, "sometoken", "spatial_qc")
   expect_identical(p$seq, 7L)
   expect_identical(p$action, "export_result")
-  expect_identical(p$module, e$TS_MCP_EXPORT_MODULE)
+  expect_identical(p$module, "spatial_qc")
   expect_identical(names(p), c("protocol", "seq", "session_token", "module", "action"))
+  # The second route, by name: the payload is the app's own dialect for EITHER
+  # declared route, and nothing else can appear in it.
+  p2 <- e$.ts_export_payload(8L, "sometoken", "bulk_de")
+  expect_identical(p2$module, "bulk_de")
+  expect_identical(names(p2), c("protocol", "seq", "session_token", "module", "action"))
   # No `import` block at all: the app-side validator refuses every key, so sending
   # even an empty one would be a refusal waiting to happen.
   expect_false("import" %in% names(p))
   expect_false("inputs" %in% names(p))
   expect_false("button" %in% names(p))
 })
+
 # =============================================================================
 # THE ARMING BOOTSTRAP (gapF §2.5 item 3).
 #
@@ -393,7 +401,7 @@ test_that("the arming bootstrap does not loosen the OTHER writes", {
   expect_true(r$isError)
   expect_identical(r$structuredContent$code, "STALE_SESSION")
 
-  r <- e$.ts_tool_export(7L, expect)
+  r <- e$.ts_tool_export(7L, "spatial_qc", expect)
   expect_true(r$isError)
   expect_identical(r$structuredContent$code, "STALE_SESSION")
 })
@@ -550,3 +558,57 @@ test_that("the import schema cross-checks clean against the app's importer table
   expect_length(e$.ts_mcp_import_problems(), 0L)
 })
 
+test_that("the export column contracts cross-check clean against the app's table", {
+  e <- .mcp_sc_local_env()
+  expect_length(e$.ts_mcp_export_problems(), 0L)
+})
+
+test_that("the export tool description carries the per-route column contracts", {
+  e <- .mcp_sc_local_env()
+  tools <- e$.ts_tools()
+  ex <- Filter(function(x) identical(x$name, "transcripto_drive_export"), tools)
+  expect_length(ex, 1L)
+  if (!length(ex)) return(invisible(NULL))
+  desc <- paste(ex[[1]]$description, collapse = " ")
+  # One engine-constant name per contract shape: the fixed spatial list, the
+  # bulk_de guaranteed set, both pathway modes, the marker normaliser's set.
+  expect_match(desc, "gi_star", fixed = TRUE)
+  expect_match(desc, "baseMean", fixed = TRUE)
+  expect_match(desc, "geneID", fixed = TRUE)
+  expect_match(desc, "core_enrichment", fixed = TRUE)
+  expect_match(desc, "avg_log2FC", fixed = TRUE)
+  # And the description must say the redaction is STILL the wire's rule —
+  # declaring the schema must not imply the caller receives these verbatim.
+  expect_match(desc, "<redacted>", fixed = TRUE)
+})
+
+test_that("the export tool refuses a module outside the app's route table", {
+  e <- .mcp_sc_local_env()
+  fx <- .mcp_sc_local_import_fixture(e)
+  on.exit(unlink(e$ts_drive_root(), recursive = TRUE, force = TRUE), add = TRUE)
+  expect <- list(session_id = fx$session_id, pid = Sys.getpid(),
+                 started_at = fx$started)
+  # `bulk_wgcna` has no route (and will NOT get one until its product call —
+  # Slice 4 decides, never a side effect). Modules kept LEAVING the refusal
+  # role as routes arrived: bulk_pathways (S2c), bulk_filter/bulk_signatures
+  # (Slice 2.3).
+  r <- e$.ts_tool_export(9L, "bulk_wgcna", expect)
+  expect_true(r$isError)
+  expect_identical(r$structuredContent$code, "MODULE_NOT_ALLOWED")
+  expect_false(file.exists(e$ts_drive_path("scenario.json")))
+
+  # EVERY declared route is reachable end-to-end through the same tool: the
+  # payload carries the caller's module verbatim, and only that field moves.
+  # Driven by the APP's own table, so a route added later joins this loop or
+  # the test goes red — the route table cannot grow silently.
+  for (i in seq_along(names(TS_DRIVE_EXPORT_ROUTES))) {
+    m <- names(TS_DRIVE_EXPORT_ROUTES)[i]
+    ri <- e$.ts_tool_export(9L + i, m, expect)
+    expect_false(ri$isError, info = sprintf("route '%s' must pass the gate", m))
+    scenario <- jsonlite::fromJSON(e$ts_drive_path("scenario.json"), simplifyVector = FALSE)
+    expect_identical(scenario$module, m,
+                     info = sprintf("route '%s': payload module verbatim", m))
+    expect_identical(scenario$action, "export_result",
+                     info = sprintf("route '%s': payload action", m))
+  }
+})

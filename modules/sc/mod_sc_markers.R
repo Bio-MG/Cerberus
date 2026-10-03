@@ -415,5 +415,15 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
       }
     )
 
+    # S2c: publish THIS module's drive export route. Same seam shape as the
+    # bulk_de / bulk_pathways ones. The exporter reads `shared_rv$markers_data`
+    # (the store every producer writes — this button AND the auto-pipeline),
+    # not the local `markers_rv` mirror; it lives in
+    # mod_sc_markers_export.R so the offline tests can reach it without a
+    # Shiny runtime.
+    ts_drive_publish_export(global_data, "sc_markers", function() {
+      sc_markers_export_table_csv(shared_rv, global_data)
+    })
+
   }) # /moduleServer
 }

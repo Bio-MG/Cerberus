@@ -910,5 +910,14 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
       }
     )
 
+    # S2c: publish THIS module's drive export route. Same seam shape as the
+    # bulk_de one (S2b): a closure over this module's own `shared_rv`, so the
+    # route exports the table THIS session produced, never a caller-chosen
+    # state. The exporter lives in mod_bulk_pathways_export.R so the offline
+    # tests can reach it without a Shiny runtime.
+    ts_drive_publish_export(global_data, "bulk_pathways", function() {
+      bulk_pathways_export_enrichment_csv(shared_rv, global_data)
+    })
+
   }) # /moduleServer
 }

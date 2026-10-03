@@ -127,19 +127,30 @@ TS_DRIVE_SPATIAL_QC_SUB_TAB      <- "hotspots"
 # drive run reports. Measured before this slice: 0 of 126 `downloadHandler` sites
 # were reachable by any drive action, because the protocol had no verb for one.
 #
-# WHY IT IS ONE, AND WHY THE CLIENT CHOOSES NOTHING. The route is declared as
-# FROZEN DATA mapping a module to the registry key its own exporter is published
-# under. The caller names neither a handler, nor an outputId, nor a destination,
-# nor a filename, nor a format. That is not a limitation of the implementation, it
-# is the design: a download verb that lets a remote caller choose where bytes land
-# is a file-write primitive, and this one is not.
+# WHY THE CALLER NAMES SO LITTLE. The route is declared as FROZEN DATA mapping a
+# module to the registry key its own exporter is published under. The caller
+# names neither a handler, nor an outputId, nor a destination, nor a filename,
+# nor a format. That is not a limitation of the implementation, it is the design:
+# a download verb that lets a remote caller choose where bytes land is a
+# file-write primitive, and this one is not.
 #
-# GENERALISING IS A SEPARATE, EXPLICIT DECISION. Adding a second entry to
-# `TS_DRIVE_EXPORT_ROUTES` is the single edit that would do it, and
-# `ts_drive_allowlist_problems()` checks the shape of the table so the addition
-# cannot be an accident.
+# GENERALISING HAPPENED, EXPLICITLY (S2b, 2026-10-03): the table gained its
+# second entry, `bulk_de`, under the SAME contract — the only thing a caller may
+# name is WHICH closed route, and every artefact decision stays the app's.
+# `ts_drive_allowlist_problems()` checks the shape of the table so a third entry
+# cannot be an accident either. 🆕 2026-10-03 (S2c): it did not stay an accident
+# — `bulk_pathways` joined under the same contract, one route for the module's
+# enrichment table (`shared_rv$pathway_results`), ORA and GSEA alike.
 TS_DRIVE_EXPORT_ROUTES <- list(
-  spatial_qc = "spatial_qc_hotspot_csv"
+  spatial_qc      = "spatial_qc_hotspot_csv",
+  bulk_de         = "bulk_de_results_csv",
+  bulk_pathways   = "bulk_pathways_enrichment_csv",
+  sc_markers      = "sc_markers_table_csv",
+  sc_pathways     = "sc_pathways_enrichment_csv",
+  bulk_filter     = "bulk_filter_vst_matrix_csv",
+  bulk_signatures = "bulk_signatures_scores_csv",
+  bulk_pattern    = "bulk_pattern_clusters_csv",
+  bulk_network    = "bulk_network_nodes_csv"
 )
 
 #' Modules allowed to publish an EXPORT route, derived from the routes above.
@@ -180,12 +191,119 @@ TS_DRIVE_EXPORT_DIRNAME <- "ts_drive_exports"
 #' deriving the index per export.
 TS_DRIVE_EXPORT_MAX_FILES <- 8L
 
-#' Filename stem for an export. Deliberately NOT the human download name, which
-#' embeds `global_data$active_spatial_dataset` — a sample name. Putting a
-#' biological identifier in a filename that reaches a remote caller is the leak
-#' this route exists to avoid. The index appended to this stem is derived from the
-#' directory's own contents, never from a request or a session field.
+#' Filename stems for the export routes, one per route. Deliberately NOT the
+#' human download names, which embed a sample name or a contrast label — a user
+#' annotation. Putting a biological identifier or a caller-chosen label in a
+#' filename that reaches a remote caller is the leak these routes exist to avoid.
+#' The index appended to each stem is derived from the directory's own contents,
+#' never from a request or a session field.
+#'
+#' `TS_DRIVE_EXPORT_STEM` is the spatial_qc stem under its S2 name — kept because
+#' `mod_spatial_qc.R` and its export tests read it; the table below is the
+#' general form the pruner walks.
 TS_DRIVE_EXPORT_STEM <- "spatial_qc_hotspots"
+TS_DRIVE_EXPORT_STEM_BULK_DE <- "bulk_de_results"
+# The enrichment-table stem (S2c): deliberately NOT the human names, which do
+# not distinguish ORA from GSEA either — one route covers both modes because the
+# module stores one table for whichever ran last.
+TS_DRIVE_EXPORT_STEM_BULK_PATHWAYS <- "bulk_pathways_enrichment"
+# The SC marker-table stem (S2c): the human filename is `markers_<date>.csv`,
+# which embeds nothing caller-chosable either — the pin exists so the stem is
+# declared data, not a string buried in a module.
+TS_DRIVE_EXPORT_STEM_SC_MARKERS <- "sc_markers_table"
+# The SC enrichment-table stem (S2c): the HUMAN filename embeds
+# `input$pathway_db` (GOBP / KEGG / Reactome) — a caller-influenceable UI
+# choice. The drive stem must not, on the S2 rule.
+TS_DRIVE_EXPORT_STEM_SC_PATHWAYS <- "sc_pathways_enrichment"
+
+# Slice 2.3 stems (2026-10-03): the four Bulk analysis tables. bulk_filter's
+# artefact is the VST matrix itself — the module has NO human CSV download for
+# it (only PNGs and a variance-partition table), so this route is a NEW
+# artefact on the wire, not the mirror of a downloadHandler; the exporter
+# writes it gene-first so it can be re-imported by import_bulk unchanged.
+TS_DRIVE_EXPORT_STEM_BULK_FILTER <- "bulk_filter_vst_matrix"
+TS_DRIVE_EXPORT_STEM_BULK_SIGNATURES <- "bulk_signatures_scores"
+TS_DRIVE_EXPORT_STEM_BULK_PATTERN <- "bulk_pattern_clusters"
+TS_DRIVE_EXPORT_STEM_BULK_NETWORK <- "bulk_network_nodes"
+
+TS_DRIVE_EXPORT_STEMS <- c(
+  spatial_qc      = TS_DRIVE_EXPORT_STEM,
+  bulk_de         = TS_DRIVE_EXPORT_STEM_BULK_DE,
+  bulk_pathways   = TS_DRIVE_EXPORT_STEM_BULK_PATHWAYS,
+  sc_markers      = TS_DRIVE_EXPORT_STEM_SC_MARKERS,
+  sc_pathways     = TS_DRIVE_EXPORT_STEM_SC_PATHWAYS,
+  bulk_filter     = TS_DRIVE_EXPORT_STEM_BULK_FILTER,
+  bulk_signatures = TS_DRIVE_EXPORT_STEM_BULK_SIGNATURES,
+  bulk_pattern    = TS_DRIVE_EXPORT_STEM_BULK_PATTERN,
+  bulk_network    = TS_DRIVE_EXPORT_STEM_BULK_NETWORK
+)
+
+#' The per-route column CONTRACT, declared (option 1 of the 2026-10-03
+#' redaction assessment).
+#'
+#' The descriptor's `columns` reaches the wire through the sanitiser, which
+#' redacts every 8+-character alphanumeric name ("a column name can be
+#' user-supplied" — drive_watcher.R). The file is the artefact, but a caller
+#' that cannot read it has only the descriptor for schema knowledge, so each
+#' route declares HERE what its artefact's columns are. Three shapes, chosen by
+#' what each producer actually guarantees — measured, not assumed:
+#'
+#'   * `fixed`     — the FULL column list, deterministic in content AND order.
+#'                   Declared only where one engine writes the table.
+#'   * `mode_*`    — the full list per enrichment mode (`mode_ora` /
+#'                   `mode_gsea`): one route, two deterministic schemas.
+#'   * `guaranteed`— the identity columns every engine guarantees (the
+#'                   normalisers' contract); the engine may add extras and may
+#'                   reorder, so NO full list is promised.
+#'
+#' Cross-checked against the MCP server's own mirror by `--check`
+#' (scripts/mcp_server.R), and pinned against the exporters' real output by
+#' test-drive-export-columns.R. The wire still sanitises: this table documents
+#' the schema, it does not un-redact anything — engine constants in static
+#' text are the same class of fact as the import schema's field names.
+TS_DRIVE_EXPORT_COLUMNS <- list(
+  spatial_qc = list(
+    fixed      = c("id", "value", "gi_star", "p_value", "hotspot")
+  ),
+  bulk_de = list(
+    guaranteed = c("gene", "baseMean", "log2FoldChange", "pvalue", "padj")
+  ),
+  bulk_pathways = list(
+    guaranteed = c("ID", "Description", "pvalue", "p.adjust"),
+    mode_ora   = c("ID", "Description", "GeneRatio", "BgRatio", "pvalue",
+                   "p.adjust", "qvalue", "geneID", "Count"),
+    mode_gsea  = c("ID", "Description", "setSize", "enrichmentScore", "NES",
+                   "pvalue", "p.adjust", "qvalue", "rank", "core_enrichment",
+                   "Count", "GeneRatio")
+  ),
+  sc_markers = list(
+    guaranteed = c("gene", "cluster", "avg_log2FC", "p_val_adj", "pct.1", "pct.2")
+  ),
+  sc_pathways = list(
+    guaranteed = c("ID", "Description", "pvalue", "p.adjust"),
+    mode_ora   = c("ID", "Description", "GeneRatio", "BgRatio", "pvalue",
+                   "p.adjust", "qvalue", "geneID", "Count")
+  ),
+  bulk_filter = list(
+    # The file is `gene` + one column PER SAMPLE: everything after the first
+    # column is the session's own sample names, so only `gene` is guaranteed.
+    guaranteed = c("gene")
+  ),
+  bulk_signatures = list(
+    # build_signature_scores_export(): the long signature x sample grid.
+    fixed      = c("signature", "sample", "score", "method", "analysis_id",
+                   "disclaimer")
+  ),
+  bulk_pattern = list(
+    # build_pattern_table_export(): exactly gene/cluster.
+    fixed      = c("gene", "cluster")
+  ),
+  bulk_network = list(
+    # build_bulk_network_table_export(): nodes + in-subgraph degree.
+    fixed      = c("node", "symbol", "role", "prize", "degree", "species",
+                   "source_db")
+  )
+)
 
 # --- SC auto-pipeline (measured in modules/sc/mod_sc.R) -----------------------
 # The SC domain has NO single-click pipeline button. `btn_auto_pipeline_sc`
@@ -1595,8 +1713,11 @@ ts_drive_validate_export_request <- function(req) {
 
 #' Drop the oldest exported files until at most `TS_DRIVE_EXPORT_MAX_FILES` remain.
 #'
-#' By modification time, and only among files this route created — the directory
-#' is the app's, but the function refuses to delete anything it did not write.
+#' By modification time, and only among files the export ROUTES created — the
+#' directory is the app's, but the function refuses to delete anything it did not
+#' write. Since S2b the route set has more than one stem, so the pattern unions
+#' `TS_DRIVE_EXPORT_STEMS`: a pruner keyed to one route would let the other route
+#' grow the directory past the cap forever.
 ts_drive_export_prune <- function(dir = ts_drive_export_dir(),
                                  cap = TS_DRIVE_EXPORT_MAX_FILES) {
   if (!dir.exists(dir)) return(invisible(0L))
@@ -1608,11 +1729,49 @@ ts_drive_export_prune <- function(dir = ts_drive_export_dir(),
   # Never remove anything that is not one of OUR files. The directory is the app's,
   # and a pruner that deletes what it did not write is a pruner that can delete an
   # operator's file.
-  ours <- sprintf("^%s_[0-9]+\\.csv$", TS_DRIVE_EXPORT_STEM)
+  ours <- sprintf("^(%s)_[0-9]+\\.csv$",
+                  paste(TS_DRIVE_EXPORT_STEMS, collapse = "|"))
   victims <- victims[grepl(ours, basename(victims))]
   if (!length(victims)) return(invisible(0L))
   unlink(victims)
   invisible(length(victims))
+}
+
+#' Write a route's table into the bounded export directory, then prune.
+#'
+#' The shared tail of every CSV export route (S2, S2b, S2c — the duplication
+#' guard flagged the third verbatim copy, and slices 2.3 will copy it again
+#' without this): resolve the destination, write ONCE, prune, and build the
+#' frozen descriptor. `next_path` is the module's own stateless index resolver
+#' (one per stem — `bulk_de_export_next_path()` and its twins), so the filename
+#' stays the MODULE's decision; everything else here is route-generic. Returns
+#' the export VERDICT: `ok = FALSE, status = "error"` when the write itself
+#' fails, else `ok = TRUE, status = "done"` with the descriptor. Refusals
+#' (`status = "invalid"`) stay the exporter's — they are about the session's
+#' state, not about the write.
+ts_drive_export_write_table <- function(df, next_path, dir = NULL) {
+  if (is.null(dir) || !nzchar(dir)) dir <- ts_drive_export_dir()
+  if (!dir.exists(dir)) dir.create(dir, recursive = TRUE, showWarnings = FALSE)
+  file <- next_path(dir)
+  wrote <- tryCatch({
+    utils::write.csv(df, file, row.names = FALSE)
+    TRUE
+  }, error = function(e) conditionMessage(e))
+  if (!isTRUE(wrote)) {
+    return(list(ok = FALSE, status = "error",
+                errors = paste("the export could not be written:", wrote),
+                descriptor = NULL))
+  }
+  ts_drive_export_prune(dir)
+  list(ok = TRUE, status = "done", errors = character(0), warnings = character(0),
+       descriptor = list(
+         format  = "csv",
+         file    = basename(file),
+         bytes   = as.integer(file.size(file)),
+         n_rows  = as.integer(nrow(df)),
+         n_cols  = as.integer(ncol(df)),
+         columns = as.character(names(df))
+       ))
 }
 
 

@@ -168,9 +168,11 @@ source("modules/sc/mod_sc_metadata.R")  # 0.5 Métadonnées — design condition
 source("modules/sc/mod_sc_annotation.R")
 source("modules/sc/mod_sc_rarity.R")  # CCC 9 (Q1) : onglet « Rareté par population » (descriptif)
 source("modules/sc/mod_sc_viz.R")
+source("modules/sc/mod_sc_markers_export.R")  # S2c : route d'export drive (table marqueurs)
 source("modules/sc/mod_sc_markers.R")
 source("modules/sc/mod_sc_pseudobulk.R")
 source("modules/sc/mod_sc_corr.R")
+source("modules/sc/mod_sc_pathways_export.R")  # S2c : route d'export drive (table d'enrichissement SC)
 source("modules/sc/mod_sc_pathways.R")
 source("modules/sc/mod_sc_trajectory.R")
 source("modules/sc/mod_sc_velocity.R")
@@ -190,17 +192,22 @@ source("modules/sc/mod_sc.R")
 
 # 5c. Bulk
 source("modules/bulk/mod_bulk_mapping.R")
+source("modules/bulk/mod_bulk_filter_export.R")  # Slice 2.3 : route d'export drive (matrice VST)
 source("modules/bulk/mod_bulk_filter.R")
 for (f in list.files("modules/bulk_de", pattern = "\\.R$", full.names = TRUE)) source(f)
+source("modules/bulk/mod_bulk_pathways_export.R")  # S2c : route d'export drive (table d'enrichissement)
 source("modules/bulk/mod_bulk_pathways.R")
+source("modules/bulk/mod_bulk_signatures_export.R")  # Slice 2.3 : route d'export drive (scores de signatures)
 source("modules/bulk/mod_bulk_signatures.R")  # Bulk V2 M3 : signatures cellulaires
 source("modules/bulk/mod_bulk_wgcna.R")       # Bulk V2 M4 : WGCNA safe-mode
 source("modules/bulk/mod_bulk_survival.R")    # Bulk V2 M5 : survie & clinique
+source("modules/bulk/mod_bulk_pattern_export.R")  # Slice 2.3 : route d'export drive (clusters de profils)
 source("modules/bulk/mod_bulk_pattern.R")     # STAT-S3 : clustering de profils (kmeans MVP)
 source("modules/bulk/mod_bulk_dose_response.R")  # NEW-1 : dose-réponse / time-course (drc)
 source("modules/bulk/mod_bulk_datasets.R")    # MD-1 : gestion du conteneur bulk_datasets
 source("modules/bulk/mod_bulk_multi.R")       # MD-2 : comparaison multi-jeux
 source("modules/bulk/mod_bulk_merge.R")       # NEW-2 : fusion de jeux bulk
+source("modules/bulk/mod_bulk_network_export.R")  # Slice 2.3 : route d'export drive (noeuds PCSF)
 source("modules/bulk/mod_bulk_network.R")     # NEW-3 : réseau PCSF / interactome
 source("modules/bulk/mod_bulk_report.R")
 source("modules/bulk/mod_bulk.R")

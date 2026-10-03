@@ -540,5 +540,13 @@ mod_bulk_signatures_server <- function(id, global_data, shared_rv) {
       }
     )
 
+    # Slice 2.3: publish THIS module's drive export route — the scores table
+    # built by build_signature_scores_export() (the same builder the human
+    # dl_sig_csv writes, disclaimer column included). The exporter lives in
+    # mod_bulk_signatures_export.R so the offline tests can reach it.
+    ts_drive_publish_export(global_data, "bulk_signatures", function() {
+      bulk_signatures_export_scores_csv(shared_rv, global_data)
+    })
+
   }) # /moduleServer
 }

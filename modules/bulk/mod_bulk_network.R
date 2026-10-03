@@ -450,5 +450,12 @@ mod_bulk_network_server <- function(id, global_data, shared_rv) {
                          file, row.names = FALSE)
       }
     )
+    # Slice 2.3: publish THIS module's drive export route — the node table
+    # built by build_bulk_network_table_export() (the same builder the human
+    # dl_network writes). The exporter lives in mod_bulk_network_export.R so
+    # the offline tests can reach it.
+    ts_drive_publish_export(global_data, "bulk_network", function() {
+      bulk_network_export_nodes_csv(shared_rv, global_data)
+    })
   })
 }

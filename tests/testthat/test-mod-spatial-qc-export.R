@@ -116,27 +116,77 @@ if (!exists(".tr_plain", envir = globalenv()))
 }
 
 # =============================================================================
-# 1. The route table is ONE entry, and it is FROZEN DATA
+# 1. The route table is FROZEN DATA
 # =============================================================================
-test_that("there is exactly ONE export route, and it belongs to spatial_qc", {
+test_that("the export route table declares exactly NINE frozen routes", {
   routes <- .exp_routes()
   if (!is.list(routes)) {
     testthat::expect_true(is.list(routes),
       info = "TS_DRIVE_EXPORT_ROUTES must exist and declare the routes as frozen data")
     return(invisible(NULL))
   }
-  # One. Not "a small number" ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ONE. The whole point of the slice is that the
-  # verb exists for a single, named artefact.
-  expect_length(routes, 1L)
-  expect_identical(names(routes), "spatial_qc")
-  # The route is a REGISTRY KEY, not a handler name the caller supplies.
+  # NINE since Slice 2.3 (bulk_filter/bulk_signatures/bulk_pattern/
+  # bulk_network), and still closed: the verb exists for NAMED artefacts, one
+  # per route, and every artefact decision stays the app’s.
+  expect_length(routes, 9L)
+  expect_setequal(names(routes),
+                  c("spatial_qc", "bulk_de", "bulk_pathways", "sc_markers",
+                    "sc_pathways", "bulk_filter", "bulk_signatures",
+                    "bulk_pattern", "bulk_network"))
+  # The routes are REGISTRY KEYS, not handler names the caller supplies.
   expect_type(routes$spatial_qc, "character")
   expect_length(routes$spatial_qc, 1L)
+  expect_type(routes$bulk_de, "character")
+  expect_length(routes$bulk_de, 1L)
+  expect_type(routes$bulk_pathways, "character")
+  expect_length(routes$bulk_pathways, 1L)
+  expect_type(routes$sc_markers, "character")
+  expect_length(routes$sc_markers, 1L)
+  expect_type(routes$sc_pathways, "character")
+  expect_length(routes$sc_pathways, 1L)
+  expect_type(routes$bulk_filter, "character")
+  expect_length(routes$bulk_filter, 1L)
+  expect_type(routes$bulk_signatures, "character")
+  expect_length(routes$bulk_signatures, 1L)
+  expect_type(routes$bulk_pattern, "character")
+  expect_length(routes$bulk_pattern, 1L)
+  expect_type(routes$bulk_network, "character")
+  expect_length(routes$bulk_network, 1L)
 
-  # And the module is a real drive module, or the route could never be dispatched.
+  # And the modules are real drive modules, or the routes could never be
+  # dispatched.
   expect_true("spatial_qc" %in% TS_DRIVE_MODULES)
+  expect_true("bulk_de" %in% TS_DRIVE_MODULES)
+  expect_true("bulk_pathways" %in% TS_DRIVE_MODULES)
+  expect_true("sc_markers" %in% TS_DRIVE_MODULES)
+  expect_true("sc_pathways" %in% TS_DRIVE_MODULES)
+  expect_true("bulk_filter" %in% TS_DRIVE_MODULES)
+  expect_true("bulk_signatures" %in% TS_DRIVE_MODULES)
+  expect_true("bulk_pattern" %in% TS_DRIVE_MODULES)
+  expect_true("bulk_network" %in% TS_DRIVE_MODULES)
   # The action exists in the frozen vocabulary.
   expect_true("export_result" %in% TS_DRIVE_ACTIONS)
+})
+
+test_that("the spatial descriptor columns equal the declared contract table", {
+  # S2c follow-up (option 1): the app declares each route's column contract
+  # (TS_DRIVE_EXPORT_COLUMNS) and the server renders it into the tool
+  # description. This pin keeps the DECLARED list equal to what THIS route's
+  # exporter actually produces — the fixed-shape promise, name for name.
+  ct <- get0("TS_DRIVE_EXPORT_COLUMNS", envir = globalenv())
+  if (is.null(ct)) {
+    testthat::fail("TS_DRIVE_EXPORT_COLUMNS must exist - the per-route column contract is declared data")
+    return(invisible(NULL))
+  }
+  x <- .exp_need(.exp_exporter(), "spatial_qc_export_hotspot_csv()")
+  if (is.null(x)) return(invisible(NULL))
+  d <- tempfile("ts-exp-ct-")
+  dir.create(d, showWarnings = FALSE)
+  on.exit(unlink(d, recursive = TRUE, force = TRUE), add = TRUE)
+  st <- .exp_state()
+  r <- x(st$rv, st$gd, d)
+  expect_true(isTRUE(r$ok))
+  expect_identical(r$descriptor$columns, ct$spatial_qc$fixed)
 })
 
 test_that("the export request carries NO selectable field", {
@@ -304,7 +354,10 @@ test_that("the export is refused for a module with NO declared route", {
     called <<- TRUE
     list(ok = TRUE, status = "done")
   }
-  for (m in c("bulk_de", "bulk_pathways", "sc_markers", "import_bulk", "spatial_pipeline")) {
+  # Modules kept LEAVING this list as slices S2b/S2c/2.3 declared routes; each
+  # leaver’s exporter is pinned in its own export suite. The loop still pins
+  # modules that have NO route (bulk_wgcna is Slice 4, NOT export).
+  for (m in c("bulk_wgcna", "bulk_survival", "import_bulk", "spatial_pipeline")) {
     out <- ts_drive_apply(NULL, NULL,
       list(action = "export_result", module = m, import = list()),
       effects = effects)
@@ -607,11 +660,14 @@ test_that("the module publishes an exporter that is welded to its OWN store", {
   expect_true(isTRUE(r$ok))
   expect_true(file.exists(file.path(d(), r$descriptor$file)))
   # And a module with no declared route cannot publish one: the frozen table is
-  # the authority, so a typo cannot invent an export.
+  # the authority, so a typo cannot invent an export. Modules kept LEAVING the
+  # no-route role (bulk_de in S2b, bulk_filter and friends in Slice 2.3), so the
+  # case is proven with a module that still has none: bulk_wgcna is Slice 4 and
+  # deliberately gets no export until its product call.
   expect_warning(
-    ts_drive_publish_export(st$gd, "bulk_de", function() TRUE),
+    ts_drive_publish_export(st$gd, "bulk_wgcna", function() TRUE),
     "no export route")
-  expect_null(ts_drive_export_of(st$gd, "bulk_de"))
+  expect_null(ts_drive_export_of(st$gd, "bulk_wgcna"))
 })
 
 test_that("the exported file is non-empty, parseable and matches the stored table", {

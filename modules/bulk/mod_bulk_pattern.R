@@ -521,5 +521,12 @@ mod_bulk_pattern_server <- function(id, global_data, shared_rv) {
                          file, row.names = FALSE)
       }
     )
+    # Slice 2.3: publish THIS module's drive export route — the gene/cluster
+    # table built by build_pattern_table_export() (the same builder the human
+    # dl_pattern writes). The exporter lives in mod_bulk_pattern_export.R so
+    # the offline tests can reach it.
+    ts_drive_publish_export(global_data, "bulk_pattern", function() {
+      bulk_pattern_export_clusters_csv(shared_rv, global_data)
+    })
   })
 }

@@ -778,5 +778,14 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
       })
     })
 
+    # Slice 2.3: publish THIS module's drive export route — the VST matrix both
+    # store paths write (Step 1 AND batch correction), gene-first so
+    # import_bulk can read the file straight back. The exporter lives in
+    # mod_bulk_filter_export.R so the offline tests can reach it without a
+    # Shiny runtime.
+    ts_drive_publish_export(global_data, "bulk_filter", function() {
+      bulk_filter_export_vst_matrix_csv(shared_rv, global_data)
+    })
+
   }) # /moduleServer
 }
