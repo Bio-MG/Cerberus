@@ -103,6 +103,7 @@ if ("--check" %in% .args) {
   .ts_stderr("  transport    : stdio (no network port)")
   .ts_stderr("  tools        : transcripto_drive_status, transcripto_drive_read_result (read-only)")
   .ts_stderr("                 transcripto_drive_snapshot (M3a: passive, read-only)")
+  .ts_stderr("                 transcripto_drive_import (S3: controlled import, scenario.json only)")
   .ts_stderr("                 transcripto_drive_set_inputs (M3b: controlled write, scenario.json only)")
   .ts_stderr("                 transcripto_drive_run (M3c: controlled run, run_pipeline only)")
   .ts_stderr("                 transcripto_drive_wait (M4: bounded observation; <=1 snapshot, post-terminal)")
@@ -1469,6 +1470,302 @@ TS_MCP_EXPORT_MODULE <- "spatial_qc"
             "' at seq ", seq, ". The app picks the artefact; nothing was selectable."))
 }
 
+# ── S3: the controlled import tool ──────────────────────────────────────────
+#
+# WHAT S3 IS.
+#   It writes ONE `scenario.json` with `action = "import_file"` through the
+#   drive's OWN atomic writer, then STOPS. The app's poller consumes it on its
+#   next tick while ARMED, and the module's own importer — published through
+#   `ts_drive_publish_importer()` — does the load. Nothing is read, loaded or
+#   computed here. This is the tool that makes a tool-only client able to
+#   BOOTSTRAP a modality: before it, `import_file` was reachable only through a
+#   hand-placed scenario file (gapF §2.5 item 5), so no agent could get data in.
+#
+# THE DIVISION OF AUTHORITY — why this server does NOT check the roots.
+#   The app validates an import path against `ts_drive_import_roots()`: the app
+#   root, the APP'S `tempdir()`, `TS_DRIVE_IMPORT_EXTRA_ROOTS` and the operator's
+#   `TRANSCRIPTO_DRIVE_DATA_DIR`. This server is a DIFFERENT process with a
+#   different `tempdir()`, so replicating the root check here would produce
+#   verdicts about a different filesystem view — a false ACCEPT is a security
+#   hole and a false REFUSE is a mystery. The server therefore enforces only the
+#   one rule that is process-independent (no `..` component on the RAW string,
+#   the same first rule the app applies), and the app stays the authority on
+#   confinement, existence and loader kind. Its refusal arrives as an `invalid`
+#   verdict in `result.json`, readable with transcripto_drive_read_result.
+
+# The server-side schema for the `import` block, per importer. Values are
+# validated HERE, before anything is written, on the M3b finding (F-A): a
+# payload the app would silently mis-apply must be refused at the tool.
+# Cross-checked against the app's own `TS_DRIVE_IMPORT_SCHEMA` by
+# `.ts_mcp_import_problems()` — surfaced by `--check`.
+TS_MCP_IMPORT_SCHEMA <- list(
+  import_bulk = list(
+    counts_path   = list(type = "path", required = TRUE),
+    metadata_path = list(type = "path", required = FALSE),
+    mode          = list(type = "enum", values = c("merged_matrix", "per_sample"),
+                         required = FALSE)
+  ),
+  import_spatial = list(
+    dir_path    = list(type = "path", required = TRUE),
+    sample_name = list(type = "text", max_chars = 120L, required = FALSE),
+    technology  = list(type = "enum",
+                       values = c("visium", "xenium", "cosmx", "slideseq"),
+                       required = FALSE)
+  ),
+  import_sc = list(
+    dir_path    = list(type = "path", required = TRUE),
+    sample_name = list(type = "text", max_chars = 120L, required = TRUE)
+  )
+)
+
+#' Cross-check the import schema against the APP's own importer table.
+#' Returns `character(0)` when consistent. Surfaced by `--check`.
+.ts_mcp_import_problems <- function() {
+  problems <- character(0)
+  for (m in names(TS_MCP_IMPORT_SCHEMA)) {
+    app <- TS_DRIVE_IMPORT_SCHEMA[[m]]
+    if (is.null(app)) {
+      problems <- c(problems, sprintf("%s: not an importer in TS_DRIVE_IMPORT_SCHEMA", m))
+      next
+    }
+    allowed <- c(app$required, app$optional)
+    for (f in names(TS_MCP_IMPORT_SCHEMA[[m]])) {
+      sch <- TS_MCP_IMPORT_SCHEMA[[m]][[f]]
+      if (!f %in% allowed) {
+        problems <- c(problems, sprintf("%s.%s: not in the app's importer schema", m, f))
+        next
+      }
+      want_required <- f %in% app$required
+      if (!identical(isTRUE(sch$required), want_required)) {
+        problems <- c(problems, sprintf(
+          "%s.%s: required = %s, app says %s", m, f, isTRUE(sch$required), want_required))
+      }
+      if (identical(sch$type, "enum") && !length(sch$values)) {
+        problems <- c(problems, sprintf("%s.%s: enum with no values", m, f))
+      }
+      if (identical(sch$type, "text") &&
+          (!is.numeric(sch$max_chars) || sch$max_chars < 1L)) {
+        problems <- c(problems, sprintf("%s.%s: text without max_chars", m, f))
+      }
+    }
+    for (f in app$required) {
+      if (is.null(TS_MCP_IMPORT_SCHEMA[[m]][[f]])) {
+        problems <- c(problems, sprintf(
+          "%s: app-required key '%s' is not exposed by S3", m, f))
+      }
+    }
+  }
+  problems
+}
+
+#' The ONE server-side path rule: one non-empty string with no `..` component on
+#' the RAW string. Deliberately the app's first rule and nothing more — see the
+#' division of authority above. Never throws, never echoes the value.
+#' @return list(ok, reason)
+.ts_import_path_ok <- function(v) {
+  if (!is.character(v) || length(v) != 1L || is.na(v) || !nzchar(v)) {
+    return(list(ok = FALSE, reason = "must be one non-empty string"))
+  }
+  parts <- strsplit(v, "[/\\\\]+")[[1]]
+  if (any(parts == "..")) {
+    return(list(ok = FALSE, reason = "must not contain a `..` component"))
+  }
+  list(ok = TRUE, reason = NULL)
+}
+
+#' Validate ONE import block against the S3 schema. Never throws, never echoes
+#' a value. Returns list(ok, value, refused, detail) — `value` is the REBUILT
+#' block, so a field this code did not put there cannot reach the app.
+.ts_import_block_ok <- function(module, block) {
+  sch <- TS_MCP_IMPORT_SCHEMA[[module]]
+  refused <- list()
+  if (is.null(block) || !is.list(block) || !length(block)) {
+    refused[[paste0("import")]] <- "must be a non-empty object"
+    return(list(ok = FALSE, value = NULL, refused = refused))
+  }
+  unknown <- setdiff(names(block), names(sch))
+  if (length(unknown)) {
+    for (k in unknown) refused[[k]] <- "not a key of this importer"
+  }
+  value <- list()
+  for (f in names(sch)) {
+    fsch <- sch[[f]]
+    v <- block[[f]]
+    if (is.null(v)) {
+      if (isTRUE(fsch$required)) refused[[f]] <- "required by this importer"
+      next
+    }
+    if (identical(fsch$type, "path")) {
+      r <- .ts_import_path_ok(v)
+      if (!isTRUE(r$ok)) { refused[[f]] <- r$reason; next }
+      value[[f]] <- v
+    } else if (identical(fsch$type, "enum")) {
+      if (!is.character(v) || length(v) != 1L || is.na(v) || !v %in% fsch$values) {
+        refused[[f]] <- sprintf("must be one of: %s", paste(fsch$values, collapse = ", "))
+        next
+      }
+      value[[f]] <- v
+    } else if (identical(fsch$type, "text")) {
+      if (!is.character(v) || length(v) != 1L || is.na(v)) {
+        refused[[f]] <- "must be one string"; next
+      }
+      if (nchar(v) > fsch$max_chars) {
+        refused[[f]] <- sprintf("longer than %d characters", fsch$max_chars); next
+      }
+      if (grepl(intToUtf8(10L), v, fixed = TRUE) || grepl(intToUtf8(13L), v, fixed = TRUE)) {
+        refused[[f]] <- "must not contain a line break"; next
+      }
+      value[[f]] <- v
+    } else {
+      refused[[f]] <- "unsupported schema type"
+    }
+  }
+  list(ok = !length(refused), value = value, refused = refused)
+}
+
+.ts_tool_import <- function(seq, module, block, expect = NULL) {
+  # A write names its session: the assertion is mandatory and non-wildcard, and
+  # an import gets NO stale rescue (it changes what the session holds).
+  a <- .ts_session_assert(expect, require_assertion = TRUE)
+  if (!isTRUE(a$ok)) return(a$error)
+  hb <- a$hb; pid <- a$pid; started <- a$started; token <- a$token; age <- a$age
+
+  # --- arm state ------------------------------------------------------------
+  if (!isTRUE(hb$armed)) {
+    return(.ts_tool_err(
+      "SESSION_NOT_ARMED",
+      "The live session is not armed, so it would never consume this scenario.",
+      "Arm it with transcripto_drive_set_armed first; the write would otherwise be a silent no-op."))
+  }
+
+  # --- module: one of the THREE importers, not any drivable module ----------
+  if (!is.character(module) || length(module) != 1L || is.na(module) ||
+      !module %in% names(TS_MCP_IMPORT_SCHEMA)) {
+    return(.ts_tool_err(
+      "MODULE_NOT_ALLOWED",
+      sprintf("module '%s' publishes no importer reachable from S3.",
+              .ts_clean(module %|NA|% "(absent)")),
+      sprintf("Importers: %s.", paste(names(TS_MCP_IMPORT_SCHEMA), collapse = ", "))))
+  }
+
+  # --- the import block, validated BEFORE anything is written ---------------
+  blk <- .ts_import_block_ok(module, block)
+  if (!isTRUE(blk$ok)) {
+    return(.ts_tool_err(
+      "PAYLOAD_REFUSED",
+      sprintf("%d import field(s) refused; NOTHING was written.", length(blk$refused)),
+      "Only the importer's own keys, with a shape-valid value, are accepted. Root confinement, existence and loader kind are the APP's verdict and arrive later as an `invalid` result.",
+      detail = list(refused = blk$refused)))
+  }
+
+  # --- sequence monotonicity (the M3b rule) ---------------------------------
+  seq <- suppressWarnings(as.integer(seq))
+  if (is.na(seq) || seq < 1L) {
+    return(.ts_tool_err("PAYLOAD_REFUSED", "`seq` must be an integer >= 1.",
+                        "The app ignores any scenario whose seq is not greater than its last_seq."))
+  }
+  last_seq <- suppressWarnings(as.integer(.as_chr(hb$last_seq) %|NA|% 0L))
+  if (seq <= last_seq) {
+    return(.ts_tool_err(
+      "SEQ_STALE",
+      sprintf("seq %s is not greater than the session's last_seq %s.", seq, last_seq),
+      "A replayed or stale scenario is ignored by the app; re-read the session and use a higher seq."))
+  }
+
+  payload <- list(
+    protocol      = TS_DRIVE_PROTOCOL,
+    seq           = seq,
+    session_token = token,
+    module        = module,
+    action        = "import_file",
+    import        = blk$value
+  )
+  payload_bytes <- nchar(.ts_json(payload), type = "bytes")
+  if (payload_bytes > TS_MCP_MAX_PAYLOAD_BYTES) {
+    return(.ts_tool_err(
+      "PAYLOAD_TOO_LARGE",
+      sprintf("the serialised scenario is %d bytes; the limit is %d.",
+              payload_bytes, TS_MCP_MAX_PAYLOAD_BYTES),
+      "Shorten the paths."))
+  }
+
+  # Re-read the session IMMEDIATELY before writing (the M3b rule).
+  hb2 <- ts_drive_read_ready()
+  if (is.null(hb2) || !identical(.as_chr(hb2$session_token), token)) {
+    return(.ts_tool_err("SESSION_MISMATCH",
+                        "The session changed between validation and the write.",
+                        "Re-read transcripto_drive_status and retry."))
+  }
+  last2 <- suppressWarnings(as.integer(.as_chr(hb2$last_seq) %|NA|% 0L))
+  if (seq <= last2) {
+    return(.ts_tool_err(
+      "SEQ_STALE",
+      sprintf("another scenario was consumed meanwhile (last_seq is now %s).", last2),
+      "Re-read the session and use a higher seq."))
+  }
+  if (!ts_drive_ready_fresh()) {
+    return(.ts_tool_err("STALE_SESSION",
+                        "The heartbeat went stale between validation and the write.",
+                        "Nothing was written; re-read the session."))
+  }
+
+  wrote <- tryCatch(ts_drive_write_json(payload, ts_drive_path("scenario.json")),
+                    error = function(e) FALSE)
+  if (!isTRUE(wrote)) {
+    return(.ts_tool_err(
+      "SCENARIO_WRITE_FAILED",
+      "The atomic write of tools/_drive/scenario.json did not land.",
+      "Another process may be holding the file; retry, or check tools/check_writers.R."))
+  }
+
+  structured <- list(
+    accepted      = TRUE,
+    wrote         = TRUE,
+    scenario_file = "scenario.json",     # basename only — never an absolute path
+    seq           = seq,
+    module        = module,
+    action        = "import_file",
+    import_keys   = names(blk$value),    # KEYS only — a value (a path) is NEVER echoed
+    wildcard_used = FALSE,
+    session = list(
+      pid                 = pid,
+      started_at          = .ts_clean(started, 40L),
+      viewer              = .ts_clean(.as_chr(hb$viewer) %|NA|% "unknown", 40L),
+      heartbeat_age_s     = if (is.finite(age)) round(age, 1) else NA_real_,
+      heartbeat_timeout_s = ts_drive_hb_timeout(),
+      armed               = TRUE,
+      session_token       = "<redacted>"
+    ),
+    pinned = list(pid = !is.null(expect$pid),
+                  started_at = !is.null(expect$started_at),
+                  session_token = !is.null(expect$session_token)),
+    applied = FALSE,
+    authority = list(
+      validated_here    = c("key set per importer", "required keys", "enum values",
+                            "text bounds", "no `..` component on the raw path"),
+      delegated_to_app  = c("root confinement", "file/directory existence",
+                            "loader kind", "the load itself"),
+      why = paste("the import roots include the APP's tempdir, and this server is a",
+                  "different process: a server-side root check would judge a different",
+                  "filesystem view. The app's refusal arrives as an `invalid` verdict in",
+                  "result.json (transcripto_drive_read_result).")
+    ),
+    redaction = list(
+      policy = "import-v1",
+      values_echoed = FALSE,
+      limits = list(max_payload_bytes = TS_MCP_MAX_PAYLOAD_BYTES),
+      importers = names(TS_MCP_IMPORT_SCHEMA)
+    ),
+    note = paste0("scenario.json is written; the importer runs on the app's next poll tick ",
+                  "(~800 ms) and the load is SYNCHRONOUS: a terminal verdict for this seq is ",
+                  "`done` when the object is loaded, `invalid` when the app refused the path, ",
+                  "`error` when the importer raised. This tool does NOT wait.")
+  )
+  .ts_tool_ok(structured, sprintf(
+    "drive import: seq=%s module=%s keys=%s written (not applied)",
+    seq, module, paste(names(blk$value), collapse = ",")))
+}
+
 # module -> the buttons that ARE a run action for it. Closed on purpose.
 TS_MCP_RUN_BUTTONS <- list(
   import_bulk   = "import_bulk-btn_load",
@@ -2167,6 +2464,55 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
                additionalProperties = FALSE)),
            required = c("seq", "expect"),
            additionalProperties = FALSE)),
+    list(name = "transcripto_drive_import",
+         description = paste0(
+           "CONTROLLED WRITE. Import data for ONE importer module by writing ONE ",
+           "tools/_drive/scenario.json with action=import_file, then stop. The ",
+           "importers are import_bulk (counts_path required; optional ",
+           "metadata_path, mode merged_matrix|per_sample), import_spatial ",
+           "(dir_path required; optional sample_name, technology ",
+           "visium|xenium|cosmx|slideseq) and import_sc (dir_path + sample_name ",
+           "required). Values are validated HERE (key set, required keys, enums, ",
+           "text bounds, no `..` component) BEFORE the write. Root confinement, ",
+           "existence and loader kind are the APP's verdict: its refusal arrives ",
+           "as an `invalid` verdict in result.json, not as a tool error. Requires ",
+           "a live, ARMED session and a non-wildcard `expect.session_id`. Never ",
+           "reads a file, never loads data, never waits, never echoes a path back. ",
+           "Refusals: NO_SESSION, STALE_SESSION, INVALID_PROTOCOL, READ_FAILED, ",
+           "AMBIGUOUS_SESSION, SESSION_MISMATCH, SESSION_ASSERTION_REQUIRED, ",
+           "SESSION_NOT_ARMED, MODULE_NOT_ALLOWED, PAYLOAD_REFUSED, ",
+           "PAYLOAD_TOO_LARGE, SEQ_STALE, SCENARIO_WRITE_FAILED."),
+         inputSchema = list(
+           type = "object",
+           properties = list(
+             seq = list(
+               type = "integer", minimum = 1L,
+               description = paste0(
+                 "Monotonic scenario sequence. MUST be greater than the session's ",
+                 "last_seq, otherwise SEQ_STALE.")),
+             module = list(
+               type = "string", enum = as.list(names(TS_MCP_IMPORT_SCHEMA)),
+               description = "The importer the block belongs to."),
+             import = list(
+               type = "object",
+               description = paste0(
+                 "The importer's block: inputId -> value. Every key must belong ",
+                 "to the named importer; values are validated against the S3 ",
+                 "schema. Paths are never echoed back.")),
+             expect = list(
+               type = "object",
+               description = paste0(
+                 "REQUIRED. A write must NAME its session: `session_id` (the ",
+                 "DERIVED id published by transcripto_drive_status) is mandatory ",
+                 "and the wildcard '*' is never accepted."),
+               properties = list(
+                 session_id = list(type = "string"),
+                 pid = list(type = "integer"),
+                 started_at = list(type = "string")),
+               required = list("session_id"),
+               additionalProperties = FALSE)),
+           required = list("seq", "module", "import", "expect"),
+           additionalProperties = FALSE)),
     list(name = "transcripto_drive_status",
          description = paste0(
            "Read-only. Report the live TranscriptoShiny drive session: protocol, ",
@@ -2404,8 +2750,9 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
     capabilities = list(tools = list(listChanged = FALSE)),
     serverInfo = list(name = "transcriptoshiny-drive", version = "0.6.0-m4"),
     instructions = paste0(
-      "Access to a LIVE TranscriptoShiny drive session. Seven tools: three read-only ",
-      "(status, verdict, passive snapshot), one controlled input write (set_inputs), ",
+      "Access to a LIVE TranscriptoShiny drive session. Nine tools: three read-only ",
+      "(status, verdict, passive snapshot), one controlled import (import, ",
+      "action=import_file only), one controlled input write (set_inputs), ",
       "one controlled run (run, action=run_pipeline only), one bounded observation ",
       "(wait) and one controlled arm/disarm. Every write touches ONE file and is ",
       "acknowledged as a WRITE, never as a business outcome; `wait` never claims an ",
@@ -2435,6 +2782,33 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
     nm <- if (is.list(params)) .as_chr(params$name) else NA_character_
     if (is.na(nm)) return(.ts_error(id, -32602, "Invalid params: 'name' must be one string."))
     if (identical(nm, "transcripto_drive_status")) return(.ts_result(id, .ts_tool_status()))
+    if (identical(nm, "transcripto_drive_import")) {
+      args <- if (is.list(params$arguments)) params$arguments else list()
+      # PROTOCOL-level shape checks stay here; domain refusals live in the tool.
+      sq <- args$seq
+      if (!is.numeric(sq) || length(sq) != 1L || is.na(sq)) {
+        return(.ts_error(id, -32602, "Invalid params: 'seq' must be one integer."))
+      }
+      md <- args$module
+      if (!is.character(md) || length(md) != 1L || is.na(md)) {
+        return(.ts_error(id, -32602, "Invalid params: 'module' must be one string."))
+      }
+      blk <- args$import
+      if (!is.list(blk)) {
+        return(.ts_error(id, -32602, "Invalid params: 'import' must be an object."))
+      }
+      ex <- args$expect
+      if (!is.list(ex) || length(ex) == 0L) {
+        return(.ts_error(id, -32602,
+                         "Invalid params: 'expect' is required and must be a non-empty object."))
+      }
+      bad <- setdiff(names(ex), .ts_expect_fields)
+      if (length(bad)) {
+        return(.ts_error(id, -32602, sprintf(
+          "Invalid params: unknown 'expect' field(s): %s", paste(bad, collapse = ", "))))
+      }
+      return(.ts_result(id, .ts_tool_import(sq, md, blk, ex)))
+    }
     if (identical(nm, "transcripto_drive_read_result")) {
       return(.ts_result(id, .ts_tool_read_result()))
     }
@@ -2660,6 +3034,7 @@ if ("--check" %in% .args) {
   .ts_stderr("  drive readers: ", if (drive_ok) "present" else "MISSING")
   .ts_schema_problems <- .ts_mcp_schema_problems()
   .ts_run_problems <- .ts_mcp_run_problems()
+  .ts_import_problems <- .ts_mcp_import_problems()
   .ts_stderr("  run actions  : ", paste(TS_MCP_RUN_ACTIONS, collapse = ", "),
              " over ", length(TS_MCP_RUN_BUTTONS), " modules / ",
              length(unique(unlist(TS_MCP_RUN_BUTTONS))), " buttons")
@@ -2685,9 +3060,11 @@ if ("--check" %in% .args) {
              } else {
                "OK (every type matches the app's own widget kind)"
              })
+  .ts_stderr("  import schema: ", sum(vapply(TS_MCP_IMPORT_SCHEMA, length, integer(1))),
+             " fields over ", length(TS_MCP_IMPORT_SCHEMA), " importers")
   quit(status = if (.ts_have_jsonlite && drive_ok && !length(.ts_schema_problems) &&
                     !length(.ts_run_problems)) 0L else 1L, save = "no")
 }
 
-.ts_stderr("mcp_server: serving 7 drive tools (3 read-only + set_inputs + run + wait + arm/disarm) (stdio, NDJSON, native JSON-RPC)")
+.ts_stderr("mcp_server: serving 9 drive tools (3 read-only + import + set_inputs + run + wait + arm/disarm + export) (stdio, NDJSON, native JSON-RPC)")
 .ts_serve()

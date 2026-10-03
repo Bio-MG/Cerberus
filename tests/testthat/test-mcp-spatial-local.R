@@ -22,19 +22,21 @@
   e
 }
 
-test_that("local MCP keeps EIGHT tools and resolves only the Spatial pipeline button", {
+test_that("local MCP keeps NINE tools and resolves only the Spatial pipeline button", {
   e <- .mcp_local_env()
   tools <- e$.ts_tools()
-  # EIGHT since S2, which added a tool for a new ACTION (`export_result`) and not
-  # for a module. The rule this pin used to stand for — a module never adds a tool —
-  # is now asserted directly in test-mcp-sc-local.R, where it can be stated over
-  # the module inventory instead of over a count. See the note there.
-  expect_length(tools, 8L)
+  # NINE since S3, which — like S2 before it — added a tool for a new ACTION
+  # (`import_file`) and not for a module. The rule this pin used to stand for — a
+  # module never adds a tool — is asserted directly in test-mcp-sc-local.R, where
+  # it can be stated over the module inventory instead of over a count. See the
+  # note there.
+  expect_length(tools, 9L)
   expect_setequal(vapply(tools, function(x) x$name, character(1)), c(
     "transcripto_drive_status", "transcripto_drive_read_result",
     "transcripto_drive_snapshot", "transcripto_drive_set_inputs",
     "transcripto_drive_run", "transcripto_drive_wait",
-    "transcripto_drive_set_armed", "transcripto_drive_export"
+    "transcripto_drive_set_armed", "transcripto_drive_export",
+    "transcripto_drive_import"
   ))
   expect_length(e$.ts_mcp_run_problems(), 0L)
   expect_identical(e$TS_MCP_RUN_ACTIONS, "run_pipeline")

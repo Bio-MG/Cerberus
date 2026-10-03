@@ -22,7 +22,7 @@
   e
 }
 
-test_that("local MCP keeps EIGHT tools and resolves the three SC action buttons", {
+test_that("local MCP keeps NINE tools and resolves the three SC action buttons", {
   e <- .mcp_sc_local_env()
   tools <- e$.ts_tools()
   # THE INVARIANT, restated rather than deleted â€” and the distinction is the whole
@@ -37,12 +37,13 @@ test_that("local MCP keeps EIGHT tools and resolves the three SC action buttons"
   # So both are now stated: the rule (a module never adds a tool) is asserted
   # directly below over the module inventory, and the declared surface is pinned as
   # a separate, visible list.
-  expect_length(tools, 8L)
+  expect_length(tools, 9L)
   expect_setequal(vapply(tools, function(x) x$name, character(1)), c(
     "transcripto_drive_status", "transcripto_drive_read_result",
     "transcripto_drive_snapshot", "transcripto_drive_set_inputs",
     "transcripto_drive_run", "transcripto_drive_wait",
-    "transcripto_drive_set_armed", "transcripto_drive_export"
+    "transcripto_drive_set_armed", "transcripto_drive_export",
+    "transcripto_drive_import"
   ))
   # THE RULE, enforced where it can be: every module in the app's own table must be
   # reachable through the EXISTING tools, so a new module is a new entry in
@@ -395,5 +396,157 @@ test_that("the arming bootstrap does not loosen the OTHER writes", {
   r <- e$.ts_tool_export(7L, expect)
   expect_true(r$isError)
   expect_identical(r$structuredContent$code, "STALE_SESSION")
+})
+
+# =============================================================================
+# S3 — the controlled import tool. The schema is the trust boundary (as with
+# export): the tool validates KEY SET, required keys, enums, text bounds and the
+# raw `..` rule, and deliberately does NOT judge roots, existence or loader kind
+# — the app is a different process with different roots, so that verdict belongs
+# to the app and arrives as an `invalid` result. The tests below pin BOTH the
+# acceptances and the division of authority.
+# =============================================================================
+
+.mcp_sc_local_import_fixture <- function(e, armed = TRUE) {
+  root <- tempfile("ts-mcp-imp-")
+  dir.create(file.path(root, "tools", "_drive"), recursive = TRUE, showWarnings = FALSE)
+  e$ts_drive_boot(root)
+  e$ts_drive_clear_write_error()
+  e$ts_drive_job_clear()
+  token <- "imptok"
+  started <- format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+  e$ts_drive_write_ready(list(), token, armed = armed, last_seq = 0L,
+                         hb_n = 2L, started_at = started)
+  if (armed) {
+    e$ts_drive_write_json(
+      list(protocol = e$TS_DRIVE_PROTOCOL, token = token, armed = TRUE),
+      e$ts_drive_path("arm.json")
+    )
+  }
+  list(token = token, started = started,
+       session_id = e$.ts_session_id(Sys.getpid(), started, token))
+}
+
+test_that("the import tool writes the app's exact import_file dialect", {
+  e <- .mcp_sc_local_env()
+  fx <- .mcp_sc_local_import_fixture(e)
+  on.exit(unlink(e$ts_drive_root(), recursive = TRUE, force = TRUE), add = TRUE)
+  expect <- list(session_id = fx$session_id, pid = Sys.getpid(),
+                 started_at = fx$started)
+
+  r <- e$.ts_tool_import(11L, "import_bulk",
+                         list(counts_path = "data/GSE_counts.csv",
+                              metadata_path = "data/meta.csv",
+                              mode = "per_sample"),
+                         expect)
+  expect_false(r$isError)
+  expect_true(r$structuredContent$accepted)
+  expect_identical(r$structuredContent$action, "import_file")
+  expect_false(r$structuredContent$applied)
+
+  scenario <- jsonlite::fromJSON(e$ts_drive_path("scenario.json"), simplifyVector = FALSE)
+  expect_identical(scenario$protocol, e$TS_DRIVE_PROTOCOL)
+  expect_identical(as.integer(scenario$seq), 11L)
+  expect_identical(scenario$module, "import_bulk")
+  expect_identical(scenario$action, "import_file")
+  expect_identical(scenario$session_token, fx$token)
+  expect_setequal(names(scenario$import), c("counts_path", "metadata_path", "mode"))
+  expect_identical(scenario$import$mode, "per_sample")
+
+  # Spatial: optional fields default app-side, so the tool carries only what was sent.
+  r <- e$.ts_tool_import(12L, "import_spatial", list(dir_path = "SPATIAL/visium_outs"), expect)
+  expect_false(r$isError)
+  scenario <- jsonlite::fromJSON(e$ts_drive_path("scenario.json"), simplifyVector = FALSE)
+  expect_identical(scenario$module, "import_spatial")
+  expect_setequal(names(scenario$import), "dir_path")
+
+  # SC: both keys required, exactly as the app's poller demands.
+  r <- e$.ts_tool_import(13L, "import_sc",
+                         list(dir_path = "SC/sample-P1", sample_name = "P1"), expect)
+  expect_false(r$isError)
+  scenario <- jsonlite::fromJSON(e$ts_drive_path("scenario.json"), simplifyVector = FALSE)
+  expect_setequal(names(scenario$import), c("dir_path", "sample_name"))
+})
+
+test_that("the import tool refuses the shapes the app should never see", {
+  e <- .mcp_sc_local_env()
+  fx <- .mcp_sc_local_import_fixture(e)
+  on.exit(unlink(e$ts_drive_root(), recursive = TRUE, force = TRUE), add = TRUE)
+  expect <- list(session_id = fx$session_id, pid = Sys.getpid(),
+                 started_at = fx$started)
+
+  # A non-importer module is MODULE_NOT_ALLOWED, not a written scenario.
+  r <- e$.ts_tool_import(20L, "bulk_filter", list(min_count = 10), expect)
+  expect_true(r$isError)
+  expect_identical(r$structuredContent$code, "MODULE_NOT_ALLOWED")
+
+  # A key belonging to ANOTHER importer is refused with the block untouched.
+  r <- e$.ts_tool_import(21L, "import_bulk", list(dir_path = "x"), expect)
+  expect_true(r$isError)
+  expect_identical(r$structuredContent$code, "PAYLOAD_REFUSED")
+  expect_true("dir_path" %in% names(r$structuredContent$detail$refused))
+
+  # A missing required key is named.
+  r <- e$.ts_tool_import(22L, "import_sc", list(dir_path = "SC/s1"), expect)
+  expect_true(r$isError)
+  expect_true("sample_name" %in% names(r$structuredContent$detail$refused))
+
+  # `..` on the RAW string: the one path rule that is process-independent.
+  r <- e$.ts_tool_import(23L, "import_bulk",
+                         list(counts_path = "../roots-EVIL/secret.csv"), expect)
+  expect_true(r$isError)
+  expect_identical(r$structuredContent$code, "PAYLOAD_REFUSED")
+  expect_false(file.exists(e$ts_drive_path("scenario.json")))
+
+  # Enum and text bounds, on the M3b pattern.
+  r <- e$.ts_tool_import(24L, "import_bulk",
+                         list(counts_path = "c.csv", mode = "rows"), expect)
+  expect_true(r$isError)
+  r <- e$.ts_tool_import(25L, "import_spatial",
+                         list(dir_path = "d", technology = "visium ",
+                              sample_name = "a\nb"), expect)
+  expect_true(r$isError)
+  expect_false(file.exists(e$ts_drive_path("scenario.json")))
+
+  # The tool-only bootstrap fails closed WITHOUT a session pin.
+  r <- e$.ts_tool_import(26L, "import_bulk", list(counts_path = "c.csv"), NULL)
+  expect_true(r$isError)
+  expect_identical(r$structuredContent$code, "SESSION_ASSERTION_REQUIRED")
+
+  # Stale seq, so a replayed import cannot overwrite a consumed one: the session
+  # first PUBLISHES a consumed sequence (last_seq = 50), then seq 1 is behind it.
+  hb <- jsonlite::fromJSON(e$ts_drive_path("ready.json"), simplifyVector = FALSE)
+  hb$last_seq <- 50L
+  e$ts_drive_write_json(hb, e$ts_drive_path("ready.json"))
+  r <- e$.ts_tool_import(1L, "import_bulk", list(counts_path = "c.csv"), expect)
+  expect_true(r$isError)
+  expect_identical(r$structuredContent$code, "SEQ_STALE")
+})
+
+test_that("the import tool is refused on an UNARMED session and echoes no path", {
+  e <- .mcp_sc_local_env()
+  fx <- .mcp_sc_local_import_fixture(e, armed = FALSE)
+  on.exit(unlink(e$ts_drive_root(), recursive = TRUE, force = TRUE), add = TRUE)
+  expect <- list(session_id = fx$session_id)
+
+  r <- e$.ts_tool_import(30L, "import_bulk", list(counts_path = "c.csv"), expect)
+  expect_true(r$isError)
+  expect_identical(r$structuredContent$code, "SESSION_NOT_ARMED")
+
+  # On the armed path, the caller's path value must not appear anywhere in the
+  # answer: KEYS travel, values never do (the import-v1 redaction policy).
+  fx2 <- .mcp_sc_local_import_fixture(e, armed = TRUE)
+  secret <- "data/very-secret-counts-matrix.csv"
+  r <- e$.ts_tool_import(31L, "import_bulk", list(counts_path = secret),
+                         list(session_id = fx2$session_id))
+  expect_false(r$isError)
+  wire <- as.character(jsonlite::toJSON(r$structuredContent, auto_unbox = TRUE))
+  expect_false(grepl(secret, wire, fixed = TRUE))
+  expect_identical(r$structuredContent$import_keys, "counts_path")
+})
+
+test_that("the import schema cross-checks clean against the app's importer table", {
+  e <- .mcp_sc_local_env()
+  expect_length(e$.ts_mcp_import_problems(), 0L)
 })
 
