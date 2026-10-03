@@ -1052,8 +1052,14 @@ build_bulk_network_table_export <- function(result) {
   nd <- result$nodes
   # degré DANS le sous-graphe retenu (pas dans le réseau complet) : c'est la
   # seule mesure qui décrive la place du nœud dans le résultat affiché.
+  # 🇱🇷 2026-10-03 : `nb = nrow(nd)` — sans lui, `tabulate()` dimensionne son
+  # vecteur au plus grand index PRÉSENT, et un dernier nœud sans arête
+  # produisait un `degree` plus court que `nd` : data.frame() levait
+  # "differing number of rows" et le téléchargement humain comme la route
+  # drive échouaient (mesuré par le fixture N4 isolé de
+  # test-mod-bulk-network-export.R). Le zéro est la valeur honnête.
   deg <- if (nrow(result$edges)) {
-    tabulate(match(c(result$edges$from, result$edges$to), nd$node))
+    tabulate(match(c(result$edges$from, result$edges$to), nd$node), nb = nrow(nd))
   } else {
     rep(0L, nrow(nd))
   }

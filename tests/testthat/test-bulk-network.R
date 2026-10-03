@@ -573,3 +573,30 @@ test_that("le moteur tient le plafond déclaré en un temps borné (mesuré)", {
   # le sous-graphe ne peut pas dépasser les nœuds du réseau
   expect_true(r$qc$n_nodes <= net$n_nodes)
 })
+
+# =============================================================================
+# N-4bis (2026-10-03) : build_bulk_network_table_export — degré sous-graphe
+# =============================================================================
+# 🆕 Régression mesurée (route d'export drive, Slice 2.3) : `tabulate(match(...))`
+# sans `nb = nrow(nd)` dimensionne son vecteur au plus grand index PRÉSENT — un
+# DERNIER nœud sans arête produisait un `degree` plus court que `nd`, et
+# data.frame() levait "differing number of rows". Le téléchargement humain
+# `dl_network` échouait exactement pareil. Le zéro est la valeur honnête.
+test_that("build_bulk_network_table_export: un dernier noeud sans arete vaut degree 0", {
+  res <- list(
+    type = "bulk_network_pcsf", status = "valid",
+    nodes = data.frame(node = c("a", "b", "c", "d"),
+                       symbol = c("T", "E", "M", "A"),
+                       role = c("terminal", "relay", "terminal", "relay"),
+                       prize = c(2.5, 1, 3, 0.5), stringsAsFactors = FALSE),
+    edges = data.frame(from = c("a", "a", "c"), to = c("b", "c", "b"),
+                       stringsAsFactors = FALSE),
+    prizes = NULL, node_role = NULL, species = "human", source_db = "string",
+    source_version = "v12", id_type = "ensembl_gene", map_rate = 0.9,
+    parameters = list(beta = 1), qc = list(), warnings = character(0),
+    provenance = "fixture", analysis_id = "reg-degre", timestamp_utc = "t")
+  tab <- build_bulk_network_table_export(res)
+  expect_identical(nrow(tab), 4L)
+  expect_identical(as.integer(tab$degree), c(2L, 2L, 2L, 0L),
+                   info = "le noeud isole du bout vaut zero, pas un vecteur plus court")
+})
