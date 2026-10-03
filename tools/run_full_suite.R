@@ -22,17 +22,24 @@ writeLines(sprintf("start %s | %d files", format(Sys.time(), "%H:%M:%S"), length
 flush(con)
 
 total_failed <- 0L; total_passed <- 0L; total_error <- 0L; total_skipped <- 0L
+.suite_t0 <- proc.time()[["elapsed"]]
 crashed_after <- NA_character_
 for (f in files) {
   bn <- basename(f)
+  # Timing par fichier (H2#9, mesurer avant d'optimiser) : sans lui, « où vont
+  # les 45 min » reste une devinette — le CENSUS reste lui déterministe.
+  .t0 <- proc.time()[["elapsed"]]
   r <- tryCatch({
     res <- testthat::test_file(f, reporter = "silent", stop_on_failure = FALSE,
                                env = testthat::test_env(),
                                load_package = "none")
     df <- as.data.frame(res)
-    sprintf("%-58s fail=%d pass=%d err=%d skip=%d",
-            bn, sum(df$failed), sum(df$passed), sum(df$error), sum(df$skipped))
-  }, error = function(e) sprintf("%-58s RUNNER-ERROR: %.120s", bn, conditionMessage(e)))
+    sprintf("%-58s fail=%d pass=%d err=%d skip=%d t=%.1fs",
+            bn, sum(df$failed), sum(df$passed), sum(df$error), sum(df$skipped),
+            proc.time()[["elapsed"]] - .t0)
+  }, error = function(e) sprintf("%-58s RUNNER-ERROR: %.120s t=%.1fs", bn,
+                                 conditionMessage(e),
+                                 proc.time()[["elapsed"]] - .t0))
   writeLines(r, con); flush(con)
   if (grepl("RUNNER-ERROR", r)) next
   # Tally anchored on the labelled fields (a naive digit grab breaks on
@@ -58,7 +65,8 @@ for (f in files) {
 writeLines("CENSUS: begin", con)
 for (bn in basename(files)) writeLines(paste0("CENSUS: ", bn), con)
 writeLines(sprintf("CENSUS: total=%d", length(files)), con)
-writeLines(sprintf("BILAN: failed=%d passed=%d error=%d skipped=%d | %s",
+writeLines(sprintf("BILAN: failed=%d passed=%d error=%d skipped=%d elapsed_s=%.0f | %s",
                    total_failed, total_passed, total_error, total_skipped,
+                   proc.time()[["elapsed"]] - .suite_t0,
                    format(Sys.time(), "%H:%M:%S")), con)
 close(con)
