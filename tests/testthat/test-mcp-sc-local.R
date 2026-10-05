@@ -859,3 +859,109 @@ test_that("read_result surfaces the verdict descriptor (additive)", {
   expect_identical(d$file, "bulk_de_results_1.csv")
   expect_identical(d$n_rows, 5L)
 })
+# =============================================================================
+# R3 (2026-10-04) — le FLUX CROISÉ : export -> dispatch read -> application ->
+# read_result, puis le refus du second read. Le contenu borné doit arriver
+# JUSQU'À l'agent, et exactement UNE lecture par export (dérivation sans état).
+# =============================================================================
+
+.mcp_sc_local_read_target <- function(e, file_base = "bulk_de_results_1.csv") {
+  # Le nom DOIT être celui du verdict d'export écrit par le fixture (le
+  # répondant dérive sa cible de result.json, pas d'un argument) : c'est
+  # bulk_de_results_1.csv. Les tests R1 n'écrivent jamais le fichier, donc
+  # aucun conflit dans le répertoire d'export temporaire du processus.
+  d <- file.path(tempdir(), "ts_drive_exports")
+  dir.create(d, showWarnings = FALSE, recursive = TRUE)
+  path <- file.path(d, file_base)
+  utils::write.csv(data.frame(gene = c("TP53", "BRCA1", "MYC"),
+                              x = c("1.5", "2.25", "0.1"),
+                              stringsAsFactors = FALSE),
+                   path, row.names = FALSE, na = "")
+  path
+}
+
+.mcp_sc_local_apply_read <- function(e) {
+  # EXACTEMENT les deux appels du poller : lire le scenario écrit par le
+  # dispatch, répondre, écrire le verdict par le projeteur READ.
+  scn <- jsonlite::fromJSON(e$ts_drive_path("scenario.json"),
+                            simplifyVector = FALSE)
+  res <- e$ts_drive_read_export_respond(as.integer(scn$seq), scn$max_rows)
+  e$ts_drive_write_result(as.integer(scn$seq), res$status,
+                          res$active_module %||% scn$module, TRUE,
+                          errors = res$errors, warnings = res$warnings,
+                          descriptor = res$descriptor,
+                          descriptor_projector = e$ts_drive_read_descriptor)
+  res
+}
+
+test_that("export then read dispatch then read_result delivers the bounded content", {
+  e <- .mcp_sc_local_env()
+  fx <- .mcp_sc_local_import_fixture(e)
+  on.exit(unlink(e$ts_drive_root(), recursive = TRUE, force = TRUE), add = TRUE)
+  csv <- .mcp_sc_local_read_target(e)
+  on.exit(unlink(csv), add = TRUE)
+  ef <- .mcp_sc_local_export_fixture(e)
+  ef$write_export(10L)
+
+  # 1. Dispatch : le scenario read_export part avec l'assertion de session.
+  r <- e$.ts_tool_read(11L, 3L, list(session_id = fx$session_id))
+  expect_false(r$isError)
+  expect_identical(r$structuredContent$dispatched, "read_export")
+
+  # 2. Application (les deux appels du poller).
+  res <- .mcp_sc_local_apply_read(e)
+  expect_identical(res$status, "done")
+
+  # 3. read_result : l'agent reçoit la preview bornée — le contenu du FICHIER,
+  #    cellule par cellule, et le keep-set du bloc de lecture.
+  rr <- e$.ts_tool_read_result()
+  expect_false(rr$isError)
+  d <- rr$structuredContent$descriptor
+  expect_false(is.null(d))
+  expect_true(all(names(d) %in% e$TS_DRIVE_READ_KEYS))
+  expect_identical(as.character(d$handle), "bulk_de_results_1.csv")
+  expect_identical(as.character(d$preview$columns), c("gene", "x"))
+  expect_identical(as.integer(d$preview$rows_returned), 3L)
+  expect_false(isTRUE(d$preview$truncated_rows))
+  expect_identical(as.character(unlist(d$preview$rows[[1]])), c("TP53", "1.5"))
+  expect_identical(as.character(unlist(d$preview$rows[[3]])), c("MYC", "0.1"))
+})
+
+test_that("exactly one read per export: the second read is refused and writes nothing", {
+  e <- .mcp_sc_local_env()
+  fx <- .mcp_sc_local_import_fixture(e)
+  on.exit(unlink(e$ts_drive_root(), recursive = TRUE, force = TRUE), add = TRUE)
+  csv <- .mcp_sc_local_read_target(e)
+  on.exit(unlink(csv), add = TRUE)
+  ef <- .mcp_sc_local_export_fixture(e)
+  ef$write_export(10L)
+  r <- e$.ts_tool_read(11L, 2L, list(session_id = fx$session_id))
+  expect_false(r$isError)
+  res <- .mcp_sc_local_apply_read(e)
+  expect_identical(res$status, "done")
+
+  # Le SECOND read : l'export a été consommé par la première lecture (le
+  # verdict de lecture A REMPLACÉ le verdict d'export dans result.json) — la
+  # dérivation sans état refuse, sans écrire RIEN nulle part.
+  before <- paste(readBin(e$ts_drive_path("result.json"), "raw",
+                          file.size(e$ts_drive_path("result.json"))),
+                  collapse = " ")
+  # Aucun scenario REÉCRIT pour le refus (celui du premier dispatch reste,
+  # inchangé), verdict de lecture intact.
+  scn_before <- paste(readBin(e$ts_drive_path("scenario.json"), "raw",
+                              file.size(e$ts_drive_path("scenario.json"))),
+                      collapse = " ")
+  r2 <- e$.ts_tool_read(12L, NULL, list(session_id = fx$session_id))
+  expect_true(r2$isError)
+  expect_identical(r2$structuredContent$code, "NO_EXPORT_TARGET")
+  expect_match(r2$structuredContent$message, "already a read verdict",
+               fixed = TRUE)
+  scn_after <- paste(readBin(e$ts_drive_path("scenario.json"), "raw",
+                             file.size(e$ts_drive_path("scenario.json"))),
+                     collapse = " ")
+  expect_identical(scn_after, scn_before)
+  after <- paste(readBin(e$ts_drive_path("result.json"), "raw",
+                         file.size(e$ts_drive_path("result.json"))),
+                 collapse = " ")
+  expect_identical(after, before)
+})
