@@ -958,6 +958,287 @@ ts_drive_export_descriptor <- function(descriptor) {
     descriptor, c("format", "file", "bytes", "n_rows", "n_cols", "n_sig", "columns"))
 }
 
+#' Project a READ block onto the wire (R2): keep-set `TS_DRIVE_READ_KEYS` only,
+#' structural strings through the sanitiser, preview cells RE-GUARDED, classes
+#' mapped through the frozen declared set.
+#'
+#' Two rules, the family resemblance to `ts_drive_export_descriptor` is
+#' deliberate:
+#'   1. only the DECLARED keys travel, so widening the responder's block cannot
+#'      widen the wire;
+#'   2. every STRUCTURAL string goes through `ts_drive_badge_sanitize()` —
+#'      `route`, `handle`, and the preview's `columns`. The preview CELL VALUES
+#'      are the D1 exception, and they get the opposite treatment: they pass
+#'      through `ts_drive_verbatim_guard()` AGAIN, so a cell that reaches the
+#'      wire has passed the guard on BOTH sides of the process boundary. The
+#'      guard is idempotent on its own output and on the declared markers
+#'      (`<over-200-chars>` / `<guarded>` carry no 8+-character run), so a
+#'      clean block is unchanged; a cell that somehow failed twice degrades to
+#'      NA (JSON null), never to prose.
+#' `col_summary$class` travels verbatim only within `TS_DRIVE_READ_CLASSES`
+#' (precedent: `TS_DRIVE_DESCRIPTOR_VERBATIM`); anything else reports "other".
+#'
+#' PURE, like the export projector: takes a block, returns a list, writes
+#' nothing.
+ts_drive_read_descriptor <- function(descriptor) {
+  if (is.null(descriptor) || !is.list(descriptor)) return(NULL)
+  d <- descriptor[intersect(TS_DRIVE_READ_KEYS, names(descriptor))]
+  for (k in c("route", "handle")) {
+    if (!is.null(d[[k]])) {
+      d[[k]] <- ts_drive_badge_sanitize(as.character(d[[k]]), 200L)
+    }
+  }
+  if (!is.null(d$seq)) d$seq <- suppressWarnings(as.integer(d$seq))
+  # The echoed EXPORT descriptor: projected through the SAME projector that
+  # produced it — defence in depth on the one nested structure the read block
+  # is allowed to carry.
+  d$descriptor <- ts_drive_export_descriptor(d$descriptor)
+  if (!is.null(d$preview)) {
+    p <- d$preview
+    if (!is.null(p$columns)) {
+      p$columns <- vapply(as.character(p$columns),
+                          function(s) ts_drive_badge_sanitize(s, 200L),
+                          character(1), USE.NAMES = FALSE)
+    }
+    if (!is.null(p$rows)) {
+      p$rows <- lapply(p$rows, function(r) {
+        g <- ts_drive_verbatim_guard(as.character(r))
+        as.list(ifelse(is.na(g), NA_character_, g))
+      })
+    }
+    d$preview <- p
+  }
+  if (!is.list(d$col_summary)) {
+    d$col_summary <- NULL
+  } else {
+    d$col_summary <- lapply(d$col_summary, function(cs) {
+      cls <- as.character(cs$class %||% "other")
+      list(name = ts_drive_badge_sanitize(as.character(cs$name %||% ""), 200L),
+           class = if (length(cls) == 1L && cls %in% TS_DRIVE_READ_CLASSES) cls else "other",
+           n_missing_in_preview = suppressWarnings(
+             as.integer(cs$n_missing_in_preview %||% 0L)))
+    })
+  }
+  d
+}
+
+#' The ONE generic `read_export` responder (R2). Zero per-module code: the
+#' read is route-agnostic by construction — the module seams exist for the
+#' EXPORT (each module knows what its artefact IS); the read only ever opens
+#' what the export verdict already named.
+#'
+#' The target is derived STATELESSLY from result.json — the exact mirror of
+#' the server's R1 derivation, re-checked here because two processes see the
+#' same verdict at different instants (defence in depth, never a second rule:
+#' the five deciding fields are the same five). The file basename comes from
+#' the verdict's own descriptor; the stem check against
+#' `TS_DRIVE_EXPORT_STEMS` is app-INTERNAL knowledge (it never produces a wire
+#' code — a verdict whose file is not a declared artefact has no target).
+#'
+#' STREAMING, and this is the RAM contract (32 GB, VST matrices > 1 Gio): a
+#' connection, ONE header line, then `read.csv(con, nrows = K)` — K records,
+#' parsed record-wise (quoted multi-line fields stay correct), and one extra
+#' record to know whether MORE rows exist. Nothing ever reads the file to its
+#' end; the allocation is O(preview), never O(file).
+#'
+#' Bounds, applied in order: `EXPORT_GONE` (existence), `FILE_TOO_LARGE`
+#' (`TS_DRIVE_READ_MAX_FILE_BYTES`), `READ_TOO_WIDE` (header width vs
+#' `TS_DRIVE_READ_MAX_COLS`), `READ_IO_ERROR` (stream failure) — each as an
+#' `errors[]` prefix on an `invalid` verdict, the app's honest refusal shape.
+#' The 256 KiB ceiling is measured AFTER projection (guard + sanitiser
+#' applied — the size of what the agent will receive), halving the preview
+#' rows until it fits; `truncated_rows` reports every shrink honestly.
+#'
+#' @param seq The read scenario's own seq (echoed in the block).
+#' @param max_rows The caller's preview height; clamped again here — the app
+#'   is the authority.
+#' @return An applier verdict: `done` with the PROJECTED read block as
+#'   `descriptor`, or `invalid` with a declared `errors[]` prefix.
+ts_drive_read_export_respond <- function(seq, max_rows = NULL) {
+  refuse <- function(msg) {
+    list(status = "invalid", errors = msg, warnings = character(0),
+         active_module = NULL, nav = NULL)
+  }
+  # ── the stateless target derivation (mirror of R1, same five fields) ──────
+  res <- ts_drive_read_result()
+  if (is.null(res)) {
+    return(refuse("NO_EXPORT_TARGET: result.json is absent — nothing has been exported in this session."))
+  }
+  if (!identical(as.character(res$protocol %||% ""), TS_DRIVE_PROTOCOL)) {
+    return(refuse(sprintf(
+      "NO_EXPORT_TARGET: result.json declares protocol '%s' (expected '%s').",
+      as.character(res$protocol %||% "(absent)"), TS_DRIVE_PROTOCOL)))
+  }
+  if (!identical(as.character(res$status %||% ""), "done") ||
+      is.null(res$descriptor) || !is.null(res$descriptor$preview)) {
+    return(refuse(paste0(
+      "NO_EXPORT_TARGET: the current verdict is not a completed export",
+      if (!is.null(res$descriptor) && !is.null(res$descriptor$preview))
+        " (already a read verdict — one read per export)" else "",
+      "; export again to read again.")))
+  }
+  desc <- res$descriptor
+  file_base <- as.character(desc$file %||% "")
+  stem_ok <- nzchar(file_base) && !grepl("/|\\\\|~|[.]{2}", file_base) &&
+    any(vapply(TS_DRIVE_EXPORT_STEMS,
+               function(st) grepl(paste0("^", st, "_[0-9]+\\.csv$"), file_base),
+               logical(1)))
+  if (!stem_ok) {
+    return(refuse("NO_EXPORT_TARGET: the verdict's file is not a declared export artefact."))
+  }
+  path <- file.path(ts_drive_export_dir(), file_base)
+  if (!file.exists(path)) {
+    return(refuse(paste0(
+      "EXPORT_GONE: the exported file no longer exists in the app's bounded ",
+      "export directory (pruned or temp cleaned); export again.")))
+  }
+  fsz <- suppressWarnings(file.size(path))
+  if (is.na(fsz) || fsz > TS_DRIVE_READ_MAX_FILE_BYTES) {
+    return(refuse(sprintf(
+      "FILE_TOO_LARGE: the exported file is %s bytes; the declared read ceiling is %s.",
+      format(as.numeric(fsz), scientific = FALSE, big.mark = ","),
+      format(TS_DRIVE_READ_MAX_FILE_BYTES, scientific = FALSE, big.mark = ","))))
+  }
+
+  # ── streaming: header, width gate, then at most K records ─────────────────
+  rows_want <- if (is.null(max_rows)) TS_DRIVE_READ_DEFAULT_ROWS else {
+    r <- suppressWarnings(as.integer(max_rows))
+    if (length(r) != 1L || is.na(r) || r < 1L) TS_DRIVE_READ_DEFAULT_ROWS else r
+  }
+  rows_want <- min(rows_want, TS_DRIVE_READ_MAX_ROWS)
+
+  io_err <- NULL
+  hdr_names <- character(0)
+  hdr <- tryCatch({
+    con <- file(path, "r")
+    h <- readLines(con, n = 1L, warn = FALSE)
+    close(con)
+    if (length(h) == 0L) stop("the file has no header line")
+    h
+  }, error = function(e) {
+    io_err <<- conditionMessage(e); NULL
+  })
+  if (is.null(hdr)) {
+    return(refuse(sprintf("READ_IO_ERROR: the export could not be opened: %s.",
+                          ts_drive_badge_sanitize(as.character(io_err), 200L))))
+  }
+  hdr_names <- tryCatch(
+    names(utils::read.csv(text = hdr, header = TRUE, check.names = FALSE)),
+    error = function(e) { io_err <<- conditionMessage(e); NULL })
+  if (is.null(hdr_names)) {
+    return(refuse(sprintf("READ_IO_ERROR: the export header could not be parsed: %s.",
+                          ts_drive_badge_sanitize(as.character(io_err), 200L))))
+  }
+  if (length(hdr_names) > TS_DRIVE_READ_MAX_COLS) {
+    return(refuse(sprintf(
+      "READ_TOO_WIDE: the export has %s columns; the declared read bound is %s.",
+      length(hdr_names), TS_DRIVE_READ_MAX_COLS)))
+  }
+  body <- tryCatch({
+    con <- file(path, "r")
+    h <- readLines(con, n = 1L, warn = FALSE)  # skip the header already parsed
+    b <- utils::read.csv(con, header = FALSE, nrows = rows_want,
+                         col.names = hdr_names, check.names = FALSE,
+                         stringsAsFactors = FALSE, colClasses = "character",
+                         na.strings = "")
+    # ONE extra record: the honest truncated_rows signal — "more rows exist
+    # than were returned" — without ever counting the file.
+    more <- utils::read.csv(con, header = FALSE, nrows = 1L,
+                            col.names = hdr_names, check.names = FALSE,
+                            stringsAsFactors = FALSE, colClasses = "character",
+                            na.strings = "")
+    close(con)
+    attr(b, "has_more") <- nrow(more) > 0L
+    b
+  }, error = function(e) {
+    io_err <<- conditionMessage(e); NULL
+  })
+  if (is.null(body)) {
+    return(refuse(sprintf("READ_IO_ERROR: the export could not be streamed: %s.",
+                          ts_drive_badge_sanitize(as.character(io_err), 200L))))
+  }
+
+  # ── cells: verbatim guard, markers, honest counters ───────────────────────
+  K <- nrow(body)
+  # Classes INFERRED from the returned preview only (no full-file scan — the
+  # separation is declared): integer/numeric/logical patterns on the preview's
+  # own values, "character" otherwise, "other" is the projector's business.
+  classify <- function(v) {
+    x <- v[!is.na(v) & nzchar(v)]
+    if (!length(x)) return("character")
+    if (all(grepl("^[+-]?[0-9]+$", x))) return("integer")
+    if (all(grepl("^[+-]?([0-9]+\\.?[0-9]*|\\.[0-9]+)([eE][+-]?[0-9]+)?$", x))) return("numeric")
+    if (all(x %in% c("TRUE", "FALSE", "true", "false"))) return("logical")
+    "character"
+  }
+  col_summary <- lapply(seq_along(body), function(j) list(
+    name = names(body)[[j]],
+    class = classify(body[[j]]),
+    n_missing_in_preview = as.integer(sum(is.na(body[[j]])))))
+
+  if (K == 0L) {
+    cells <- matrix(character(0), nrow = 0L, ncol = length(hdr_names))
+  } else {
+    # cbind, NOT sapply: sapply simplifies single-value columns to an atomic
+    # vector, and the ncol=1 fallback then reshaped a 1x2 table into 2x1 — a
+    # silently TRANSPOSED preview (measured in the R2 smoke run). cbind keeps
+    # the shape the file had.
+    cells <- do.call(cbind, lapply(body, function(col) as.character(col)))
+    dimnames(cells) <- NULL
+  }
+  in_na <- is.na(cells)
+  n_chars <- suppressWarnings(nchar(cells, type = "chars", allowNA = TRUE))
+  too_long <- !in_na & (is.na(n_chars) | n_chars > TS_DRIVE_READ_MAX_CELL_CHARS)
+  # The guard is vectorised: one call over the flattened cells (column-major,
+  # same order as every logical matrix subscript below).
+  g_flat <- ts_drive_verbatim_guard(as.character(cells))
+  guarded <- !in_na & !too_long & is.na(g_flat)
+  cells_final <- cells
+  cells_final[too_long] <- TS_DRIVE_READ_CELL_MARKERS[["truncated"]]
+  cells_final[guarded] <- TS_DRIVE_READ_CELL_MARKERS[["guarded"]]
+  cells_final[in_na] <- NA_character_
+
+  # ── the block, and the byte ceiling measured AFTER projection ─────────────
+  has_more <- isTRUE(attr(body, "has_more"))
+  mk_block <- function(k) {
+    list(
+      route = as.character(res$active_module %||% ""),
+      handle = file_base,
+      seq = as.integer(seq),
+      descriptor = desc,
+      preview = list(
+        rows_returned = as.integer(k),
+        truncated_rows = isTRUE(has_more),
+        columns = hdr_names,
+        rows = if (k == 0L) list() else lapply(seq_len(k), function(i) {
+          as.list(cells_final[i, ])
+        }),
+        cells_truncated = as.integer(if (k == 0L) 0L else sum(too_long[seq_len(k), , drop = TRUE])),
+        cells_guarded = as.integer(if (k == 0L) 0L else sum(guarded[seq_len(k), , drop = TRUE]))),
+      col_summary = col_summary)
+  }
+  K_cur <- K
+  clamped <- FALSE
+  proj <- NULL
+  jsz <- NA_real_
+  repeat {
+    proj <- ts_drive_read_descriptor(mk_block(K_cur))
+    jsz <- nchar(jsonlite::toJSON(proj, auto_unbox = TRUE, null = "null",
+                                  pretty = TRUE), type = "bytes")
+    if (jsz <= TS_DRIVE_READ_MAX_BYTES || K_cur <= 1L) break
+    K_cur <- max(1L, floor(K_cur / 2L))
+    clamped <- TRUE
+  }
+  # The block is rebuilt at the final height so the counters and rows_returned
+  # describe EXACTLY what travels.
+  proj <- ts_drive_read_descriptor(mk_block(K_cur))
+  blk <- proj
+  blk$preview$truncated_rows <- isTRUE(has_more) || isTRUE(clamped)
+
+  list(status = "done", errors = character(0), warnings = character(0),
+       active_module = NULL, nav = NULL, descriptor = blk)
+}
+
 #' The DECLARED vocabulary a state descriptor's `kind` and `convention` may take.
 #'
 #' Frozen, and returned VERBATIM by the projection: both are compile-time constants
@@ -1048,7 +1329,8 @@ ts_drive_table_descriptor <- function(x, kind = "table", convention = NULL,
 ts_drive_write_result <- function(seq, status, active_module, armed,
                                  preserve_data = TRUE, errors = character(0),
                                  warnings = character(0), snapshot = NULL,
-                                 descriptor = NULL) {
+                                 descriptor = NULL,
+                                 descriptor_projector = ts_drive_export_descriptor) {
   payload <- list(
     protocol      = TS_DRIVE_PROTOCOL,
     ack_seq       = if (is.null(seq)) 0L else as.integer(seq),
@@ -1066,7 +1348,10 @@ ts_drive_write_result <- function(seq, status, active_module, armed,
     # never a verdict with nothing behind it. MEASURED on a live session: the export
     # wrote a real 204 485-byte file, reported `done`, and published no descriptor —
     # so the agent could not learn the filename, the row count or the columns.
-    descriptor    = ts_drive_export_descriptor(descriptor),
+    # R2: the projector is a PARAMETER, defaulting to the export projection —
+    # every existing caller is unchanged byte for byte; the read verdict passes
+    # ts_drive_read_descriptor so the read block is projected by its own rule.
+    descriptor    = descriptor_projector(descriptor),
     # Sanitized diagnostics for the last FAILED wire write, or NULL.
     #
     # This is how a write failure becomes visible: `ready.json` is itself a
@@ -2049,6 +2334,19 @@ ts_drive_apply <- function(session, input, scn, effects = NULL, owner_token = NU
                 descriptor = out$descriptor))
   }
 
+  # ── R2: read_export — the ONE bounded read ────────────────────────────────
+  # Zero per-module code: the responder is GENERIC over the routes. It derives
+  # the target STATELESSLY from result.json (mirror of the server's R1
+  # derivation), streams the file (header + at most K records through a
+  # connection — never a full read.csv), applies every declared bound, and
+  # returns the read block as the verdict's descriptor, projected by
+  # ts_drive_read_descriptor at the writer. `module` is deliberately absent
+  # from the scenario (relaxed gate above); the block's `route` is the export
+  # verdict's own module, for the agent's information only.
+  if (identical(action, "read_export")) {
+    return(ts_drive_read_export_respond(scn$seq %||% 0L, scn$max_rows))
+  }
+
   if (identical(module, "spatial_pipeline") && identical(action, "set_inputs")) {
     return(list(
       status = "invalid",
@@ -2726,7 +3024,14 @@ ts_drive_nav_plan <- function(module, target_tab = NULL) {
     # "the export worked" was indistinguishable from "the export silently did
     # nothing". The descriptor is bounded scalars and short strings by
     # construction; it is projected through the same redaction as everything else.
-    descriptor = res$descriptor
+    descriptor = res$descriptor,
+    # R2: the read verdict's block is projected by ITS rule (guard + keep-set),
+    # the export verdict's by the export rule — same writer, one parameter.
+    descriptor_projector = if (identical(scn$action, "read_export")) {
+      ts_drive_read_descriptor
+    } else {
+      ts_drive_export_descriptor
+    }
   )
 
   out$consumed <- TRUE
