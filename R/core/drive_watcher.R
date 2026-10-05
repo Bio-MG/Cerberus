@@ -879,6 +879,12 @@ ts_drive_validate_scenario <- function(scn, token, last_seq) {
          expect = if (is.list(scn$expect)) scn$expect else NULL,
          button = if (is.character(scn$button) && length(scn$button) == 1L &&
                      !is.na(scn$button) && nzchar(scn$button)) scn$button else NULL,
+         # F-1 (2026-10-05): `max_rows` must ride the REBUILT scenario — the
+         # live poller consumes THIS list, and dropping it silently replaced
+         # the caller's validated preview height with the default 20 (measured
+         # red: a 30-row file asked for 3 and answered 20).
+         max_rows = if (length(scn$max_rows) == 1L && is.numeric(scn$max_rows) &&
+                        !is.na(scn$max_rows)) as.integer(scn$max_rows) else NULL,
          # The WHITELISTED import block (G3), NULL for every other action.
          import = imp
        ))

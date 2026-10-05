@@ -411,3 +411,44 @@ test_that("the keep-set is closed and structural strings stay sanitised", {
   expect_true(all(names(v$descriptor) %in% e$TS_DRIVE_READ_KEYS))
 })
 
+# =============================================================================
+# F-1 (2026-10-05) — le pin qui tue le trou de la LISTE BLANCHE : le scénario
+# reconstruit par ts_drive_validate_scenario() doit PORTER `max_rows`.
+#
+# MESURÉ AVANT CORRECTION (rouge) : la liste blanche s'arrêtait à `import`,
+# donc le battement du poller vivant appelait
+# ts_drive_read_export_respond(scn$seq, NULL) — la hauteur demandée par
+# l'agent (validée 1..200 côté serveur) était remplacée SILENCIEUSEMENT par le
+# défaut 20. Les tests hors ligne appliquaient la lecture depuis le scénario
+# BRUT et ne pouvaient pas le voir : ce pin passe par la PAIRE EXACTE que le
+# poller consomme — validate -> scenario reconstruit -> apply.
+# =============================================================================
+
+test_that("the rebuilt scenario carries max_rows: the caller's preview height survives the validator", {
+  e <- .read_export_env()
+  on.exit(unlink(e$ts_drive_root(), recursive = TRUE, force = TRUE), add = TRUE)
+  # 30 lignes : SANS le fix, l'applier reçoit max_rows NULL => défaut 20 =>
+  # rows_returned 20 (rouge) ; AVEC le fix, la hauteur demandée 3 gagne (vert).
+  df <- data.frame(gene = sprintf("g%02d", seq_len(30L)),
+                   x = as.character(seq_len(30L)),
+                   stringsAsFactors = FALSE)
+  fb <- "bulk_de_results_41.csv"
+  p <- .read_export_csv(fb, df)
+  on.exit(unlink(p), add = TRUE)
+  .read_export_verdict(e, "bulk_de", fb, names(df), 30L, 2L)
+
+  scn_raw <- list(protocol = e$TS_DRIVE_PROTOCOL, seq = 11L,
+                  session_token = "f1tok123", action = "read_export",
+                  max_rows = 3L)
+  v <- e$ts_drive_validate_scenario(scn_raw, "f1tok123", 0L)
+  expect_true(isTRUE(v$ok))
+  # EXACTEMENT le chemin du poller : le scénario RECONSTRUIT est ce que
+  # ts_drive_apply consomme — pas le brut.
+  verdict <- e$ts_drive_apply(NULL, NULL, v$scenario)
+  expect_identical(verdict$status, "done")
+  pr <- verdict$descriptor$preview
+  expect_identical(as.integer(pr$rows_returned), 3L,
+                   info = "la hauteur demandée par l'agent doit traverser la liste blanche")
+  expect_true(isTRUE(pr$truncated_rows))
+  expect_identical(as.integer(pr$cells_truncated), 0L)
+})
