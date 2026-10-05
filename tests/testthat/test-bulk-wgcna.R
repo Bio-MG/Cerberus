@@ -119,7 +119,11 @@ test_that("pipeline réel WGCNA : power -> modules -> bicor MEs/traits", {
   expect_false(any(is.na(mods$colors)))
   expect_false(is.null(mods$dendro))
   expect_false(is.null(mods$dendro_colors))
-  expect_identical(names(mods$colors), colnames(sim)[seq_len(mods$n_genes_used)] %||% names(mods$colors))
+  # The names are the SELECTED GENE ids (rownames of the VST matrix): the HVG
+  # step keeps the top-varied rows, so assert membership/count, not a prefix.
+  expect_length(names(mods$colors), mods$n_genes_used)
+  expect_false(any(duplicated(names(mods$colors))))
+  expect_true(all(names(mods$colors) %in% rownames(sim)))
 
   traits_df <- data.frame(row.names = paste0("s", 1:20),
                           x = seq(1, 20), y = rep(c(0, 1), 10))
@@ -128,6 +132,33 @@ test_that("pipeline réel WGCNA : power -> modules -> bicor MEs/traits", {
   expect_identical(dim(mt$cor), c(ncol(mods$MEs), 2L))
   expect_true(all(mt$pval >= 0 & mt$pval <= 1))
   expect_true(mt$n_samples == 20L)
+})
+
+test_that("F7 (réel 2026-10-05) : names(colors) sont des GÈNES de la VST, jamais des échantillons", {
+  skip_if_not_installed("WGCNA")
+  set.seed(7)
+  # Noms DISTINCTS par nature : GENE* en lignes, MW_sample_* en colonnes —
+  # toute fuite de colnames dans les noms de colors devient visible.
+  sim <- matrix(rnorm(2500 * 18), 2500, 18,
+                dimnames = list(paste0("GENE", 1:2500),
+                                paste0("MW_sample_", 1:18))) + 8
+  mods <- bulk_wgcna_build_modules(sim, power = 6, n_top = 2000)
+  # Niveau moteur : les noms de `colors` sont les ids de gènes SÉLECTIONNÉS,
+  # jamais les noms d'échantillons, jamais NA (le `names<-` de R complete par
+  # NA au lieu d'erreur — le défaut réel mesuré sur GSE164073).
+  expect_false(any(is.na(names(mods$colors))))
+  expect_true(all(names(mods$colors) %in% rownames(sim)))
+  expect_length(names(mods$colors), mods$n_genes_used)
+  expect_false(any(duplicated(names(mods$colors))))
+  expect_false(any(is.na(names(mods$dendro_colors))))
+  expect_true(all(names(mods$dendro_colors) %in% rownames(sim)))
+  # Niveau export : une ligne par gène utilisé, chaque `gene` un id présent
+  # dans la matrice VST, aucun NA.
+  ex <- build_wgcna_export(mods)
+  expect_identical(nrow(ex), as.integer(mods$n_genes_used))
+  expect_false(any(is.na(ex$gene)))
+  expect_true(all(ex$gene %in% rownames(sim)))
+  expect_false(any(duplicated(ex$gene)))
 })
 
 test_that("plots et export : consommateurs purs", {

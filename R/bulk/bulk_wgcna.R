@@ -261,7 +261,13 @@ bulk_wgcna_build_modules <- function(vst_matrix, power, n_top = NULL, deep_split
 
   colors_num <- net$colors
   color_labels <- labels2colors_safe(colors_num)
-  names(color_labels) <- colnames(hvg$mat)
+  # F7 (2026-10-06, mesuré sur GSE164073 en session réelle) : les noms des
+  # couleurs sont des GÈNES — `hvg$mat` reste gènes x échantillons, donc
+  # `rownames`, pas `colnames` (les échantillons). L'ancien `colnames` ne
+  # plantait PAS : le `names<-` de R complete une valeur trop courte par NA
+  # au lieu d'erreur, d'où 18 noms d'échantillons + 2 482 NA partis tout
+  # droit dans l'export (`build_wgcna_export` lit `names(colors)`).
+  names(color_labels) <- rownames(hvg$mat)
   mes <- net$MEs
   if (!is.null(mes)) {
     colnames(mes) <- sub("^ME", "", colnames(mes))
@@ -272,7 +278,8 @@ bulk_wgcna_build_modules <- function(vst_matrix, power, n_top = NULL, deep_split
   dendro_colors <- NULL
   if (!is.null(dendro) && length(net$blockGenes) >= 1L) {
     dendro_colors <- color_labels[net$blockGenes[[1]]]
-    names(dendro_colors) <- colnames(hvg$mat)[net$blockGenes[[1]]]
+    # Même correction F7 : les indices de `blockGenes` indexent les GÈNES.
+    names(dendro_colors) <- rownames(hvg$mat)[net$blockGenes[[1]]]
   }
   n_modules <- length(setdiff(unique(color_labels), "grey"))
   warnings <- c(hvg$warnings, if (n_modules == 0L) sprintf(
