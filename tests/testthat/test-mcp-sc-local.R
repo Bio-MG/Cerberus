@@ -1088,3 +1088,114 @@ test_that("indexed inputs are validated against the published vocabulary, and th
   tools <- e$.ts_tools()
   expect_length(tools, 10L)
 })
+
+# =============================================================================
+# F2 (2026-10-06) — le vocabulaire publié devient JOIGNABLE. Avant ce
+# correctif, les TROIS surfaces de lecture (read_result, snapshot,
+# wait observe) laissaient tomber le bloc `modules.<m>.vocabulary` entier :
+# `set_inputs` exigeait {index, vocab_rev} sans jamais publier de quoi les
+# satisfaire — la surface Slice 3 était morte au-dessus du MCP. Un SEUL
+# projecteur (celui du snapshot) sert désormais les trois surfaces ;
+# read_result REUTILISE `.ts_project_snapshot()` au lieu de son keep-set
+# privé à 4 clés (docs/mcp_design_F2_vocabulary.md, approuvé).
+# =============================================================================
+
+.mcp_sc_local_vocab_verdict <- function(e, vocab_bulk_de) {
+  # Un verdict `done` dont le snapshot porte le résumé objet + le bloc
+  # vocabulaire TEL QUE L'APP LE PUBLIE (ts_drive_write_result écrit le
+  # snapshot tel quel : la projection app a déjà eu lieu au moment de la
+  # sonde — ici on écrit donc la forme post-sonde, mot pour mot).
+  e$ts_drive_write_result(10L, "done", "bulk_de", TRUE, snapshot = list(
+    has_data = TRUE, object_class = "list", n_genes = 17925L, n_samples = 18L,
+    modules = list(bulk_de = list(
+      n_contrasts = 1L, status = "done",
+      vocabulary = vocab_bulk_de))))
+}
+
+test_that("F2: read_result surfaces the published vocabulary and keeps the object summary", {
+  e <- .mcp_sc_local_env()
+  fx <- .mcp_sc_local_import_fixture(e)
+  on.exit(unlink(e$ts_drive_root(), recursive = TRUE, force = TRUE), add = TRUE)
+  .mcp_sc_local_vocab_verdict(e, list(
+    condition_col = c("condition", "tissue"),
+    covariates    = c("condition", "tissue"),
+    group_levels  = c("mock", "CoV2"),
+    vocab_rev     = 3L))
+  rr <- e$.ts_tool_read_result()
+  expect_false(rr$isError)
+  s <- rr$structuredContent$snapshot
+  # l'ancien résumé objet reste, inchangé — le correctif est ADDITIF
+  expect_true(isTRUE(s$has_data))
+  expect_identical(as.integer(s$n_genes), 17925L)
+  expect_identical(as.integer(s$n_samples), 18L)
+  # LE correctif : le bloc vocabulaire est joignable, clés fermées, rev entière
+  v <- s$modules$bulk_de$vocabulary
+  expect_false(is.null(v), info = "F2: the vocabulary block must be reachable over MCP")
+  expect_identical(as.character(v$condition_col), c("condition", "tissue"))
+  expect_identical(as.character(v$group_levels), c("mock", "CoV2"))
+  expect_identical(as.integer(v$vocab_rev), 3L)
+  expect_true(all(names(v) %in% c("condition_col", "covariates", "group_levels",
+                                  "vocab_rev", "vocab_error")))
+  # la divulgation accompagne la projection (règle maison : rien n'est
+  # silencieusement jeté)
+  expect_match(s$redaction$policy, "snapshot-allowlist", fixed = TRUE)
+})
+
+test_that("F2: snapshot exposes the SAME vocabulary projection as read_result", {
+  e <- .mcp_sc_local_env()
+  fx <- .mcp_sc_local_import_fixture(e)
+  on.exit(unlink(e$ts_drive_root(), recursive = TRUE, force = TRUE), add = TRUE)
+  .mcp_sc_local_vocab_verdict(e, list(
+    condition_col = c("condition", "tissue"),
+    group_levels  = c("mock", "CoV2"),
+    vocab_rev     = 3L))
+  rr <- e$.ts_tool_read_result()
+  sn <- e$.ts_tool_snapshot()
+  expect_false(rr$isError)
+  expect_false(sn$isError)
+  v1 <- sn$structuredContent$modules$bulk_de$vocabulary
+  v2 <- rr$structuredContent$snapshot$modules$bulk_de$vocabulary
+  expect_false(is.null(v1), info = "F2: snapshot must expose the vocabulary too")
+  # UN projecteur, TROIS surfaces : les deux outils publient la MÊME projection
+  expect_identical(v1, v2)
+})
+
+test_that("F2: a refused choice lands null at its position; a rogue key is dropped and counted", {
+  e <- .mcp_sc_local_env()
+  fx <- .mcp_sc_local_import_fixture(e)
+  on.exit(unlink(e$ts_drive_root(), recursive = TRUE, force = TRUE), add = TRUE)
+  .mcp_sc_local_vocab_verdict(e, list(
+    condition_col = c("condition", "../etc/passwd"),
+    group_levels  = c("mock", "CoV2"),
+    rogue_key     = "x",
+    vocab_rev     = 3L))
+  rr <- e$.ts_tool_read_result()
+  expect_false(rr$isError)
+  v <- rr$structuredContent$snapshot$modules$bulk_de$vocabulary
+  # D1 verbatim guard : la position reste alignée avec les vrais choix du
+  # widget — le refus est un null À SA POSITION, jamais une suppression
+  expect_identical(as.character(v$condition_col[1]), "condition")
+  expect_true(is.na(v$condition_col[2]),
+              info = "F2: the guarded-out choice is NA (JSON null) at its position")
+  expect_identical(as.character(v$group_levels), c("mock", "CoV2"))
+  # keep-set FERMÉ : une clé que la table ne nomme pas ne traverse pas
+  expect_false("rogue_key" %in% names(v))
+  # ...et les jets sont COMPTÉS dans la divulgation (1 clé rogue + 1 choix refusé)
+  expect_true(rr$structuredContent$snapshot$redaction$dropped_field_count >= 2L,
+              info = "F2: guard refusals and rogue keys fold into dropped_field_count")
+})
+
+test_that("F2: the shared projector bounds choices at 64 and flags truncation (wait observe inherits)", {
+  e <- .mcp_sc_local_env()
+  # .ts_project_snapshot est AUSSI le projecteur du chemin observe du wait :
+  # ce test borne donc les trois surfaces d'un seul coup.
+  p <- e$.ts_project_snapshot(list(modules = list(bulk_de = list(vocabulary = list(
+    group_levels = paste0("lvl", seq_len(70L)), vocab_rev = 1L)))))
+  v <- p$modules$bulk_de$vocabulary
+  expect_identical(as.integer(v$vocab_rev), 1L)
+  expect_length(v$group_levels, 64L)   # TS_MCP_VOCAB_MAX_CHOICES
+  expect_identical(as.character(v$group_levels[[64L]]), "lvl64")
+  # jamais de coupe silencieuse : le drapeau ET le compte montent
+  expect_true(p$truncated, info = "F2: overflow is truncated AND disclosed")
+  expect_true(p$dropped >= 6L, info = "F2: truncated choices are counted as dropped")
+})

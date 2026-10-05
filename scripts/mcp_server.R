@@ -449,12 +449,23 @@ ts_drive_boot(.project_root)
     preserve_data = isTRUE(res$preserve_data),
     errors        = lapply(utils::head(errs, 5L), .ts_clean, max_chars = 200L),
     warnings      = lapply(utils::head(warns, 5L), .ts_clean, max_chars = 200L),
-    snapshot      = if (is.null(snap)) NULL else list(
-      has_data     = isTRUE(snap$has_data),
-      object_class = .ts_clean(.as_chr(snap$object_class) %|NA|% "", 40L),
-      n_genes      = suppressWarnings(as.integer(.as_chr(snap$n_genes) %|NA|% NA_integer_)),
-      n_samples    = suppressWarnings(as.integer(.as_chr(snap$n_samples) %|NA|% NA_integer_))
-    ),
+    # F2 (2026-10-06): the snapshot is projected by THE SAME projector as
+    # `transcripto_drive_snapshot` and the wait-observe path — not by a private
+    # 4-key keep-set that had drifted into a contract. The object summary keeps
+    # its keys; the module blocks (and the published vocabulary they carry)
+    # arrive with their own disclosure, because a projection that can DROP must
+    # publish HOW MUCH it dropped.
+    snapshot      = if (is.null(snap)) NULL else {
+      sp <- .ts_project_snapshot(snap)
+      list(
+        has_data     = sp$object$has_data,
+        object_class = sp$object$object_class,
+        n_genes      = sp$object$n_genes,
+        n_samples    = sp$object$n_samples,
+        error_state  = sp$object$error_state,
+        modules      = sp$modules,
+        redaction    = .ts_redaction_note(sp$dropped, sp$truncated))
+    },
     # R1 — ADDITIVE: the verdict's descriptor, exactly as the APP projected it
     # (keep-set + sanitiser at the writer — the projection point IS the app's;
     # the server passes the app-projected structure through, like the snapshot
@@ -777,6 +788,15 @@ ts_drive_boot(.project_root)
 .ts_snapshot_max_string  <- 120L
 .ts_snapshot_max_bytes   <- 8192L
 
+# F2 (2026-10-06): the vocabulary branch's own bound. The APP empties a choice
+# list beyond TS_DRIVE_VOCAB_MAX_CHOICES (4096) rather than truncate; this
+# server cap is FAR below that, so a genuinely huge published list IS truncated
+# here — which is exactly why the truncation is DISCLOSED (truncated flag +
+# dropped count), never silent. Measured real vocabularies (condition columns,
+# group levels, gene-set sources) sit in the tens; 64 leaves orders of
+# magnitude of headroom while bounding the wire.
+.ts_vocab_max_choices <- 64L
+
 #' A scalar we are willing to publish: length 1, never NA, never non-finite.
 .ts_snapshot_scalar <- function(x) {
   if (is.null(x) || length(x) != 1L) return(FALSE)
@@ -786,21 +806,85 @@ ts_drive_boot(.project_root)
   FALSE
 }
 
+#' Project ONE module's published VOCABULARY block (F2, 2026-10-06).
+#'
+#' The module projector below keeps SCALARS only, so the app-published
+#' `vocabulary` list used to fall on the floor at every read surface — while
+#' `set_inputs` demanded `{index, vocab_rev}` keyed on that very vocabulary.
+#' This branch is its read half. Rules, in order:
+#'   * CLOSED key set: only `TS_DRIVE_VOCABULARY_KEYS[[module]]` (+ `vocab_rev`,
+#'     `vocab_error`) is read; anything else is a DROPPED-FIELD COUNT, never a
+#'     leak.
+#'   * D1 verbatim guard on every choice: a refused choice (path-like, control
+#'     chars, over the cell cap) lands JSON `null` AT ITS POSITION — the index
+#'     the agent computes must stay aligned with the app's real widget choices.
+#'     Refusal count folds into `dropped_field_count`.
+#'   * BOUNDS: the choice list is capped at `.ts_vocab_max_choices` — truncate
+#'     AND disclose (`truncated`), never a silent cut. `vocab_rev` always
+#'     travels as an integer: it is the pin `set_inputs` validates against.
+#'   * The app's own `vocab_error` (its empty-list fail-closed marker) passes
+#'     through, cleaned.
+#'
+#' PURE. Returns NULL when the block is absent or the module declares no
+#' vocabulary, so the caller falls through to the scalar path.
+#'
+#' @return list(value = named list, dropped = integer, truncated = logical)
+.ts_project_vocabulary <- function(vocab, module) {
+  keys <- TS_DRIVE_VOCABULARY_KEYS[[module]]
+  if (!is.list(vocab) || !length(vocab) || is.null(keys)) return(NULL)
+  out <- list(); dropped <- 0L; truncated <- FALSE
+  keep <- c(keys, "vocab_rev", "vocab_error")
+  dropped <- dropped + length(setdiff(names(vocab), keep))
+  vocab <- vocab[intersect(keep, names(vocab))]
+  for (k in keys) {
+    v <- vocab[[k]]
+    if (is.null(v)) next
+    v <- as.character(v)
+    if (length(v) > .ts_vocab_max_choices) {
+      dropped <- dropped + (length(v) - .ts_vocab_max_choices)
+      v <- v[seq_len(.ts_vocab_max_choices)]
+      truncated <- TRUE
+    }
+    g <- if (length(v)) ts_drive_verbatim_guard(v) else character(0)
+    dropped <- dropped + sum(is.na(g))
+    out[[k]] <- g
+  }
+  if (!is.null(vocab$vocab_rev)) {
+    out$vocab_rev <- suppressWarnings(as.integer(vocab$vocab_rev))
+  }
+  if (!is.null(vocab$vocab_error)) {
+    out$vocab_error <- .ts_clean(as.character(vocab$vocab_error), 200L)
+  }
+  list(value = out, dropped = dropped, truncated = truncated)
+}
+
 #' Project ONE module's published state through the closed allowlist.
 #'
 #' Recurses at most `.ts_snapshot_max_depth` levels (the measured shape is
 #' `list(<slot> = list(n_genes, n_samples, samples))`) and keeps SCALARS only.
-#' A vector (`samples`), a matrix, or anything deeper is DROPPED.
+#' A vector (`samples`), a matrix, or anything deeper is DROPPED — except the
+#' module's own top-level `vocabulary` block, which `.ts_project_vocabulary()`
+#' projects by ITS rule when the module declares one (F2): the branch is keyed
+#' on the module NAME, so a vocabulary nested inside a slot is still a drop.
 #'
-#' @return list(value = named list, dropped = integer)
-.ts_snapshot_project_module <- function(state, depth = 1L) {
-  out <- list(); dropped <- 0L
-  if (!is.list(state)) return(list(value = out, dropped = 1L))
+#' @return list(value = named list, dropped = integer, truncated = logical)
+.ts_snapshot_project_module <- function(state, module = NULL, depth = 1L) {
+  out <- list(); dropped <- 0L; truncated <- FALSE
+  if (!is.list(state)) return(list(value = out, dropped = 1L, truncated = FALSE))
   nms <- names(state)
   for (i in seq_along(nms)) {
     if (length(out) >= .ts_snapshot_max_fields) { dropped <- dropped + 1L; next }
     nm <- nms[[i]]
     v <- state[[i]]
+    if (identical(nm, "vocabulary") && !is.null(module) && is.list(v)) {
+      pv <- .ts_project_vocabulary(v, module)
+      if (!is.null(pv)) {
+        dropped <- dropped + pv$dropped
+        truncated <- truncated || pv$truncated
+        if (length(pv$value)) out[[nm]] <- pv$value
+        next
+      }
+    }
     if (.ts_snapshot_scalar(v)) {
       if (!nm %in% .ts_snapshot_module_allow) { dropped <- dropped + 1L; next }
       if (is.character(v)) v <- .ts_clean(v, .ts_snapshot_max_string)
@@ -808,14 +892,15 @@ ts_drive_boot(.project_root)
     } else if (is.list(v) && length(v) && depth < .ts_snapshot_max_depth &&
                nm %in% .ts_snapshot_slot_allow) {
       # A SLOT: only the allowlisted scalars INSIDE it are published.
-      sub <- .ts_snapshot_project_module(v, depth + 1L)
+      sub <- .ts_snapshot_project_module(v, depth = depth + 1L)
       dropped <- dropped + sub$dropped
+      truncated <- truncated || isTRUE(sub$truncated)
       if (length(sub$value)) out[[nm]] <- sub$value
     } else {
       dropped <- dropped + 1L
     }
   }
-  list(value = out, dropped = dropped)
+  list(value = out, dropped = dropped, truncated = truncated)
 }
 
 #' The bounded, redacted projection of `result.json`'s `snapshot`.
@@ -844,8 +929,12 @@ ts_drive_boot(.project_root)
         truncated <- TRUE
       }
       for (k in known) {
-        pm <- .ts_snapshot_project_module(mods[[k]])
+        # F2: the module NAME rides along — the vocabulary branch is keyed on
+        # TS_DRIVE_VOCABULARY_KEYS[[module]] and must not fire for a nested
+        # namesake inside a slot.
+        pm <- .ts_snapshot_project_module(mods[[k]], module = k)
         dropped <- dropped + pm$dropped
+        truncated <- truncated || isTRUE(pm$truncated)
         if (length(pm$value)) modules[[k]] <- pm$value
       }
     }
