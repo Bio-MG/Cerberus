@@ -181,6 +181,108 @@ TS_DRIVE_EXPORT_PREFIX <- "tsdrive-export-"
 #' destination is fixed by the app, not merely permitted to the app.
 TS_DRIVE_EXPORT_DIRNAME <- "ts_drive_exports"
 
+# =============================================================================
+# transcripto_drive_read — les bornes de la lecture bornée (option i, D1
+# approuvé 2026-10-04, revue pré-code amendée le même jour).
+#
+# Ces constantes sont déclarées UNE fois ici ; le serveur MCP source CE FICHIER
+# (il sourçait déjà TS_DRIVE_ALLOWLIST), donc ce sont des données partagées et
+# non un miroir : impossible de dériver d'un côté sans l'autre.
+#
+# SERVER-MIRRORED (citée par le schéma/la description de l'outil MCP) :
+#   TS_DRIVE_READ_DEFAULT_ROWS, TS_DRIVE_READ_MAX_ROWS,
+#   TS_DRIVE_READ_MAX_CELL_CHARS (politique D1), TS_DRIVE_READ_KEYS (croisé
+#   par --check via TS_MCP_READ_KEYS), TS_DRIVE_READ_CLASSES (énum figée
+#   verbatim), TS_DRIVE_READ_CELL_MARKERS (forme épinglée par test).
+# APP-AUTHORITATIVE (l'app applique en dernier ressort, même si le client
+# ment) : tous les plafonds — le serveur n'écrit jamais le bloc `read`, il ne
+# peut pas borner ce qu'il n'a pas composé.
+# =============================================================================
+
+#' Défaut de hauteur de preview (le protocole n'a pas de mot-clé « default » :
+#' la valeur est rendue dans la DESCRIPTION de l'outil et appliquée des deux
+#' côtés).
+TS_DRIVE_READ_DEFAULT_ROWS <- 20L
+
+#' Plafond de la preview. Le serveur le refuse au schéma (maximum), l'app le
+#' clamp à nouveau (l'app est l'autorité).
+TS_DRIVE_READ_MAX_ROWS <- 200L
+
+#' Plafond du bloc `read` SÉRIALISÉ (256 Kio), mesuré APRÈS la projection
+#' (garde verbatim + sanitiseur appliqués) : c'est la taille de ce que l'agent
+#' recevra qui compte, pas celle d'une structure intermédiaire.
+TS_DRIVE_READ_MAX_BYTES <- 262144L
+
+#' Garde pathologique sur la TAILLE DU FICHIER (2 Gio). La RAM est protégée par
+#' le streaming, pas par ce plafond : au-delà, la déclaration est « une preview
+#' n'a plus de sens ». Type DOUBLE : 2^31 déborde .Machine$integer.max.
+TS_DRIVE_READ_MAX_FILE_BYTES <- 2^31
+
+#' Plafond DUR par cellule verbatim (décision D1, périmètre restreint). Une
+#' cellule plus longue ne voyage JAMAIS verbatim : marqueur déclaré + compteur.
+TS_DRIVE_READ_MAX_CELL_CHARS <- 200L
+
+#' Borne déclarée de nombre de colonnes d'une preview ; au-delà, refus honnête
+#' (READ_TOO_WIDE) plutôt qu'un bloc dégénéré.
+TS_DRIVE_READ_MAX_COLS <- 2048L
+
+#' Le keep-set du bloc `read` projeté sur le wire : mêmes deux règles que le
+#' descripteur d'export — clés déclarées seulement, et un projeteur dédié
+#' (ts_drive_read_descriptor) qui ne peut pas élargir la surface. Miroir
+#' serveur : TS_MCP_READ_KEYS, croisé par --check.
+TS_DRIVE_READ_KEYS <- c("route", "handle", "seq", "descriptor",
+                        "preview", "col_summary")
+
+#' Les classes que col_summary peut déclarer — ensemble FIGÉ (constantes de R
+#' lui-même, précédent TS_DRIVE_DESCRIPTOR_VERBATIM : les redacter détruirait
+#' le sens sans retirer aucun risque). Toute autre classe rapporte "other".
+TS_DRIVE_READ_CLASSES <- c("numeric", "integer", "character", "logical",
+                           "factor", "Date", "POSIXct", "POSIXlt")
+
+#' Marqueurs STRUCTURELS remplaçant une cellule qui ne voyage pas verbatim.
+#' Données déclarées pour que leur forme soit épinglée par un test ; ils
+#' passent le sanitiseur VERBATIM — contrainte de CONSTRUCTION : aucun run
+#' alphanumérique de 8+ (« truncated » en a 9 et serait parti en
+#' <<redacted>> ; mesuré par le cross-check de test-mcp-sc-local.R, d'où le
+#' trait d'union qui casse le run dans <over-200-chars>).
+TS_DRIVE_READ_CELL_MARKERS <- c(truncated = "<over-200-chars>",  # > plafond de cellule
+                                guarded   = "<guarded>")         # échec d'un règle D1
+
+#' La garde verbatim de D1 — UNE implémentation, DEUX consommateurs (preview
+#' de transcripto_drive_read ET vocabulaire session-dérivé Slice 3 ; la garde
+#' anti-duplication du dépôt l'imposerait de toute façon).
+#'
+#' PURE, vectorisée, sans I/O. Contrat de retour : character de MÊME LONGUEUR
+#' que `x` ; élément qui passe = la chaîne ; élément refusé = NA (l'appelant
+#' substitue le marqueur déclaré et compte) ; NA en ENTRÉE => NA en sortie
+#' (sémantique « émettre null » — jamais la chaîne "NA" fabriquée ; un
+#' littéral "NA" authentique reste une donnée).
+#'
+#' Règles de refus (D1, périmètre restreint, opérateur 2026-10-04) :
+#'   - plus de `max_chars` caractères (plafond dur, défaut
+#'     TS_DRIVE_READ_MAX_CELL_CHARS) ;
+#'   - contient '..' (traversée), '/' (séparateur de chemin — conséquence
+#'     mesurée : les cellules geneID des tables ORA ne voyagent pas verbatim),
+#'     '\\' ou '~' (chemins) ;
+#'   - contient un caractère de contrôle ([[:cntrl:]]) ;
+#'   - entrée NA (ambiguïté : sortir null, pas la chaîne "NA").
+#'
+#' Les bornes TOTALES (lignes × colonnes × octets) sont des compteurs côté
+#' appelant, déclarés à côté — pas ici : cette fonction juge une chaîne.
+#'
+#' @param x Vector character (cellules de preview ou libellés de vocabulaire).
+#' @param max_chars Plafond dur par chaîne.
+#' @return Character de même longueur ; NA aux positions refusées.
+ts_drive_verbatim_guard <- function(x, max_chars = TS_DRIVE_READ_MAX_CELL_CHARS) {
+  s <- as.character(x)
+  # nchar(allowNA = TRUE) rend NA sur les chaînes non-UTF8 invalides : refusées
+  # par précaution (impossibles à borner honnêtement).
+  n <- nchar(s, type = "chars", allowNA = TRUE)
+  bad <- is.na(s) | is.na(n) | n > max_chars |
+    grepl("\\.\\.|/|\\\\|~|[[:cntrl:]]", s)
+  ifelse(bad, NA_character_, s)
+}
+
 #' Retention bound. Exports are a convenience for an operator collecting evidence,
 #' not a store: without a cap the directory grows once per export, in the one
 #' place on this host an agent is allowed to write.
@@ -789,23 +891,27 @@ TS_DRIVE_IMPORT_SCHEMA <- list(
 
 #' Actions that must be PINNED to a session (frozen).
 #'
-#' Two of the seven change what the session holds, and both were MEASURED on a
+#' Three of the eight change what the session holds, and each was MEASURED on a
 #' live session accepting a scenario that carried no token at all, because the
 #' comparison was guarded by `nzchar()` and an absent token skipped it:
 #'
 #'   * `export_result` writes a file (S2, 2026-09-26);
 #'   * `import_file` REPLACES the session's primary object — `global_data$sc_obj`
-#'     for `import_sc`, `spatial_obj` for `import_spatial` (S3, 2026-09-26).
+#'     for `import_sc`, `spatial_obj` for `import_spatial` (S3, 2026-09-26);
+#'   * `read_export` REPLACES the verdict in result.json (R1, 2026-10-04): the
+#'     read consumes the export verdict, so a stale replayed read would
+#'     double-consume another session's artefact.
 #'
-#' The realistic failure for both is a STALE scenario, not a hostile one: written
-#' for a previous session, replayed after the user has loaded something else.
+#' The realistic failure for all three is a STALE scenario, not a hostile one:
+#' written for a previous session, replayed after the user has loaded something
+#' else.
 #'
 #' ⚠️ The other five keep the token-OPTIONAL affordance on purpose. A one-shot
 #' scenario an operator drops into `tools/_drive/` by hand carries no token, and
 #' widening this to every action is precisely the change that would break them.
 #' It is DATA, and not a literal in the comparison, so the S2 and S3 test files
 #' assert against the same set instead of each keeping a private copy.
-TS_DRIVE_TOKEN_PINNED_ACTIONS <- c("import_file", "export_result")
+TS_DRIVE_TOKEN_PINNED_ACTIONS <- c("import_file", "export_result", "read_export")
 
 #' Modules allowed to publish an IMPORTER (frozen).
 #'

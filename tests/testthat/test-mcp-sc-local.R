@@ -35,7 +35,7 @@
   e
 }
 
-test_that("local MCP keeps NINE tools and resolves the three SC action buttons", {
+test_that("local MCP keeps TEN tools and resolves the three SC action buttons", {
   e <- .mcp_sc_local_env()
   tools <- e$.ts_tools()
   # THE INVARIANT, restated rather than deleted â€” and the distinction is the whole
@@ -50,13 +50,19 @@ test_that("local MCP keeps NINE tools and resolves the three SC action buttons",
   # So both are now stated: the rule (a module never adds a tool) is asserted
   # directly below over the module inventory, and the declared surface is pinned as
   # a separate, visible list.
-  expect_length(tools, 9L)
+  #
+  # TEN since R1 (2026-10-04): `transcripto_drive_read` is the tool for the
+  # protocol capability the invariant RULE ITSELF names — "a tool is added only
+  # for a new protocol capability (import, READING), never for a module". The
+  # read reads the CURRENT export verdict; it names no route, no handle, no
+  # path, and adds no module surface.
+  expect_length(tools, 10L)
   expect_setequal(vapply(tools, function(x) x$name, character(1)), c(
     "transcripto_drive_status", "transcripto_drive_read_result",
     "transcripto_drive_snapshot", "transcripto_drive_set_inputs",
     "transcripto_drive_run", "transcripto_drive_wait",
     "transcripto_drive_set_armed", "transcripto_drive_export",
-    "transcripto_drive_import"
+    "transcripto_drive_import", "transcripto_drive_read"
   ))
   # THE RULE, enforced where it can be: every module in the app's own table must be
   # reachable through the EXISTING tools, so a new module is a new entry in
@@ -624,4 +630,232 @@ test_that("the export tool refuses a module outside the app's route table", {
     expect_identical(scenario$action, "export_result",
                      info = sprintf("route '%s': payload action", m))
   }
+})
+
+
+# =============================================================================
+# R1 — the ONE bounded read tool (option i, D1 approuvé 2026-10-04, revue
+# pré-code amendée : PAS de route, PAS de handle — les stems portent des runs
+# alphanumériques de 8+ que le sanitiseur redacte, donc l'agent ne peut pas
+# renvoyer un handle valide ; l'outil lit LE verdict d'export courant, et
+# NO_EXPORT_TARGET est dérivé SANS ÉTAT depuis result.json).
+# =============================================================================
+
+.mcp_sc_local_export_fixture <- function(e) {
+  # Un verdict d'export `done` crédible dans le root hermétique du sandbox :
+  # exactement ce que ts_drive_write_result écrit pour un export réel, avec le
+  # descripteur projeté (keep-set export). L'applied_at est MAINTENANT, donc
+  # postérieur au started_at du handshake — l'attribution de session passe.
+  write_result <- get("ts_drive_write_result", envir = e)
+  started <- format(Sys.time() - 5, "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+  list(
+    started = started,
+    write_export = function(seq) {
+      write_result(seq, "done", "bulk_de", TRUE, descriptor = list(
+        format = "csv", file = "bulk_de_results_1.csv", bytes = 120L,
+        n_rows = 5L, n_cols = 2L, columns = c("gene", "x")))
+    },
+    write_read = function(seq) {
+      # Un verdict de LECTURE : le descripteur porte `preview` — LE marqueur
+      # sans état qui dit « consommé ». Écrit DIRECTEMENT (pas via
+      # ts_drive_write_result, dont le projeteur EXPORT retirerait preview) :
+      # R2 écrira ce bloc par le projeteur read, qui n'existe pas encore.
+      payload <- list(
+        protocol      = e$TS_DRIVE_PROTOCOL,
+        ack_seq       = as.integer(seq),
+        status        = "done",
+        applied_at    = e$ts_drive_now_iso(),
+        active_module = NULL,
+        armed         = TRUE,
+        preserve_data = TRUE,
+        errors        = list(),
+        warnings      = list(),
+        snapshot      = NULL,
+        job           = NULL,
+        descriptor    = list(
+          route = "bulk_de", handle = "bulk_de_results_1.csv", seq = as.integer(seq),
+          descriptor = list(format = "csv", file = "bulk_de_results_1.csv",
+                            bytes = 120L, n_rows = 5L, n_cols = 2L),
+          preview = list(rows_returned = 1L, truncated_rows = FALSE,
+                         columns = c("gene", "x"), rows = list(list("G1", 1)),
+                         cells_truncated = 0L, cells_guarded = 0L),
+          col_summary = list(list(name = "gene", class = "character",
+                                  n_missing_in_preview = 0L))))
+      e$ts_drive_write_json(payload, e$ts_drive_path("result.json"))
+    }
+  )
+}
+
+test_that("the read tool exposes only seq, max_rows and expect, at both levels", {
+  e <- .mcp_sc_local_env()
+  tools <- e$.ts_tools()
+  ex <- Filter(function(x) identical(x$name, "transcripto_drive_read"), tools)
+  expect_length(ex, 1L)
+  if (!length(ex)) return(invisible(NULL))
+  sch <- ex[[1]]$inputSchema
+  expect_identical(sch$type, "object")
+  expect_setequal(names(sch$properties), c("seq", "max_rows", "expect"))
+  expect_false(sch$additionalProperties)
+  expect_false(sch$properties$expect$additionalProperties)
+  expect_setequal(names(sch$properties$expect$properties),
+                  c("pid", "started_at", "session_id"))
+  # PAS de session_token : le token brut n'est jamais une valeur fournie par
+  # l'appelant ; l'assertion le dérive du heartbeat vivant.
+  expect_false("session_token" %in% names(sch$properties$expect$properties))
+  expect_setequal(sch$required, c("seq", "expect"))
+  expect_identical(sch$properties$max_rows$maximum, 200L)
+  expect_identical(sch$properties$max_rows$minimum, 1L)
+})
+
+test_that("the read tool refuses out-of-domain values as tool results, and malformed shapes as -32602", {
+  e <- .mcp_sc_local_env()
+  fx <- .mcp_sc_local_import_fixture(e)
+  on.exit(unlink(e$ts_drive_root(), recursive = TRUE, force = TRUE), add = TRUE)
+  expect <- list(session_id = fx$session_id)
+
+  # Domaine : des valeurs BIEN typées hors bornes => tool result à code.
+  r0 <- e$.ts_tool_read(0L, NULL, expect)
+  expect_true(r0$isError)
+  expect_identical(r0$structuredContent$code, "PAYLOAD_REFUSED")
+  rlo <- e$.ts_tool_read(11L, 0L, expect)
+  expect_true(rlo$isError)
+  expect_identical(rlo$structuredContent$code, "PAYLOAD_REFUSED")
+  rhi <- e$.ts_tool_read(11L, 201L, expect)
+  expect_true(rhi$isError)
+  expect_identical(rhi$structuredContent$code, "PAYLOAD_REFUSED")
+  # Aucune écriture de scenario sur un refus pré-écriture.
+  expect_false(file.exists(e$ts_drive_path("scenario.json")))
+
+  # Protocole (-32602) : les erreurs de FORME, côté dispatch.
+  dmiss <- e$.ts_dispatch(list(jsonrpc = "2.0", id = 1L, method = "tools/call",
+    params = list(name = "transcripto_drive_read",
+                  arguments = list(seq = 11L))))
+  expect_identical(dmiss$error$code, -32602,
+                   info = "expect absent: -32602, forme du protocole")
+  dextra <- e$.ts_dispatch(list(jsonrpc = "2.0", id = 1L, method = "tools/call",
+    params = list(name = "transcripto_drive_read",
+                  arguments = list(seq = 11L, expect = list(session_id = "s"),
+                                   route = "bulk_de"))))
+  expect_identical(dextra$error$code, -32602,
+                   info = "route est SUPPRIME de l'outil : champ inconnu => -32602")
+  dtok <- e$.ts_dispatch(list(jsonrpc = "2.0", id = 1L, method = "tools/call",
+    params = list(name = "transcripto_drive_read",
+                  arguments = list(seq = 11L,
+                                   expect = list(session_id = "s", session_token = "t")))))
+  expect_identical(dtok$error$code, -32602,
+                   info = "session_token n'est jamais une valeur fournie par l'appelant")
+  dseq <- e$.ts_dispatch(list(jsonrpc = "2.0", id = 1L, method = "tools/call",
+    params = list(name = "transcripto_drive_read",
+                  arguments = list(seq = "12", expect = list(session_id = "s")))))
+  expect_identical(dseq$error$code, -32602)
+  dmr <- e$.ts_dispatch(list(jsonrpc = "2.0", id = 1L, method = "tools/call",
+    params = list(name = "transcripto_drive_read",
+                  arguments = list(seq = 11L, max_rows = "20",
+                                   expect = list(session_id = "s")))))
+  expect_identical(dmr$error$code, -32602)
+})
+
+test_that("NO_EXPORT_TARGET is derived statelessly from result.json", {
+  e <- .mcp_sc_local_env()
+  fx <- .mcp_sc_local_import_fixture(e)
+  on.exit(unlink(e$ts_drive_root(), recursive = TRUE, force = TRUE), add = TRUE)
+  ef <- .mcp_sc_local_export_fixture(e)
+  expect <- list(session_id = fx$session_id)
+
+  # 1. result.json ABSENT : rien n'a été conduit, donc rien n'a été exporté.
+  r0 <- e$.ts_tool_read(11L, NULL, expect)
+  expect_true(r0$isError)
+  expect_identical(r0$structuredContent$code, "NO_EXPORT_TARGET")
+
+  # 2. verdict d'export `done` : la cible EXISTE (descripteur, pas de preview).
+  ef$write_export(10L)
+  ok <- e$.ts_tool_read(11L, 5L, expect)
+  expect_false(ok$isError)
+  expect_identical(ok$structuredContent$dispatched, "read_export")
+  expect_identical(ok$structuredContent$max_rows, 5L)
+  scn <- jsonlite::fromJSON(e$ts_drive_path("scenario.json"), simplifyVector = FALSE)
+  expect_identical(scn$action, "read_export")
+  expect_identical(scn$max_rows, 5L)
+  expect_identical(scn$session_token, fx$token)
+  # Aucun champ de fichier du tout (ni route, ni handle, ni chemin).
+  expect_false(any(c("route", "handle", "file", "dir", "path") %in% names(scn)))
+
+  # 3. le verdict est déjà un verdict de LECTURE : consommé => NO_EXPORT_TARGET.
+  ef$write_read(11L)
+  r2 <- e$.ts_tool_read(12L, NULL, expect)
+  expect_true(r2$isError)
+  expect_identical(r2$structuredContent$code, "NO_EXPORT_TARGET")
+  expect_match(r2$structuredContent$message, "already a read verdict", fixed = TRUE)
+
+  # 4. verdict non terminal (running) : pas d'artefact => NO_EXPORT_TARGET.
+  write_result <- get("ts_drive_write_result", envir = e)
+  write_result(12L, "running", "bulk_de", TRUE, descriptor = NULL)
+  r3 <- e$.ts_tool_read(13L, NULL, expect)
+  expect_true(r3$isError)
+  expect_identical(r3$structuredContent$code, "NO_EXPORT_TARGET")
+
+  # 5. verdict d'une session ANTIÉRIEURE : attribution réutilisée
+  #    (RESULT_SESSION_MISMATCH), pas NO_EXPORT_TARGET.
+  stale <- jsonlite::fromJSON(e$ts_drive_path("result.json"), simplifyVector = FALSE)
+  stale$applied_at <- format(as.POSIXct("2000-01-01", tz = "UTC"),
+                             "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+  e$ts_drive_write_json(stale, e$ts_drive_path("result.json"))
+  r4 <- e$.ts_tool_read(14L, NULL, expect)
+  expect_true(r4$isError)
+  expect_identical(r4$structuredContent$code, "RESULT_SESSION_MISMATCH")
+})
+
+test_that("the read tool mirrors the export session assertion exactly", {
+  e <- .mcp_sc_local_env()
+  fx <- .mcp_sc_local_import_fixture(e)
+  on.exit(unlink(e$ts_drive_root(), recursive = TRUE, force = TRUE), add = TRUE)
+  ef <- .mcp_sc_local_export_fixture(e)
+  ef$write_export(10L)
+
+  # session_id ABSENT : SESSION_ASSERTION_REQUIRED (comme l'export).
+  r1 <- e$.ts_tool_read(11L, NULL, list())
+  expect_true(r1$isError)
+  expect_identical(r1$structuredContent$code, "SESSION_ASSERTION_REQUIRED")
+  # Wildcard : AMBIGUOUS_SESSION (comme l'export).
+  r2 <- e$.ts_tool_read(11L, NULL, list(session_id = "*"))
+  expect_true(r2$isError)
+  expect_identical(r2$structuredContent$code, "AMBIGUOUS_SESSION")
+  # Mauvais pin : SESSION_MISMATCH (comme l'export).
+  r3 <- e$.ts_tool_read(11L, NULL, list(session_id = "s-not-the-session"))
+  expect_true(r3$isError)
+  expect_identical(r3$structuredContent$code, "SESSION_MISMATCH")
+  # SEQ_STALE : rejouer un seq déjà consommé. Le fixture écrit le verdict
+  # DIRECTEMENT (le poller réel est ce qui incrémente last_seq), donc le test
+  # fait le bump explicitement — même sémantique, sans poller.
+  hb <- jsonlite::fromJSON(e$ts_drive_path("ready.json"), simplifyVector = FALSE)
+  hb$last_seq <- 10L
+  e$ts_drive_write_json(hb, e$ts_drive_path("ready.json"))
+  r4 <- e$.ts_tool_read(10L, NULL, list(session_id = fx$session_id))
+  expect_true(r4$isError)
+  expect_identical(r4$structuredContent$code, "SEQ_STALE")
+  expect_false(file.exists(e$ts_drive_path("scenario.json")))
+})
+
+test_that("the read keep-set cross-checks clean against the app's table", {
+  e <- .mcp_sc_local_env()
+  expect_length(e$.ts_mcp_read_problems(), 0L)
+  # Les marqueurs déclarés passent le sanitiseur verbatim (sinon les compteurs
+  # seraient illisibles sur le wire).
+  for (mk in e$TS_DRIVE_READ_CELL_MARKERS) {
+    expect_identical(e$ts_drive_badge_sanitize(mk, 200L), mk)
+  }
+})
+
+test_that("read_result surfaces the verdict descriptor (additive)", {
+  e <- .mcp_sc_local_env()
+  fx <- .mcp_sc_local_import_fixture(e)
+  on.exit(unlink(e$ts_drive_root(), recursive = TRUE, force = TRUE), add = TRUE)
+  ef <- .mcp_sc_local_export_fixture(e)
+  ef$write_export(10L)
+  rr <- e$.ts_tool_read_result()
+  expect_false(rr$isError)
+  d <- rr$structuredContent$descriptor
+  expect_false(is.null(d))
+  expect_identical(d$file, "bulk_de_results_1.csv")
+  expect_identical(d$n_rows, 5L)
 })

@@ -674,8 +674,12 @@ ts_drive_arm_state <- function(token) {
 # =============================================================================
 
 #' Allowed `action` values (spec §2.3, frozen).
+#' R1: `read_export` joins the enum — the bounded read (option i, D1 approuvé).
+#' The handler lands in R2; until then a dispatched read_export receives an
+#' honest `invalid` verdict from the unhandled-action branch, never silence.
 TS_DRIVE_ACTIONS <- c("noop", "set_inputs", "run_pipeline", "import_file",
-                      "snapshot", "reset_module", "export_result")
+                      "snapshot", "reset_module", "export_result",
+                      "read_export")
 
 #' The `result.json` status enum (spec §2.4, FROZEN).
 #'
@@ -767,9 +771,14 @@ ts_drive_validate_scenario <- function(scn, token, last_seq) {
   }
 
   module <- as.character(scn$module %||% "")
-  if (!nzchar(module)) {
+  # R1/R2: `read_export` is deliberately MODULE-LESS — it targets the current
+  # export verdict and names no module (the agent could not echo a handle or a
+  # route anyway: the stems carry 8+-character runs the sanitiser redacts).
+  # Every other action still requires one; a module handed to read_export is
+  # simply ignored downstream.
+  if (!nzchar(module) && !identical(action, "read_export")) {
     errors <- c(errors, "missing `module`")
-  } else if (!module %in% TS_DRIVE_MODULES) {
+  } else if (nzchar(module) && !module %in% TS_DRIVE_MODULES) {
     errors <- c(errors, sprintf(
       "module '%s' outside the drive allowlist (allowed: %s)",
       module, paste(TS_DRIVE_MODULES, collapse = ", ")))

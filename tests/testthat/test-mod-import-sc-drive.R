@@ -409,9 +409,13 @@ test_that("an import_sc with NO session token is refused (it replaces sc_obj)", 
     expect_false(vs(sc(ac, ""), tok, 0)$ok)
     expect_true(vs(sc(ac, tok), tok, 0)$ok)
   }
-  # The pinned set is DATA, and both actions in it are exactly the two that
-  # mutate the session. A third pinned action would be a visible edit here.
-  expect_setequal(TS_DRIVE_TOKEN_PINNED_ACTIONS, c("import_file", "export_result"))
+  # The pinned set is DATA, and every action in it is exactly one that mutates
+  # the session. R1 (2026-10-04) adds `read_export`: the read REPLACES the
+  # verdict in result.json — it consumes the export verdict — so a stale
+  # replayed read would double-consume another session's artefact. Same
+  # measured failure class as the first two, disclosed here.
+  expect_setequal(TS_DRIVE_TOKEN_PINNED_ACTIONS,
+                  c("import_file", "export_result", "read_export"))
   expect_true(all(TS_DRIVE_TOKEN_PINNED_ACTIONS %in% TS_DRIVE_ACTIONS))
   # And an action that mutates nothing is still addressable without a token.
   expect_true(vs(list(protocol = "ts-drive/1", seq = 5, module = "import_sc",

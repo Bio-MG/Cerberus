@@ -109,6 +109,7 @@ if ("--check" %in% .args) {
   .ts_stderr("                 transcripto_drive_wait (M4: bounded observation; <=1 snapshot, post-terminal)")
   .ts_stderr("                 transcripto_drive_set_armed (M2: arm/disarm; writes arm.json only)")
   .ts_stderr("                 transcripto_drive_export (S2/S2b: the artefact of ONE declared route)")
+  .ts_stderr("                 transcripto_drive_read (R1: bounded read of the CURRENT export verdict)")
   .ts_stderr("  dependencies : mcptools/btw/ellmer NOT required")
   # The tool-schema and reader checks need the drive files SOURCED, so they run
   # in a SECOND phase further down (section 1b). Everything above is
@@ -221,7 +222,16 @@ ts_drive_boot(.project_root)
                       "BUTTON_MODULE_MISMATCH", "JOB_ALREADY_RUNNING",
                       # M4 — long-job observation
                       "SESSION_LOST", "OBSERVE_FAILED",
-                      "OBSERVE_SKIPPED_NO_TERMINAL")
+                      "OBSERVE_SKIPPED_NO_TERMINAL",
+                      # R1 — the bounded read. ONE new code: the missing-target
+                      # state, derived STATELESSLY from result.json (a done
+                      # export verdict of the LIVE session whose descriptor is
+                      # not already a read verdict). Everything else the read
+                      # can refuse reuses existing codes: INVALID_PROTOCOL,
+                      # READ_FAILED, RESULT_SESSION_MISMATCH (attribution), the
+                      # session family, PAYLOAD_REFUSED (malformed values) —
+                      # there is no route/handle argument, so no handle code.
+                      "NO_EXPORT_TARGET")
 # M3a — the passive snapshot tool adds NO new code on purpose: it is a READ, so
 # every refusal it can produce is one of the six above (NO_SESSION,
 # STALE_SESSION, INVALID_PROTOCOL, READ_FAILED, RESULT_SESSION_MISMATCH,
@@ -436,6 +446,14 @@ ts_drive_boot(.project_root)
       n_genes      = suppressWarnings(as.integer(.as_chr(snap$n_genes) %|NA|% NA_integer_)),
       n_samples    = suppressWarnings(as.integer(.as_chr(snap$n_samples) %|NA|% NA_integer_))
     ),
+    # R1 — ADDITIVE: the verdict's descriptor, exactly as the APP projected it
+    # (keep-set + sanitiser at the writer — the projection point IS the app's;
+    # the server passes the app-projected structure through, like the snapshot
+    # fields above). Until R1 this was written into result.json and never
+    # surfaced: an export `done` gave the caller nothing to name, and the
+    # export tool's own note already promised this field. For a read verdict
+    # this carries the bounded read block (preview + col_summary).
+    descriptor    = res$descriptor,
     session = list(pid = suppressWarnings(as.integer(hb$pid)),
                    started_at = .ts_clean(.as_chr(hb$started_at), 40L),
                    identity_ok = TRUE)
@@ -1516,6 +1534,88 @@ TS_MCP_EXPORT_COLUMNS <- list(
   problems
 }
 
+# ── R1 — the bounded read: mirror keep-set + coherence cross-check ──────────
+#
+# TS_MCP_READ_KEYS mirrors TS_DRIVE_READ_KEYS (both sourced from
+# R/core/drive_allowlist.R, so the mirror is data-to-data, not memory-to-data).
+# .ts_mcp_read_problems() is the --check line: it cannot verify what the APP
+# will project (that verdict arrives at R2), but it can verify that THIS
+# server's declared surface is coherent with the app's declared table and that
+# the declared markers survive the sanitiser unchanged — a marker that the
+# sanitiser would rewrite would make the counters unreadable on the wire.
+
+TS_MCP_READ_KEYS <- TS_DRIVE_READ_KEYS
+
+.ts_mcp_read_problems <- function() {
+  problems <- character(0)
+  if (!identical(TS_MCP_READ_KEYS, TS_DRIVE_READ_KEYS)) {
+    problems <- c(problems, "read keys: the server mirror differs from TS_DRIVE_READ_KEYS")
+  }
+  if (!length(TS_DRIVE_READ_KEYS) || is.null(TS_DRIVE_READ_KEYS)) {
+    problems <- c(problems, "read keys: the app declares an empty keep-set")
+  }
+  for (mk in names(TS_DRIVE_READ_CELL_MARKERS)) {
+    mk_val <- TS_DRIVE_READ_CELL_MARKERS[[mk]]
+    if (!identical(ts_drive_badge_sanitize(mk_val, 200L), mk_val)) {
+      problems <- c(problems, sprintf(
+        "cell marker '%s' does not survive the sanitiser verbatim", mk))
+    }
+  }
+  if (!length(TS_DRIVE_READ_CLASSES)) {
+    problems <- c(problems, "read classes: the declared class set is empty")
+  }
+  if (!(TS_DRIVE_READ_DEFAULT_ROWS >= 1L &&
+        TS_DRIVE_READ_DEFAULT_ROWS <= TS_DRIVE_READ_MAX_ROWS)) {
+    problems <- c(problems, "read rows: the default is not within 1..max")
+  }
+  if (!(TS_DRIVE_READ_MAX_BYTES > 0L) || !(TS_DRIVE_READ_MAX_COLS > 0L) ||
+      !(TS_DRIVE_READ_MAX_FILE_BYTES > 0)) {
+    problems <- c(problems, "read bounds: a declared ceiling is not positive")
+  }
+  problems
+}
+
+#' Cross-check the SESSION-DERIVED vocabulary surface (Slice 3).
+#'
+#' The five indexed ids must be EXACTLY: the select ids whose schema type is
+#' index/index_list, the members of `TS_DRIVE_SESSION_INPUTS`, and the modules
+#' that declare vocabulary keys. Any disagreement between the three tables is
+#' a drift the --check surfaces instead of assuming away.
+.ts_mcp_vocab_problems <- function() {
+  problems <- character(0)
+  indexed <- names(TS_DRIVE_SESSION_INPUTS)
+  for (id in indexed) {
+    e <- ts_drive_allowlist_get(id)
+    if (is.null(e) || !identical(e$kind, "select")) {
+      problems <- c(problems, sprintf("%s: indexed but not a select in TS_DRIVE_ALLOWLIST", id))
+    }
+    sch <- TS_MCP_INPUT_SCHEMA[[id]]
+    if (is.null(sch) || !sch$type %in% c("index", "index_list")) {
+      problems <- c(problems, sprintf("%s: indexed but absent from TS_MCP_INPUT_SCHEMA as index/index_list", id))
+      next
+    }
+    mod <- TS_DRIVE_SESSION_INPUTS[[id]]$module
+    if (is.null(TS_DRIVE_VOCABULARY_KEYS[[mod]])) {
+      problems <- c(problems, sprintf("%s: module '%s' declares no vocabulary keys", id, mod))
+      next
+    }
+    key <- TS_DRIVE_SESSION_INPUTS[[id]]$key
+    if (!key %in% TS_DRIVE_VOCABULARY_KEYS[[mod]]) {
+      problems <- c(problems, sprintf("%s: key '%s' is not declared for module '%s'", id, key, mod))
+    }
+  }
+  # And the converse: every select exposed as index/index_list must BE in the
+  # session table — an indexed type without an app-side entry would validate
+  # against nothing.
+  for (id in names(TS_MCP_INPUT_SCHEMA)) {
+    sch <- TS_MCP_INPUT_SCHEMA[[id]]
+    if (sch$type %in% c("index", "index_list") && !id %in% indexed) {
+      problems <- c(problems, sprintf("%s: index type but not in TS_DRIVE_SESSION_INPUTS", id))
+    }
+  }
+  problems
+}
+
 #' The scenario payload for `export_result`, as a REBUILT list.
 #'
 #' Built field by field rather than assembled from the caller's arguments, so a
@@ -1585,6 +1685,144 @@ TS_MCP_EXPORT_COLUMNS <- list(
     disclosure = .ts_redaction_note(0L, FALSE)
   ), paste0("export_result dispatched for module '", module,
             "' at seq ", seq, ". The app picks the artefact; nothing else was selectable."))
+}
+
+# ── R1 — the ONE bounded read tool ──────────────────────────────────────────
+#
+# WHAT IT IS. A dispatcher, like export: it writes ONE scenario.json with
+# action=read_export and stops. The APP reads its own file (streaming), bounds
+# it, and writes the read verdict into result.json; the caller surfaces it
+# through transcripto_drive_read_result — which now projects the verdict's
+# `descriptor` (additive field; the export descriptor was already written
+# there but never surfaced before R1).
+#
+# WHAT THE CALLER CANNOT NAME (revue 2026-10-04): a route, a handle, a path.
+# The stems carry 8+-character runs the sanitiser redacts
+# (bulk_pathways_enrichment, spatial_qc_hotspots, ...), so a caller could not
+# echo a valid handle back — the tool reads THE current export verdict, and
+# nothing else. The stem stays app-internal knowledge.
+#
+# NO_EXPORT_TARGET is derived STATELESSLY from result.json at every dispatch
+# (and again app-side at apply time in R2). The deciding fields, in order:
+#   1. res$protocol == TS_DRIVE_PROTOCOL      (else INVALID_PROTOCOL, reused)
+#   2. res$applied_at parseable               (else READ_FAILED, reused)
+#      and >= the live session's started_at   (else RESULT_SESSION_MISMATCH,
+#                                              the exact existing comparison)
+#   3. res$status == "done"                   (the only terminal status that
+#                                              carries an artefact)
+#   4. res$descriptor non-NULL                (a done export always has one)
+#   5. is.null(res$descriptor$preview)        NULL => an EXPORT verdict (the
+#                                              target); non-NULL => the verdict
+#                                              is already a READ verdict =>
+#                                              consumed => NO_EXPORT_TARGET.
+# No in-memory variable participates: the check is re-derivable from the drive
+# alone, on both sides of the process boundary.
+
+.ts_read_payload <- function(seq, token, max_rows) {
+  list(
+    protocol      = TS_DRIVE_PROTOCOL,
+    seq           = seq,
+    session_token = token,
+    action        = "read_export",
+    max_rows      = as.integer(max_rows)
+  )
+}
+
+.ts_tool_read <- function(seq, max_rows = NULL, expect = NULL) {
+  if (!is.numeric(seq) || length(seq) != 1L || is.na(seq) || seq < 1 ||
+      seq != as.integer(seq)) {
+    return(.ts_tool_err("PAYLOAD_REFUSED", "`seq` must be an integer >= 1.",
+                        "The app ignores any scenario whose seq is not greater than its last_seq."))
+  }
+  seq <- as.integer(seq)
+  rows <- if (is.null(max_rows)) TS_DRIVE_READ_DEFAULT_ROWS else {
+    if (!is.numeric(max_rows) || length(max_rows) != 1L || is.na(max_rows) ||
+        max_rows < 1 || max_rows != as.integer(max_rows) ||
+        max_rows > TS_DRIVE_READ_MAX_ROWS) {
+      return(.ts_tool_err("PAYLOAD_REFUSED",
+        sprintf("`max_rows` must be an integer between 1 and %s (absent = %s).",
+                TS_DRIVE_READ_MAX_ROWS, TS_DRIVE_READ_DEFAULT_ROWS),
+        "The app clamps again: the app is the authority on the preview height."))
+    }
+    as.integer(max_rows)
+  }
+  # Miroir EXACT de l'assertion d'export : expect.session_id obligatoire
+  # (SESSION_ASSERTION_REQUIRED), wildcard refusé (AMBIGUOUS_SESSION),
+  # SESSION_MISMATCH sur un pin faux, SESSION_NOT_ARMED/STALE_SESSION sur une
+  # session qui ne va pas. Une lecture DÉCLENCHE une action du poller, donc
+  # elle exige une session ARMÉE vivante — et elle n'obtient JAMAIS le secours
+  # d'armement (elle ne restaure pas la vivacité).
+  asserted <- .ts_session_assert(expect, require_assertion = TRUE)
+  if (!isTRUE(asserted$ok)) return(asserted$error)
+  last_seq <- suppressWarnings(as.integer(.as_chr(asserted$hb$last_seq) %|NA|% 0L))
+  if (seq <= last_seq) {
+    return(.ts_tool_err("SEQ_STALE",
+      sprintf("seq %s is not greater than the session's last_seq %s.", seq, last_seq),
+      "A replayed or stale scenario is ignored by the app; re-read the session and use a higher seq."))
+  }
+
+  # NO_EXPORT_TARGET — the stateless derivation, exactly as documented above.
+  res <- ts_drive_read_result()
+  if (is.null(res)) {
+    return(.ts_tool_err("NO_EXPORT_TARGET",
+      "result.json is absent: nothing has been driven yet, so nothing has been exported.",
+      "Dispatch transcripto_drive_export first, read its descriptor via transcripto_drive_read_result, then read."))
+  }
+  rproto <- .as_chr(res$protocol)
+  if (is.na(rproto) || !identical(rproto, TS_DRIVE_PROTOCOL)) {
+    return(.ts_tool_err("INVALID_PROTOCOL",
+      sprintf("result.json declares protocol '%s'; expected '%s'.",
+              .ts_clean(rproto %|NA|% "(absent)"), TS_DRIVE_PROTOCOL),
+      "The verdict was written by a different build."))
+  }
+  applied <- .ts_parse_iso(res$applied_at)
+  started <- .ts_parse_iso(.as_chr(asserted$hb$started_at))
+  if (is.na(applied)) {
+    return(.ts_tool_err("READ_FAILED",
+      "result.json has no parseable applied_at, so its verdict cannot be attributed.",
+      "A verdict without a timestamp cannot be read."))
+  }
+  if (!is.na(started) && applied < started) {
+    return(.ts_tool_err("RESULT_SESSION_MISMATCH",
+      "result.json predates the live session: it is a leftover verdict from a previous session.",
+      "Export within THIS session before reading."))
+  }
+  status <- .as_chr(res$status)
+  desc <- res$descriptor
+  if (!identical(status, "done") || is.null(desc) || !is.null(desc$preview)) {
+    return(.ts_tool_err("NO_EXPORT_TARGET",
+      sprintf("the current verdict (status=%s%s) is not a completed export.",
+              .ts_clean(status %|NA|% "(absent)"),
+              if (!is.null(desc) && !is.null(desc$preview)) ", already a read verdict" else ""),
+      "One read per completed export: dispatch transcripto_drive_export again (exports are byte-identical), then read."))
+  }
+
+  payload <- .ts_read_payload(seq, asserted$token, rows)
+  if (nchar(.ts_json(payload), type = "bytes") > TS_MCP_MAX_PAYLOAD_BYTES) {
+    return(.ts_tool_err("PAYLOAD_TOO_LARGE", "the serialised scenario is too large.",
+                        "A read carries a counter and a pin; this should not happen."))
+  }
+  wrote <- tryCatch(ts_drive_write_json(payload, ts_drive_path("scenario.json")),
+                    error = function(e) FALSE)
+  if (!isTRUE(wrote)) {
+    return(.ts_tool_err("SCENARIO_WRITE_FAILED",
+      "The atomic write of tools/_drive/scenario.json did not land.",
+      "Another process may be holding the file; retry, or check tools/check_writers.R."))
+  }
+
+  .ts_tool_ok(list(
+    dispatched = "read_export",
+    seq = seq,
+    max_rows = rows,
+    chosen_by_caller = list(route = NULL, handle = NULL, file = NULL,
+                            destination = NULL, format = NULL),
+    note = paste("The app resolves the file from the current export verdict's own",
+                 "descriptor (statelessly), streams it, and writes a bounded read",
+                 "verdict. Surface it via transcripto_drive_read_result. One read",
+                 "per completed export: export again to read again."),
+    disclosure = .ts_redaction_note(0L, FALSE)
+  ), paste0("read_export dispatched at seq ", seq,
+            " (preview height ", rows, "). The app picks the file, the bounds and the projection."))
 }
 
 # ── S3: the controlled import tool ──────────────────────────────────────────
@@ -2592,6 +2830,71 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
                additionalProperties = FALSE)),
            required = c("seq", "module", "expect"),
            additionalProperties = FALSE)),
+    # R1 — the ONE bounded read. Deliberately THREE arguments: a counter, a
+    # height, a pin. No route, no handle: the stems carry 8+-character runs the
+    # sanitiser redacts (bulk_pathways_enrichment, spatial_qc_hotspots, ...),
+    # so a caller could not echo a valid handle back — the tool reads THE
+    # current export verdict, one read per completed export. `expect` mirrors
+    # the export assertion exactly (session_id mandatory, wildcard refused)
+    # WITHOUT session_token: the raw token is never published, the assertion
+    # derives the id from the live heartbeat.
+    list(name = "transcripto_drive_read",
+         description = paste0(
+           "BOUNDED READ of the current exported artefact by writing ONE ",
+           "scenario.json with action=read_export, then stop. The caller names ",
+           "NOTHING about the file — no route, no handle, no path: the read ",
+           "targets the current export verdict (one read per completed export; ",
+           "export again to read again). The APP resolves the file from its own ",
+           "verdict, streams it (header + first K data lines, never a full ",
+           "load), clamps the preview to max_rows (default 20, ceiling 200) and ",
+           "to a 256 KiB serialized block measured AFTER projection, and writes ",
+           "a bounded verdict: preview rows plus a per-column summary ",
+           "(name, class, n_missing_in_preview only — no min/max/n_distinct/",
+           "top values). Preview CELL VALUES travel verbatim under the declared ",
+           "D1 policy: max 200 chars; '..', '/', '\\', '~' and control ",
+           "characters are refused; a failing cell is replaced by <over-200-chars> ",
+           "or <guarded> and counted — cells containing '/' (ORA geneID lists) ",
+           "therefore do NOT travel verbatim. Every structural field (file, ",
+           "route, handle, columns, module, action, error codes) stays ",
+           "sanitised: 8+-character alphanumeric runs arrive as <redacted> with ",
+           "positions preserved, so map column names by position with the ",
+           "declared contracts: ",
+           .ts_export_contract_text(),
+           ". Refuses NO_EXPORT_TARGET when there is no completed export to ",
+           "read (derived statelessly from result.json), and refuses any field ",
+           "beyond `seq`, `max_rows` and `expect`."),
+         inputSchema = list(
+           type = "object",
+           properties = list(
+             seq = list(
+               type = "integer",
+               minimum = 1,
+               description = paste0(
+                 "Protocol counter, must be greater than the session's last_seq. ",
+                 "Required. It is a sequence number, not a choice about the file.")),
+             max_rows = list(
+               type = "integer",
+               minimum = 1L,
+               maximum = 200L,
+               description = paste0(
+                 "Bounded preview height. Absent = 20. The app clamps again: ",
+                 "the app is the authority on what it streams.")),
+             expect = list(
+               type = "object",
+               description = paste0(
+                 "Required pin, mirroring the export assertion exactly: ",
+                 "session_id is MANDATORY (SESSION_ASSERTION_REQUIRED), the ",
+                 "wildcard '*' is never accepted (AMBIGUOUS_SESSION), and the ",
+                 "raw session_token is deliberately NOT a field. A read ",
+                 "triggers an app-side action, so it must name the live, ARMED ",
+                 "session. A wrong pin fails closed as SESSION_MISMATCH."),
+               properties = list(
+                 pid = list(type = "integer"),
+                 started_at = list(type = "string"),
+                 session_id = list(type = "string")),
+               additionalProperties = FALSE)),
+           required = c("seq", "expect"),
+           additionalProperties = FALSE)),
     list(name = "transcripto_drive_import",
          description = paste0(
            "CONTROLLED WRITE. Import data for ONE importer module by writing ONE ",
@@ -3116,6 +3419,42 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
       }
       return(.ts_result(id, .ts_tool_export(sq, md, ex)))
     }
+    # R1 — the bounded read. Protocol-level shape checks stay HERE (-32602:
+    # type errors, unknown fields, missing required); domain refusals
+    # (bounds, seq staleness, missing export target) are tool results with
+    # domain codes. `expect` mirrors the export assertion WITHOUT
+    # session_token: the raw token is never a caller-supplied field.
+    if (identical(nm, "transcripto_drive_read")) {
+      args <- if (is.list(params$arguments)) params$arguments else list()
+      ex <- args$expect
+      if (is.null(ex) || !is.list(ex) || length(ex) == 0L) {
+        return(.ts_error(id, -32602,
+          "Invalid params: 'expect' is required and must be a non-empty object: a read triggers an app-side action and must name the live session."))
+      }
+      bad <- setdiff(names(ex), setdiff(.ts_expect_fields, "session_token"))
+      if (length(bad)) {
+        return(.ts_error(id, -32602, sprintf(
+          "Invalid params: unknown 'expect' field(s): %s (a read never takes session_token: the raw token is not a caller-supplied value)",
+          paste(bad, collapse = ", "))))
+      }
+      unknown <- setdiff(names(args), c("seq", "max_rows", "expect"))
+      if (length(unknown)) {
+        return(.ts_error(id, -32602, sprintf(
+          paste("Invalid params: transcripto_drive_read takes only `seq`, `max_rows` and `expect`;",
+                "unknown field(s): %s. There is NO route or handle argument: the read",
+                "targets the current export verdict, one read per completed export."),
+          paste(unknown, collapse = ", "))))
+      }
+      sq <- args$seq
+      if (is.null(sq) || !is.numeric(sq)) {
+        return(.ts_error(id, -32602, "Invalid params: 'seq' must be an integer >= 1."))
+      }
+      mr <- args$max_rows
+      if (!is.null(mr) && !is.numeric(mr)) {
+        return(.ts_error(id, -32602, "Invalid params: 'max_rows' must be an integer."))
+      }
+      return(.ts_result(id, .ts_tool_read(sq, mr, ex)))
+    }
     return(.ts_error(id, -32602, sprintf("Unknown tool: %s", nm)))
   }
 
@@ -3214,11 +3553,21 @@ if ("--check" %in% .args) {
              } else {
                "OK (every key and required flag matches the app's own importer schema)"
              })
+  .ts_read_problems <- .ts_mcp_read_problems()
+  .ts_stderr("  read keys    : ",
+             paste(TS_MCP_READ_KEYS, collapse = ", "))
+  .ts_stderr("  read check   : ",
+             if (length(.ts_read_problems)) {
+               paste0(length(.ts_read_problems), " PROBLEM(S): ",
+                      paste(.ts_read_problems, collapse = "; "))
+             } else {
+               "OK (the read keep-set, markers and bounds match the app's declared table)"
+             })
   quit(status = if (.ts_have_jsonlite && drive_ok && !length(.ts_schema_problems) &&
                     !length(.ts_run_problems) && !length(.ts_import_problems) &&
-                    !length(.ts_export_problems)) 0L else 1L,
+                    !length(.ts_export_problems) && !length(.ts_read_problems)) 0L else 1L,
        save = "no")
 }
 
-.ts_stderr("mcp_server: serving 9 drive tools (3 read-only + import + set_inputs + run + wait + arm/disarm + export) (stdio, NDJSON, native JSON-RPC)")
+.ts_stderr("mcp_server: serving 10 drive tools (3 read-only + import + set_inputs + run + wait + arm/disarm + export + read) (stdio, NDJSON, native JSON-RPC)")
 .ts_serve()
