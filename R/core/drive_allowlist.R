@@ -976,6 +976,57 @@ TS_DRIVE_INPUT_STAGES <- list(
   )
 )
 
+# ── Slice 3 : les entrées session-dérivées, adressées PAR INDEX ──────────────
+#
+# Les CINQ selects dont le domaine vient de la session vivante (métadonnées
+# chargées, catalogue des paquets localement installés). Ils étaient
+# délibérément NON exposés par M3b (mcp_server.R, « WHY FIVE ALLOWLISTED
+# INPUTS ARE DELIBERATELY NOT EXPOSED ») : le serveur ne peut pas lire le
+# domaine, donc ne peut pas honorer « rejeter les valeurs non supportées ».
+# Slice 3 ferme ce trou AUTREMENT : l'app PUBLIE le domaine (sonde d'état,
+# clé `vocabulary`), et la valeur wire devient un ENTIER (l'index dans la
+# liste publiée) — jamais le nom brut. Le serveur valide 1..N contre le
+# vocabulaire publié ; l'app résout l'index dans SES choix au moment
+# d'appliquer et re-vérifie (l'app est l'autorité).
+#
+# DECISION D1 (rendue 2026-10-04) : les CHOIX publiés sont verbatim (c'est le
+# second consommateur déclaré de `ts_drive_verbatim_guard()`), toute clé
+# structurelle reste sanitisee. Une position de liste NE disparaît JAMAIS :
+# un choix qui échoue à la garde part en NA (JSON null) et l'index reste
+# aligné sur les choix réels du widget.
+#
+# `key` nomme la liste du bloc `vocabulary` publié qui porte le domaine de
+# l'entrée. `type` est le type wire serveur (`index` = un entier, `index_list`
+# = un tableau d'entiers distincts). Une valeur STRING reste acceptée par
+# l'APPLICATeur (chemin existant, scénarios internes) — le SERVEUR, lui, ne
+# produit que la forme index : c'est la surface agent qui est indexée.
+TS_DRIVE_SESSION_INPUTS <- list(
+  "bulk-de-condition_col"       = list(module = "bulk_de",       key = "condition_col", type = "index"),
+  "bulk-de-covariates"          = list(module = "bulk_de",       key = "covariates",
+                                       type = "index_list", max_items = 8L, allow_empty = TRUE),
+  "bulk-de-group_ref"           = list(module = "bulk_de",       key = "group_levels", type = "index"),
+  "bulk-de-group_target"        = list(module = "bulk_de",       key = "group_levels", type = "index"),
+  "bulk-pathways-scores_source" = list(module = "bulk_pathways", key = "scores_source", type = "index")
+)
+
+#' Les clés qu'un bloc `vocabulary` publié peut porter, PAR MODULE.
+#'
+#' Keep-set fermé, comme `TS_DRIVE_READ_KEYS` : un bloc qui gagnerait une clé
+#' ne peut pas l'emporter sur le wire. `vocab_rev` est admis pour tout module
+#' qui publie (compteur monotone incrémenté à chaque republication — chargement
+#' de données, changement de `condition_col`).
+TS_DRIVE_VOCABULARY_KEYS <- list(
+  bulk_de       = c("condition_col", "covariates", "group_levels"),
+  bulk_pathways = c("scores_source")
+)
+
+#' Borne déclarée du nombre de choix publiés par liste (décision D1 : bornes
+#' totales déclarées). Au-delà, la liste est publiée VIDE (et `vocab_error`
+#' porte la raison sanitisee) : un domaine trop grand pour être publié est un
+#' domaine que le serveur ne peut pas valider — fail closed, jamais tronqué,
+#' car TRONQUER désalignerait les index des choix réels du widget.
+TS_DRIVE_VOCAB_MAX_CHOICES <- 4096L
+
 # --- Pure helpers (no Shiny) -------------------------------------------------
 
 #' Look up one allowlist entry.

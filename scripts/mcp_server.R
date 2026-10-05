@@ -231,7 +231,16 @@ ts_drive_boot(.project_root)
                       # READ_FAILED, RESULT_SESSION_MISMATCH (attribution), the
                       # session family, PAYLOAD_REFUSED (malformed values) —
                       # there is no route/handle argument, so no handle code.
-                      "NO_EXPORT_TARGET")
+                      "NO_EXPORT_TARGET",
+                      # Slice 3 — session-derived inputs, addressed by index.
+                      # INPUT_NOT_READY: the module's published vocabulary is
+                      # absent or the key list is empty (data not loaded).
+                      # VOCAB_STALE: the payload pins a revision the session
+                      # has moved past — re-snapshot. INDEX_OUT_OF_RANGE: an
+                      # index past the choices as they stand at apply time
+                      # (the residual race after VOCAB_STALE). The malformed
+                      # shapes reuse VALUE_REFUSED / PAYLOAD_REFUSED.
+                      "INPUT_NOT_READY", "VOCAB_STALE", "INDEX_OUT_OF_RANGE")
 # M3a — the passive snapshot tool adds NO new code on purpose: it is a READ, so
 # every refusal it can produce is one of the six above (NO_SESSION,
 # STALE_SESSION, INVALID_PROTOCOL, READ_FAILED, RESULT_SESSION_MISMATCH,
@@ -1040,13 +1049,22 @@ ts_drive_boot(.project_root)
 #   that never changed. M3b closes that by validating the value HERE, BEFORE
 #   anything is written.
 #
-# WHY FIVE ALLOWLISTED INPUTS ARE DELIBERATELY NOT EXPOSED.
+# WHY FIVE ALLOWLISTED INPUTS WERE DELIBERATELY NOT EXPOSED — AND HOW SLICE 3
+# EXPOSES THEM WITHOUT RE-OPENING THE HOLE.
 #   `condition_col`, `covariates`, `group_ref`, `group_target` take their value
 #   domain from the LIVE session's metadata, and `scores_source` from
 #   `bulk_gene_set_choices()`. This server cannot read either, so it cannot
-#   honour "reject unsupported values" for them. Fail closed: they are not
-#   exposed, and `redaction.not_exposed` says so. Exposing an input whose
+#   honour "reject unsupported values" for them — and exposing an input whose
 #   domain we cannot check would re-open exactly the hole this tool closes.
+#   SLICE 3 closes it differently: the app PUBLISHES the domain (its state
+#   probe carries a `vocabulary` block with a monotone `vocab_rev`), and the
+#   wire value becomes an INTEGER INDEX into that published list — never the
+#   raw name (D1: the choices are verbatim, the address is structural). The
+#   server validates 1..N against the published vocabulary of the moment and
+#   refuses INPUT_NOT_READY / VOCAB_STALE / INDEX_OUT_OF_RANGE; the app
+#   resolves the index into ITS OWN choices at apply time and re-checks. A raw
+#   string for these ids is refused HERE — the indexed surface is the agent's;
+#   the app's own internal path still accepts names.
 
 # --- the value schema (server-side policy, cross-checked against the app) ----
 # `min`/`max` are GENEROUS server-side bounds, not an app contract: they exist
@@ -1065,7 +1083,12 @@ TS_MCP_INPUT_SCHEMA <- list(
   "import_bulk-multi_label"         = list(type = "text", max_chars = 120L),
   "import_bulk-min_counts"          = list(type = "number", min = 0, max = 1e7),
   "import_bulk-ps_dup_threshold"    = list(type = "number", min = 0, max = 1),
-  # ── bulk_de (the four metadata-driven selects are NOT here, by design) ───
+  # ── bulk_de (the four metadata-driven selects ARE here since Slice 3 —
+  #    by INDEX against the app's published vocabulary) ─────────────────────
+  "bulk-de-condition_col"           = list(type = "index"),
+  "bulk-de-covariates"              = list(type = "index_list", max_items = 8L, allow_empty = TRUE),
+  "bulk-de-group_ref"               = list(type = "index"),
+  "bulk-de-group_target"            = list(type = "index"),
   "bulk-de-de_engine"               = list(type = "enum", values = c("deseq2", "edger", "limma")),
   "bulk-de-shrink_lfc"              = list(type = "boolean"),
   "bulk-de-lfc_thresh"              = list(type = "number", min = -100, max = 100),
@@ -1075,7 +1098,8 @@ TS_MCP_INPUT_SCHEMA <- list(
   "bulk-filter-min_count"           = list(type = "number", min = 0, max = 1e7),
   "bulk-filter-min_samples"         = list(type = "number", min = 0, max = 1e6, integer = TRUE),
   "bulk-filter-min_count_per_sample" = list(type = "number", min = 0, max = 1e6),
-  # ── bulk_pathways (scores_source is NOT here, by design) ─────────────────
+  # ── bulk_pathways (scores_source exposed since Slice 3, by INDEX) ────────
+  "bulk-pathways-scores_source"     = list(type = "index"),
   "bulk-pathways-enrich_mode"       = list(type = "enum", values = c("ora", "gsea")),
   "bulk-pathways-pathway_source"    = list(type = "enum", values = c("up", "down", "all_sig", "manual")),
   "bulk-pathways-pathway_db"        = list(type = "enum", values = c("GOBP", "KEGG", "Reactome")),
@@ -1105,17 +1129,28 @@ TS_MCP_MAX_PAYLOAD_BYTES <- 4096L
       problems <- c(problems, sprintf("%s: not in TS_DRIVE_ALLOWLIST", id)); next
     }
     sch <- TS_MCP_INPUT_SCHEMA[[id]]
+    # Slice 3: a `select` may be exposed as `enum` (static domain) or as
+    # `index` / `index_list` (session-derived domain, published vocabulary).
     want <- switch(e$kind,
                    checkbox = "boolean", numeric = "number", text = "text",
-                   radio = "enum", select = "enum", button = "FORBIDDEN", "?")
+                   radio = "enum", select = c("enum", "index", "index_list"),
+                   button = "FORBIDDEN", "?")
     if (identical(want, "FORBIDDEN")) {
       problems <- c(problems, sprintf("%s: is a BUTTON and must never be settable", id))
-    } else if (!identical(sch$type, want)) {
+    } else if (!identical(sch$type, want) &&
+               !(length(want) > 1L && sch$type %in% want)) {
       problems <- c(problems, sprintf("%s: schema type '%s' != widget kind '%s' (expects '%s')",
-                                      id, sch$type, e$kind, want))
+                                      id, sch$type, e$kind, paste(want, collapse = "|")))
     }
     if (identical(sch$type, "enum") && !length(sch$values)) {
       problems <- c(problems, sprintf("%s: enum with no values", id))
+    }
+    if (sch$type %in% c("index", "index_list") && length(sch$values)) {
+      problems <- c(problems, sprintf("%s: an indexed input carries no static values — its domain is the app's published vocabulary", id))
+    }
+    if (identical(sch$type, "index_list") &&
+        (!is.numeric(sch$max_items) || sch$max_items < 1L)) {
+      problems <- c(problems, sprintf("%s: index_list without a max_items bound", id))
     }
     if (identical(sch$type, "number") &&
         (!is.numeric(sch$min) || !is.numeric(sch$max) || sch$min > sch$max)) {
@@ -1144,6 +1179,51 @@ TS_MCP_MAX_PAYLOAD_BYTES <- 4096L
   sch <- TS_MCP_INPUT_SCHEMA[[id]]
   if (is.null(sch)) return(list(ok = FALSE, reason = "no value schema for this input"))
   v <- value
+  # Slice 3 — the INDEXED shapes. The wire value is an object
+  # `{index, vocab_rev}`: `index` is the position in the app's PUBLISHED
+  # vocabulary (1-based; a vector of DISTINCT positions for `index_list`),
+  # `vocab_rev` the revision the caller pinned from its last observation. Only
+  # the SHAPE is checked here — the vocabulary itself (ready / stale / range)
+  # is checked against result.json by the tool, which is where that state
+  # lives. The value is never echoed, in any refusal.
+  if (sch$type %in% c("index", "index_list")) {
+    if (!is.list(v) || is.null(names(v)) ||
+        !setequal(names(v), c("index", "vocab_rev"))) {
+      return(list(ok = FALSE, reason = paste0(
+        "must be an object `{index, vocab_rev}`: `index` is the position in ",
+        "the app's published vocabulary, `vocab_rev` the revision pinned from ",
+        "the last observation (a raw string is refused — this input is ",
+        "addressed by index since Slice 3)")))
+    }
+    rvr <- suppressWarnings(as.integer(v$vocab_rev))
+    if (length(rvr) != 1L || is.na(rvr) || rvr < 0L) {
+      return(list(ok = FALSE, reason = "`vocab_rev` must be one non-negative integer"))
+    }
+    idx <- tryCatch(suppressWarnings(as.numeric(v$index)), error = function(e) NA_real_)
+    if (!length(idx) || any(is.na(idx)) || any(!is.finite(idx)) || any(idx < 1)) {
+      return(list(ok = FALSE, reason = "`index` must be one integer >= 1 (or a list of them)"))
+    }
+    if (any(idx != trunc(idx))) {
+      return(list(ok = FALSE, reason = "`index` must be integer(s)"))
+    }
+    if (identical(sch$type, "index") && length(idx) != 1L) {
+      return(list(ok = FALSE, reason = "`index` must be exactly one integer"))
+    }
+    if (identical(sch$type, "index_list")) {
+      if (!isTRUE(sch$allow_empty) && !length(idx)) {
+        return(list(ok = FALSE, reason = "`index` must not be empty"))
+      }
+      if (length(idx) > (sch$max_items %||% 8L)) {
+        return(list(ok = FALSE, reason = sprintf(
+          "`index` carries %d positions; the declared maximum is %d",
+          length(idx), sch$max_items %||% 8L)))
+      }
+      if (any(duplicated(idx))) {
+        return(list(ok = FALSE, reason = "`index` positions must be distinct"))
+      }
+    }
+    return(list(ok = TRUE, reason = NULL))
+  }
   if (is.list(v) || length(v) != 1L) {
     return(list(ok = FALSE, reason = "must be a single scalar"))
   }
@@ -1180,6 +1260,56 @@ TS_MCP_MAX_PAYLOAD_BYTES <- 4096L
     return(list(ok = TRUE, reason = NULL))
   }
   list(ok = FALSE, reason = "unsupported schema type")
+}
+
+#' Validate ONE indexed input against the vocabulary the app PUBLISHED.
+#'
+#' result.json is the only view of the session's domain this server has, and
+#' the snapshot's `vocabulary` block is that view. The check is exactly the
+#' mirror of the app's apply-time re-check (`ts_drive_resolve_session_inputs`)
+#' — same three states, same order — so a refusal here is never contradicted
+#' later: at worst the app re-derives the same refusal from fresher state.
+#' Counts and revisions are named; the choice NAMES are never echoed here (the
+#' published block itself is the agent's source for them).
+#' @return list(ok = TRUE) or list(ok = FALSE, code, reason)
+.ts_vocabulary_ok <- function(id, module, value) {
+  entry <- TS_DRIVE_SESSION_INPUTS[[id]]
+  if (is.null(entry)) {
+    return(list(ok = FALSE, code = "VALUE_REFUSED", reason = "not a session-derived input"))
+  }
+  res <- ts_drive_read_result()
+  vocab <- NULL
+  if (!is.null(res) && !is.null(res$snapshot) &&
+      !is.null(res$snapshot$modules) && !is.null(res$snapshot$modules[[module]])) {
+    vocab <- res$snapshot$modules[[module]]$vocabulary
+  }
+  if (is.null(vocab) || !is.list(vocab)) {
+    return(list(ok = FALSE, code = "INPUT_NOT_READY", reason = paste0(
+      "the app has published no vocabulary for this module — its data is not ",
+      "loaded; load it and re-snapshot (transcripto_drive_snapshot refreshes ",
+      "result.json)")))
+  }
+  choices <- vocab[[entry$key]]
+  if (is.null(choices) || !length(choices) ||
+      (!is.null(vocab$vocab_error) && nzchar(as.character(vocab$vocab_error)))) {
+    return(list(ok = FALSE, code = "INPUT_NOT_READY", reason = sprintf(
+      "the published domain '%s' is empty (its data is not loaded)", entry$key)))
+  }
+  rev <- suppressWarnings(as.integer(value$vocab_rev %||% NA_integer_))
+  cur <- suppressWarnings(as.integer(vocab$vocab_rev %||% NA_integer_))
+  if (length(rev) != 1L || is.na(rev) || length(cur) != 1L || is.na(cur) ||
+      rev != cur) {
+    return(list(ok = FALSE, code = "VOCAB_STALE", reason = sprintf(
+      "payload pins vocabulary revision %s; the session publishes %s — re-snapshot and retry",
+      if (length(rev) == 1L && !is.na(rev)) as.character(rev) else "(absent)",
+      if (length(cur) == 1L && !is.na(cur)) as.character(cur) else "(absent)")))
+  }
+  idx <- tryCatch(suppressWarnings(as.integer(value$index)), error = function(e) NA_integer_)
+  if (any(idx > length(choices), na.rm = TRUE) || any(is.na(idx))) {
+    return(list(ok = FALSE, code = "INDEX_OUT_OF_RANGE", reason = sprintf(
+      "index points past the %d published choices", length(choices))))
+  }
+  list(ok = TRUE)
 }
 
 .ts_tool_set_inputs <- function(seq, module, inputs, preserve_data = TRUE, expect = NULL) {
@@ -1245,11 +1375,35 @@ TS_MCP_MAX_PAYLOAD_BYTES <- 4096L
     }
     v <- .ts_input_value_ok(id, inputs[[id]])
     if (!isTRUE(v$ok)) { refused[[id]] <- v$reason; kind[id] <- "VALUE_REFUSED"; next }
+    # Slice 3: an INDEXED input is validated against the vocabulary the app
+    # PUBLISHED in result.json — the one view of the session's domain this
+    # server can see. Shape (VALUE_REFUSED) came first; ready/stale/range are
+    # domain states and get their own codes.
+    if (id %in% names(TS_DRIVE_SESSION_INPUTS)) {
+      vv <- .ts_vocabulary_ok(id, module, inputs[[id]])
+      if (!isTRUE(vv$ok)) { refused[[id]] <- vv$reason; kind[id] <- vv$code; next }
+    }
+  }
+  # Slice 3: the ref/target PAIR must resolve to different choices — checked
+  # here too, so an agent learns it before the write instead of from the app.
+  gr <- inputs[["bulk-de-group_ref"]]; gt <- inputs[["bulk-de-group_target"]]
+  if (is.list(gr) && is.list(gt) && !is.null(gr$index) && !is.null(gt$index)) {
+    a <- suppressWarnings(as.integer(gr$index)); b <- suppressWarnings(as.integer(gt$index))
+    if (length(a) == 1L && length(b) == 1L && !is.na(a) && !is.na(b) && a == b) {
+      return(.ts_tool_err(
+        "PAYLOAD_REFUSED",
+        "group_ref and group_target pin the same index; the two groups must differ.",
+        "Choose a group_target different from the reference group."))
+    }
   }
   if (length(refused)) {
     code <- if ("INPUT_NOT_ALLOWED" %in% kind) "INPUT_NOT_ALLOWED"
             else if ("INPUT_MODULE_MISMATCH" %in% kind) "INPUT_MODULE_MISMATCH"
-            else "VALUE_REFUSED"
+            else if ("VALUE_REFUSED" %in% kind) "VALUE_REFUSED"
+            else if ("INPUT_NOT_READY" %in% kind) "INPUT_NOT_READY"
+            else if ("VOCAB_STALE" %in% kind) "VOCAB_STALE"
+            else if ("INDEX_OUT_OF_RANGE" %in% kind) "INDEX_OUT_OF_RANGE"
+            else "PAYLOAD_REFUSED"
     return(.ts_tool_err(
       code,
       sprintf("%d input(s) refused; NOTHING was written.", length(refused)),
@@ -1271,6 +1425,20 @@ TS_MCP_MAX_PAYLOAD_BYTES <- 4096L
       "A replayed or stale scenario is ignored by the app; re-read the session and use a higher seq."))
   }
 
+  # Slice 3: indexed values are written back NORMALISED to integers — JSON
+  # numbers arrive as doubles, and the app resolves with as.integer; the
+  # scenario must carry what was validated, in the shape it was validated.
+  inputs_out <- inputs
+  for (id in intersect(names(inputs), names(TS_DRIVE_SESSION_INPUTS))) {
+    v <- inputs[[id]]
+    if (is.list(v)) {
+      # tryCatch: an index_list arrives from JSON as a list — as.integer(list) raises.
+      inputs_out[[id]] <- list(
+        index = tryCatch(suppressWarnings(as.integer(v$index)), error = function(e) v$index),
+        vocab_rev = suppressWarnings(as.integer(v$vocab_rev)))
+    }
+  }
+
   payload <- list(
     protocol      = TS_DRIVE_PROTOCOL,
     seq           = seq,
@@ -1278,7 +1446,7 @@ TS_MCP_MAX_PAYLOAD_BYTES <- 4096L
     module        = module,
     action        = "set_inputs",
     preserve_data = isTRUE(preserve_data),
-    inputs        = inputs
+    inputs        = inputs_out
   )
   # Payload byte bound, measured on the SERIALISED scenario (the real thing).
   payload_bytes <- nchar(.ts_json(payload), type = "bytes")
@@ -1351,7 +1519,14 @@ TS_MCP_MAX_PAYLOAD_BYTES <- 4096L
       values_echoed = FALSE,
       limits = list(max_inputs = TS_MCP_MAX_INPUTS,
                     max_payload_bytes = TS_MCP_MAX_PAYLOAD_BYTES),
-      not_exposed = .ts_mcp_not_exposed()
+      # Slice 3: NOTHING is "not exposed" any more — the five session-derived
+      # selects are exposed BY INDEX (their wire value is a position in the
+      # app's published vocabulary, never the raw name), so the note flips
+      # from `not_exposed` to `indexed`. 29 -> 34 exposed inputs.
+      indexed = list(ids = as.list(names(TS_DRIVE_SESSION_INPUTS)),
+                     note = paste0("value is {index, vocab_rev}: a position ",
+                                   "in the app's published vocabulary and the ",
+                                   "revision pinned from the last observation"))
     ),
     note = paste0("scenario.json is written; the app applies it on its next poll tick (~800 ms). ",
                   "This tool does NOT wait and does NOT apply anything: `applied` stays false ",
@@ -2993,15 +3168,25 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
            "ONE tools/_drive/scenario.json with action=set_inputs, then stop. Values ",
            "are validated HERE (type, enum, bounds, length, payload size) BEFORE the ",
            "write, because the app accepts an out-of-range select value silently. ",
+           "Five session-derived selects (condition_col, covariates, group_ref, ",
+           "group_target, scores_source) are addressed BY INDEX: the wire value is ",
+           "{index, vocab_rev} — a position in the app's PUBLISHED vocabulary ",
+           "(transcripto_drive_read_result -> snapshot.modules.<module>.vocabulary) ",
+           "and the revision pinned from that observation; the app resolves the ",
+           "index into its own choices at apply time. ",
            "Requires a live, ARMED session and a non-wildcard `expect.session_token`. ",
            "Refuses unknown modules and inputs, module/input mismatches, stale or ",
-           "replayed seq, and an oversized payload. Never clicks a button, never runs ",
-           "an action, never waits, never touches a Shiny input directly, and never ",
-           "echoes a value back. Refusals: NO_SESSION, STALE_SESSION, INVALID_PROTOCOL, ",
+           "replayed seq, an oversized payload, and for indexed inputs a missing or ",
+           "empty vocabulary (INPUT_NOT_READY), a superseded revision (VOCAB_STALE), ",
+           "an out-of-range index (INDEX_OUT_OF_RANGE), or ref == target ",
+           "(PAYLOAD_REFUSED). Never clicks a button, never runs an action, never ",
+           "waits, never touches a Shiny input directly, and never echoes a value ",
+           "back. Refusals: NO_SESSION, STALE_SESSION, INVALID_PROTOCOL, ",
            "READ_FAILED, AMBIGUOUS_SESSION, SESSION_MISMATCH, ",
            "SESSION_ASSERTION_REQUIRED, SESSION_NOT_ARMED, MODULE_NOT_ALLOWED, ",
            "INPUT_NOT_ALLOWED, INPUT_MODULE_MISMATCH, VALUE_REFUSED, PAYLOAD_REFUSED, ",
-           "PAYLOAD_TOO_LARGE, SEQ_STALE, SCENARIO_WRITE_FAILED."),
+           "PAYLOAD_TOO_LARGE, SEQ_STALE, INPUT_NOT_READY, VOCAB_STALE, ",
+           "INDEX_OUT_OF_RANGE, SCENARIO_WRITE_FAILED."),
          inputSchema = list(
            type = "object",
            properties = list(
@@ -3017,7 +3202,9 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
                type = "object",
                description = paste0(
                  "inputId -> value. Every id must be exposed by M3b and owned by ",
-                 "`module`; values are validated against a server-side schema.")),
+                 "`module`; values are validated against a server-side schema. ",
+                 "Session-derived selects take {index, vocab_rev} — an index into ",
+                 "the app's published vocabulary, never the raw name.")),
              preserve_data = list(
                type = "boolean",
                description = "Defaults to true. False is refused by design in this grade."),
@@ -3525,6 +3712,22 @@ if ("--check" %in% .args) {
              })
   .ts_stderr("  input schema : ", length(TS_MCP_INPUT_SCHEMA), " exposed, ",
              length(.ts_mcp_not_exposed()), " allowlisted but NOT exposed")
+  .ts_stderr("  vocabulary   : ",
+             paste(sprintf("%s(%s)", names(TS_DRIVE_VOCABULARY_KEYS),
+                           vapply(TS_DRIVE_VOCABULARY_KEYS,
+                                  function(k) paste(k, collapse = ", "),
+                                  character(1))),
+                   collapse = ", "),
+             sprintf(" - %d session-derived inputs, addressed by index",
+                     length(TS_DRIVE_SESSION_INPUTS)))
+  .ts_vocab_problems <- .ts_mcp_vocab_problems()
+  .ts_stderr("  vocab check  : ",
+             if (length(.ts_vocab_problems)) {
+               paste0(length(.ts_vocab_problems), " PROBLEM(S): ",
+                      paste(.ts_vocab_problems, collapse = "; "))
+             } else {
+               "OK (the indexed inputs, the published keys and the schema agree)"
+             })
   .ts_stderr("  schema check : ",
              if (length(.ts_schema_problems)) {
                paste0(length(.ts_schema_problems), " PROBLEM(S): ",
@@ -3565,7 +3768,8 @@ if ("--check" %in% .args) {
              })
   quit(status = if (.ts_have_jsonlite && drive_ok && !length(.ts_schema_problems) &&
                     !length(.ts_run_problems) && !length(.ts_import_problems) &&
-                    !length(.ts_export_problems) && !length(.ts_read_problems)) 0L else 1L,
+                    !length(.ts_export_problems) && !length(.ts_read_problems) &&
+                    !length(.ts_vocab_problems)) 0L else 1L,
        save = "no")
 }
 

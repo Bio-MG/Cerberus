@@ -1022,6 +1022,171 @@ ts_drive_read_descriptor <- function(descriptor) {
   d
 }
 
+#' Project a module's published VOCABULARY onto the wire (Slice 3).
+#'
+#' The keep-set `TS_DRIVE_VOCABULARY_KEYS[[module]]` + `vocab_rev` is CLOSED,
+#' like every other projection: a probe that returns one extra key cannot widen
+#' the wire. The CHOICES are the D1-verbatim exception — they go through
+#' `ts_drive_verbatim_guard()` (the SECOND declared consumer, same function as
+#' the read preview) — but a choice that fails the guard is replaced by NA
+#' (JSON `null`), NEVER dropped: dropping would desynchronise the published
+#' positions from the widget's real choices, and the index the agent chose
+#' would resolve to the wrong value. `vocab_rev` travels as an integer.
+#'
+#' A list LONGER than `TS_DRIVE_VOCAB_MAX_CHOICES` empties the whole block and
+#' names the reason in `vocab_error` (sanitised): fail closed, and never
+#' TRUNCATE — a truncated list misaligns every index behind it.
+#'
+#' PURE: takes a block, returns a list, writes nothing.
+ts_drive_project_vocabulary <- function(vocab, module) {
+  if (is.null(vocab) || !is.list(vocab)) return(NULL)
+  keys <- TS_DRIVE_VOCABULARY_KEYS[[module]]
+  if (is.null(keys)) return(NULL)   # a module that declares no vocabulary publishes none
+  keep <- c(keys, "vocab_rev", "vocab_error")
+  out <- vocab[intersect(keep, names(vocab))]
+  for (k in keys) {
+    v <- out[[k]]
+    if (is.null(v)) next
+    v <- as.character(v)
+    if (length(v) > TS_DRIVE_VOCAB_MAX_CHOICES) {
+      out[[k]] <- character(0)
+      # Chaque mot est choisi pour PASSER le sanitiseur (mesuré : "declared",
+      # "vocabulary", "published" portent des runs de 8+ et partiraient en
+      # <redacted>) — la raison doit rester lisible sur le wire.
+      out$vocab_error <- ts_drive_badge_sanitize(sprintf(
+        "%s: %d choices over the bound of %d — the list is not sent",
+        k, length(v), TS_DRIVE_VOCAB_MAX_CHOICES), 200L)
+      next
+    }
+    # Positions preserved: a guarded-out choice is NA, not removed.
+    out[[k]] <- if (length(v)) ts_drive_verbatim_guard(v) else character(0)
+  }
+  if (!is.null(out$vocab_rev)) out$vocab_rev <- suppressWarnings(as.integer(out$vocab_rev))
+  if (!is.null(out$vocab_error)) {
+    out$vocab_error <- ts_drive_badge_sanitize(as.character(out$vocab_error), 200L)
+  }
+  out
+}
+
+#' Resolve SESSION-DERIVED inputs (Slice 3): index -> value, at apply time.
+#'
+#' The scenario carries `{index, vocab_rev}` per session-derived id (the server
+#' validated the index against the PUBLISHED vocabulary before writing). The
+#' app re-checks EVERYTHING here against its own probe — the app is the
+#' authority, and the probe is the SAME closure that produced the published
+#' block, so the rev and the choices cannot drift from each other:
+#'   INPUT_NOT_READY     no probe, no vocabulary, or the key list is empty
+#'                       (data not loaded) — fail closed with a reason;
+#'   VOCAB_STALE         the payload's `vocab_rev` is not the CURRENT one —
+#'                       the choices changed since the agent looked; re-snapshot;
+#'   INDEX_OUT_OF_RANGE  an index outside 1..N of the choices as they stand at
+#'                       the apply beat — the residual race after VOCAB_STALE;
+#'   PAYLOAD_REFUSED     duplicates, more than `max_items`, an empty list where
+#'                       none is allowed, or group_ref == group_target.
+#' A value that is NOT the indexed shape (a plain string) passes through
+#' UNCHANGED: it is the internal path (tests, internal scenarios) and the
+#' existing behaviour is untouched — the INDEXED surface is the server's.
+#'
+#' The resolution happens BEFORE any injection or confirmation, so the adapters
+#' and the confirm handshake keep working on real values — zero behaviour
+#' change downstream.
+#'
+#' @param inputs The scenario's inputs (named list).
+#' @param module The scenario module.
+#' @param vocab_fn The module's vocabulary probe (a function), or NULL.
+#' @return list(ok, values, errors). On failure `values` is untouched input.
+ts_drive_resolve_session_inputs <- function(inputs, module, vocab_fn = NULL) {
+  errs <- character(0)
+  refuse <- function(...) list(ok = FALSE, values = inputs, errors = c(...))
+  sess_ids <- intersect(names(inputs), names(TS_DRIVE_SESSION_INPUTS))
+  if (!length(sess_ids)) return(list(ok = TRUE, values = inputs, errors = character(0)))
+
+  vocab <- NULL
+  if (!is.null(vocab_fn) && is.function(vocab_fn)) {
+    vocab <- tryCatch(vocab_fn(), error = function(e) NULL)
+  }
+  if (is.null(vocab) || !is.list(vocab)) {
+    return(refuse("INPUT_NOT_READY: the module published no vocabulary for this session."))
+  }
+  # The APPLIED vocabulary is the PROJECTED one — the exact block the wire
+  # carries, so the positions the agent saw are the positions resolved here.
+  vocab <- ts_drive_project_vocabulary(vocab, module)
+  if (is.null(vocab)) {
+    return(refuse("INPUT_NOT_READY: the module publishes no vocabulary."))
+  }
+
+  values <- inputs
+  seen_groups <- list()
+  for (id in sess_ids) {
+    entry <- TS_DRIVE_SESSION_INPUTS[[id]]
+    v <- inputs[[id]]
+    if (!is.list(v) || is.null(v$index)) next  # plain-string value: internal path
+    choices <- vocab[[entry$key]]
+    if (is.null(choices) || !length(choices)) {
+      errs <- c(errs, sprintf(
+        "INPUT_NOT_READY: '%s' has an empty domain (its data is not loaded) — load it, then re-snapshot.",
+        id))
+      next
+    }
+    rev <- suppressWarnings(as.integer(v$vocab_rev %||% NA_integer_))
+    if (length(rev) != 1L || is.na(rev) ||
+        !identical(rev, suppressWarnings(as.integer(vocab$vocab_rev %||% NA_integer_)))) {
+      errs <- c(errs, sprintf(
+        "VOCAB_STALE: '%s' pins vocabulary revision %s, but the session is at %s — re-snapshot and retry.",
+        id, if (length(rev) == 1L && !is.na(rev)) as.character(rev) else "(absent)",
+        as.character(suppressWarnings(as.integer(vocab$vocab_rev %||% NA_integer_)))))
+      next
+    }
+    # Un index JSON peut arriver en liste (tableau) : as.integer(list) LÈVE —
+    # mesuré — donc la coercition est gardée, et l'échec est un refus, pas une
+    # exception qui tuerait le battement du poller.
+    idx <- tryCatch(suppressWarnings(as.integer(v$index)),
+                    error = function(e) NA_integer_)
+    if (!length(idx) || any(is.na(idx)) || any(idx < 1L)) {
+      errs <- c(errs, sprintf("PAYLOAD_REFUSED: '%s' carries an index that is not a positive integer.", id))
+      next
+    }
+    if (identical(entry$type, "index") && length(idx) != 1L) {
+      errs <- c(errs, sprintf("PAYLOAD_REFUSED: '%s' takes exactly one index.", id))
+      next
+    }
+    if (identical(entry$type, "index_list")) {
+      if (length(idx) > (entry$max_items %||% 8L)) {
+        errs <- c(errs, sprintf(
+          "PAYLOAD_REFUSED: '%s' carries %d indices; the declared maximum is %d.",
+          id, length(idx), entry$max_items %||% 8L))
+        next
+      }
+      if (any(duplicated(idx))) {
+        errs <- c(errs, sprintf("PAYLOAD_REFUSED: '%s' carries duplicate indices.", id))
+        next
+      }
+      if (!length(idx) && !isTRUE(entry$allow_empty)) {
+        errs <- c(errs, sprintf("PAYLOAD_REFUSED: '%s' cannot be empty.", id))
+        next
+      }
+    }
+    if (any(idx > length(choices))) {
+      errs <- c(errs, sprintf(
+        "INDEX_OUT_OF_RANGE: '%s' points past the %d choices the session holds at apply time — re-snapshot.",
+        id, length(choices)))
+      next
+    }
+    resolved <- choices[idx]
+    if (identical(entry$key, "group_levels")) seen_groups[[id]] <- idx
+    values[[id]] <- resolved
+  }
+  # The pair check is on the RESOLVED positions: ref == target is refused,
+  # server-side when both travel together, and re-checked here (authority).
+  if (length(seen_groups) >= 2L &&
+      identical(seen_groups[["bulk-de-group_ref"]],
+                seen_groups[["bulk-de-group_target"]])) {
+    errs <- c(errs, "PAYLOAD_REFUSED: group_ref and group_target resolve to the same choice.")
+  }
+  if (length(errs)) return(list(ok = FALSE, values = inputs, errors = errs))
+  list(ok = TRUE, values = values, errors = character(0))
+}
+
 #' The ONE generic `read_export` responder (R2). Zero per-module code: the
 #' read is route-agnostic by construction — the module seams exist for the
 #' EXPORT (each module knows what its artefact IS); the read only ever opens
@@ -1479,6 +1644,13 @@ ts_drive_module_states <- function(global_data) {
           ans$descriptor$columns <- as.list(ans$descriptor$columns)
         }
       }
+      # Slice 3: the published VOCABULARY is projected by ITS rule (closed
+      # keep-set, D1-verbatim choices through the shared guard, positions
+      # preserved). Same shape as the descriptor branch above — a probe cannot
+      # widen the wire by returning one extra key.
+      if (!is.null(ans$vocabulary)) {
+        ans$vocabulary <- ts_drive_project_vocabulary(ans$vocabulary, mod)
+      }
       ans
     } else {
       list(probe_error = "the state probe returned neither a list nor an error")
@@ -1739,7 +1911,7 @@ ts_drive_registry <- function(global_data) {
 #'   its own cost — the DE module cites its 852.7 s measurement.
 ts_drive_publish_token <- function(global_data, input_id, counter, ready = NULL,
                                     state = NULL, long = FALSE, timeout_s = NULL,
-                                    confirm_inputs = NULL) {
+                                    confirm_inputs = NULL, vocab = NULL) {
   if (!input_id %in% TS_DRIVE_BUTTONS) {
     warning(sprintf("ts_drive_publish_token(): '%s' is not in TS_DRIVE_BUTTONS — ignored.", input_id))
     return(invisible(FALSE))
@@ -1753,7 +1925,14 @@ ts_drive_publish_token <- function(global_data, input_id, counter, ready = NULL,
                           # the confirmation handshake. `NULL` means the module
                           # cannot confirm, and a run injecting non-button inputs
                           # into it is refused rather than fired blind.
-                          confirm_inputs = if (is.function(confirm_inputs)) confirm_inputs else NULL)
+                          confirm_inputs = if (is.function(confirm_inputs)) confirm_inputs else NULL,
+                          # Slice 3: the module's own VOCABULARY probe — the SAME
+                          # closure whose output the state publishes — so the
+                          # applier resolves an index against the choices that
+                          # produced the published block, never against a copy.
+                          # `NULL` means the module publishes no vocabulary and
+                          # its session-derived inputs stay `INPUT_NOT_READY`.
+                          vocab = if (is.function(vocab)) vocab else NULL)
   invisible(TRUE)
 }
 
@@ -2381,6 +2560,33 @@ ts_drive_apply <- function(session, input, scn, effects = NULL, owner_token = NU
   nav <- ts_drive_nav_plan(module, scn$expect$nav %||% NULL)
 
   applied <- list(applied = character(0), refused = character(0), warnings = character(0))
+
+  # ── Slice 3: resolve SESSION-DERIVED inputs (index -> value) ──────────────
+  # BEFORE any injection or confirmation, so the adapters and the confirm
+  # handshake keep working on real values — zero behaviour change downstream.
+  # The probe is the module's OWN vocabulary closure (published through the
+  # same projection the wire sees), so the rev the agent pinned and the
+  # choices resolved here come from ONE closure: a change in between bumps the
+  # rev and the resolution refuses VOCAB_STALE. Plain-string values (the
+  # internal path) pass through untouched.
+  if (length(scn$inputs)) {
+    sess <- intersect(names(scn$inputs), names(TS_DRIVE_SESSION_INPUTS))
+    if (length(sess)) {
+      entries <- ts_drive_tokens_for(module, effects)
+      vocab_fn <- NULL
+      for (nm in names(entries)) {
+        e <- entries[[nm]]
+        if (is.list(e) && is.function(e$vocab)) { vocab_fn <- e$vocab; break }
+      }
+      rv <- ts_drive_resolve_session_inputs(scn$inputs, module, vocab_fn)
+      if (!isTRUE(rv$ok)) {
+        return(list(status = "invalid", errors = rv$errors, warnings = warnings,
+                    active_module = module, nav = nav))
+      }
+      scn$inputs <- rv$values
+    }
+  }
+
   # A `run_pipeline` that injects non-button inputs is DEFERRED below, and a
   # deferred run injects in STAGES, one per beat. Injecting it here would hand a
   # value to a `selectInput` whose options do not exist yet, and a browser select

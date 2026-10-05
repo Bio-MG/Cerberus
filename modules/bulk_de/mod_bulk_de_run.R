@@ -101,6 +101,58 @@
     }
     out
   }
+  # VOCABULARY PROBE (Slice 3) — the domain of the module's session-derived
+  # selects, published by index (`TS_DRIVE_SESSION_INPUTS`). THE SAME closure
+  # feeds the published state (below) and the applier's index resolution
+  # (`vocab =` in ts_drive_publish_token), so the rev the agent pins and the
+  # choices resolved at apply time cannot drift apart.
+  #
+  # Derivations mirror the module's OWN observers EXACTLY (mod_bulk_de_engine.R):
+  # condition_col / covariates = the character/factor metadata columns (all names
+  # as fallback), group_levels = unique non-NA levels of the ACTIVE condition
+  # column (mirrored to shared_rv$active_condition_col by an existing observe —
+  # reading it keeps the probe out of `input`'s reactive domain). Empty lists are
+  # the honest "not ready": the drive refuses INPUT_NOT_READY until data exists.
+  #
+  # `vocab_rev` is a MONOTONE counter bumped whenever the three lists change
+  # (fingerprint compare) — the probe is the only writer, so no existing
+  # observer is touched and the human UI is unchanged. Reactive reads are
+  # isolate()-guarded: this runs inside the poller's beat (spec §6).
+  drive_vocab_state <- new.env(parent = emptyenv())
+  drive_vocab_state$rev <- 0L
+  drive_vocab_state$fp  <- NULL
+  drive_vocabulary <- function() {
+    meta <- tryCatch(shiny::isolate(global_data$bulk_obj)$metadata, error = function(e) NULL)
+    cat_cols <- if (is.null(meta) || !ncol(meta)) character(0) else {
+      cols <- names(meta)[vapply(meta, function(x) is.character(x) || is.factor(x), logical(1))]
+      if (!length(cols)) names(meta) else cols
+    }
+    col <- tryCatch(shiny::isolate(shared_rv$active_condition_col), error = function(e) NULL)
+    lvls <- if (is.null(meta) || is.null(col) || is.na(col) ||
+                !col %in% names(meta)) character(0) else {
+      unique(na.omit(as.character(meta[[col]])))
+    }
+    fp <- paste(c(length(cat_cols), cat_cols, length(lvls), lvls),
+                collapse = "\u0001")
+    if (!identical(fp, drive_vocab_state$fp)) {
+      drive_vocab_state$rev <- drive_vocab_state$rev + 1L
+      drive_vocab_state$fp  <- fp
+    }
+    list(
+      condition_col = cat_cols,
+      covariates    = cat_cols,
+      group_levels  = lvls,
+      vocab_rev     = drive_vocab_state$rev
+    )
+  }
+  # Publish the vocabulary INSIDE the state (the wire channel): the poller
+  # writes it with every result.json snapshot, projected by
+  # ts_drive_project_vocabulary (D1-verbatim choices, closed keep-set).
+  drive_state2 <- function() {
+    s <- drive_state()
+    s$vocabulary <- drive_vocabulary()
+    s
+  }
   # LONG JOB (drive job contract, spec §5). This button is DECLARED long, so
   # `run_pipeline` answers `running` at dispatch instead of `done`, and this
   # module owes the protocol a terminal status through
@@ -195,8 +247,9 @@
   }
 
   ts_drive_publish_token(global_data, "bulk-de-run_de", drive_counter,
-                         ready = drive_ready, state = drive_state, long = TRUE,
-                         confirm_inputs = drive_confirm_inputs)
+                         ready = drive_ready, state = drive_state2, long = TRUE,
+                         confirm_inputs = drive_confirm_inputs,
+                         vocab = drive_vocabulary)
   drive_trigger <- shiny::reactive(list(drive_counter(), input$run_de))
 
   .tr <- function(key) {

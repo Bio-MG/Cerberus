@@ -282,10 +282,46 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
       ))
     }
 
+    # SONDE DE VOCABULAIRE (Slice 3) — le domaine de `scores_source`, adressé
+    # par index (`TS_DRIVE_SESSION_INPUTS`). LES MÊMES valeurs que le select
+    # construit plus haut (`bulk_gene_set_choices()`, la source — pas le
+    # libellé i18n) : le domaine dépend des paquets LOCALEMENT installés,
+    # c'est le cas d'école du vocabulaire publié. LA MÊME closure alimente
+    # l'état publié (canal wire) et la résolution d'index de l'applicateur
+    # (`vocab =`), donc la rev épinglée par l'agent et les choix résolus au
+    # battement d'application ne peuvent pas diverger. Aucune lecture
+    # réactive : le catalogue est une fonction pure du disque.
+    #
+    # `vocab_rev` : compteur MONOTONE posé par empreinte — la sonde est la
+    # seule scriptrice, aucun observateur existant n'est touché, l'UI humaine
+    # ne change pas.
+    drive_vocab_state <- new.env(parent = emptyenv())
+    drive_vocab_state$rev <- 0L
+    drive_vocab_state$fp  <- NULL
+    drive_vocabulary <- function() {
+      srcs <- tryCatch(as.character(unname(bulk_gene_set_choices())),
+                       error = function(e) character(0))
+      fp <- paste(c(length(srcs), srcs), collapse = "\u0001")
+      if (!identical(fp, drive_vocab_state$fp)) {
+        drive_vocab_state$rev <- drive_vocab_state$rev + 1L
+        drive_vocab_state$fp  <- fp
+      }
+      list(scores_source = srcs, vocab_rev = drive_vocab_state$rev)
+    }
+    # Publié DANS l'état (le canal wire) : projété par
+    # ts_drive_project_vocabulary (choix verbatim D1, keep-set fermé).
+    drive_state2 <- function() {
+      s <- drive_state()
+      s$vocabulary <- drive_vocabulary()
+      s
+    }
+
     ts_drive_publish_token(global_data, "bulk-pathways-run_pathway", drive_counter_pathway,
-                           ready = ready_pathway, state = drive_state, long = TRUE)
+                           ready = ready_pathway, state = drive_state2, long = TRUE,
+                           vocab = drive_vocabulary)
     ts_drive_publish_token(global_data, "bulk-pathways-run_scores",  drive_counter_scores,
-                           ready = ready_scores, state = drive_state, long = TRUE)
+                           ready = ready_scores, state = drive_state2, long = TRUE,
+                           vocab = drive_vocabulary)
     drive_trigger_pathway <- shiny::reactive(list(drive_counter_pathway(), input$run_pathway))
     drive_trigger_scores  <- shiny::reactive(list(drive_counter_scores(),  input$run_scores))
 

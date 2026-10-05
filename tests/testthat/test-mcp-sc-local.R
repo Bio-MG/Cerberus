@@ -965,3 +965,119 @@ test_that("exactly one read per export: the second read is refused and writes no
                  collapse = " ")
   expect_identical(after, before)
 })
+# =============================================================================
+# Slice 3 (2026-10-05) — le serveur face au vocabulaire session-dérivé : les
+# cinq entrées indexées, la matrice INPUT_NOT_READY / VOCAB_STALE /
+# INDEX_OUT_OF_RANGE, et la note redaction qui passe de not_exposed à indexed
+# (29 -> 34 exposés).
+# =============================================================================
+
+.mcp_sc_local_vocab_snapshot <- function(e, with_vocab = TRUE) {
+  # Un verdict d'export `done` crédible dont le snapshot porte le bloc
+  # `vocabulary` publié par la sonde du module (projété : ce qui Voyage est
+  # exactement ce bloc).
+  voc <- if (with_vocab) list(
+    bulk_de = list(vocabulary = list(
+      condition_col = c("condition", "tissue"),
+      covariates = c("condition", "tissue"),
+      group_levels = c("mock", "CoV2"),
+      vocab_rev = 3L)),
+    bulk_pathways = list(vocabulary = list(
+      scores_source = c("msigdb_hallmark", "progeny", "dorothea", "file"),
+      vocab_rev = 7L))) else NULL
+  write_result <- get("ts_drive_write_result", envir = e)
+  write_result(10L, "done", "bulk_de", TRUE,
+               snapshot = if (is.null(voc)) NULL else list(modules = voc))
+}
+
+test_that("the five session-derived inputs are exposed by index, and the vocabulary tables agree", {
+  e <- .mcp_sc_local_env()
+  # La note 29 -> 34 est un pin, pas un décompte décoratif : cinq entrées sont
+  # passées de « délibérément non exposées » à « exposées par index ».
+  expect_length(e$TS_MCP_INPUT_SCHEMA, 34L)
+  expect_length(e$TS_DRIVE_SESSION_INPUTS, 5L)
+  # Le miroir sans drift : les cinq ids sont EXACTEMENT ceux du schéma dont le
+  # type est index/index_list, tous selects côté app, clés déclarées.
+  expect_length(e$.ts_mcp_vocab_problems(), 0L)
+  expect_length(e$.ts_mcp_not_exposed(), 0L)
+  types <- vapply(e$TS_DRIVE_SESSION_INPUTS, function(x) x$type, character(1))
+  expect_identical(unname(types), c("index", "index_list", "index", "index", "index"))
+  # Les nouveaux codes sont bien du domaine (tool result), pas du protocole.
+  expect_true(all(c("INPUT_NOT_READY", "VOCAB_STALE", "INDEX_OUT_OF_RANGE")
+                  %in% e$.ts_domain_codes))
+})
+
+test_that("indexed inputs are validated against the published vocabulary, and the scenario carries the index", {
+  e <- .mcp_sc_local_env()
+  fx <- .mcp_sc_local_import_fixture(e)
+  on.exit(unlink(e$ts_drive_root(), recursive = TRUE, force = TRUE), add = TRUE)
+  .mcp_sc_local_vocab_snapshot(e)
+  expect <- list(session_id = fx$session_id)
+
+  # 1. Forme refusée : un nom brut n'est PLUS une valeur acceptable — l'entrée
+  #    est adressée par index depuis la Slice 3.
+  r0 <- e$.ts_tool_set_inputs(11L, "bulk_de",
+                              list(`bulk-de-condition_col` = "condition"), TRUE, expect)
+  expect_true(r0$isError)
+  expect_identical(r0$structuredContent$code, "VALUE_REFUSED")
+  expect_false(file.exists(e$ts_drive_path("scenario.json")))
+
+  # 2. La forme est bonne : le scénario part, et il porte {index, vocab_rev}
+  #    NORMALISÉS en entiers — jamais le nom.
+  r1 <- e$.ts_tool_set_inputs(11L, "bulk_de", list(
+    `bulk-de-condition_col` = list(index = 2L, vocab_rev = 3L),
+    `bulk-de-covariates`    = list(index = list(2L, 1L), vocab_rev = 3L),
+    `bulk-de-de_engine`     = "deseq2"), TRUE, expect)
+  expect_false(r1$isError)
+  scn <- jsonlite::fromJSON(e$ts_drive_path("scenario.json"), simplifyVector = FALSE)
+  expect_identical(as.integer(scn$inputs$`bulk-de-condition_col`$index), 2L)
+  expect_identical(as.integer(scn$inputs$`bulk-de-condition_col`$vocab_rev), 3L)
+  expect_identical(as.integer(unlist(scn$inputs$`bulk-de-covariates`$index)), c(2L, 1L))
+  expect_identical(as.character(scn$inputs$`bulk-de-de_engine`), "deseq2")
+  # La note de redaction dit `indexed`, plus jamais `not_exposed`.
+  expect_setequal(as.character(unlist(r1$structuredContent$redaction$indexed$ids)),
+                  c("bulk-de-condition_col", "bulk-de-covariates", "bulk-de-group_ref",
+                    "bulk-de-group_target", "bulk-pathways-scores_source"))
+  expect_false("not_exposed" %in% names(r1$structuredContent$redaction))
+
+  # 3. rev dépassée : VOCAB_STALE — rien n'est écrit.
+  r2 <- e$.ts_tool_set_inputs(12L, "bulk_de", list(
+    `bulk-de-condition_col` = list(index = 1L, vocab_rev = 2L)), TRUE, expect)
+  expect_true(r2$isError)
+  expect_identical(r2$structuredContent$code, "VOCAB_STALE")
+  expect_identical(as.integer(jsonlite::fromJSON(
+    e$ts_drive_path("scenario.json"), simplifyVector = FALSE)$seq), 11L)
+
+  # 4. Index au-delà du domaine publié : INDEX_OUT_OF_RANGE.
+  r3 <- e$.ts_tool_set_inputs(12L, "bulk_de", list(
+    `bulk-de-condition_col` = list(index = 9L, vocab_rev = 3L)), TRUE, expect)
+  expect_true(r3$isError)
+  expect_identical(r3$structuredContent$code, "INDEX_OUT_OF_RANGE")
+
+  # 5. Le pair ref == target : PAYLOAD_REFUSED, avant toute écriture.
+  r4 <- e$.ts_tool_set_inputs(12L, "bulk_de", list(
+    `bulk-de-group_ref`    = list(index = 1L, vocab_rev = 3L),
+    `bulk-de-group_target` = list(index = 1L, vocab_rev = 3L)), TRUE, expect)
+  expect_true(r4$isError)
+  expect_identical(r4$structuredContent$code, "PAYLOAD_REFUSED")
+  expect_match(r4$structuredContent$message, "same index", fixed = TRUE)
+
+  # 6. Aucun vocabulaire publié (données non chargées) : INPUT_NOT_READY —
+  #    fail closed, avec le POURQUOI. Le scénario du chemin heureux (case 2)
+  #    reste sur le disque : le refus n'écrit RIEN, il est inchangé.
+  scn_bytes <- paste(readBin(e$ts_drive_path("scenario.json"), "raw",
+                             file.size(e$ts_drive_path("scenario.json"))),
+                     collapse = " ")
+  .mcp_sc_local_vocab_snapshot(e, with_vocab = FALSE)
+  r5 <- e$.ts_tool_set_inputs(12L, "bulk_de", list(
+    `bulk-de-condition_col` = list(index = 1L, vocab_rev = 3L)), TRUE, expect)
+  expect_true(r5$isError)
+  expect_identical(r5$structuredContent$code, "INPUT_NOT_READY")
+  expect_identical(paste(readBin(e$ts_drive_path("scenario.json"), "raw",
+                                 file.size(e$ts_drive_path("scenario.json"))),
+                         collapse = " "), scn_bytes)
+
+  # 7. Les cinq ids restent des ENTRÉES : le compte d'outils ne bouge pas.
+  tools <- e$.ts_tools()
+  expect_length(tools, 10L)
+})
