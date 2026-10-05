@@ -751,7 +751,13 @@ ts_drive_boot(.project_root)
   # (selected, no result). The distinction is the whole point — collapsing
   # `ignored` into `ran` would claim a computation that never happened.
   "mapping", "qc", "norm", "pca", "clusters", "umap", "tsne", "singler",
-  "markers", "pathway", "correlation", "trajectory"
+  "markers", "pathway", "correlation", "trajectory",
+  # Slice 4 — the bulk_wgcna probe: `ready` declares stage-2 READABILITY (the
+  # power analysis has run), `chosen_power`/`chosen_r2` are the retained
+  # soft-threshold, `modules_power` the power the build actually ran at (it
+  # can differ: the override), `n_modules` the module count. All scalars;
+  # the VST matrix and the module colours never travel.
+  "chosen_power", "chosen_r2", "n_modules", "modules_power"
 )
 
 # SLOT names that may be opened and recursed into. The measured shape of
@@ -1108,7 +1114,16 @@ TS_MCP_INPUT_SCHEMA <- list(
   "bulk-pathways-scores_org"        = list(type = "enum", values = c("human", "mouse")),
   "bulk-pathways-scores_method"     = list(type = "enum", values = c("ssgsea", "gsva", "plage", "zscore")),
   "bulk-pathways-scores_min_size"   = list(type = "number", min = 1, max = 100000, integer = TRUE),
-  "bulk-pathways-scores_max_size"   = list(type = "number", min = 1, max = 100000, integer = TRUE)
+  "bulk-pathways-scores_max_size"   = list(type = "number", min = 1, max = 100000, integer = TRUE),
+  # ── bulk_wgcna (Slice 4) — the two stage widgets, plus the ONE
+  #    session-derived select addressed by INDEX ─────────────────────────────
+  # `wgcna_power_override` ABSENT means "power kept at step 1" (the UI's own
+  # empty-input semantics): the field is simply not sent, the app then reads
+  # its default. There is no null sentinel on the wire — absence IS the
+  # honest encoding of the UI's empty input.
+  "bulk-wgcna-wgcna_n_genes"        = list(type = "number", min = 2000, max = 5000, integer = TRUE),
+  "bulk-wgcna-wgcna_power_override" = list(type = "number", min = 1, max = 20, integer = TRUE),
+  "bulk-wgcna-wgcna_traits"         = list(type = "index_list", max_items = 32L, allow_empty = TRUE)
 )
 
 # Payload bounds.
@@ -1200,6 +1215,15 @@ TS_MCP_MAX_PAYLOAD_BYTES <- 4096L
       return(list(ok = FALSE, reason = "`vocab_rev` must be one non-negative integer"))
     }
     idx <- tryCatch(suppressWarnings(as.numeric(v$index)), error = function(e) NA_real_)
+    # Slice 4 (2026-10-05): an EMPTY index list is a valid shape when the
+    # entry declares allow_empty — the generic scalar check below would refuse
+    # it before the index_list branch ever ran (a latent Slice 3 gap: an
+    # empty `bulk-de-covariates` passed neither the shape check nor the
+    # apply-time resolution it was promised). The domain state (empty vs
+    # populated vocabulary) stays the tool's business.
+    if (!length(idx) && identical(sch$type, "index_list") && isTRUE(sch$allow_empty)) {
+      return(list(ok = TRUE, reason = NULL))
+    }
     if (!length(idx) || any(is.na(idx)) || any(!is.finite(idx)) || any(idx < 1)) {
       return(list(ok = FALSE, reason = "`index` must be one integer >= 1 (or a list of them)"))
     }
@@ -1647,6 +1671,14 @@ TS_MCP_EXPORT_COLUMNS <- list(
   bulk_network = list(
     fixed      = c("node", "symbol", "role", "prize", "degree", "species",
                    "source_db")
+  ),
+  bulk_wgcna = list(
+    # build_wgcna_export(): gene -> module colour, plus the correlation method
+    # WHEN the MEs <-> traits step has produced one. Same declared-shape
+    # pattern as the ORA/GSEA modes: one route, two deterministic schemas, the
+    # differentiator being whether the session's traits were correlated.
+    guaranteed  = c("gene", "module"),
+    mode_traits = c("gene", "module", "trait_cor_method")
   )
 )
 
@@ -1665,6 +1697,8 @@ TS_MCP_EXPORT_COLUMNS <- list(
       parts <- c(parts, sprintf("ORA full (in order): %s", paste(e$mode_ora, collapse = ", ")))
     if (!is.null(e$mode_gsea))
       parts <- c(parts, sprintf("GSEA full (in order): %s", paste(e$mode_gsea, collapse = ", ")))
+    if (!is.null(e$mode_traits))
+      parts <- c(parts, sprintf("traits full (in order): %s", paste(e$mode_traits, collapse = ", ")))
     if (!is.null(e$guaranteed))
       parts <- c(parts, sprintf("guaranteed (extras/order vary): %s",
                                 paste(e$guaranteed, collapse = ", ")))
@@ -2306,6 +2340,7 @@ TS_MCP_RUN_BUTTONS <- list(
   bulk_signatures = c("bulk-signatures-run_signatures"),
   bulk_pattern = c("bulk-pattern-run_pattern"),
   bulk_network = c("bulk-network-run_network"),
+  bulk_wgcna = c("bulk-wgcna-run_wgcna_power", "bulk-wgcna-run_wgcna_modules"),
   spatial_pipeline = "spatial-pipeline-btn_run_all",
   spatial_qc   = "spatial-qc-btn_hotspots",
   sc_pipeline   = "sc-pipeline-run_auto_pipeline",

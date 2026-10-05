@@ -140,7 +140,15 @@ TS_DRIVE_SPATIAL_QC_SUB_TAB      <- "hotspots"
 # `ts_drive_allowlist_problems()` checks the shape of the table so a third entry
 # cannot be an accident either. 🆕 2026-10-03 (S2c): it did not stay an accident
 # — `bulk_pathways` joined under the same contract, one route for the module's
-# enrichment table (`shared_rv$pathway_results`), ORA and GSEA alike.
+# enrichment table (`shared_rv$pathway_results`), ORA and GSEA alike. 🆕
+# 2026-10-05 (Slice 4): `bulk_wgcna` joins the same way — ONE route for the
+# gene -> module table the human `dl_wgcna_genes` download already writes via
+# `build_wgcna_export()`. TOM, the RDS and the dendrogram are deliberately NOT
+# routes: the TOM is a 5000 x 5000 matrix (the memory-guard class), the RDS is
+# arbitrary R objects (not a bounded-read artefact), and the dendrogram has no
+# tabular form without a second builder — none of the three is a human
+# download today, and a route without a human download would be a second
+# builder by another name.
 TS_DRIVE_EXPORT_ROUTES <- list(
   spatial_qc      = "spatial_qc_hotspot_csv",
   bulk_de         = "bulk_de_results_csv",
@@ -150,7 +158,8 @@ TS_DRIVE_EXPORT_ROUTES <- list(
   bulk_filter     = "bulk_filter_vst_matrix_csv",
   bulk_signatures = "bulk_signatures_scores_csv",
   bulk_pattern    = "bulk_pattern_clusters_csv",
-  bulk_network    = "bulk_network_nodes_csv"
+  bulk_network    = "bulk_network_nodes_csv",
+  bulk_wgcna      = "bulk_wgcna_genes_csv"
 )
 
 #' Modules allowed to publish an EXPORT route, derived from the routes above.
@@ -327,6 +336,7 @@ TS_DRIVE_EXPORT_STEM_BULK_FILTER <- "bulk_filter_vst_matrix"
 TS_DRIVE_EXPORT_STEM_BULK_SIGNATURES <- "bulk_signatures_scores"
 TS_DRIVE_EXPORT_STEM_BULK_PATTERN <- "bulk_pattern_clusters"
 TS_DRIVE_EXPORT_STEM_BULK_NETWORK <- "bulk_network_nodes"
+TS_DRIVE_EXPORT_STEM_BULK_WGCNA <- "bulk_wgcna_genes"
 
 TS_DRIVE_EXPORT_STEMS <- c(
   spatial_qc      = TS_DRIVE_EXPORT_STEM,
@@ -337,7 +347,8 @@ TS_DRIVE_EXPORT_STEMS <- c(
   bulk_filter     = TS_DRIVE_EXPORT_STEM_BULK_FILTER,
   bulk_signatures = TS_DRIVE_EXPORT_STEM_BULK_SIGNATURES,
   bulk_pattern    = TS_DRIVE_EXPORT_STEM_BULK_PATTERN,
-  bulk_network    = TS_DRIVE_EXPORT_STEM_BULK_NETWORK
+  bulk_network    = TS_DRIVE_EXPORT_STEM_BULK_NETWORK,
+  bulk_wgcna      = TS_DRIVE_EXPORT_STEM_BULK_WGCNA
 )
 
 #' The per-route column CONTRACT, declared (option 1 of the 2026-10-03
@@ -404,6 +415,14 @@ TS_DRIVE_EXPORT_COLUMNS <- list(
     # build_bulk_network_table_export(): nodes + in-subgraph degree.
     fixed      = c("node", "symbol", "role", "prize", "degree", "species",
                    "source_db")
+  ),
+  bulk_wgcna = list(
+    # build_wgcna_export(): gene -> module colour, plus the correlation method
+    # WHEN the MEs <-> traits step has produced one. Same declared-shape
+    # pattern as the ORA/GSEA modes: one route, two deterministic schemas, the
+    # differentiator being whether the session's traits were correlated.
+    guaranteed  = c("gene", "module"),
+    mode_traits = c("gene", "module", "trait_cor_method")
   )
 )
 
@@ -507,6 +526,21 @@ TS_DRIVE_BULK_NETWORK_BUTTON <- "bulk-network-run_network"
 TS_DRIVE_BULK_NETWORK_MODULE <- "bulk_network"
 TS_DRIVE_BULK_NETWORK_TOP_TAB <- "tab_bulk"
 TS_DRIVE_BULK_NETWORK_PANELS <- "panel_network"
+
+# --- Bulk WGCNA co-expression (measured in modules/bulk/mod_bulk_wgcna.R) ----
+# The sixteenth drivable module, and the first one built around a TWO-STAGE
+# flow: "Analyser le power" (pickSoftThreshold, mod_bulk_wgcna.R:128) then
+# "Construire les modules" (blockwiseModules, :159). Stage 2 CONSUMES stage 1's
+# stored result (`req(shared_rv$wgcna_power)`), so the two buttons are a
+# declared PREREQUISITE chain, not a run/confirm pair — the drive's confirm
+# handshake is for injected non-button inputs and stays untouched. Nested
+# module server id is "wgcna" inside the bulk module (mod_bulk.R:535), hence
+# `bulk-wgcna-` — the same nesting rule that fixed `bulk-filter-`. The ids are
+# the module's OWN actionButton inputIds (mod_bulk_wgcna.R:23/34), never an
+# abbreviation: the allowlist keys the ids the document actually carries.
+TS_DRIVE_BULK_WGCNA_POWER_BUTTON   <- "bulk-wgcna-run_wgcna_power"
+TS_DRIVE_BULK_WGCNA_MODULES_BUTTON <- "bulk-wgcna-run_wgcna_modules"
+TS_DRIVE_BULK_WGCNA_MODULE         <- "bulk_wgcna"
 
 # --- SC pathway enrichment (measured in modules/sc/mod_sc_pathways.R) ---------
 # The fourth SC action, and the first `sc-` key outside the pipeline trio, so it is
@@ -656,6 +690,19 @@ TS_DRIVE_ALLOWLIST <- list(
   "bulk-pathways-scores_min_size" = list(kind = "numeric", module = "bulk_pathways", note = "mod_bulk_pathways.R:80"),
   "bulk-pathways-scores_max_size" = list(kind = "numeric", module = "bulk_pathways", note = "mod_bulk_pathways.R:82"),
 
+  # ── Bulk WGCNA (prefix "bulk-wgcna-") ──────────────────────────────────────
+  # Slice 4. The three widgets the two stages actually read — measured ids:
+  # the nested server id is "wgcna" (mod_bulk.R:535) and the widget ids carry
+  # the module's own `wgcna_` prefix, hence the doubled-looking
+  # `bulk-wgcna-wgcna_*`. `wgcna_traits` is a selectizeInput whose OPTIONS are
+  # rebuilt from the loaded metadata (mod_bulk_wgcna.R:88-99, numeric-or-binary
+  # filter) — that session-derived domain is exactly why it is addressed by
+  # INDEX against the published vocabulary (TS_DRIVE_SESSION_INPUTS below),
+  # never by raw name.
+  "bulk-wgcna-wgcna_n_genes"        = list(kind = "numeric", module = "bulk_wgcna", note = "slider 2000-5000 step 500 (mod_bulk_wgcna.R:20)"),
+  "bulk-wgcna-wgcna_power_override" = list(kind = "numeric", module = "bulk_wgcna", note = "empty = power kept at step 1 (mod_bulk_wgcna.R:29)"),
+  "bulk-wgcna-wgcna_traits"         = list(kind = "select", module = "bulk_wgcna", note = "multi; numeric/binary metadata columns (mod_bulk_wgcna.R:31)"),
+
   # ── Action buttons exposed to run_pipeline (integer counters) ─────────────
   # Bound through ts_drive_bind_button(); updateActionButton() does NOT click.
   "import_bulk-btn_load"       = list(kind = "button", module = "import_bulk", note = "import confirm (mod_import_bulk.R:253)"),
@@ -675,7 +722,15 @@ TS_DRIVE_ALLOWLIST <- list(
   # takes a literal name: `TS_DRIVE_SPATIAL_IMPORT_BUTTON = list(...)` would create
   # a key with no dash in it, which the source-time check below refuses. The
   # literal and the constant are tied together by `ts_drive_allowlist_problems()`.
-  "import_spatial-btn_import" = list(kind = "button", module = "import_spatial", note = "import spatial (mod_import_spatial.R:258, DOM-measured)")
+  "import_spatial-btn_import" = list(kind = "button", module = "import_spatial", note = "import spatial (mod_import_spatial.R:258, DOM-measured)"),
+  # Slice 4: the two WGCNA STAGE buttons. Real DOM actionButtons again
+  # (mod_bulk_wgcna.R:23/34), and a declared PREREQUISITE chain: stage 2's
+  # observer req()s `shared_rv$wgcna_power`, so both the published readiness
+  # guard and the observer's own job contract name it — a stage-2 dispatch
+  # without a step-1 run is an honest `invalid` verdict, never a stranded
+  # `running`.
+  "bulk-wgcna-run_wgcna_power"   = list(kind = "button", module = "bulk_wgcna", note = "stage 1: pickSoftThreshold (mod_bulk_wgcna.R:23, DOM-measured)"),
+  "bulk-wgcna-run_wgcna_modules" = list(kind = "button", module = "bulk_wgcna", note = "stage 2: blockwiseModules, REQUIRES stage 1 (mod_bulk_wgcna.R:34, DOM-measured)")
 )
 
 # The SC and Bulk-signature entries are APPENDED rather than written inline
@@ -737,12 +792,15 @@ TS_DRIVE_ALLOWLIST <- c(
   )
 )
 
-#' The ONLY FIFTEEN button ids ts_drive_bind_button() is allowed to instrument.
+#' The ONLY SEVENTEEN button ids ts_drive_bind_button() is allowed to instrument.
 #' Seven are real DOM buttons measured on a live session; the eighth through
 #' fourteenth are dispatched by a counter each module publishes (frozen declared
-#' parameters, so the DOM id is deliberately not exposed), and the fifteenth — the
+#' parameters, so the DOM id is deliberately not exposed); the fifteenth — the
 #' Spatial import confirm — is a real DOM button again, for the module whose only
-#' dataset input is a folder.
+#' dataset input is a folder; and the sixteenth and seventeenth (Slice 4) are the
+#' two WGCNA STAGE buttons — real DOM buttons once more, forming a declared
+#' prerequisite chain (stage 2 consumes stage 1's stored power), each published
+#' by its own counter and readiness guard.
 TS_DRIVE_BUTTONS <- c(
   "import_bulk-btn_load",
   "bulk-filter-run_filter_norm",
@@ -758,7 +816,9 @@ TS_DRIVE_BUTTONS <- c(
   TS_DRIVE_SC_BUTTON,
   TS_DRIVE_SC_ANNOTATION_BUTTON,
   TS_DRIVE_SC_MARKERS_BUTTON,
-  TS_DRIVE_SC_PATHWAYS_BUTTON
+  TS_DRIVE_SC_PATHWAYS_BUTTON,
+  TS_DRIVE_BULK_WGCNA_POWER_BUTTON,
+  TS_DRIVE_BULK_WGCNA_MODULES_BUTTON
 )
 
 #' The single-cell importer (S3), measured in `modules/import/mod_import_sc.R`.
@@ -811,7 +871,7 @@ TS_DRIVE_SC_10X_V3_FILES <- list(
 TS_DRIVE_MODULES <- c("import_bulk", "import_spatial", TS_DRIVE_SC_IMPORT_MODULE,
                       "bulk_filter", "bulk_de", "bulk_pathways",
                       TS_DRIVE_BULK_SIGNATURES_MODULE, TS_DRIVE_BULK_PATTERN_MODULE,
-                      TS_DRIVE_BULK_NETWORK_MODULE,
+                      TS_DRIVE_BULK_NETWORK_MODULE, TS_DRIVE_BULK_WGCNA_MODULE,
                       "spatial_pipeline", TS_DRIVE_SPATIAL_QC_MODULE,
                       TS_DRIVE_SC_MODULE,
                       TS_DRIVE_SC_ANNOTATION_MODULE, TS_DRIVE_SC_MARKERS_MODULE,
@@ -1006,7 +1066,9 @@ TS_DRIVE_SESSION_INPUTS <- list(
                                        type = "index_list", max_items = 8L, allow_empty = TRUE),
   "bulk-de-group_ref"           = list(module = "bulk_de",       key = "group_levels", type = "index"),
   "bulk-de-group_target"        = list(module = "bulk_de",       key = "group_levels", type = "index"),
-  "bulk-pathways-scores_source" = list(module = "bulk_pathways", key = "scores_source", type = "index")
+  "bulk-pathways-scores_source" = list(module = "bulk_pathways", key = "scores_source", type = "index"),
+  "bulk-wgcna-wgcna_traits"     = list(module = "bulk_wgcna",    key = "traits",
+                                       type = "index_list", max_items = 32L, allow_empty = TRUE)
 )
 
 #' Les clés qu'un bloc `vocabulary` publié peut porter, PAR MODULE.
@@ -1017,7 +1079,14 @@ TS_DRIVE_SESSION_INPUTS <- list(
 #' de données, changement de `condition_col`).
 TS_DRIVE_VOCABULARY_KEYS <- list(
   bulk_de       = c("condition_col", "covariates", "group_levels"),
-  bulk_pathways = c("scores_source")
+  bulk_pathways = c("scores_source"),
+  # Slice 4 — ONE domain: the candidate traits (numeric-or-binary metadata
+  # columns, the module's own filter at mod_bulk_wgcna.R:88-99). The empty list
+  # is the honest "no metadata loaded" state: the drive refuses INPUT_NOT_READY
+  # until data exists. An agent choosing NOTHING is a VALID choice
+  # (allow_empty), and means "correlate against every candidate trait" — the
+  # module's own behaviour for an empty selection.
+  bulk_wgcna    = c("traits")
 )
 
 #' Borne déclarée du nombre de choix publiés par liste (décision D1 : bornes

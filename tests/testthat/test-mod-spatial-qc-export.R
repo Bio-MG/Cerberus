@@ -118,21 +118,21 @@ if (!exists(".tr_plain", envir = globalenv()))
 # =============================================================================
 # 1. The route table is FROZEN DATA
 # =============================================================================
-test_that("the export route table declares exactly NINE frozen routes", {
+test_that("the export route table declares exactly TEN frozen routes", {
   routes <- .exp_routes()
   if (!is.list(routes)) {
     testthat::expect_true(is.list(routes),
       info = "TS_DRIVE_EXPORT_ROUTES must exist and declare the routes as frozen data")
     return(invisible(NULL))
   }
-  # NINE since Slice 2.3 (bulk_filter/bulk_signatures/bulk_pattern/
-  # bulk_network), and still closed: the verb exists for NAMED artefacts, one
-  # per route, and every artefact decision stays the app’s.
-  expect_length(routes, 9L)
+  # TEN since Slice 4 (bulk_wgcna joins with the gene->module table its
+  # product call granted), and still closed: the verb exists for NAMED
+  # artefacts, one per route, and every artefact decision stays the app’s.
+  expect_length(routes, 10L)
   expect_setequal(names(routes),
                   c("spatial_qc", "bulk_de", "bulk_pathways", "sc_markers",
                     "sc_pathways", "bulk_filter", "bulk_signatures",
-                    "bulk_pattern", "bulk_network"))
+                    "bulk_pattern", "bulk_network", "bulk_wgcna"))
   # The routes are REGISTRY KEYS, not handler names the caller supplies.
   expect_type(routes$spatial_qc, "character")
   expect_length(routes$spatial_qc, 1L)
@@ -354,10 +354,10 @@ test_that("the export is refused for a module with NO declared route", {
     called <<- TRUE
     list(ok = TRUE, status = "done")
   }
-  # Modules kept LEAVING this list as slices S2b/S2c/2.3 declared routes; each
+  # Modules kept LEAVING this list as slices S2b/S2c/2.3/4 declared routes; each
   # leaver’s exporter is pinned in its own export suite. The loop still pins
-  # modules that have NO route (bulk_wgcna is Slice 4, NOT export).
-  for (m in c("bulk_wgcna", "bulk_survival", "import_bulk", "spatial_pipeline")) {
+  # modules that have NO route (bulk_survival has no product call at all).
+  for (m in c("bulk_survival", "import_bulk", "spatial_pipeline")) {
     out <- ts_drive_apply(NULL, NULL,
       list(action = "export_result", module = m, import = list()),
       effects = effects)
@@ -661,13 +661,13 @@ test_that("the module publishes an exporter that is welded to its OWN store", {
   expect_true(file.exists(file.path(d(), r$descriptor$file)))
   # And a module with no declared route cannot publish one: the frozen table is
   # the authority, so a typo cannot invent an export. Modules kept LEAVING the
-  # no-route role (bulk_de in S2b, bulk_filter and friends in Slice 2.3), so the
-  # case is proven with a module that still has none: bulk_wgcna is Slice 4 and
-  # deliberately gets no export until its product call.
+  # no-route role (bulk_de in S2b, bulk_filter and friends in Slice 2.3,
+  # bulk_wgcna in Slice 4), so the case is proven with a module that still has
+  # none: bulk_survival has no product call at all.
   expect_warning(
-    ts_drive_publish_export(st$gd, "bulk_wgcna", function() TRUE),
+    ts_drive_publish_export(st$gd, "bulk_survival", function() TRUE),
     "no export route")
-  expect_null(ts_drive_export_of(st$gd, "bulk_wgcna"))
+  expect_null(ts_drive_export_of(st$gd, "bulk_survival"))
 })
 
 test_that("the exported file is non-empty, parseable and matches the stored table", {

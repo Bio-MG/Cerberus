@@ -148,7 +148,8 @@ test_that("the bound buttons are exactly the ones the spec names", {
       "bulk-pattern-run_pattern", "bulk-network-run_network",
       "spatial-pipeline-btn_run_all", "spatial-qc-btn_hotspots",
       "sc-pipeline-run_auto_pipeline", "sc-annotation-run_annot",
-      "sc-markers-run_markers", "sc-pathways-run_pathway")
+      "sc-markers-run_markers", "sc-pathways-run_pathway",
+      "bulk-wgcna-run_wgcna_power", "bulk-wgcna-run_wgcna_modules")
   )
   # Every button must be in the allowlist with kind = "button", otherwise
   # run_pipeline would accept an id the injector cannot classify.

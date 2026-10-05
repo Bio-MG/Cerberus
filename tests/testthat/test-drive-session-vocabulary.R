@@ -33,18 +33,22 @@ source_project_file("R/core/drive_watcher.R")
 }
 
 test_that("the session-derived inputs are DECLARED data, and the table agrees with the allowlist and the stages", {
-  expect_length(TS_DRIVE_SESSION_INPUTS, 5L)
+  # Slice 4 (2026-10-05) : la sixieme entree, les traits WGCNA (index_list,
+  # allow_empty, max_items 32).
+  expect_length(TS_DRIVE_SESSION_INPUTS, 6L)
   expect_setequal(names(TS_DRIVE_SESSION_INPUTS), c(
     "bulk-de-condition_col", "bulk-de-covariates", "bulk-de-group_ref",
-    "bulk-de-group_target", "bulk-pathways-scores_source"))
+    "bulk-de-group_target", "bulk-pathways-scores_source",
+    "bulk-wgcna-wgcna_traits"))
   mods <- vapply(TS_DRIVE_SESSION_INPUTS, function(x) x$module, character(1))
   expect_identical(unname(mods), c("bulk_de", "bulk_de", "bulk_de", "bulk_de",
-                                   "bulk_pathways"))
+                                   "bulk_pathways", "bulk_wgcna"))
   keys <- vapply(TS_DRIVE_SESSION_INPUTS, function(x) x$key, character(1))
   expect_identical(unname(keys), c("condition_col", "covariates", "group_levels",
-                                   "group_levels", "scores_source"))
+                                   "group_levels", "scores_source", "traits"))
   types <- vapply(TS_DRIVE_SESSION_INPUTS, function(x) x$type, character(1))
-  expect_identical(unname(types), c("index", "index_list", "index", "index", "index"))
+  expect_identical(unname(types), c("index", "index_list", "index", "index", "index",
+                                    "index_list"))
   # Chaque id est un select ALLOWLISTÉ (jamais un bouton), et son module est
   # celui du module d'appartenance réel.
   for (id in names(TS_DRIVE_SESSION_INPUTS)) {
@@ -54,10 +58,12 @@ test_that("the session-derived inputs are DECLARED data, and the table agrees wi
     expect_identical(e$module, TS_DRIVE_SESSION_INPUTS[[id]]$module, info = id)
   }
   # Les clés déclarées par module sont exactement celles que la table référence.
-  expect_setequal(names(TS_DRIVE_VOCABULARY_KEYS), c("bulk_de", "bulk_pathways"))
+  expect_setequal(names(TS_DRIVE_VOCABULARY_KEYS),
+                  c("bulk_de", "bulk_pathways", "bulk_wgcna"))
   expect_setequal(TS_DRIVE_VOCABULARY_KEYS$bulk_de,
                   unique(unname(keys[mods == "bulk_de"])))
   expect_setequal(TS_DRIVE_VOCABULARY_KEYS$bulk_pathways, "scores_source")
+  expect_setequal(TS_DRIVE_VOCABULARY_KEYS$bulk_wgcna, "traits")
   expect_true(TS_DRIVE_VOCAB_MAX_CHOICES > 0L)
   # Les étages d'injection restent la loi : condition_col/covariates en
   # étage 1, le pair ref/target en étage 2 (la dépendance MESURÉE).

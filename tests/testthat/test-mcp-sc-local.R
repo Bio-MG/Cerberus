@@ -607,11 +607,13 @@ test_that("the export tool refuses a module outside the app's route table", {
   on.exit(unlink(e$ts_drive_root(), recursive = TRUE, force = TRUE), add = TRUE)
   expect <- list(session_id = fx$session_id, pid = Sys.getpid(),
                  started_at = fx$started)
-  # `bulk_wgcna` has no route (and will NOT get one until its product call —
-  # Slice 4 decides, never a side effect). Modules kept LEAVING the refusal
-  # role as routes arrived: bulk_pathways (S2c), bulk_filter/bulk_signatures
-  # (Slice 2.3).
-  r <- e$.ts_tool_export(9L, "bulk_wgcna", expect)
+  # `sc_annotation` has no route (and gets none without its own product
+  # call — Slice 4 decides, never a side effect). Modules kept LEAVING the
+  # refusal role as routes arrived: bulk_pathways (S2c),
+  # bulk_filter/bulk_signatures (Slice 2.3), bulk_wgcna (Slice 4, whose
+  # product call GRANTED the gene->module route — the leaver loop below
+  # proves it end-to-end).
+  r <- e$.ts_tool_export(9L, "sc_annotation", expect)
   expect_true(r$isError)
   expect_identical(r$structuredContent$code, "MODULE_NOT_ALLOWED")
   expect_false(file.exists(e$ts_drive_path("scenario.json")))
@@ -993,15 +995,18 @@ test_that("exactly one read per export: the second read is refused and writes no
 test_that("the five session-derived inputs are exposed by index, and the vocabulary tables agree", {
   e <- .mcp_sc_local_env()
   # La note 29 -> 34 est un pin, pas un décompte décoratif : cinq entrées sont
-  # passées de « délibérément non exposées » à « exposées par index ».
-  expect_length(e$TS_MCP_INPUT_SCHEMA, 34L)
-  expect_length(e$TS_DRIVE_SESSION_INPUTS, 5L)
+  # passées de « délibérément non exposées » à « exposées par index ». Slice 4
+  # (2026-10-05) : 34 -> 37 — les trois widgets WGCNA (n_genes, power_override,
+  # traits) ; 5 -> 6 entrées session-dérivées (traits, par INDEX).
+  expect_length(e$TS_MCP_INPUT_SCHEMA, 37L)
+  expect_length(e$TS_DRIVE_SESSION_INPUTS, 6L)
   # Le miroir sans drift : les cinq ids sont EXACTEMENT ceux du schéma dont le
   # type est index/index_list, tous selects côté app, clés déclarées.
   expect_length(e$.ts_mcp_vocab_problems(), 0L)
   expect_length(e$.ts_mcp_not_exposed(), 0L)
   types <- vapply(e$TS_DRIVE_SESSION_INPUTS, function(x) x$type, character(1))
-  expect_identical(unname(types), c("index", "index_list", "index", "index", "index"))
+  expect_identical(unname(types), c("index", "index_list", "index", "index", "index",
+                                    "index_list"))
   # Les nouveaux codes sont bien du domaine (tool result), pas du protocole.
   expect_true(all(c("INPUT_NOT_READY", "VOCAB_STALE", "INDEX_OUT_OF_RANGE")
                   %in% e$.ts_domain_codes))
@@ -1035,9 +1040,11 @@ test_that("indexed inputs are validated against the published vocabulary, and th
   expect_identical(as.integer(unlist(scn$inputs$`bulk-de-covariates`$index)), c(2L, 1L))
   expect_identical(as.character(scn$inputs$`bulk-de-de_engine`), "deseq2")
   # La note de redaction dit `indexed`, plus jamais `not_exposed`.
+  # Slice 4 : la sixième entrée indexée (les traits WGCNA) rejoint la note.
   expect_setequal(as.character(unlist(r1$structuredContent$redaction$indexed$ids)),
                   c("bulk-de-condition_col", "bulk-de-covariates", "bulk-de-group_ref",
-                    "bulk-de-group_target", "bulk-pathways-scores_source"))
+                    "bulk-de-group_target", "bulk-pathways-scores_source",
+                    "bulk-wgcna-wgcna_traits"))
   expect_false("not_exposed" %in% names(r1$structuredContent$redaction))
 
   # 3. rev dépassée : VOCAB_STALE — rien n'est écrit.

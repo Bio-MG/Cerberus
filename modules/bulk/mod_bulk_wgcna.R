@@ -59,7 +59,7 @@ mod_bulk_wgcna_output_ui <- function(id) {
   )
 }
 
-mod_bulk_wgcna_server <- function(id, global_data, shared_rv) {
+  mod_bulk_wgcna_server <- function(id, global_data, shared_rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
@@ -68,6 +68,119 @@ mod_bulk_wgcna_server <- function(id, global_data, shared_rv) {
       if (is.null(tr)) return(key)
       tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
     }
+
+    # ── DRIVE (Slice 4) : compteurs, gardes de readiness, sondes ────────────
+    # Deux jetons, un par ÉTAPE : la paire est une chaîne de PRÉREQUIS déclaré
+    # (l'étape 2 consomme `shared_rv$wgcna_power`), pas un couple
+    # run/confirm — le handshake de confirmation du drive concerne les
+    # entrées non-bouton injectées et n'est pas touché.
+    drive_counter_power   <- shiny::reactiveVal(0L)
+    drive_counter_modules <- shiny::reactiveVal(0L)
+
+    # READINESS GUARD (G2) par étape, miroir des préconditions DES observers
+    # ci-dessous (mesurées, pas devinées) : sans garde, le dispatch réponde
+    # `done` pour un calcul jamais parti — le mensonge coûteux déjà mesuré
+    # sur bulk_de. `shiny::isolate()` garde la lecture hors du battement du
+    # poller (la réactivité est l'affaire du module).
+    drive_ready_power <- function() {
+      if (is.null(shiny::isolate(shared_rv$vst_mat))) {
+        "no VST matrix (run the bulk Filtering & VST step first)"
+      } else TRUE
+    }
+    drive_ready_modules <- function() {
+      if (is.null(shiny::isolate(shared_rv$vst_mat))) {
+        "no VST matrix (run the bulk Filtering & VST step first)"
+      } else if (is.null(shiny::isolate(shared_rv$wgcna_power))) {
+        "no power analysis yet (stage 2 consumes its result: run bulk-wgcna-run_wgcna_power first)"
+      } else TRUE
+    }
+
+    # STATE PROBE (G3) — COMPTEURS SEULEMENT, chaque lecture isolate-guardée
+    # (le probe tourne dans le battement du poller, spec §6 ; rien ici ne
+    # renvoie jamais la matrice VST ni les couleurs brutes des modules).
+    # « Le jeton a bougé » ne dit pas qu'un power est retenu ni que des
+    # modules existent : la sonde rend ces deux faits OBSERVABLES au lieu
+    # d'inférés, et la clé `ready` déclare la lisibilité de l'ÉTAPE 2 —
+    # l'agent peut observer avant de dispatcher.
+    drive_state <- function() {
+      pw <- tryCatch(shiny::isolate(shared_rv$wgcna_power), error = function(e) NULL)
+      md <- tryCatch(shiny::isolate(shared_rv$wgcna_modules), error = function(e) NULL)
+      out <- list(
+        ready         = FALSE,
+        n_genes       = NULL,
+        n_samples     = NULL,
+        chosen_power  = NULL,
+        chosen_r2     = NULL,
+        n_modules     = NULL,
+        modules_power = NULL,
+        convention    = "power by scale-free fit R2 >= 0.80, best compromise otherwise"
+      )
+      if (!is.null(pw)) {
+        out$ready        <- TRUE
+        out$n_genes      <- pw$n_genes_used
+        out$n_samples    <- pw$n_samples
+        out$chosen_power <- pw$chosen$power
+        out$chosen_r2    <- pw$chosen$r2
+      }
+      if (!is.null(md)) {
+        out$n_modules     <- md$n_modules
+        out$modules_power <- md$power
+      }
+      out
+    }
+
+    # VOCABULARY PROBE (Slice 3) — le domaine de `wgcna_traits`, publié par
+    # INDEX. LA MÊME closure nourrit l'état publiée et la résolution à
+    # l'apply (`vocab =`), donc la rev épinglée par l'agent et les choix
+    # résolus ne peuvent pas dériver l'un de l'autre. Le filtre est le
+    # MIROIR EXACT de l'observer qui alimente les choices du widget
+    # (colonnes numériques >= 3 valeurs finies, ou exactement binaires) ;
+    # `vocab_rev` est un compteur MONOTONE poussé par comparaison de
+    # fingerprint — la sonde est la seule écrivaine, aucun observer
+    # existant n'est touché, l'UI humaine ne change pas.
+    drive_vocab_state <- new.env(parent = emptyenv())
+    drive_vocab_state$rev <- 0L
+    drive_vocab_state$fp  <- NULL
+    drive_vocabulary <- function() {
+      meta <- tryCatch(shiny::isolate(global_data$bulk_obj)$metadata,
+                       error = function(e) NULL)
+      traits <- character(0)
+      if (!is.null(meta) && ncol(meta)) {
+        ok <- vapply(names(meta), function(cl) {
+          x <- meta[[cl]]
+          (is.numeric(x) && sum(is.finite(x)) >= 3L) ||
+            ((is.factor(x) || is.character(x) || is.logical(x)) &&
+               length(unique(stats::na.omit(as.character(x)))) == 2L)
+        }, logical(1))
+        traits <- names(meta)[ok]
+      }
+      fp <- paste(c(length(traits), traits), collapse = "\u0001")
+      if (!identical(fp, drive_vocab_state$fp)) {
+        drive_vocab_state$rev <- drive_vocab_state$rev + 1L
+        drive_vocab_state$fp  <- fp
+      }
+      list(
+        traits    = traits,
+        vocab_rev = drive_vocab_state$rev
+      )
+    }
+    # La vocabulaire voyage DANS l'état (canal wire), projetée par
+    # ts_drive_project_vocabulary (choix D1-verbatim, keep-set fermé).
+    drive_state2 <- function() {
+      s <- drive_state()
+      s$vocabulary <- drive_vocabulary()
+      s
+    }
+
+    drive_trigger_power   <- shiny::reactive(list(drive_counter_power(),   input$run_wgcna_power))
+    drive_trigger_modules <- shiny::reactive(list(drive_counter_modules(), input$run_wgcna_modules))
+
+    ts_drive_publish_token(global_data, "bulk-wgcna-run_wgcna_power", drive_counter_power,
+                           ready = drive_ready_power, state = drive_state2, long = TRUE,
+                           vocab = drive_vocabulary)
+    ts_drive_publish_token(global_data, "bulk-wgcna-run_wgcna_modules", drive_counter_modules,
+                           ready = drive_ready_modules, state = drive_state2, long = TRUE,
+                           vocab = drive_vocabulary)
 
     # ── i18n push on language switch ─────────────────────────────────────
     observeEvent(global_data$language, {
@@ -125,9 +238,28 @@ mod_bulk_wgcna_server <- function(id, global_data, shared_rv) {
     })
 
     # ── Étape 1 : power analysis ─────────────────────────────────────────
-    observeEvent(input$run_wgcna_power, {
+    observeEvent(drive_trigger_power(), {
+      # ── DECLARE THE JOB OVER (drive job contract, spec §5) ────────────────
+      # Ce jeton est DÉCLARÉ long (pickSoftThreshold est synchrone et long) :
+      # il doit fermer son job sur TOUTE sortie, y compris les `req()` qui
+      # avortent en silence. L'on.exit est enregistré AVANT eux — c'est lui
+      # qui transforme un clic à sec en verdict `invalid` honnête au lieu
+      # d'un `running` sans fin (la panne la plus coûteuse du contrat long).
+      outcome <- new.env(parent = emptyenv())
+      outcome$v <- "refused"
+      if (isTRUE(ts_drive_job_busy()) &&
+          identical(ts_drive_job_state()$button, "bulk-wgcna-run_wgcna_power")) {
+        on.exit(ts_drive_job_finish("bulk-wgcna-run_wgcna_power",
+          status = switch(outcome$v, ok = "done", failed = "error", "invalid"),
+          error = if (identical(outcome$v, "failed")) {
+            "the power analysis raised — see the app notification"
+          } else NULL
+        ), add = TRUE)
+      }
+
+      req(input$run_wgcna_power > 0 || shiny::isolate(drive_counter_power()) > 0)
       req(shared_rv$vst_mat)
-      p <- shiny::Progress$new(); on.exit(p$close())
+      p <- shiny::Progress$new(); on.exit(p$close(), add = TRUE)
       p$set(message = .tr("Analyse du power (soft-thresholding)..."), value = 0.2)
       tryCatch({
         pw <- bulk_wgcna_pick_power(shared_rv$vst_mat, n_top = input$wgcna_n_genes)
@@ -148,20 +280,43 @@ mod_bulk_wgcna_server <- function(id, global_data, shared_rv) {
                                  p = format(pw$chosen$power), r = round(pw$chosen$r2, 3)),
                          type = "message")
         nav_select(id = "wgcna_tabs", selected = "wgcna_power_tab", session = session)
+        outcome$v <- "ok"
       }, error = function(e) {
         showNotification(paste(.tr("Erreur WGCNA:"), conditionMessage(e)),
                          type = "error", duration = 10)
         shared_rv$wgcna_power <- NULL
+        outcome$v <- "failed"
       })
     })
 
     # ── Étape 2 : modules + traits ───────────────────────────────────────
-    observeEvent(input$run_wgcna_modules, {
+    # ⚠️ PRÉREQUIS DÉCLARÉ : cette étape consomme `shared_rv$wgcna_power`
+    # (l'étape 1). Sans étape 1, le dispatch est refusé par la garde de
+    # readiness AVANT tout feu ; si l'état change entre le dispatch et le
+    # battement (fenêtre TOCTOU), l'on.exit du contrat long transforme le
+    # `req()` avorté en verdict `invalid` — jamais un `running` sans fin.
+    observeEvent(drive_trigger_modules(), {
+      # ── DECLARE THE JOB OVER (drive job contract, spec §5) ────────────────
+      # Même contrat que l'observateur du power ci-dessus : blockwiseModules
+      # est synchrone et long, le job doit être fermé sur TOUTE sortie.
+      outcome <- new.env(parent = emptyenv())
+      outcome$v <- "refused"
+      if (isTRUE(ts_drive_job_busy()) &&
+          identical(ts_drive_job_state()$button, "bulk-wgcna-run_wgcna_modules")) {
+        on.exit(ts_drive_job_finish("bulk-wgcna-run_wgcna_modules",
+          status = switch(outcome$v, ok = "done", failed = "error", "invalid"),
+          error = if (identical(outcome$v, "failed")) {
+            "the module construction raised — see the app notification"
+          } else NULL
+        ), add = TRUE)
+      }
+
+      req(input$run_wgcna_modules > 0 || shiny::isolate(drive_counter_modules()) > 0)
       req(shared_rv$vst_mat, shared_rv$wgcna_power)
       power <- if (!is.na(input$wgcna_power_override) && !is.null(input$wgcna_power_override)) {
         input$wgcna_power_override
       } else shared_rv$wgcna_power$chosen$power
-      p <- shiny::Progress$new(); on.exit(p$close())
+      p <- shiny::Progress$new(); on.exit(p$close(), add = TRUE)
       p$set(message = .tr("Construction des modules (blockwiseModules)..."), value = 0.2)
       tryCatch({
         md <- bulk_wgcna_build_modules(shared_rv$vst_mat, power = power,
@@ -176,10 +331,12 @@ mod_bulk_wgcna_server <- function(id, global_data, shared_rv) {
         showNotification(.t_fmt(.tr("\u2713 {k} modules d\u00e9tect\u00e9s."),
                                  k = md$n_modules), type = "message")
         nav_select(id = "wgcna_tabs", selected = "wgcna_trait_tab", session = session)
+        outcome$v <- "ok"
       }, error = function(e) {
         showNotification(paste(.tr("Erreur WGCNA:"), conditionMessage(e)),
                          type = "error", duration = 10)
         shared_rv$wgcna_modules <- NULL
+        outcome$v <- "failed"
       })
     })
 
@@ -268,6 +425,20 @@ mod_bulk_wgcna_server <- function(id, global_data, shared_rv) {
         saveRDS(out, file)
       }
     )
+
+    # ── EXPORT ROUTE (Slice 4) — la table gène -> module ──────────────────
+    # Le builder est EXACTEMENT celui du téléchargement humain
+    # `dl_wgcna_genes` ci-dessus (règle S2 : jamais un second builder) ; la
+    # clôture passe la reactive des corrélations isolée — le poller appelle
+    # l'exporteur hors de tout contexte réactif. Les verdicts (rien à
+    # exporter / résultat non canonique / écriture) vivent dans
+    # mod_bulk_wgcna_export.R, atteignable hors Shiny par les tests.
+    ts_drive_publish_export(global_data, "bulk_wgcna", function() {
+      bulk_wgcna_export_genes_csv(
+        shared_rv, global_data,
+        trait_cor = tryCatch(shiny::isolate(wgcna_trait_cor()),
+                             error = function(e) NULL))
+    })
 
   }) # /moduleServer
 }

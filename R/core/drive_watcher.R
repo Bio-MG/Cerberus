@@ -1148,6 +1148,16 @@ ts_drive_resolve_session_inputs <- function(inputs, module, vocab_fn = NULL) {
     # exception qui tuerait le battement du poller.
     idx <- tryCatch(suppressWarnings(as.integer(v$index)),
                     error = function(e) NA_integer_)
+    # Slice 4 (2026-10-05): une liste VIDE est un choix VALIDE quand l'entrée
+    # le déclare (`allow_empty`) — le serveur honore déjà ce drapeau, le
+    # résolveur le refusait encore : un `bulk-de-covariates` vide passait le
+    # wire et se faisait refuser à l'apply. La résolution est `character(0)`,
+    # la sémantique du module (« tous les choix par défaut »). Mesuré par le
+    # test de la Slice 4 (`bulk-wgcna-wgcna_traits` vide).
+    if (!length(idx) && isTRUE(entry$allow_empty)) {
+      values[[id]] <- choices[integer(0)]
+      next
+    }
     if (!length(idx) || any(is.na(idx)) || any(idx < 1L)) {
       errs <- c(errs, sprintf("PAYLOAD_REFUSED: '%s' carries an index that is not a positive integer.", id))
       next

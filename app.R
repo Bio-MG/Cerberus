@@ -199,6 +199,7 @@ source("modules/bulk/mod_bulk_pathways_export.R")  # S2c : route d'export drive 
 source("modules/bulk/mod_bulk_pathways.R")
 source("modules/bulk/mod_bulk_signatures_export.R")  # Slice 2.3 : route d'export drive (scores de signatures)
 source("modules/bulk/mod_bulk_signatures.R")  # Bulk V2 M3 : signatures cellulaires
+source("modules/bulk/mod_bulk_wgcna_export.R")  # Slice 4 : route d'export drive (gènes -> modules WGCNA)
 source("modules/bulk/mod_bulk_wgcna.R")       # Bulk V2 M4 : WGCNA safe-mode
 source("modules/bulk/mod_bulk_survival.R")    # Bulk V2 M5 : survie & clinique
 source("modules/bulk/mod_bulk_pattern_export.R")  # Slice 2.3 : route d'export drive (clusters de profils)
