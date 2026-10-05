@@ -450,11 +450,12 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
       outcome$v <- "refused"
       if (isTRUE(ts_drive_job_busy()) &&
           identical(ts_drive_job_state()$button, "bulk-pathways-run_scores")) {
+        # F4 : même contrat que run_pathway — un refus porte sa raison.
         on.exit(ts_drive_job_finish("bulk-pathways-run_scores",
           status = switch(outcome$v, ok = "done", failed = "error", "invalid"),
           error = if (identical(outcome$v, "failed")) {
             "the per-sample scoring raised — see the app notification"
-          } else NULL
+          } else outcome$reason
         ), add = TRUE)
       }
 
@@ -470,6 +471,7 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
         if (is.null(input$scores_gmt) || is.null(input$scores_gmt$datapath)) {
           showNotification(.tr("\u26a0\ufe0f Fournissez un fichier .gmt (jeux de gènes)."),
                            type = "warning", duration = 5)
+          outcome$reason <- "no .gmt file was given"
           drive_record("run_scores", "not_ready")
           return()
         }
@@ -477,6 +479,7 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
         if (inherits(sets, "error")) {
           showNotification(paste(.tr("Erreur GMT:"), conditionMessage(sets)),
                            type = "error", duration = 8)
+          outcome$reason <- "the .gmt file could not be read"
           drive_record("run_scores", "error", error = conditionMessage(sets))
           return()
         }
@@ -486,6 +489,7 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
         if (inherits(sets, "error")) {
           showNotification(paste(.tr("Erreur jeux de gènes :"), conditionMessage(sets)),
                            type = "error", duration = 8)
+          outcome$reason <- "the gene set source could not be read"
           drive_record("run_scores", "error", error = conditionMessage(sets))
           return()
         }
@@ -640,11 +644,14 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
       # qui ne serait jamais écrite.
       if (isTRUE(ts_drive_job_busy()) &&
           identical(ts_drive_job_state()$button, "bulk-pathways-run_pathway")) {
+        # F4 (2026-10-06, mesuré en session réelle) : un refus porte sa raison
+        # (`outcome$reason`) sur le wire — un `invalid` à errors[] vide force
+        # l'agent à deviner. Les textes restent sanitiser-sure (mots < 8 cars).
         on.exit(ts_drive_job_finish("bulk-pathways-run_pathway",
           status = switch(outcome$v, ok = "done", failed = "error", "invalid"),
           error = if (identical(outcome$v, "failed")) {
             "the pathway enrichment raised — see the app notification"
-          } else NULL
+          } else outcome$reason
         ), add = TRUE)
       }
 
@@ -663,6 +670,7 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
           showNotification(.tr("\u26a0\ufe0f Lancez d'abord l'\u00e9tape 2 (Analyse Diff\u00e9rentielle)."), type = "warning")
           # Refus : rien n'a tourné. `not_ready` est la réponse honnête — le
           # module ne peut pas produire de résultat faute d'amont.
+          outcome$reason <- "no DE result yet: run the DE step first"
           drive_record("run_pathway", "not_ready")
           return()
         }
@@ -675,6 +683,7 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
             showNotification(.tr("\u2139\ufe0f Aucun pathway enrichi trouv\u00e9 (GSEA)."), type = "warning")
             shared_rv$pathway_results <- NULL
             # `empty` et non `done` : l'analyse a TOURNÉ et n'a rien trouvé.
+            outcome$reason <- "the GSEA ran and found no pathway"
             drive_record("run_pathway", "empty", 0L)
             return()
           }
@@ -698,6 +707,7 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
         res <- .active_de_results()
         if (is.null(res)) {
           showNotification(.tr("\u26a0\ufe0f Lancez d'abord l'\u00e9tape 2 (Analyse Diff\u00e9rentielle)."), type = "warning")
+          outcome$reason <- "no DE result yet: run the DE step first"
           drive_record("run_pathway", "not_ready")
           return()
         }
@@ -720,6 +730,8 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
         # sortie et un enrichissement réussi de 2 voies rendaient le MÊME
         # `done` de protocole, et `shared_rv$pathway_results` restait INCHANGÉ
         # (d'où la cassette : l'objet vivant ne peut pas les distinguer).
+        # F4 : la raison part aussi sur le wire (mesuré muet en session réelle).
+        outcome$reason <- "fewer than 10 genes to test; the min is 10"
         drive_record("run_pathway", "empty", 0L)
         return()
       }

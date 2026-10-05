@@ -3141,8 +3141,14 @@ ts_drive_nav_plan <- function(module, target_tab = NULL) {
   if (!is.null(pend)) {
     job <- ts_drive_job_state()
     wire_status <- pend$wire_status %||% pend$status
+    # F4 (2026-10-06) : la raison d'un refus (`invalid`) voyage sur le wire,
+    # comme la cause d'un `error`. Sans raison déclarée par le module, un
+    # générique HONNÊTE remplace le silence — jamais un errors[] vide pour un
+    # verdict qui dit « refusé ».
     errors <- if (identical(wire_status, "error")) {
       pend$error %||% "the job failed"
+    } else if (identical(wire_status, "invalid")) {
+      pend$error %||% "the run was refused: a prior step has not run"
     } else {
       character(0)
     }
@@ -3535,7 +3541,12 @@ ts_drive_job_set_pending <- function(status, error = NULL) {
   .ts_drive_state$job$pending <- list(
     status      = status,
     wire_status = ts_drive_job_result_status(status),
-    error       = if (identical(ts_drive_job_result_status(status), "error")) {
+    # F4 (2026-10-06, mesuré en session réelle) : un refus HONNÊTE
+    # (`invalid`) doit porter sa raison sur le wire comme un `error` le fait.
+    # Avant, l'error était gardée pour le seul statut "error" — un module qui
+    # savait pourquoi il avait refusé laissait un verdict muet.
+    error       = if (identical(ts_drive_job_result_status(status), "error") ||
+                      identical(ts_drive_job_result_status(status), "invalid")) {
       as.character(error)
     } else {
       NULL

@@ -249,16 +249,22 @@ mod_bulk_wgcna_output_ui <- function(id) {
       outcome$v <- "refused"
       if (isTRUE(ts_drive_job_busy()) &&
           identical(ts_drive_job_state()$button, "bulk-wgcna-run_wgcna_power")) {
+        # F4 (2026-10-06) : la raison du refus voyage sur le wire.
         on.exit(ts_drive_job_finish("bulk-wgcna-run_wgcna_power",
           status = switch(outcome$v, ok = "done", failed = "error", "invalid"),
           error = if (identical(outcome$v, "failed")) {
             "the power analysis raised — see the app notification"
-          } else NULL
+          } else outcome$reason
         ), add = TRUE)
       }
 
       req(input$run_wgcna_power > 0 || shiny::isolate(drive_counter_power()) > 0)
-      req(shared_rv$vst_mat)
+      # F4 : un `req()` avorte en silence — la même absence, énoncée, devient
+      # la raison du verdict `invalid` (cf. drive_ready_power, même miroir).
+      if (is.null(shiny::isolate(shared_rv$vst_mat))) {
+        outcome$reason <- "no VST matrix yet: run step 1 first"
+        return(invisible(NULL))
+      }
       p <- shiny::Progress$new(); on.exit(p$close(), add = TRUE)
       p$set(message = .tr("Analyse du power (soft-thresholding)..."), value = 0.2)
       tryCatch({
@@ -303,16 +309,23 @@ mod_bulk_wgcna_output_ui <- function(id) {
       outcome$v <- "refused"
       if (isTRUE(ts_drive_job_busy()) &&
           identical(ts_drive_job_state()$button, "bulk-wgcna-run_wgcna_modules")) {
+        # F4 (2026-10-06) : la raison du refus voyage sur le wire.
         on.exit(ts_drive_job_finish("bulk-wgcna-run_wgcna_modules",
           status = switch(outcome$v, ok = "done", failed = "error", "invalid"),
           error = if (identical(outcome$v, "failed")) {
             "the module construction raised — see the app notification"
-          } else NULL
+          } else outcome$reason
         ), add = TRUE)
       }
 
       req(input$run_wgcna_modules > 0 || shiny::isolate(drive_counter_modules()) > 0)
-      req(shared_rv$vst_mat, shared_rv$wgcna_power)
+      # F4 : les prérequis de l'étape 2, énoncés (miroir de drive_ready_modules)
+      # au lieu d'un `req()` muet — le verdict `invalid` dit alors POURQUOI.
+      if (is.null(shiny::isolate(shared_rv$vst_mat)) ||
+          is.null(shiny::isolate(shared_rv$wgcna_power))) {
+        outcome$reason <- "needs step 1: a VST matrix and the power result; run the power step first"
+        return(invisible(NULL))
+      }
       power <- if (!is.na(input$wgcna_power_override) && !is.null(input$wgcna_power_override)) {
         input$wgcna_power_override
       } else shared_rv$wgcna_power$chosen$power

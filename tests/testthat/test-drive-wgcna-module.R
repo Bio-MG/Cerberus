@@ -291,6 +291,10 @@ test_that("a stage-2 dispatch without stage 1 ends in an honest INVALID verdict"
   expect_identical(pending$status, "invalid",
                    info = paste("the job contract must CLOSE on the aborted req():",
                                 "an honest invalid verdict, never a stranded running"))
+  # F4 (2026-10-06) : le refus porte sa raison — mesuré muet en session
+  # réelle (errors[] vide sur GSE164073). Texte sanitiser-sure, miroir de
+  # drive_ready_modules.
+  expect_match(pending$error, "power step first", fixed = TRUE)
   ts_drive_job_clear()
   expect_false(isTRUE(ts_drive_job_busy()))
 })

@@ -3278,6 +3278,39 @@ test_that("CONTRACT A: a FAILED job reports `error` and carries the cause", {
   expect_true(any(grepl("DE computation raised", unlist(r$errors))))
 })
 
+test_that("CONTRACT A: a REFUSED job reports `invalid` AND carries its reason (F4)", {
+  # Measured live 2026-10-05 (real-world MCP cycle, GSE164073): the pathways
+  # <10-gene guard answered `invalid` with an EMPTY errors[] — the module knew
+  # why (its own guard), the wire did not say it. Two drop points: the watcher
+  # kept `error` only for wire_status "error", and the modules passed NULL.
+  # (The reason text is the one that guard produces; the long stub below binds
+  # bulk-de-run_de, so the contract is exercised on THAT button.)
+  .drv_local_root()
+  .drv_write_arm("tok")
+  .drv_write_scn(25L, action = "run_pipeline", module = "bulk_de",
+                 session_token = "tok")
+  ts_drive_tick(NULL, NULL, NULL, "tok", 0, FALSE, effects = .drv_long_effects())
+  expect_true(ts_drive_job_finish("bulk-de-run_de", status = "invalid",
+                                  error = "fewer than 10 genes to test; the min is 10"))
+  ts_drive_tick(NULL, NULL, NULL, "tok", 25, TRUE, effects = .drv_long_effects())
+  r <- ts_drive_read_result()
+  expect_identical(r$status, "invalid")
+  expect_true(any(grepl("fewer than 10 genes", unlist(r$errors))))
+})
+
+test_that("CONTRACT A: an invalid job with NO declared reason gets the honest generic", {
+  .drv_local_root()
+  .drv_write_arm("tok")
+  .drv_write_scn(26L, action = "run_pipeline", module = "bulk_de",
+                 session_token = "tok")
+  ts_drive_tick(NULL, NULL, NULL, "tok", 0, FALSE, effects = .drv_long_effects())
+  expect_true(ts_drive_job_finish("bulk-de-run_de", status = "invalid"))
+  ts_drive_tick(NULL, NULL, NULL, "tok", 26, TRUE, effects = .drv_long_effects())
+  r <- ts_drive_read_result()
+  expect_identical(r$status, "invalid")
+  expect_true(any(grepl("refused", unlist(r$errors))))
+})
+
 test_that("CONTRACT B: a mutating scenario waits while a job is authoritative", {
   .drv_local_root()
   .drv_write_arm("tok")

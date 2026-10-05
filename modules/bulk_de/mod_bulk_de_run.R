@@ -344,6 +344,9 @@
     job_state <- new.env(parent = emptyenv())
     job_state$outcome <- "refused"
     job_state$error   <- NULL
+    # F4 (2026-10-06, mesuré en session réelle) : la raison d'un refus voyage
+    # sur le wire au lieu de laisser un verdict `invalid` à errors[] vide.
+    job_state$reason  <- NULL
     if (isTRUE(ts_drive_job_busy()) &&
         identical(ts_drive_job_state()$button, "bulk-de-run_de")) {
       on.exit(ts_drive_job_finish(
@@ -354,7 +357,7 @@
                         "invalid"),
         error = if (identical(job_state$outcome, "failed")) {
           job_state$error %||% "the DE computation raised"
-        } else NULL
+        } else job_state$reason
       ), add = TRUE)
     }
 
@@ -364,7 +367,9 @@
 
     if (input$group_ref == input$group_target) {
       showNotification(.tr("⚠️ Le groupe Référence et le groupe Cible doivent être différents."),
-                       type = "warning"); return()
+                       type = "warning")
+      job_state$reason <- "ref and target name the same group"
+      return()
     }
 
     meta <- global_data$bulk_obj$metadata
@@ -388,6 +393,7 @@
                col = input$condition_col, covs = paste(confounded, collapse = ", ")),
         type = "error", duration = 10
       )
+      job_state$reason <- "a covariate fully mirrors the condition; drop it from the design"
       return()
     }
 
@@ -407,6 +413,7 @@
                covs = paste(single_level, collapse = ", ")),
         type = "error", duration = 10
       )
+      job_state$reason <- "a covariate has one level only; it adds nothing to the design"
       return()
     }
 
@@ -423,6 +430,7 @@
           .t_fmt(.tr("\u274c Plan sans r\u00e9plicat : {n} \u00e9chantillon(s) pour {p} coefficient(s) \u2014 aucune dispersion estimable. Activez le mode exploratoire ET cochez l'attestation pour continuer."),
                  n = sat$n, p = sat$p),
           type = "error", duration = 12)
+        job_state$reason <- "not enough samples per coef: enable the attest box to run anyway"
         return()
       }
       bypass <- TRUE
