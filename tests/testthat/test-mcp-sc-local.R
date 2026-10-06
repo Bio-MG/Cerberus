@@ -35,6 +35,18 @@
   e
 }
 
+.mcp_sc_local_consume <- function(e, seq, token, started, hb_n = 2L) {
+  # F3 (2026-10-06) : simuler LE BEAT DU POLLER. L'app consomme la case en
+  # AVANÇANT last_seq — elle n'efface jamais scenario.json. Un test qui
+  # enchaîne deux écritures sans cette avance modélise exactement le scénario
+  # que la garde SCENARIO_IN_FLIGHT refuse désormais : un agent qui écrit plus
+  # vite que l'app ne consomme (la panne mesurée du cycle réel, F3).
+  e$ts_drive_write_ready(list(), token, armed = TRUE,
+                         last_seq = as.integer(seq), hb_n = hb_n,
+                         started_at = started)
+  invisible(TRUE)
+}
+
 test_that("local MCP keeps TEN tools and resolves the three SC action buttons", {
   e <- .mcp_sc_local_env()
   tools <- e$.ts_tools()
@@ -239,6 +251,9 @@ test_that("local MCP run writes the SC scenarios into an external fixture root",
   # No inputs: the parameter set is frozen in code, not in the scenario.
   expect_length(scenario$inputs, 0L)
 
+  # F3 : l'app consomme seq 23 (le beat avance last_seq) avant l'écriture suivante.
+  .mcp_sc_local_consume(e, 23L, token, started)
+
   response_annot <- e$.ts_tool_run(24L, "sc_annotation", NULL, TRUE, expectation)
   expect_false(response_annot$isError)
   expect_true(response_annot$structuredContent$accepted)
@@ -249,6 +264,9 @@ test_that("local MCP run writes the SC scenarios into an external fixture root",
   expect_identical(scenario$action, "run_pipeline")
   expect_identical(scenario$button, "sc-annotation-run_annot")
   expect_length(scenario$inputs, 0L)
+
+  # F3 : consommation de seq 24.
+  .mcp_sc_local_consume(e, 24L, token, started)
 
   response_markers <- e$.ts_tool_run(25L, "sc_markers", NULL, TRUE, expectation)
   expect_false(response_markers$isError)
@@ -480,12 +498,18 @@ test_that("the import tool writes the app's exact import_file dialect", {
   expect_setequal(names(scenario$import), c("counts_path", "metadata_path", "mode"))
   expect_identical(scenario$import$mode, "per_sample")
 
+  # F3 : consommation de seq 11 avant l'écriture suivante.
+  .mcp_sc_local_consume(e, 11L, fx$token, fx$started)
+
   # Spatial: optional fields default app-side, so the tool carries only what was sent.
   r <- e$.ts_tool_import(12L, "import_spatial", list(dir_path = "SPATIAL/visium_outs"), expect)
   expect_false(r$isError)
   scenario <- jsonlite::fromJSON(e$ts_drive_path("scenario.json"), simplifyVector = FALSE)
   expect_identical(scenario$module, "import_spatial")
   expect_setequal(names(scenario$import), "dir_path")
+
+  # F3 : consommation de seq 12.
+  .mcp_sc_local_consume(e, 12L, fx$token, fx$started)
 
   # SC: both keys required, exactly as the app's poller demands.
   r <- e$.ts_tool_import(13L, "import_sc",
@@ -631,6 +655,8 @@ test_that("the export tool refuses a module outside the app's route table", {
                      info = sprintf("route '%s': payload module verbatim", m))
     expect_identical(scenario$action, "export_result",
                      info = sprintf("route '%s': payload action", m))
+    # F3 : consommation de la route courante avant la suivante.
+    .mcp_sc_local_consume(e, 9L + i, fx$token, fx$started)
   }
 })
 

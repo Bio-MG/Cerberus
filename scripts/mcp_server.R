@@ -240,12 +240,68 @@ ts_drive_boot(.project_root)
                       # index past the choices as they stand at apply time
                       # (the residual race after VOCAB_STALE). The malformed
                       # shapes reuse VALUE_REFUSED / PAYLOAD_REFUSED.
-                      "INPUT_NOT_READY", "VOCAB_STALE", "INDEX_OUT_OF_RANGE")
+                      "INPUT_NOT_READY", "VOCAB_STALE", "INDEX_OUT_OF_RANGE",
+                      # F3 — one-in-flight guard: a scenario the app has not
+                      # consumed yet must not be silently REPLACED (the
+                      # measured one-slot loss).
+                      "SCENARIO_IN_FLIGHT")
 # M3a — the passive snapshot tool adds NO new code on purpose: it is a READ, so
 # every refusal it can produce is one of the six above (NO_SESSION,
 # STALE_SESSION, INVALID_PROTOCOL, READ_FAILED, RESULT_SESSION_MISMATCH,
 # SESSION_MISMATCH). A read-only tool that needed a new error vocabulary would
 # be a sign it was doing more than reading.
+
+#' F3 (2026-10-06) — the ONE-IN-FLIGHT guard, called before EVERY scenario
+#' write.
+#'
+#' MEASURED (real-world cycle, docs/mcp_realworld_test.md F3): scenario.json is
+#' ONE slot, consumed one per poller beat; the tools only validated
+#' `seq > last_seq`, so a fast agent writing seq 14, 15, 16 in ~100 ms lost 14
+#' and 15 SILENTLY — never acked, never refused. This guard makes the tools'
+#' own documented discipline ("write ONE scenario.json, then stop") enforceable
+#' instead of advisory:
+#'
+#'   scenario.json exists AND scenario.seq > ready.json:last_seq (SAME token)
+#'     → refuse, SCENARIO_IN_FLIGHT, nothing written.
+#'
+#' `scenario.seq <= last_seq` means the slot was consumed (the app never
+#' deletes the file, it advances last_seq) — overwriting it is the normal
+#' leftover state and stays allowed. Absent or unreadable slot → allowed.
+#'
+#' TOKEN-SCOPED, deliberately: a scenario pinned to ANOTHER session is ignored
+#' by this session's app (the watcher refuses a session_token mismatch), so
+#' overwriting it loses nothing — the bare seq rule would false-refuse every
+#' write after an app restart that left a scenario in the slot.
+#'
+#' Residual, stated honestly: two server processes can still interleave
+#' read-scenario / write-scenario within milliseconds — there is no portable
+#' file lock in base R on Windows. The guard narrows the hazard from "any
+#' write within one poller beat" to that millisecond window, and each loser
+#' now gets an honest refusal instead of a silent drop.
+#'
+#' @return NULL when the write may proceed, else a ready-made tool error.
+.ts_inflight_refusal <- function() {
+  path <- ts_drive_path("scenario.json")
+  if (!file.exists(path)) return(NULL)
+  scn <- tryCatch(jsonlite::fromJSON(path, simplifyVector = FALSE),
+                  error = function(e) NULL)
+  if (is.null(scn)) return(NULL)
+  inflight <- suppressWarnings(as.integer(.as_chr(scn$seq) %|NA|% NA_integer_))
+  if (is.na(inflight) || inflight < 1L) return(NULL)
+  hb <- ts_drive_read_ready()
+  if (is.null(hb)) return(NULL)   # session state is refused UPSTREAM, not here
+  if (!identical(.as_chr(scn$session_token %|NA|% ""),
+                 .as_chr(hb$session_token))) return(NULL)
+  last_seq <- suppressWarnings(as.integer(.as_chr(hb$last_seq) %|NA|% 0L))
+  if (inflight <= last_seq) return(NULL)
+  .ts_tool_err(
+    "SCENARIO_IN_FLIGHT",
+    sprintf(paste("scenario seq %d is on the wire but the session has",
+                  "acknowledged only up to %d; writing now would silently",
+                  "replace it."), inflight, last_seq),
+    "poll transcripto_drive_read_result until ack_seq reaches the inflight seq, then write the next decision as a HIGHER seq — corrections are new decisions; there is no bypass.",
+    detail = list(inflight_seq = inflight, last_seq = last_seq))
+}
 
 # --- 5. Sanitising and small helpers ---------------------------------------
 
@@ -1593,6 +1649,11 @@ TS_MCP_MAX_PAYLOAD_BYTES <- 4096L
                         "Nothing was written; re-read the session."))
   }
 
+  # F3 — one-in-flight guard: refuse rather than silently REPLACE a scenario
+  # the app has not consumed yet (docs/mcp_design_F3_inflight_guard.md).
+  inflight <- .ts_inflight_refusal()
+  if (!is.null(inflight)) return(inflight)
+
   # --- the existing atomic writer ------------------------------------------
   wrote <- tryCatch(ts_drive_write_json(payload, ts_drive_path("scenario.json")),
                     error = function(e) FALSE)
@@ -1961,6 +2022,11 @@ TS_MCP_READ_KEYS <- TS_DRIVE_READ_KEYS
                         "An export carries no values; this should not happen."))
   }
 
+  # F3 — one-in-flight guard: refuse rather than silently REPLACE a scenario
+  # the app has not consumed yet (docs/mcp_design_F3_inflight_guard.md).
+  inflight <- .ts_inflight_refusal()
+  if (!is.null(inflight)) return(inflight)
+
   # The existing atomic writer, the same one `run` and `set_inputs` use.
   wrote <- tryCatch(ts_drive_write_json(payload, ts_drive_path("scenario.json")),
                     error = function(e) FALSE)
@@ -2100,6 +2166,10 @@ TS_MCP_READ_KEYS <- TS_DRIVE_READ_KEYS
     return(.ts_tool_err("PAYLOAD_TOO_LARGE", "the serialised scenario is too large.",
                         "A read carries a counter and a pin; this should not happen."))
   }
+  # F3 — one-in-flight guard: refuse rather than silently REPLACE a scenario
+  # the app has not consumed yet (docs/mcp_design_F3_inflight_guard.md).
+  inflight <- .ts_inflight_refusal()
+  if (!is.null(inflight)) return(inflight)
   wrote <- tryCatch(ts_drive_write_json(payload, ts_drive_path("scenario.json")),
                     error = function(e) FALSE)
   if (!isTRUE(wrote)) {
@@ -2361,6 +2431,11 @@ TS_MCP_IMPORT_SCHEMA <- list(
                         "The heartbeat went stale between validation and the write.",
                         "Nothing was written; re-read the session."))
   }
+
+  # F3 — one-in-flight guard: refuse rather than silently REPLACE a scenario
+  # the app has not consumed yet (docs/mcp_design_F3_inflight_guard.md).
+  inflight <- .ts_inflight_refusal()
+  if (!is.null(inflight)) return(inflight)
 
   wrote <- tryCatch(ts_drive_write_json(payload, ts_drive_path("scenario.json")),
                     error = function(e) FALSE)
@@ -2641,6 +2716,11 @@ TS_MCP_RUN_BUTTONS <- list(
                         "Contract B refuses a second job; nothing was written."))
   }
 
+  # F3 — one-in-flight guard: refuse rather than silently REPLACE a scenario
+  # the app has not consumed yet (docs/mcp_design_F3_inflight_guard.md).
+  inflight <- .ts_inflight_refusal()
+  if (!is.null(inflight)) return(inflight)
+
   # --- the existing atomic writer ------------------------------------------
   wrote <- tryCatch(ts_drive_write_json(payload, ts_drive_path("scenario.json")),
                     error = function(e) FALSE)
@@ -2836,6 +2916,12 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
   }
   last2 <- suppressWarnings(as.integer(.as_chr(hb2$last_seq) %|NA|% 0L))
   if (obs_seq <= last2) return(list(ok = FALSE, code = "SEQ_STALE", wrote = FALSE))
+
+  # F3 — one-in-flight guard. The observe helper answers in its INTERNAL
+  # contract (ok/code), which .ts_tool_wait surfaces as `observe_error`.
+  inf <- .ts_inflight_refusal()
+  if (!is.null(inf)) return(list(ok = FALSE, code = "SCENARIO_IN_FLIGHT",
+                                 wrote = FALSE))
 
   payload <- list(protocol = TS_DRIVE_PROTOCOL, seq = obs_seq, session_token = token,
                   module = module, action = "snapshot", preserve_data = TRUE)
