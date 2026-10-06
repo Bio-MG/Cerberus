@@ -1512,6 +1512,23 @@ ts_drive_write_result <- function(seq, status, active_module, armed,
                                  warnings = character(0), snapshot = NULL,
                                  descriptor = NULL,
                                  descriptor_projector = ts_drive_export_descriptor) {
+  # N1 (2026-10-06) — wire-safe fold for verdict diagnostics. MEASURED: the
+  # session's locale is C (the LC_CTYPE mount refuses, the F8 boot noise), and
+  # jsonlite's serialiser corrupts any string carrying a byte it cannot read
+  # in that locale: the resolver's VOCAB_STALE message landed on the wire as
+  # "… the session is at 3 b" — the em-dash mangled AND the actionable tail
+  # ("— re-snapshot and retry.") gone. Folding every diagnostic to ASCII at
+  # the ONE verdict writer guarantees the whole reason survives, whatever a
+  # future message contains. An em-dash reads as "-"; this is strictly less
+  # lossy than what the serialiser did unfixed.
+  .ascii_fold <- function(x) {
+    vapply(as.character(x), function(s) {
+      if (is.na(s) || !nzchar(s)) return(s)
+      r <- tryCatch(iconv(s, from = "UTF-8", to = "ASCII", sub = "-"),
+                    error = function(e) s)
+      if (is.null(r) || is.na(r)) "" else r
+    }, character(1), USE.NAMES = FALSE)
+  }
   payload <- list(
     protocol      = TS_DRIVE_PROTOCOL,
     ack_seq       = if (is.null(seq)) 0L else as.integer(seq),
@@ -1520,8 +1537,8 @@ ts_drive_write_result <- function(seq, status, active_module, armed,
     active_module = active_module,
     armed         = isTRUE(armed),
     preserve_data = isTRUE(preserve_data),
-    errors        = as.list(errors),
-    warnings      = as.list(warnings),
+    errors        = as.list(.ascii_fold(errors)),
+    warnings      = as.list(.ascii_fold(warnings)),
     snapshot      = snapshot,
     job           = ts_drive_job_view(ts_drive_job_state()),
     # S2: the REDACTED export descriptor, or NULL. Projected by a PURE function so

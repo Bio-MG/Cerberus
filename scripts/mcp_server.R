@@ -489,8 +489,15 @@ ts_drive_boot(.project_root)
   }
 
   status <- .as_chr(res$status)
-  errs <- as.list(res$errors %|NA|% list())
-  warns <- as.list(res$warnings %|NA|% list())
+  # N1 (2026-10-06): `errors`/`warnings` are ARRAYS on the wire, never scalars.
+  # The old `%|NA|% list()` coalescing returns the FALLBACK for anything that
+  # is not length 1 — so a verdict carrying TWO refusal reasons (group_ref AND
+  # group_target, both VOCAB_STALE) published `[]` and the agent lost every
+  # reason. MEASURED live (real-world retest 2026-10-06, seq 6): the reasons
+  # were on the disk, `read_result` still showed none. A missing key is the
+  # only empty case; present keys pass through whatever their length.
+  errs <- if (is.null(res$errors)) list() else as.list(res$errors)
+  warns <- if (is.null(res$warnings)) list() else as.list(res$warnings)
   snap <- res$snapshot
   structured <- list(
     present       = TRUE,
