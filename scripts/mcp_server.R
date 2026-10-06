@@ -472,9 +472,23 @@ ts_drive_boot(.project_root)
 #'   `expect$session_id` is mandatory. It is the DERIVED id (never the token),
 #'   so it is obtainable through this server without publishing a secret, and it
 #'   is non-wildcard by construction.
+#' @param allow_stale TRUE lets a stale handshake through WITHOUT a pin — the
+#'   `wait` tool's graded mode, where observing a stalled session is the job.
+#' @param rescue_pinned_alive TRUE enables THE ARMING BOOTSTRAP: a stale
+#'   handshake is accepted when the caller PINS the session identity
+#'   (`session_id`, or `pid` + `started_at`) AND the pinned pid is ALIVE, and
+#'   the pin is still validated below (a wrong pin fails closed as
+#'   SESSION_MISMATCH). Only `set_armed` passes it: the poller beats only while
+#'   ARMED (drive_watcher.R: `cursor$armed && due`), so an unarmed session goes
+#'   stale within `ts_drive_hb_timeout()` and arming — the one write that
+#'   RESTORES liveness — must remain reachable, or every session's first action
+#'   is a hand-written `arm.json` that bypasses the tool. Writes that CHANGE
+#'   analysis state (set_inputs, run, export) never get the rescue: a stale
+#'   heartbeat is exactly when the session's true state is unknown.
 #' @return list(ok, error, hb, pid, started, token, age). On refusal `ok` is
 #'   FALSE and `error` is the ready-made tool result.
-.ts_session_assert <- function(expect = NULL, require_assertion = FALSE, allow_stale = FALSE) {
+.ts_session_assert <- function(expect = NULL, require_assertion = FALSE,
+                               allow_stale = FALSE, rescue_pinned_alive = FALSE) {
   refuse <- function(code, message, hint = NULL) {
     list(ok = FALSE, error = .ts_tool_err(code, message, hint))
   }
@@ -535,11 +549,25 @@ ts_drive_boot(.project_root)
       "Process liveness could not be determined."
     }
     if (!isTRUE(allow_stale)) {
-      return(refuse(
-        "STALE_SESSION",
-        sprintf("ready.json heartbeat is stale (age %s s > timeout %s s).",
-                if (is.finite(age)) round(age, 1) else "Inf", ts_drive_hb_timeout()),
-        hint))
+      # THE ARMING BOOTSTRAP. A stale handshake is survivable only for the one
+      # write that restores liveness, and only under a pin the next section
+      # validates. The liveness check is on the LIVE session's pid — the same
+      # pid the pin must name, so a wrong pin cannot buy the rescue.
+      rescued <- FALSE
+      if (isTRUE(rescue_pinned_alive) && isTRUE(alive) && is.list(expect)) {
+        pins_sid <- !is.null(expect$session_id) &&
+          nzchar(.as_chr(expect$session_id) %|NA|% "")
+        pins_pair <- !is.null(expect$pid) && !is.null(expect$started_at) &&
+          nzchar(.as_chr(expect$started_at) %|NA|% "")
+        rescued <- pins_sid || pins_pair
+      }
+      if (!rescued) {
+        return(refuse(
+          "STALE_SESSION",
+          sprintf("ready.json heartbeat is stale (age %s s > timeout %s s).",
+                  if (is.finite(age)) round(age, 1) else "Inf", ts_drive_hb_timeout()),
+          hint))
+      }
     }
   }
 
@@ -607,7 +635,11 @@ ts_drive_boot(.project_root)
 }
 
 .ts_tool_set_armed <- function(armed, expect = NULL) {
-  a <- .ts_session_assert(expect)
+  # THE ARMING BOOTSTRAP: the only tool that may rescue a stale handshake (a
+  # live pin required; see .ts_session_assert). Disarming a stalled session is
+  # rescued by the same gate, which is what makes an abandoned session
+  # reachable again without a restart.
+  a <- .ts_session_assert(expect, rescue_pinned_alive = TRUE)
   if (!isTRUE(a$ok)) return(a$error)
   hb <- a$hb; pid <- a$pid; started <- a$started; token <- a$token; age <- a$age
 
@@ -629,6 +661,7 @@ ts_drive_boot(.project_root)
     wrote = TRUE,
     arm_file = "arm.json",            # basename only — never an absolute path
     wildcard_used = FALSE,
+    rescued_stale = !isTRUE(a$fresh),
     session = list(
       pid = pid,
       started_at = .ts_clean(started, 40L),
@@ -644,7 +677,9 @@ ts_drive_boot(.project_root)
     ),
     observed_armed_before = observed_before,
     note = paste0("arm.json is written; the app applies it on its next poll tick (~800 ms). ",
-                  "This tool does not wait.")
+                  "This tool does not wait. A stale heartbeat is accepted ONLY under the ",
+                  "arming bootstrap: the caller pins the session identity and the pinned ",
+                  "pid is alive (rescued_stale = true).")
   )
   .ts_tool_ok(structured,
               sprintf("%s: arm.json written (armed=%s, pid %s)",
@@ -2327,8 +2362,15 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
            "heartbeat freshness and selected-session metadata before writing, and ",
            "refuses stale, mismatched, malformed or ambiguous sessions ",
            "(NO_SESSION, STALE_SESSION, INVALID_PROTOCOL, READ_FAILED, ",
-           "AMBIGUOUS_SESSION, SESSION_MISMATCH, ARM_WRITE_FAILED). Never accepts the ",
-           "wildcard token, never waits, never mutates Shiny inputs, never runs code."),
+           "AMBIGUOUS_SESSION, SESSION_MISMATCH, ARM_WRITE_FAILED). THE ARMING ",
+           "BOOTSTRAP: because the poller beats only while ARMED, an unarmed ",
+           "session's handshake goes stale within the heartbeat timeout; this is ",
+           "the ONE tool that may act on a stale handshake, and only when the ",
+           "caller pins the session identity (session_id, or pid + started_at) ",
+           "and the pinned pid is alive — reported as rescued_stale = true. A ",
+           "wrong pin still fails closed (SESSION_MISMATCH). Never accepts the ",
+           "wildcard token, never waits, never mutates Shiny inputs, never runs ",
+           "code."),
          inputSchema = list(
            type = "object",
            properties = list(

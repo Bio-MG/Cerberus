@@ -298,3 +298,102 @@ test_that("the export scenario payload is REBUILT, and carries no import block",
   expect_false("inputs" %in% names(p))
   expect_false("button" %in% names(p))
 })
+# =============================================================================
+# THE ARMING BOOTSTRAP (gapF §2.5 item 3).
+#
+# `ts_drive_write_ready()` beats only while the session is ARMED
+# (drive_watcher.R: the `cursor$armed && due` guard), so an unarmed session's
+# handshake goes stale after `ts_drive_hb_timeout()` (15 s) — and
+# `transcripto_drive_set_armed` refused stale handshakes. The first action of
+# every session therefore had to bypass the tool by hand-writing `arm.json`.
+#
+# The fix: arm/disarm — and ONLY arm/disarm — may act on a stale handshake when
+# the caller PINS the session identity (session_id, or pid + started_at) and the
+# pinned pid is ALIVE. Arming is the one write that RESTORES liveness, so it is
+# the one write a stale handshake cannot corrupt; every other write keeps the
+# strict rule. A wrong pin still fails closed (SESSION_MISMATCH), and a dead pid
+# is never rescued.
+# =============================================================================
+
+.mcp_sc_local_stale_fixture <- function(e) {
+  root <- tempfile("ts-mcp-arm-")
+  dir.create(file.path(root, "tools", "_drive"), recursive = TRUE, showWarnings = FALSE)
+  e$ts_drive_boot(root)
+  e$ts_drive_clear_write_error()
+  e$ts_drive_job_clear()
+  token <- "armtok"
+  started <- format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+  e$ts_drive_write_ready(list(), token, armed = FALSE, last_seq = 0L,
+                         hb_n = 1L, started_at = started)
+  # Age the heartbeat beyond the 15 s timeout WITHOUT touching mtime: staleness
+  # is read from the payload's own `hb_at`, so rewriting the field is the honest
+  # way to build the fixture.
+  hb <- jsonlite::fromJSON(e$ts_drive_path("ready.json"), simplifyVector = FALSE)
+  hb$hb_at <- format(Sys.time() - 120, "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+  e$ts_drive_write_json(hb, e$ts_drive_path("ready.json"))
+  expect_false(e$ts_drive_ready_fresh())
+  list(token = token, started = started,
+       session_id = e$.ts_session_id(Sys.getpid(), started, token))
+}
+
+test_that("the arming bootstrap: a stale handshake is rescued only by a live pin", {
+  e <- .mcp_sc_local_env()
+  fx <- .mcp_sc_local_stale_fixture(e)
+  on.exit(unlink(e$ts_drive_root(), recursive = TRUE, force = TRUE), add = TRUE)
+
+  # A — stale, UNPINNED: refused exactly as before the fix.
+  r <- e$.ts_tool_set_armed(TRUE, NULL)
+  expect_true(r$isError)
+  expect_identical(r$structuredContent$code, "STALE_SESSION")
+  expect_false(file.exists(e$ts_drive_path("arm.json")))
+
+  # B — stale, pinned by session_id, pid ALIVE: rescued. This is the bootstrap.
+  r <- e$.ts_tool_set_armed(TRUE, list(session_id = fx$session_id))
+  expect_false(r$isError)
+  expect_true(r$structuredContent$wrote)
+  expect_true(r$structuredContent$rescued_stale)
+  arm <- jsonlite::fromJSON(e$ts_drive_path("arm.json"), simplifyVector = FALSE)
+  expect_identical(arm$token, fx$token)
+  expect_true(arm$armed)
+
+  # C — stale, WRONG pin: fail closed on identity, never on staleness.
+  r <- e$.ts_tool_set_armed(TRUE, list(session_id = "00000000deadbeef"))
+  expect_true(r$isError)
+  expect_identical(r$structuredContent$code, "SESSION_MISMATCH")
+
+  # D — stale, correct pin, but the pinned pid is NOT alive: no rescue.
+  # `.ts_pid_alive` is stubbed because the fixture's pid IS this test process;
+  # the stub isolates the rule under test from the host's process table.
+  e$.ts_pid_alive <- function(pid) FALSE
+  r <- e$.ts_tool_set_armed(FALSE, list(session_id = fx$session_id))
+  expect_true(r$isError)
+  expect_identical(r$structuredContent$code, "STALE_SESSION")
+  # The disarm that never landed must not have touched the armed state above.
+  arm <- jsonlite::fromJSON(e$ts_drive_path("arm.json"), simplifyVector = FALSE)
+  expect_true(arm$armed)
+})
+
+test_that("the arming bootstrap does not loosen the OTHER writes", {
+  e <- .mcp_sc_local_env()
+  fx <- .mcp_sc_local_stale_fixture(e)
+  on.exit(unlink(e$ts_drive_root(), recursive = TRUE, force = TRUE), add = TRUE)
+  expect <- list(session_id = fx$session_id, pid = Sys.getpid(),
+                 started_at = fx$started)
+
+  # set_inputs, run and export keep the strict rule: a stale handshake is
+  # refused even with a perfect live pin, because those writes CHANGE analysis
+  # state and a stale heartbeat is exactly when the session's true state is
+  # unknown.
+  r <- e$.ts_tool_set_inputs(5L, "bulk_filter", list("bulk-filter-min_count" = 10), TRUE, expect)
+  expect_true(r$isError)
+  expect_identical(r$structuredContent$code, "STALE_SESSION")
+
+  r <- e$.ts_tool_run(6L, "bulk_filter", NULL, TRUE, expect)
+  expect_true(r$isError)
+  expect_identical(r$structuredContent$code, "STALE_SESSION")
+
+  r <- e$.ts_tool_export(7L, expect)
+  expect_true(r$isError)
+  expect_identical(r$structuredContent$code, "STALE_SESSION")
+})
+
