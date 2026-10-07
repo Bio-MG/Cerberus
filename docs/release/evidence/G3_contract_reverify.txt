@@ -1,0 +1,43 @@
+- One or more packages recorded in the lockfile are not installed.
+- Use `renv::status()` for more details.
+During startup - Warning messages:
+1: Setting LC_COLLATE=C.UTF-8 failed 
+2: Setting LC_CTYPE=C.UTF-8 failed 
+3: Setting LC_MONETARY=C.UTF-8 failed 
+4: Setting LC_TIME=C.UTF-8 failed 
+[1] "fr_FR.UTF-8"
+=== 1. counts: read exactly as the app does (mode merged_matrix) ===
+read.csv(row.names = 1) dim: 27946 genes x 18 samples
+rownames[1:3]: A1BG, A1BG-AS1, A1CF 
+colnames[1:3]: MW1_cornea_mock_1, MW2_cornea_mock_2, MW3_cornea_mock_3 
+
+=== 2. the app's numeric coercion + gene pre-filter (min_counts = 10) ===
+NA after numeric conversion: 0 PASS 
+genes kept at min_counts = 10: 17925 of 27946 (removed 10021 )
+resulting object dim: 17925 x 18 
+all integer-like? TRUE 
+
+=== 3. metadata: read + the app's ROWNAME alignment rule ===
+metadata dim (after row.names = 1): 18 x 3 
+metadata columns: tissue, condition, replicate 
+metadata rownames[1:3]: MW1_cornea_mock_1, MW2_cornea_mock_2, MW3_cornea_mock_3 
+all(colnames(counts) %in% rownames(metadata)): TRUE PASS 
+aligned metadata rows: 18 
+condition table:
+
+CoV2 mock 
+   9    9 
+tissue table:
+
+cornea limbus sclera 
+     6      6      6 
+>= 2 conditions? TRUE | every group >= 2 replicates? TRUE 
+DE/pathway readiness (same rule as .validate_design): TRUE 
+
+=== 4. contract verdict ===
+delimiter          : comma (18 on line 1, 0 tabs)  -> .csv branch of smart_read
+encoding           : UTF-8 WITH BOM, matches fileEncoding='UTF-8-BOM'
+layout             : genes in ROWS, samples in COLUMNS -> counts_format='rows' (default)
+header/rownames    : header TRUE, rownames TRUE (defaults)
+gene ids           : HGNC symbols, 0 duplicated, 0 empty
+metadata alignment : by ROWNAMES (merged_matrix branch), not by a sample_id column

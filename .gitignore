@@ -33,7 +33,23 @@ app.log
 .posit/
 .posit/
 AGENTS.md
-docs/
+docs/*
+!docs/release/
+docs/release/*
+!docs/release/evidence/
+!docs/mcp/
+!docs/decisions/
+# Defence in depth (must stay AFTER the ! rules — last match wins)
+docs/**/*.tmp
+docs/**/*.temp
+docs/**/*.bak
+docs/**/*.orig
+docs/**/*~
+docs/**/*.swp
+docs/**/*.swo
+docs/**/.DS_Store
+docs/**/scratch
+docs/**/scratch.*
 .zcode
 .workbuddy-ai/
 QC

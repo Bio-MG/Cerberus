@@ -1,0 +1,60 @@
+{
+  "protocol": "ts-drive/1",
+  "ack_seq": 4,
+  "status": "done",
+  "applied_at": "2026-09-23T22:14:15Z",
+  "active_module": "bulk_de",
+  "armed": true,
+  "preserve_data": true,
+  "errors": [],
+  "warnings": [],
+  "snapshot": {
+    "has_data": true,
+    "object_class": "list",
+    "n_genes": 5000,
+    "n_samples": 8,
+    "error_state": {},
+    "modules": {
+      "bulk_de": {
+        "n_contrasts": 1,
+        "active_contrast": "treatment_vs_control",
+        "n_genes": 5000,
+        "n_padj_finite": 5000,
+        "n_significant": 1012,
+        "convention": "padj < 0.05 & |log2FoldChange| > 1",
+        "bypass": false
+      },
+      "bulk_filter": {
+        "filtered_counts": {
+          "n_genes": 5000,
+          "n_samples": 8,
+          "samples": [
+            "ctrl_1",
+            "ctrl_2",
+            "ctrl_3",
+            "ctrl_4",
+            "trt_1",
+            "trt_2",
+            "trt_3",
+            "trt_4"
+          ]
+        },
+        "vst_mat": {
+          "n_genes": 5000,
+          "n_samples": 8,
+          "samples": [
+            "ctrl_1",
+            "ctrl_2",
+            "ctrl_3",
+            "ctrl_4",
+            "trt_1",
+            "trt_2",
+            "trt_3",
+            "trt_4"
+          ]
+        }
+      }
+    }
+  },
+  "write_error": {}
+}

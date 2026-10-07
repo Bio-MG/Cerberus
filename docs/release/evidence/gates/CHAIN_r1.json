@@ -1,0 +1,34 @@
+{
+  "protocol": "ts-drive/1",
+  "ack_seq": 1,
+  "status": "done",
+  "applied_at": "2026-09-23T22:13:40Z",
+  "active_module": "import_bulk",
+  "armed": true,
+  "preserve_data": true,
+  "errors": [],
+  "warnings": [],
+  "snapshot": {
+    "has_data": true,
+    "object_class": "list",
+    "n_genes": 5000,
+    "n_samples": 8,
+    "error_state": {},
+    "modules": {
+      "bulk_de": {
+        "n_contrasts": 0,
+        "active_contrast": {},
+        "n_genes": {},
+        "n_padj_finite": {},
+        "n_significant": {},
+        "convention": "padj < 0.05 & |log2FoldChange| > 1",
+        "bypass": false
+      },
+      "bulk_filter": {
+        "filtered_counts": {},
+        "vst_mat": {}
+      }
+    }
+  },
+  "write_error": {}
+}

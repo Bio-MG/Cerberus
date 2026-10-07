@@ -1,0 +1,58 @@
+- One or more packages recorded in the lockfile are not installed.
+- Use `renv::status()` for more details.
+During startup - Warning messages:
+1: Setting LC_COLLATE=C.UTF-8 failed 
+2: Setting LC_CTYPE=C.UTF-8 failed 
+3: Setting LC_MONETARY=C.UTF-8 failed 
+4: Setting LC_TIME=C.UTF-8 failed 
+[1] "fr_FR.UTF-8"
+Warning messages:
+1: package 'chromote' was built under R version 4.4.3 
+2: package 'jsonlite' was built under R version 4.4.3 
+=== A. token after tab1 ===
+$frameId
+[1] "B52429C05898F5FAF17C0D991150DC70"
+
+$loaderId
+[1] "04759FC27921627DEED3BC74A9681E7E"
+
+$isDownload
+[1] FALSE
+
+$timestamp
+[1] 584599.1
+
+token1 = 7h88ewiz  started_at = 2026-09-21T20:53:58Z 
+
+=== B. SAME ChromoteSession, navigate again (a reload of one tab) ===
+$frameId
+[1] "B52429C05898F5FAF17C0D991150DC70"
+
+$loaderId
+[1] "6B4953C7E8E7916CAD2B995F54FC44FA"
+
+$isDownload
+[1] FALSE
+
+$timestamp
+[1] 584626.5
+
+token after reload = v4z732tt  rotated = TRUE 
+
+=== C. a TRULY SEPARATE browser process (new Chromote instance) ===
+$frameId
+[1] "A385C2D50EDF5B9D7D5547E8AC0A1A47"
+
+$loaderId
+[1] "999440ACE4E6A295CE9C72DF0D15EC00"
+
+$isDownload
+[1] FALSE
+
+$timestamp
+[1] 584653.7
+
+token after 2nd browser = u0jrebu4  rotated = TRUE 
+started_at changed = TRUE 
+[1] TRUE
+[1] TRUE

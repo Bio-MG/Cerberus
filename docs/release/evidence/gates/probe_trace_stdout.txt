@@ -1,0 +1,966 @@
+- One or more packages recorded in the lockfile are not installed.
+- Use `renv::status()` for more details.
+During startup - Warning messages:
+1: Setting LC_COLLATE=C.UTF-8 failed 
+2: Setting LC_CTYPE=C.UTF-8 failed 
+3: Setting LC_MONETARY=C.UTF-8 failed 
+4: Setting LC_TIME=C.UTF-8 failed 
+Tracing function "close.connection" in package "base"
+[1] "close.connection"
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/testthat/Meta/package.rds
+[close] D:/Data_science/R-4.4.2/library/testthat/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/testthat/Meta/nsInfo.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/testthat/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/testthat/Meta/features.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/rlang/Meta/package.rds
+[close] D:/Data_science/R-4.4.2/library/rlang/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/rlang/Meta/nsInfo.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/rlang/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/rlang/Meta/features.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/rlang/R/rlang
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/rlang/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/rlang/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/cli/Meta/package.rds
+[close] D:/Data_science/R-4.4.2/library/cli/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/cli/Meta/nsInfo.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/cli/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/cli/Meta/features.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/cli/R/cli
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/cli/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/cli/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/cli/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/R6/Meta/package.rds
+[close] D:/Data_science/R-4.4.2/library/R6/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/R6/Meta/nsInfo.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/R6/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/R6/Meta/features.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/R6/R/R6
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/brio/Meta/package.rds
+[close] D:/Data_science/R-4.4.2/library/brio/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/brio/Meta/nsInfo.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/brio/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/brio/Meta/features.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/brio/R/brio
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/brio/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/lifecycle/Meta/package.rds
+[close] D:/Data_science/R-4.4.2/library/lifecycle/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/lifecycle/Meta/nsInfo.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/lifecycle/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/lifecycle/Meta/features.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/lifecycle/R/lifecycle
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/magrittr/Meta/package.rds
+[close] D:/Data_science/R-4.4.2/library/magrittr/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/magrittr/Meta/nsInfo.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/magrittr/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/magrittr/Meta/features.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/magrittr/R/magrittr
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/magrittr/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/testthat/R/testthat
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/testthat/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/otel/Meta/package.rds
+[close] D:/Data_science/R-4.4.2/library/otel/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/otel/Meta/nsInfo.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/otel/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/otel/Meta/features.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/otel/R/otel
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/testthat/Meta/package.rds
+[close] D:/Data_science/R-4.4.2/library/testthat/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/testthat/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/testthat/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/pkgload/Meta/package.rds
+[close] D:/Data_science/R-4.4.2/library/pkgload/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/pkgload/Meta/nsInfo.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/pkgload/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/pkgload/Meta/features.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/pkgload/R/pkgload
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/testthat/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/desc/Meta/package.rds
+[close] D:/Data_science/R-4.4.2/library/desc/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/desc/Meta/nsInfo.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/desc/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/desc/Meta/features.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/desc/R/desc
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/rprojroot/Meta/package.rds
+[close] D:/Data_science/R-4.4.2/library/rprojroot/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/rprojroot/Meta/nsInfo.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/rprojroot/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/rprojroot/Meta/features.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/rprojroot/R/rprojroot
+[close] raw(1000)
+[close] raw(1000)
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/cli/Meta/package.rds
+[close] raw(1000)
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/withr/Meta/package.rds
+[close] D:/Data_science/R-4.4.2/library/withr/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/withr/Meta/nsInfo.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/withr/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/withr/Meta/features.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/withr/R/withr
+[close] lines
+[close] lines
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/tests/testthat/helper-source.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/config/defaults.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/config/thresholds.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/error_state.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/io_helpers.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/rdata_io.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/state.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/provenance.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_velocity.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_communication.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_communication_views.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_communication_spatial.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_communication_trajectory.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_communication_velocity.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_communication_perturbation.R
+[close] lines
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/io_helpers.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/rdata_io.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/state.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/provenance.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_velocity.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_communication.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_communication_engine.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_communication_views.R
+[close] lines
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/io_helpers.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/state.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/provenance.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/validation.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_velocity.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_abundance_design.R
+[close] lines
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/io_helpers.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/state.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/provenance.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/validation.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_velocity.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_abundance_design.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_abundance_milo.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_abundance_milo_views.R
+[close] lines
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/io_helpers.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/provenance.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_velocity.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_population_rarity.R
+[close] lines
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/io_helpers.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/state.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/provenance.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/validation.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_velocity.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_abundance_design.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_abundance_milo.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_abundance_milo_views.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_abundance_sccoda.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_abundance_sccoda_views.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_abundance_cross_views.R
+[close] lines
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/config/defaults.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/config/thresholds.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/error_state.R
+[close] lines
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/io_helpers.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/rdata_io.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/state.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/provenance.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_velocity.R
+[close] lines
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/drive_allowlist.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/drive_watcher.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/waldo/Meta/package.rds
+[close] D:/Data_science/R-4.4.2/library/waldo/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/waldo/Meta/nsInfo.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/waldo/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/waldo/Meta/features.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/waldo/R/waldo
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/jsonlite/Meta/package.rds
+[close] D:/Data_science/R-4.4.2/library/jsonlite/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/jsonlite/Meta/nsInfo.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/jsonlite/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/jsonlite/Meta/features.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/jsonlite/R/jsonlite
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/jsonlite/Meta/package.rds
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-688201646/tools/_drive/ready.json.39696.1.dpjp87.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-688201646/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-688201646/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-514470230/tools/_drive/ready.json.39696.2.huns60.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-514470230/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-514470230/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-166843560/tools/_drive/ready.json.39696.3.jmt775.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-166843560/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-166843560/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-166843560/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-685338538/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-114237523/tools/_drive/arm.json.39696.4.vjvbq2.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-114237523/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-114237523/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-114237523/tools/_drive/arm.json.39696.5.4zu2mt.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-114237523/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-114237523/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-44202804/tools/_drive/arm.json.39696.6.aw7tq9.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-44202804/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-44202804/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-104030783/tools/_drive/arm.json.39696.7.d0zc2m.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-104030783/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-104030783/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-485078734/tools/_drive/arm.json.39696.8.zjgnqo.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-485078734/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-485078734/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-485078734/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-103757641/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-103757641/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-506116578/tools/_drive/arm.json.39696.9.6n51n1.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-506116578/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-506116578/tools/_drive/scenario.json.39696.10.mus9th.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-506116578/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-651661848/tools/_drive/result.json.39696.11.mz183o.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-651661848/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-651661848/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-952656648/tools/_drive/result.json.39696.12.d4zp25.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-952656648/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-952656648/tools/_drive/result.json
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/shiny/Meta/package.rds
+[close] D:/Data_science/R-4.4.2/library/shiny/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/shiny/Meta/nsInfo.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/shiny/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/shiny/Meta/features.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/htmltools/Meta/package.rds
+[close] D:/Data_science/R-4.4.2/library/htmltools/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/htmltools/Meta/nsInfo.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/htmltools/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/htmltools/Meta/features.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/digest/Meta/package.rds
+[close] D:/Data_science/R-4.4.2/library/digest/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/digest/Meta/nsInfo.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/digest/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/digest/Meta/features.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/digest/R/digest
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/digest/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/digest/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/fastmap/Meta/package.rds
+[close] D:/Data_science/R-4.4.2/library/fastmap/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/fastmap/Meta/nsInfo.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/fastmap/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/fastmap/Meta/features.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/fastmap/R/fastmap
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/fastmap/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/htmltools/R/htmltools
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/htmltools/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/httpuv/Meta/package.rds
+[close] D:/Data_science/R-4.4.2/library/httpuv/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/httpuv/Meta/nsInfo.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/httpuv/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/httpuv/Meta/features.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/Rcpp/Meta/package.rds
+[close] D:/Data_science/R-4.4.2/library/Rcpp/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/Rcpp/Meta/nsInfo.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/Rcpp/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/Rcpp/Meta/features.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/Rcpp/R/Rcpp
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/Rcpp/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/later/Meta/package.rds
+[close] D:/Data_science/R-4.4.2/library/later/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/later/Meta/nsInfo.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/later/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/later/Meta/features.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/later/R/later
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/later/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/promises/Meta/package.rds
+[close] D:/Data_science/R-4.4.2/library/promises/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/promises/Meta/nsInfo.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/promises/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/promises/Meta/features.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/promises/R/promises
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/httpuv/R/httpuv
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/httpuv/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/mime/Meta/package.rds
+[close] D:/Data_science/R-4.4.2/library/mime/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/mime/Meta/nsInfo.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/mime/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/mime/Meta/features.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/mime/R/mime
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/mime/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/xtable/Meta/package.rds
+[close] D:/Data_science/R-4.4.2/library/xtable/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/xtable/Meta/nsInfo.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/xtable/Meta/package.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/xtable/Meta/features.rds
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/xtable/R/xtable
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/renv/library/windows/R-4.4/x86_64-w64-mingw32/shiny/R/shiny
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-636741082/tools/_drive/scenario.json.39696.13.ye1iii.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-636741082/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-636741082/tools/_drive/scenario.json.39696.14.4l2mgw.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-636741082/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-636741082/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-339870798/tools/_drive/scenario.json.39696.15.wcrc1f.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-339870798/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-339870798/tools/_drive/scenario.json
+[close] C:\Users\marcg\AppData\Local\Temp\RtmpM19a0z/no-such-dir-xyz/sub/out.json.39696.16.837of7.tmp
+[close] C:\Users\marcg\AppData\Local\Temp\RtmpM19a0z/no-such-dir-xyz/sub/out.json.39696.17.j1hjqt.tmp
+[close] C:\Users\marcg\AppData\Local\Temp\RtmpM19a0z/no-such-dir-xyz/sub/out.json.39696.18.ajroby.tmp
+[close] C:\Users\marcg\AppData\Local\Temp\RtmpM19a0z/no-such-dir-xyz/sub/out.json.39696.19.i30prr.tmp
+[close] C:\Users\marcg\AppData\Local\Temp\RtmpM19a0z/no-such-dir-xyz/sub/out.json.39696.20.53qrg0.tmp
+[close] C:\Users\marcg\AppData\Local\Temp\RtmpM19a0z/no-such-dir-xyz/sub/out.json.39696.21.iop3v4.tmp
+[close] C:\Users\marcg\AppData\Local\Temp\RtmpM19a0z/no-such-dir-xyz/sub/out.json.39696.22.qvajga.tmp
+[close] C:\Users\marcg\AppData\Local\Temp\RtmpM19a0z/no-such-dir-xyz/sub/out.json.39696.23.5paeul.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-771682723/tools/_drive/here.json.39696.24.5o2qos.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-771682723/tools/_drive/here.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-324033312/tools/_drive/scenario.json.39696.25.oekaz0.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-324033312/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-840799443/tools/_drive/arm.json.39696.26.to9tml.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-840799443/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-840799443/tools/_drive/scenario.json.39696.27.i2ipdq.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-840799443/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-840799443/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-81693444/tools/_drive/scenario.json.39696.28.fxbqqa.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-81693444/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-81693444/tools/_drive/arm.json.39696.29.8a1tt7.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-81693444/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-81693444/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-246896703/tools/_drive/arm.json.39696.30.qfzuqx.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-246896703/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-246896703/tools/_drive/scenario.json.39696.31.vdeiho.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-246896703/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-246896703/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-246896703/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-246896703/tools/_drive/result.json.39696.32.xmatgo.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-246896703/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-246896703/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-864094669/tools/_drive/arm.json.39696.33.r41uwk.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-864094669/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-864094669/tools/_drive/scenario.json.39696.34.ws6c5e.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-864094669/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-864094669/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-864094669/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-737066743/tools/_drive/arm.json.39696.35.jn7ts9.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-737066743/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-737066743/tools/_drive/scenario.json.39696.36.890szo.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-737066743/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-737066743/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-737066743/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-737066743/tools/_drive/result.json.39696.37.r7r46v.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-737066743/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-737066743/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-40696836/tools/_drive/arm.json.39696.38.uijvb3.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-40696836/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-40696836/tools/_drive/scenario.json.39696.39.6rbq95.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-40696836/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-40696836/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-40696836/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-40696836/tools/_drive/result.json.39696.40.75zpwr.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-40696836/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-40696836/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-391721287/tools/_drive/arm.json.39696.41.7gl41q.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-391721287/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-391721287/tools/_drive/scenario.json.39696.42.zxabe9.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-391721287/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-391721287/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-391721287/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-391721287/tools/_drive/result.json.39696.43.opjltq.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-391721287/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-391721287/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-782800613/tools/_drive/arm.json.39696.44.n1vqsp.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-782800613/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-782800613/tools/_drive/scenario.json.39696.45.mc3six.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-782800613/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-782800613/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-782800613/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-782800613/tools/_drive/result.json.39696.46.9b1fc3.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-782800613/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-782800613/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-944476018/tools/_drive/arm.json.39696.47.maixic.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-944476018/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-944476018/tools/_drive/scenario.json.39696.48.b1ww61.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-944476018/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-944476018/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-944476018/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-944476018/tools/_drive/result.json.39696.49.l3ovz5.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-944476018/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-944476018/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-522483406/tools/_drive/arm.json.39696.50.trvmt0.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-522483406/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-522483406/tools/_drive/scenario.json.39696.51.0rdner.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-522483406/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-522483406/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-522483406/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-522483406/tools/_drive/result.json.39696.52.vxp8xk.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-522483406/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-522483406/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-540138404/tools/_drive/arm.json.39696.53.afxdz3.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-540138404/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-540138404/tools/_drive/scenario.json.39696.54.c9wbue.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-540138404/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-540138404/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-540138404/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-540138404/tools/_drive/result.json.39696.55.5zklva.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-540138404/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-540138404/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-540138404/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-540138404/tools/_drive/scenario.json.39696.56.ky6fh6.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-540138404/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-540138404/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-540138404/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-540138404/tools/_drive/result.json.39696.57.4duukm.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-540138404/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-540138404/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-540138404/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-556808897/tools/_drive/arm.json.39696.58.eabo28.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-556808897/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-556808897/tools/_drive/scenario.json.39696.59.kwtzmh.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-556808897/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-556808897/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-556808897/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-556808897/tools/_drive/result.json.39696.60.j4w24p.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-556808897/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-556808897/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-542910363/tools/_drive/arm.json.39696.61.j6k4zb.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-542910363/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-542910363/tools/_drive/scenario.json.39696.62.i1gs45.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-542910363/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-542910363/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-542910363/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-542910363/tools/_drive/result.json.39696.63.99mfth.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-542910363/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-542910363/tools/_drive/result.json
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/bulk/mod_bulk.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/bulk/mod_bulk_datasets.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/bulk/mod_bulk_dose_response.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/bulk/mod_bulk_filter.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/bulk/mod_bulk_mapping.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/bulk/mod_bulk_merge.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/bulk/mod_bulk_multi.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/bulk/mod_bulk_network.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/bulk/mod_bulk_pathways.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/bulk/mod_bulk_pattern.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/bulk/mod_bulk_report.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/bulk/mod_bulk_signatures.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/bulk/mod_bulk_survival.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/bulk/mod_bulk_wgcna.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/bulk_de/mod_bulk_de.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/bulk_de/mod_bulk_de_engine.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/bulk_de/mod_bulk_de_multimethod.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/bulk_de/mod_bulk_de_pairwise.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/bulk_de/mod_bulk_de_run.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/bulk_de/mod_bulk_de_summary.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/bulk_de/mod_bulk_de_ui.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/bulk_de/mod_bulk_de_venn.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/bulk_de/mod_bulk_de_viz.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/import/mod_geo.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/import/mod_import_bulk.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/import/mod_import_sc.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/import/mod_import_spatial.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/import/mod_rdata_picker.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/sc/mod_sc.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/sc/mod_sc_annotation.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/sc/mod_sc_communication.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/sc/mod_sc_communication_perturbation.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/sc/mod_sc_communication_spatial.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/sc/mod_sc_communication_trajectory.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/sc/mod_sc_communication_velocity.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/sc/mod_sc_corr.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/sc/mod_sc_da_cross.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/sc/mod_sc_da_design.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/sc/mod_sc_da_milo.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/sc/mod_sc_da_sccoda.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/sc/mod_sc_datasets.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/sc/mod_sc_mapping.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/sc/mod_sc_markers.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/sc/mod_sc_pathways.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/sc/mod_sc_pipeline.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/sc/mod_sc_pseudobulk.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/sc/mod_sc_rarity.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/sc/mod_sc_report_consolidated.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/sc/mod_sc_trajectory.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/sc/mod_sc_velocity.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/sc/mod_sc_viz.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/spatial/deconv/mod_spatial_deconv.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/spatial/deconv/mod_spatial_deconv_outputs.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/spatial/deconv/mod_spatial_deconv_reference.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/spatial/deconv/mod_spatial_deconv_refviz.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/spatial/deconv/mod_spatial_deconv_ui.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/spatial/mod_spatial.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/spatial/mod_spatial_cluster.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/spatial/mod_spatial_export.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/spatial/mod_spatial_lr.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/spatial/mod_spatial_multi.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/spatial/mod_spatial_niche.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/spatial/mod_spatial_pipeline.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/spatial/mod_spatial_qc.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/spatial/mod_spatial_report.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/spatial/mod_spatial_viz.R
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-347384479/tools/_drive/ready.json.39696.64.lxz9w9.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-347384479/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-347384479/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-347384479/tools/_drive/ready.json.39696.65.ylwr3d.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-347384479/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-347384479/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-267579112/tools/_drive/ready.json.39696.66.nyou5c.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-267579112/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-267579112/tools/_drive/ready.json.39696.67.pyrfef.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-267579112/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-267579112/tools/_drive/arm.json.39696.68.tyqpyi.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-267579112/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-267579112/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-267579112/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-267579112/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-267579112/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-267579112/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-267579112/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-267579112/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-796656850/tools/_drive/ready.json.39696.69.6xogae.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-796656850/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-370697325/tools/_drive/ready.json.39696.70.i8dvbh.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-370697325/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-709152000/tools/_drive/ready.json.39696.71.jd9y2m.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-709152000/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-709152000/tools/_drive/arm.json.39696.72.j4lx81.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-709152000/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-709152000/tools/_drive/scenario.json.39696.73.qeq2p7.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-709152000/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-709152000/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-709152000/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-709152000/tools/_drive/result.json.39696.74.px6xsx.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-709152000/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-709152000/tools/_drive/ready.json.39696.75.dgzprr.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-709152000/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-251994103/tools/_drive/ready.json.39696.76.t17oys.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-251994103/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-251994103/tools/_drive/arm.json.39696.77.n8r42g.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-251994103/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-251994103/tools/_drive/scenario.json.39696.78.v8zv4y.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-251994103/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-251994103/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-251994103/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-251994103/tools/_drive/result.json.39696.79.jqrcoc.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-251994103/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-251994103/tools/_drive/ready.json.39696.80.74x5be.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-251994103/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-251994103/tools/_drive/scenario.json.39696.81.kierey.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-251994103/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-251994103/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-251994103/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-251994103/tools/_drive/result.json.39696.82.adkb2s.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-251994103/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-251994103/tools/_drive/ready.json.39696.83.665bfe.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-251994103/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-165510112/tools/_drive/ready.json.39696.84.sr4an8.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-165510112/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-165510112/tools/_drive/arm.json.39696.85.qd06io.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-165510112/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-165510112/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-165510112/tools/_drive/ready.json.39696.86.28eagh.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-165510112/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-165510112/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-81707142/tools/_drive/ready.json.39696.87.wf17nf.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-81707142/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-81707142/tools/_drive/arm.json.39696.88.8qyckq.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-81707142/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-81707142/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-81707142/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-81707142/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-81707142/tools/_drive/result.json.39696.89.8uemmi.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-81707142/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-81707142/tools/_drive/ready.json.39696.90.bwd0fi.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-81707142/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-81707142/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-957469940/tools/_drive/ready.json.39696.91.divx8m.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-957469940/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-957469940/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-948851691/tools/_drive/ready.json.39696.92.y16thg.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-948851691/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-948851691/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-223976693/tools/_drive/ready.json.39696.93.f5n6wn.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-223976693/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-223976693/tools/_drive/arm.json.39696.94.biakaz.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-223976693/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-223976693/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-223976693/tools/_drive/ready.json.39696.95.1n3uo7.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-223976693/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-223976693/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-223976693/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-223976693/tools/_drive/ready.json.39696.96.oguoax.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-223976693/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-223976693/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-223976693/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-223976693/tools/_drive/ready.json.39696.97.3iaqm2.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-223976693/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-223976693/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-223976693/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-223976693/tools/_drive/ready.json.39696.98.na182o.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-223976693/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-223976693/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-223976693/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-223976693/tools/_drive/ready.json.39696.99.2c2ssn.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-223976693/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-223976693/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-636613015/tools/_drive/ready.json.39696.100.5alyso.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-636613015/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-636613015/tools/_drive/arm.json.39696.101.wt2rct.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-636613015/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-636613015/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-636613015/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-636613015/tools/_drive/ready.json.39696.102.jpcrde.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-636613015/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-636613015/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-636613015/tools/_drive/ready.json.39696.103.umu027.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-636613015/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-636613015/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-636613015/tools/_drive/ready.json.39696.104.0wovvm.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-636613015/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-636613015/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-900337387/tools/_drive/ready.json.39696.105.6kyyb4.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-900337387/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-900337387/tools/_drive/arm.json.39696.106.ms03lr.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-900337387/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-900337387/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-900337387/tools/_drive/ready.json.39696.107.xybjtx.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-900337387/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-900337387/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-900337387/tools/_drive/ready.json.39696.108.pccpzm.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-900337387/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-900337387/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-900337387/tools/_drive/ready.json.39696.109.zne7ml.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-900337387/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-900337387/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-900337387/tools/_drive/arm.json.39696.110.g7gg0p.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-900337387/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-900337387/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-900337387/tools/_drive/ready.json.39696.111.i1hox7.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-900337387/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-900337387/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-900337387/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-900337387/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-900337387/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-900337387/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-609782817/tools/_drive/ready.json.39696.112.3n11ev.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-609782817/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-609782817/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-609782817/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-609782817/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-609782817/tools/_drive/ready.json.39696.113.9k2dkb.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-609782817/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-609782817/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-609782817/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-609782817/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-609782817/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-609782817/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-16409499/tools/_drive/ready.json.39696.114.0f70sz.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-16409499/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-16409499/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-16409499/tools/_drive/ready.json.39696.115.8xt309.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-16409499/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-16409499/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-16409499/tools/_drive/ready.json.39696.116.n7d4ep.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-16409499/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-16409499/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-16409499/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-16409499/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-64840913/tools/_drive/ready.json.39696.117.yhyxdy.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-64840913/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-64840913/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-64840913/tools/_drive/arm.json.39696.118.sejij3.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-64840913/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-64840913/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-64840913/tools/_drive/ready.json.39696.119.6n8wdk.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-64840913/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-64840913/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-64840913/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-64840913/tools/_drive/ready.json
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/drive_watcher.R
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-408798149/tools/_drive/ready.json.39696.120.nagpz2.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-408798149/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-408798149/tools/_drive/arm.json.39696.121.fxuu0d.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-408798149/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-408798149/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-408798149/tools/_drive/ready.json.39696.122.w74ktb.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-408798149/tools/_drive/ready.json.39696.123.osqtw3.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-408798149/tools/_drive/ready.json.39696.124.v0huum.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-408798149/tools/_drive/ready.json.39696.125.7zwzrz.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-408798149/tools/_drive/ready.json.39696.126.hv9z89.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-408798149/tools/_drive/ready.json.39696.127.mz3hcs.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-408798149/tools/_drive/ready.json.39696.128.5ge1an.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-408798149/tools/_drive/ready.json.39696.129.ik1pvd.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-408798149/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-408798149/tools/_drive/ready.json.39696.130.jp4sa8.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-408798149/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-408798149/tools/_drive/ready.json
+[close] .workbuddy-ai/tmp/evidence/probe_trace.txt
+!!! THE CALLER'S CONNECTION IS BEING CLOSED
+   frame[1] tryCatch({
+   frame[2] tryCatchList(expr, classes, parentenv, handlers)
+   frame[3] tryCatchOne(expr, names, parentenv, handlers[[1L]])
+   frame[4] doTryCatch(return(expr), name, parentenv, handler)
+   frame[5] testthat::test_file("tests/testthat/test-drive-watcher.R", reporter = "silent", 
+   frame[6] test_files(test_dir = dirname(path), test_package = package, 
+   frame[7] test_files_serial(test_dir = test_dir, test_package = test_package, 
+   frame[8] with_reporter(reporters$multi, lapply(test_paths, test_one_file, 
+   frame[9] tryCatch(code, testthat_abort_reporter = function(cnd) {
+   frame[10] tryCatchList(expr, classes, parentenv, handlers)
+   frame[11] tryCatchOne(expr, names, parentenv, handlers[[1L]])
+   frame[12] doTryCatch(return(expr), name, parentenv, handler)
+   frame[13] lapply(test_paths, test_one_file, env = env, desc = desc, shuffle = shuffle, 
+   frame[14] FUN(X[[i]], ...)
+   frame[15] source_file(path, env = env(env), desc = desc, shuffle = shuffle, 
+   frame[16] test_code(code = exprs, env = env, reporter = get_reporter() %||% 
+   frame[17] withRestarts(tryCatch(withCallingHandlers({
+   frame[18] withOneRestart(expr, restarts[[1L]])
+   frame[19] doWithOneRestart(return(expr), restart)
+   frame[20] tryCatch(withCallingHandlers({
+   frame[21] tryCatchList(expr, classes, parentenv, handlers)
+   frame[22] tryCatchOne(expr, names, parentenv, handlers[[1L]])
+   frame[23] doTryCatch(return(expr), name, parentenv, handler)
+   frame[24] withCallingHandlers({
+   frame[25] eval(code, test_env)
+   frame[26] eval(code, test_env)
+   frame[27] test_that("a write that cannot land fails LOUDLY after a bounded budget", 
+   frame[28] test_code(code, parent.frame())
+   frame[29] withRestarts(tryCatch(withCallingHandlers({
+   frame[30] withOneRestart(expr, restarts[[1L]])
+   frame[31] doWithOneRestart(return(expr), restart)
+   frame[32] tryCatch(withCallingHandlers({
+   frame[33] tryCatchList(expr, classes, parentenv, handlers)
+   frame[34] tryCatchOne(expr, names, parentenv, handlers[[1L]])
+   frame[35] doTryCatch(return(expr), name, parentenv, handler)
+   frame[36] withCallingHandlers({
+   frame[37] eval(code, test_env)
+   frame[38] eval(code, test_env)
+   frame[39] expect_false(ts_drive_write_json(list(a = 1), dest))
+   frame[40] quasi_label(enquo(object), label)
+   frame[41] eval_bare(expr, quo_get_env(quo))
+   frame[42] ts_drive_write_json(list(a = 1), dest)
+   frame[43] ts_drive_write_attempt(txt, path, tmp)
+   frame[44] tryCatch({
+   frame[45] tryCatchList(expr, classes, parentenv, handlers)
+   frame[46] tryCatchOne(expr, names, parentenv, handlers[[1L]])
+   frame[47] value[[3L]](cond)
+   frame[48] try(close(con), silent = TRUE)
+   frame[49] tryCatch(expr, error = function(e) {
+   frame[50] tryCatchList(expr, classes, parentenv, handlers)
+   frame[51] tryCatchOne(expr, names, parentenv, handlers[[1L]])
+   frame[52] doTryCatch(return(expr), name, parentenv, handler)
+   frame[53] close(con)
+   frame[54] close.connection(con)
+   frame[55] .doTrace({
+   frame[56] eval.parent(exprObj)
+   frame[57] eval(expr, p)
+   frame[58] eval(expr, p)
+!!! end of stack
+[close] <unreadable>
+[close] <unreadable>
+[close] <unreadable>
+[close] <unreadable>
+[close] <unreadable>
+[close] <unreadable>
+[close] <unreadable>
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/drive_watcher.R
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-869253684/tools/_drive/here.json.39696.141.qz38o9.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-869253684/tools/_drive/here.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-649579430/tools/_drive/scenario.json.39696.142.glwjim.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-649579430/tools/_drive/scenario.json.39696.143.c3yz5i.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-649579430/tools/_drive/scenario.json.39696.144.bp2x6c.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-649579430/tools/_drive/scenario.json.39696.145.by1wt6.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-649579430/tools/_drive/scenario.json.39696.146.uqwr55.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-649579430/tools/_drive/scenario.json.39696.147.nia2bd.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-649579430/tools/_drive/scenario.json.39696.148.6zqudq.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-649579430/tools/_drive/scenario.json.39696.149.bmu0t8.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-649579430/tools/_drive/result.json.39696.150.ani0ag.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-649579430/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-649579430/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-649579430/tools/_drive/result.json.39696.151.5yd27v.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-649579430/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-649579430/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-649579430/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-853515320/tools/_drive/ready.json.39696.152.p3uell.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-853515320/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-266641470/tools/_drive/ready.json.39696.153.b6c049.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-266641470/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-266641470/tools/_drive/arm.json.39696.154.cnej2k.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-266641470/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-266641470/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-266641470/tools/_drive/ready.json.39696.155.n5rv97.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-266641470/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-41291309/tools/_drive/ready.json.39696.156.w4nuoh.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-41291309/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-41291309/tools/_drive/arm.json.39696.157.8tkfzp.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-41291309/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-41291309/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-41291309/tools/_drive/ready.json.39696.158.by4mu6.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-41291309/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-41291309/tools/_drive/scenario.json.39696.159.lc334n.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-41291309/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-41291309/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-41291309/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-41291309/tools/_drive/result.json.39696.160.smf4hz.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-41291309/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-41291309/tools/_drive/ready.json.39696.161.fki140.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-41291309/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-407829706/tools/_drive/ready.json.39696.162.z75yn5.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-407829706/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-407829706/tools/_drive/arm.json.39696.163.013lfm.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-407829706/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-407829706/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-407829706/tools/_drive/ready.json.39696.164.oe6d81.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-407829706/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-407829706/tools/_drive/arm.json.39696.165.r5zvl3.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-407829706/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-407829706/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-407829706/tools/_drive/ready.json.39696.166.g1fmcb.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-407829706/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-627815261/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-627815261/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-960857426/tools/_drive/ready.json.39696.167.ft7wby.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-960857426/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-960857426/tools/_drive/arm.json.39696.168.dlv26c.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-960857426/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-960857426/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-960857426/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-960857426/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-960857426/tools/_drive/ready.json.39696.169.7bd80m.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-960857426/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-960857426/tools/_drive/arm.json.39696.170.3pzfh7.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-960857426/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-960857426/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-960857426/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-612582572/tools/_drive/ready.json.39696.171.evjawc.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-612582572/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-612582572/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-612582572/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-612582572/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-612582572/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-899571641/tools/_drive/ready.json.39696.172.sxbvnx.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-899571641/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-899571641/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-899571641/tools/_drive/ready.json.39696.173.7x87rp.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-899571641/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-899571641/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-899571641/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-899571641/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-459953238/tools/_drive/arm.json.39696.174.keb45s.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-459953238/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-459953238/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-459385991/tools/_drive/ready.json.39696.175.nezgqh.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-459385991/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-459385991/tools/_drive/arm.json.39696.176.85m060.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-459385991/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-459385991/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-459385991/tools/_drive/ready.json.39696.177.h3jkh1.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-459385991/tools/_drive/ready.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-459385991/tools/_drive/ready.json
+[close] C:\Users\marcg\AppData\Local\Temp\RtmpM19a0z/tsdrive-164225696/counts.csv
+[close] C:\Users\marcg\AppData\Local\Temp\RtmpM19a0z/tsdrive-604509117/counts.csv
+[close] C:\Users\marcg\AppData\Local\Temp\RtmpM19a0z/tsdrive-98032828/counts.csv
+[close] C:\Users\marcg\AppData\Local\Temp\RtmpM19a0z/tsdrive-651624003/counts.csv
+[close] C:\Users\marcg\AppData\Local\Temp\RtmpM19a0z/tsdrive-877580853/counts.csv
+[close] C:\Users\marcg\AppData\Local\Temp\RtmpM19a0z/tsdrive-data-dir/counts.csv
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-672245173/tools/_drive/arm.json.39696.178.rxw0nk.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-672245173/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-672245173/tools/_drive/scenario.json.39696.179.lc2xqy.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-672245173/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-672245173/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-672245173/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-672245173/tools/_drive/result.json.39696.180.1qrxw4.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-672245173/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-672245173/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-205757759/tools/_drive/arm.json.39696.181.oowpyg.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-205757759/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-205757759/tools/_drive/scenario.json.39696.182.59dz0q.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-205757759/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-205757759/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-205757759/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-205757759/tools/_drive/result.json.39696.183.lq6bfw.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-205757759/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-205757759/tools/_drive/result.json
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/bulk/mod_bulk_filter.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/bulk/batch_correction.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/bulk/bulk_batch_qc.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/bulk/bulk_gene_sets.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/bulk/bulk_gsva.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/bulk/bulk_helpers.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/bulk/bulk_import_engine.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/bulk/bulk_merge.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/bulk/bulk_multi.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/bulk/bulk_multi_compare.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/bulk/bulk_network.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/bulk/bulk_pattern.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/bulk/bulk_provenance.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/bulk/bulk_report_engine.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/bulk/bulk_signatures.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/bulk/bulk_survival.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/bulk/bulk_wgcna.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/bulk/dose_response.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/caching.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/drive_allowlist.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/drive_watcher.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/error_state.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/io_helpers.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/jobs.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/pathway_helpers.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/provenance.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/rdata_io.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/state.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/core/validation.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/plotting/complex_heatmap.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/plotting/datatable.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/plotting/export.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/plotting/palettes.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/plotting/plot_dims.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/plotting/theme.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/reports/report_bundle.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/reports/report_collector.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/reports/report_render.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/reports/report_validator.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_abundance_cross_views.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_abundance_design.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_abundance_milo.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_abundance_milo_views.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_abundance_sccoda.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_abundance_sccoda_views.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_bpcells.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_communication.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_communication_engine.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_communication_input.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_communication_perturbation.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_communication_spatial.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_communication_trajectory.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_communication_velocity.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_communication_views.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_export.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_helpers.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_multi.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_pipeline.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_plotting.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_population_rarity.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_state.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_trajectory.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/sc/sc_velocity.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/spatial/spatial_async.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/spatial/spatial_deconv_prep.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/spatial/spatial_deconv_tasks.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/spatial/spatial_export.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/spatial/spatial_io.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/spatial/spatial_multi.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/spatial/spatial_niche.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/spatial/spatial_plotting.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/spatial/spatial_reference.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/spatial/spatial_report.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/R/spatial/spatial_stats.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/bulk_de/mod_bulk_de_run.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/bulk_de/mod_bulk_de_run.R
+[close] D:/Data_science/SHINYAPP test (git work)/SHINYAPP test/modules/bulk_de/mod_bulk_de_run.R
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-509857875/tools/_drive/arm.json.39696.184.nt70lk.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-509857875/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-509857875/tools/_drive/scenario.json.39696.185.09w45w.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-509857875/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-509857875/tools/_drive/arm.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-509857875/tools/_drive/scenario.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-509857875/tools/_drive/result.json.39696.186.b7ktnu.tmp
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-509857875/tools/_drive/result.json
+[close] C:/Users/marcg/AppData/Local/Temp/RtmpM19a0z/tsdrive-509857875/tools/_drive/result.json
+[close] lines
+Warning message:
+package 'testthat' was built under R version 4.4.3 
+result line: fail=2 pass=568 err=0 skip=0 
+WRITELINES FAILED: invalid connection 
+writeLines ok: FALSE 
+DONE

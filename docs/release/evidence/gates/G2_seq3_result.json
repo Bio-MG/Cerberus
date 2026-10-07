@@ -1,0 +1,20 @@
+{
+  "protocol": "ts-drive/1",
+  "ack_seq": 3,
+  "status": "invalid",
+  "applied_at": "2026-09-21T23:29:54Z",
+  "active_module": "bulk_de",
+  "armed": true,
+  "preserve_data": true,
+  "errors": [
+    "button 'bulk-de-run_de' is bound but not ready: no bulk object loaded (shared_rv$filtered_counts is NULL)"
+  ],
+  "warnings": [],
+  "snapshot": {
+    "has_data": false,
+    "object_class": {},
+    "n_genes": {},
+    "n_samples": {},
+    "error_state": {}
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "protocol": "ts-drive/1",
+  "ack_seq": 1,
+  "status": "done",
+  "applied_at": "2026-09-22T10:13:10Z",
+  "active_module": "import_bulk",
+  "armed": true,
+  "preserve_data": true,
+  "errors": [],
+  "warnings": [],
+  "snapshot": {
+    "has_data": true,
+    "object_class": "list",
+    "n_genes": 17925,
+    "n_samples": 18,
+    "error_state": {}
+  },
+  "write_error": {}
+}

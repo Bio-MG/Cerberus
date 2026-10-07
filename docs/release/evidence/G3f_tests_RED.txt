@@ -1,0 +1,234 @@
+- One or more packages recorded in the lockfile are not installed.
+- Use `renv::status()` for more details.
+During startup - Warning messages:
+1: Setting LC_COLLATE=C.UTF-8 failed 
+2: Setting LC_CTYPE=C.UTF-8 failed 
+3: Setting LC_MONETARY=C.UTF-8 failed 
+4: Setting LC_TIME=C.UTF-8 failed 
+Warning message:
+package 'testthat' was built under R version 4.4.3 
+== filter: drive-watcher ==
+  test-drive-watcher.R                                    fail=0 pass=8 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=3 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=3 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=3 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=4 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=5 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=4 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=3 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=4 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=5 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=3 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=4 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=4 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=10 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=3 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=4 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=3 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=6 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=6 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=1 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=3 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=3 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=4 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=3 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=1 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=12 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=3 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=3 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=13 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=7 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=3 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=3 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=11 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=3 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=5 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=5 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=3 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=10 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=4 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=3 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=4 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=1 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=9 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=6 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=6 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=3 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=7 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=7 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=6 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=5 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=5 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=8 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=3 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=4 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=4 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=5 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=4 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=5 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=7 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=5 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=6 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=10 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=5 skip=0 warn=8
+  test-drive-watcher.R                                    fail=0 pass=5 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=8 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=5 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=7 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=3 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=3 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=10 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=5 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=8 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=5 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=3 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=3 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=4 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=4 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=5 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=7 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=7 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=6 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=4 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=6 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=6 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=1 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=6 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=4 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=4 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=8 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=5 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=4 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=3 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=4 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=7 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=7 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=3 pass=2 skip=0 warn=0
+  test-drive-watcher.R                                    fail=9 pass=1 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=3 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=8 skip=0 warn=0
+  test-drive-watcher.R                                    fail=0 pass=2 skip=0 warn=0
+TOTAL failed=12 passed=558 error=0 skipped=0
+
+---- FAILURES ----
+drive-watcher: ........................................................................................................................................................................................................................................................................................................................................................WWWWWWWW......................................................................................................................................................................................................1.23.456789abc..............
+
+══ Warnings ════════════════════════════════════════════════════════════════════
+1. a write that cannot land fails LOUDLY after a bounded budget ('test-drive-watcher.R:1609:3') - cannot open file 'C:/Users/marcg/AppData/Local/Temp/RtmpwXwxTA/tsdrive-553850271/tools/_drive/no-such-subdir/scenario.json.53284.131.kxa7kv.tmp': No such file or directory
+
+2. a write that cannot land fails LOUDLY after a bounded budget ('test-drive-watcher.R:1609:3') - cannot open file 'C:/Users/marcg/AppData/Local/Temp/RtmpwXwxTA/tsdrive-553850271/tools/_drive/no-such-subdir/scenario.json.53284.132.aphkjp.tmp': No such file or directory
+
+3. a write that cannot land fails LOUDLY after a bounded budget ('test-drive-watcher.R:1609:3') - cannot open file 'C:/Users/marcg/AppData/Local/Temp/RtmpwXwxTA/tsdrive-553850271/tools/_drive/no-such-subdir/scenario.json.53284.133.l7tndg.tmp': No such file or directory
+
+4. a write that cannot land fails LOUDLY after a bounded budget ('test-drive-watcher.R:1609:3') - cannot open file 'C:/Users/marcg/AppData/Local/Temp/RtmpwXwxTA/tsdrive-553850271/tools/_drive/no-such-subdir/scenario.json.53284.134.ao6s5f.tmp': No such file or directory
+
+5. a write that cannot land fails LOUDLY after a bounded budget ('test-drive-watcher.R:1609:3') - cannot open file 'C:/Users/marcg/AppData/Local/Temp/RtmpwXwxTA/tsdrive-553850271/tools/_drive/no-such-subdir/scenario.json.53284.135.b9ozyu.tmp': No such file or directory
+
+6. a write that cannot land fails LOUDLY after a bounded budget ('test-drive-watcher.R:1609:3') - cannot open file 'C:/Users/marcg/AppData/Local/Temp/RtmpwXwxTA/tsdrive-553850271/tools/_drive/no-such-subdir/scenario.json.53284.136.y5tqr0.tmp': No such file or directory
+
+7. a write that cannot land fails LOUDLY after a bounded budget ('test-drive-watcher.R:1609:3') - cannot open file 'C:/Users/marcg/AppData/Local/Temp/RtmpwXwxTA/tsdrive-553850271/tools/_drive/no-such-subdir/scenario.json.53284.137.pqm39v.tmp': No such file or directory
+
+8. a write that cannot land fails LOUDLY after a bounded budget ('test-drive-watcher.R:1609:3') - cannot open file 'C:/Users/marcg/AppData/Local/Temp/RtmpwXwxTA/tsdrive-553850271/tools/_drive/no-such-subdir/scenario.json.53284.138.duk3py.tmp': No such file or directory
+
+══ Failed ══════════════════════════════════════════════════════════════════════
+── 1. Failure ('test-drive-watcher.R:2533:3'): the DE token publishes a state pr
+Expected `length(region) > 0L` to be TRUE.
+Differences:
+`actual`:   FALSE
+`expected`: TRUE 
+
+mod_bulk_de_run.R defines no `drive_state` probe
+
+── 2. Failure ('test-drive-watcher.R:2542:3'): the DE token publishes a state pr
+Expected `paste(src[pub:min(length(src), pub + 2L)], collapse = "\n")` to match regexp "state = drive_state".
+Actual text:
+✖ │   ts_drive_publish_token(global_data, "bulk-de-run_de", drive_counter,
+  │                          ready = drive_ready)
+  │   drive_trigger <- shiny::reactive(list(drive_counter(), input$run_de))
+
+── 3. Failure ('test-drive-watcher.R:2549:3'): the DE token publishes a state pr
+Expected `length(grep("shared_rv\\$", code)) >= 1L` to be TRUE.
+Differences:
+`actual`:   FALSE
+`expected`: TRUE 
+
+the probe reads no shared state — it cannot report the contrast
+
+── 4. Failure ('test-drive-watcher.R:2562:5'): the DE state reports COUNTS under
+Expected `joined` to match string "n_contrasts".
+Actual text:
+✖ │ 
+the DE state probe does not report `n_contrasts`
+
+── 5. Failure ('test-drive-watcher.R:2562:5'): the DE state reports COUNTS under
+Expected `joined` to match string "active_contrast".
+Actual text:
+✖ │ 
+the DE state probe does not report `active_contrast`
+
+── 6. Failure ('test-drive-watcher.R:2562:5'): the DE state reports COUNTS under
+Expected `joined` to match string "n_genes".
+Actual text:
+✖ │ 
+the DE state probe does not report `n_genes`
+
+── 7. Failure ('test-drive-watcher.R:2562:5'): the DE state reports COUNTS under
+Expected `joined` to match string "n_padj_finite".
+Actual text:
+✖ │ 
+the DE state probe does not report `n_padj_finite`
+
+── 8. Failure ('test-drive-watcher.R:2562:5'): the DE state reports COUNTS under
+Expected `joined` to match string "n_significant".
+Actual text:
+✖ │ 
+the DE state probe does not report `n_significant`
+
+── 9. Failure ('test-drive-watcher.R:2562:5'): the DE state reports COUNTS under
+Expected `joined` to match string "convention".
+Actual text:
+✖ │ 
+the DE state probe does not report `convention`
+
+── 10. Failure ('test-drive-watcher.R:2562:5'): the DE state reports COUNTS unde
+Expected `joined` to match string "bypass".
+Actual text:
+✖ │ 
+the DE state probe does not report `bypass`
+  ... and 2 more
+
+
+Maximum number of 10 failures reached, some test results may be missing.
+
+══ DONE ════════════════════════════════════════════════════════════════════════
