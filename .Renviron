@@ -1,6 +1,0 @@
-# Desactive la sandbox renv : chaque processus enfant (workers future,
-# daemons mirai) payait ~54 s d'activation de sandbox au demarrage, ce qui
-# faisait exploser les connectTimeout des clusters paralleles sous Windows.
-# La gestion des versions passe par renv.lock / renv::restore(), pas par la
-# sandbox, donc cette desactivation est sans effet sur la reproducibilite.
-RENV_CONFIG_SANDBOX_ENABLED = FALSE
