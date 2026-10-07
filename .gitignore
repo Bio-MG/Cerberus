@@ -1,45 +1,56 @@
-# --- R (Fichiers temporaires et sessions) ---
+# -------------------------------------------------
+# R (fichiers temporaires et sessions)
+# -------------------------------------------------
 .Rhistory
 .RData
 .RDataTmp
-.Rds
+*.Rds
 
-# --- RStudio (Utilisateur et projet) ---
+# -------------------------------------------------
+# RStudio (utilisateur et projet)
+# -------------------------------------------------
 *.Rproj
 .Rproj.user/
-.Rproj.user/ app.log                        
-app.tex                       
-RData                        
-.RDataTmp                                
 
-
-# --- Shiny & Fichiers de test locaux ---
+# -------------------------------------------------
+# Fichiers Shiny & tests locaux
+# -------------------------------------------------
 /test new features.R
 /Tests save/
 test_trajectory_refactor.R
-# --- Système d'exploitation ---
+test_new_features.R
+
+# -------------------------------------------------
+# Système d'exploitation
+# -------------------------------------------------
 .DS_Store
 Thumbs.db
 
-# Git
+# -------------------------------------------------
+# Git & artefacts divers
+# -------------------------------------------------
 .gitignore
-.Rproj.userTests/
-test_new_features.R
+.Rproj.user
+Tests/
 conversation-export.md
 
-# POSIT? zcode
+# -------------------------------------------------
+# Posit / zcode / agents / docs (local only)
+# -------------------------------------------------
 app.tex
 app.log
 .posit/
-.posit/
 AGENTS.md
-docs/*
-!docs/release/
-docs/release/*
-!docs/release/evidence/
-!docs/mcp/
-!docs/decisions/
-# Defence in depth (must stay AFTER the ! rules — last match wins)
+
+# Toute la documentation (agents, audits, preuves, etc.)
+# Par défaut : ignorée.
+docs/
+
+# Si un jour tu veux exposer une sous-partie publique, tu pourras ajouter :
+# !docs/public/
+# mais pour l'instant, on garde tout docs/ en local.
+
+# Defence in depth (doit rester APRÈS les règles docs/ si on ajoute des ! plus tard)
 docs/**/*.tmp
 docs/**/*.temp
 docs/**/*.bak
@@ -50,34 +61,40 @@ docs/**/*.swo
 docs/**/.DS_Store
 docs/**/scratch
 docs/**/scratch.*
+
 .zcode
 .workbuddy-ai/
 QC
 mcp.examples/
 
-
-
-# --- Environnement Python scCODA (Stage 15, local machine only) ---
+# -------------------------------------------------
+# Environnement Python scCODA (Stage 15, local only)
+# -------------------------------------------------
 /python_env_sccoda/
 
-# --- Sorties de tests (artefacts regeneres, non sources) ---
+# -------------------------------------------------
+# Sorties de tests (artefacts régénérés, non sources)
+# -------------------------------------------------
 full_suite_results.txt
 _e2e_out.txt
 _suite_stdout.log
 
-#repomix
+# -------------------------------------------------
+# repomix
+# -------------------------------------------------
 repomix.config.json
 repomix.core.config.json
 repomix-output.xml
 repomix-core-output.xml
 
-# --- DRIVE LIVE CONTROL (docs/DRIVE_LIVE_CONTROL_PLAN.md) ---
-# Runtime IPC between an agent and a LIVE session: the JSON handshake files are
-# transient by nature (pid/token/seq of THIS machine) and must never be
-# committed. Only tools/_drive/README.md is tracked — it documents the channel.
+# -------------------------------------------------
+# DRIVE LIVE CONTROL (IPC transient, local only)
+# -------------------------------------------------
 tools/_drive/*.json
 tools/_drive/*.tmp
 
+# -------------------------------------------------
 # Runtime artefacts (OmnipathR logger, drive IPC tests)
+# -------------------------------------------------
 /omnipathr-log/
 tests/testthat/tools/
