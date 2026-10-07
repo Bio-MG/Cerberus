@@ -2,10 +2,10 @@
   "manifest": "CANONICAL_BLOB_MANIFEST",
   "date": "2026-10-07",
   "repository": "scratch clone (reconcile branch)",
-  "commit": "046b5f67f6edaabc3cd2f0934971c64fcb94514e",
-  "tree": "6ea16d0fa5ef67265df56d25d3d38ff9559fc6c6",
+  "commit": "02fcffce08264cf5516a29171a5a93f962b65f42",
+  "tree": "6f489c648354c104d5e803936d8548b026c84c14",
   "basis": "committed Git blob content (git cat-file blob <blob-sha>)",
-  "note": "Digests are computed over the COMMITTED BLOB, not the working-tree file. Because core.autocrlf=true, git normalises CRLF->LF when writing a blob, so files whose working-tree bytes were CRLF have a different blob digest from the Step 4 working-tree manifest. The EOL classification columns record git's own view (git ls-files --eol).",
+  "note": "Digests are computed over the COMMITTED BLOB, not the working-tree file. Because core.autocrlf=true, git normalises CRLF->LF when writing a blob, so files whose working-tree bytes were CRLF have a different blob digest from the Step 4 working-tree manifest. The EOL classification columns record git's own view (git ls-files --eol). Regenerated 2026-10-07 against commit 02fcffc after the ADR backup-ancestry correction; it supersedes the revision committed at ea07b640 for the ADR entry only. The manifest JSON and its .sha256 sidecar are intentionally excluded from the entry list (self-reference is not computable); tracked docs files at HEAD number 111, of which 109 are evidence documents covered here.",
   "scope": "docs/ only",
   "files_total": 109,
   "classification_counts": {
@@ -19,9 +19,9 @@
   "entries": [
     {
       "path": "docs/decisions/ADR-2026-10-07-git-reconciliation.md",
-      "blob_sha": "6497e07df82c8c2446c8f12662cefb131259a933",
-      "committed_blob_sha256": "af695803464e4a1e587f7c33858073c4554f3a85efad917d100fd6092f574c65",
-      "committed_blob_bytes": 7478,
+      "blob_sha": "b3a8a6ef291c06bed0c85255f60d785809445387",
+      "committed_blob_sha256": "8bf5b3444e606fec93cf7db57837ec4ca3a2fd2564197a277b76b135f79a8b7e",
+      "committed_blob_bytes": 7662,
       "step4_working_tree_sha256": null,
       "matches_step4_manifest": null,
       "eol_index": "i/lf",
@@ -746,7 +746,7 @@
       "matches_step4_manifest": false,
       "eol_index": "i/lf",
       "eol_worktree": "w/crlf",
-      "eol_attr": "attr/",
+      "eol_attr": "attr/text eol=lf",
       "classification": "BLOB_DIFFERS_DUE_TO_EOL_NORMALISATION"
     },
     {
@@ -758,7 +758,7 @@
       "matches_step4_manifest": false,
       "eol_index": "i/lf",
       "eol_worktree": "w/crlf",
-      "eol_attr": "attr/",
+      "eol_attr": "attr/text eol=lf",
       "classification": "BLOB_DIFFERS_DUE_TO_EOL_NORMALISATION"
     },
     {
@@ -770,7 +770,7 @@
       "matches_step4_manifest": false,
       "eol_index": "i/lf",
       "eol_worktree": "w/crlf",
-      "eol_attr": "attr/",
+      "eol_attr": "attr/text eol=lf",
       "classification": "BLOB_DIFFERS_DUE_TO_EOL_NORMALISATION"
     },
     {
@@ -782,7 +782,7 @@
       "matches_step4_manifest": false,
       "eol_index": "i/lf",
       "eol_worktree": "w/crlf",
-      "eol_attr": "attr/",
+      "eol_attr": "attr/text eol=lf",
       "classification": "BLOB_DIFFERS_DUE_TO_EOL_NORMALISATION"
     },
     {
@@ -806,7 +806,7 @@
       "matches_step4_manifest": false,
       "eol_index": "i/lf",
       "eol_worktree": "w/crlf",
-      "eol_attr": "attr/",
+      "eol_attr": "attr/text eol=lf",
       "classification": "BLOB_DIFFERS_DUE_TO_EOL_NORMALISATION"
     },
     {
@@ -818,7 +818,7 @@
       "matches_step4_manifest": false,
       "eol_index": "i/lf",
       "eol_worktree": "w/crlf",
-      "eol_attr": "attr/",
+      "eol_attr": "attr/text eol=lf",
       "classification": "BLOB_DIFFERS_DUE_TO_EOL_NORMALISATION"
     },
     {
@@ -842,7 +842,7 @@
       "matches_step4_manifest": false,
       "eol_index": "i/lf",
       "eol_worktree": "w/crlf",
-      "eol_attr": "attr/",
+      "eol_attr": "attr/text eol=lf",
       "classification": "BLOB_DIFFERS_DUE_TO_EOL_NORMALISATION"
     },
     {
@@ -1010,7 +1010,7 @@
       "matches_step4_manifest": false,
       "eol_index": "i/lf",
       "eol_worktree": "w/crlf",
-      "eol_attr": "attr/",
+      "eol_attr": "attr/text eol=lf",
       "classification": "BLOB_DIFFERS_DUE_TO_EOL_NORMALISATION"
     },
     {
@@ -1046,7 +1046,7 @@
       "matches_step4_manifest": false,
       "eol_index": "i/lf",
       "eol_worktree": "w/crlf",
-      "eol_attr": "attr/",
+      "eol_attr": "attr/text eol=lf",
       "classification": "BLOB_DIFFERS_DUE_TO_EOL_NORMALISATION"
     },
     {
@@ -1118,7 +1118,7 @@
       "matches_step4_manifest": true,
       "eol_index": "i/lf",
       "eol_worktree": "w/lf",
-      "eol_attr": "attr/",
+      "eol_attr": "attr/text eol=lf",
       "classification": "BLOB_MATCHES_STEP4_MANIFEST"
     },
     {
