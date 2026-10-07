@@ -8,3 +8,5 @@
 *.yaml     text eol=lf
 *.md       text eol=lf
 renv.lock  text eol=lf
+*.json text eol=lf
+*.sha256 text eol=lf
