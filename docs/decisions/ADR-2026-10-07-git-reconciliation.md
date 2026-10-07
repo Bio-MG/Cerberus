@@ -98,8 +98,10 @@ secrets.
   has occurred.** The original still sits on `main` at `b494404` with 7 refs.
 - The **backup branches remain intact** (`backup-pre-rewrite` `caee471`,
   `backup-pre-squash` `54eb602`) and must be kept until a separate integration
-  decision is made — they are the only refs that still carry the complete
-  published ancestry.
+  decision is made. `backup-pre-rewrite` (`caee471`) retains the complete
+  published ancestry, including `df3369d`. `backup-pre-squash` (`54eb602`) is
+  rooted at the former synthetic S0 commit `93cbecb` and has no common ancestor
+  with `df3369d`. Both backup refs remain intact.
 - The earlier **squash is now understood as the root cause** of the disjoint
   histories; future history rewrites should be avoided in favour of
   replay-onto-published-base, which is verifiable by tree hash.
