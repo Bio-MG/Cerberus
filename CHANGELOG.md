@@ -1,6 +1,6 @@
 # Changelog
 
-Tous les changements notables de TranscriptoShiny (« Cerberus ») sont documentés ici.
+Tous les changements notables de Cerberus sont documentés ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ;
 versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur `main`.
 
