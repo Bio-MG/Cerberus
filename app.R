@@ -18,17 +18,17 @@ if (!requireNamespace("shinyjs", quietly = TRUE)) {
   ))
   if (on_proj_renv) {
     stop(
-      "TranscriptoShiny : packages requis introuvables alors que le renv du ",
+      "Cerberus : packages requis introuvables alors que le renv du ",
       "projet est actif. Librairie projet incomplète — exécutez ",
       "renv::restore() puis relancez.",
       call. = FALSE
     )
   }
   stop(
-    "TranscriptoShiny : cette session R a été démarrée en dehors du projet ",
+    "Cerberus : cette session R a été démarrée en dehors du projet ",
     "(renv du projet inactif — renv/library/ absent de .libPaths()).\n",
     "Corrections possibles :\n",
-    "  1. Ouvrez le projet via 'SHINYAPP test.Rproj' (renv s'active au ",
+    "  1. Ouvrez le projet via 'Cerberus.Rproj' (renv s'active au ",
     "démarrage), puis relancez runApp() ;\n",
     "  2. ou dans la session courante : setwd('",
     getwd(), "') ; source('renv/activate.R') ; runApp().",
@@ -243,7 +243,7 @@ ui <- page_navbar(
   # (nav_select) to the analysis tabs that host the ID-mapping panels.
   id = "main_nav",
 
-  title = "TranscriptoShiny v2 - Multi-Omics Platform",
+  title = "Cerberus v1.0 - Multi-Omics Platform",
   
   theme = my_theme,
 
@@ -872,7 +872,7 @@ server <- function(input, output, session) {
   
   output$save_session_btn <- downloadHandler(
     
-    filename = function() paste0("transcriptoshiny_session_", Sys.Date(), ".rds"),
+    filename = function() paste0("cerberus_session_", Sys.Date(), ".rds"),
     
     content  = function(file) {
       
@@ -902,7 +902,7 @@ server <- function(input, output, session) {
         
         saved_at    = Sys.time(),
         
-        app_version = "TranscriptoShiny v2"
+        app_version = "Cerberus v1.0"
         
       )
       
@@ -1100,7 +1100,7 @@ server <- function(input, output, session) {
     .tr_h <- function(k) { tr <- global_data$i18n; if (is.null(tr)) return(k); tryCatch(.strip_i18n_html(tr$t(k)), error=function(e) k) }
     showModal(modalDialog(
       
-      title = .tr_h("📖 Guide d'Utilisation - TranscriptoShiny v2"),
+      title = .tr_h("📖 Guide d'Utilisation - Cerberus v1.0"),
       
       size = "l",
       

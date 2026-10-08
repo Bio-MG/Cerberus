@@ -234,7 +234,7 @@ rdata_picker_server <- function(id, file_rv, commit_fn, expected = NULL,
     # ── Export : bundle .RData téléchargé (hors application) ───────────────
     output$export_btn <- downloadHandler(
       filename = function() {
-        paste0("TranscriptoShiny_selection_", format(Sys.time(), "%Y%m%d_%H%M%S"),
+        paste0("Cerberus_selection_", format(Sys.time(), "%Y%m%d_%H%M%S"),
                ".RData")
       },
       content = function(file) {
@@ -264,7 +264,7 @@ rdata_picker_server <- function(id, file_rv, commit_fn, expected = NULL,
           p <- info_rv()$name[sel[1]]
           base <- gsub("[^[:alnum:]_-]", "_", p)
         }
-        paste0("TranscriptoShiny_", base, "_", format(Sys.time(), "%Y%m%d_%H%M%S"),
+        paste0("Cerberus_", base, "_", format(Sys.time(), "%Y%m%d_%H%M%S"),
                ".rds")
       },
       content = function(file) {
