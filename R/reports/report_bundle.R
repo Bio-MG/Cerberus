@@ -115,7 +115,7 @@ consolidated_report_export_filename <- function(kind, ext) {
 
 .report_bundle_readme <- function(report_input, validation) {
   paste0(
-    "BUNDLE D'EXPORT PROJET — RAPPORT CONSOLIDÉ (TranscriptoShiny, 4F)\n",
+    "BUNDLE D'EXPORT PROJET — RAPPORT CONSOLIDÉ (Cerberus, 4F)\n",
     "=================================================================\n\n",
     "analysis_id : ", report_input$analysis_id, "\n",
     "Généré le : ", format(report_input$generated_at, "%Y-%m-%d %H:%M:%S"), "\n\n",

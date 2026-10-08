@@ -159,7 +159,7 @@ build_spatial_export_bundle <- function(spatial_obj, results, sections, out_dir,
   sk_ids <- if (!is.null(spatial_obj$sketch)) colnames(spatial_obj$sketch) else NULL
   
   readme_lines <- c(
-    "TranscriptoShiny -- Export Spatial (paquet complet)",
+    "Cerberus -- Export Spatial (paquet complet)",
     sprintf("Echantillon     : %s", spatial_obj$project %||% "?"),
     sprintf("Technologie     : %s", spatial_obj$technology %||% "?"),
     sprintf("Genere le       : %s", format(Sys.time(), "%Y-%m-%d %H:%M:%S")),
@@ -531,7 +531,7 @@ niche_res <- NULL
 
   paste0(
 '# =============================================================================
-# Script R Reproductible -- TranscriptoShiny (module Spatial)
+# Script R Reproductible -- Cerberus (module Spatial)
 # Genere le : ', date, '
 # Echantillon : ', spatial_obj$project %||% "?", ' (', spatial_obj$technology %||% "?", ')
 # =============================================================================

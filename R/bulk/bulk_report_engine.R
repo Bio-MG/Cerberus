@@ -209,7 +209,7 @@ if (requireNamespace("clusterProfiler",quietly=TRUE) && requireNamespace("org.Hs
 
   paste0(
 '# =============================================================================
-# Script R Reproductible \u2014 TranscriptoShiny
+# Script R Reproductible \u2014 Cerberus
 # G\u00e9n\u00e9r\u00e9 le : ', date, '
 # Contraste  : ', contrast_name, ' (', group_target, ' vs ', group_ref, ')
 # Dataset    : ', n_genes, ' g\u00e8nes \u00d7 ', n_samp, ' \u00e9chantillons
