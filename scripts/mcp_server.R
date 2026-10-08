@@ -1,5 +1,5 @@
 # =============================================================================
-# scripts/mcp_server.R — TranscriptoShiny MCP server (stdio, NATIVE JSON-RPC)
+# scripts/mcp_server.R — Cerberus MCP server (stdio, NATIVE JSON-RPC)
 # =============================================================================
 # M1 — READ-ONLY drive tools. Native handler: NO mcptools, NO btw, NO ellmer.
 # Only jsonlite (already in renv.lock) is used, and only for the protocol layer.
@@ -3338,7 +3338,7 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
            additionalProperties = FALSE)),
     list(name = "transcripto_drive_status",
          description = paste0(
-           "Read-only. Report the live TranscriptoShiny drive session: protocol, ",
+           "Read-only. Report the live Cerberus drive session: protocol, ",
            "viewer mode, pid, started_at, heartbeat freshness and job state. ",
            "Returns a domain error code (NO_SESSION, STALE_SESSION, ",
            "INVALID_PROTOCOL, READ_FAILED) in structuredContent when the session ",
@@ -3583,9 +3583,9 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
   list(
     protocolVersion = ver,
     capabilities = list(tools = list(listChanged = FALSE)),
-    serverInfo = list(name = "transcriptoshiny-drive", version = "0.6.0-m4"),
+    serverInfo = list(name = "cerberus-drive", version = "0.6.0-m4"),
     instructions = paste0(
-      "Access to a LIVE TranscriptoShiny drive session. Nine tools: three read-only ",
+      "Access to a LIVE Cerberus drive session. Nine tools: three read-only ",
       "(status, verdict, passive snapshot), one controlled import (import, ",
       "action=import_file only), one controlled input write (set_inputs), ",
       "one controlled run (run, action=run_pipeline only), one bounded observation ",
