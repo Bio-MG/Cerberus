@@ -149,7 +149,7 @@ mod_bulk_report_server <- function(id, global_data, shared_rv) {
           "Table consensus (top 20 par rang moyen)",
           "Consensus de rang — table complète disponible en export CSV depuis l'app.",
           "Aucune comparaison multi-méthodes disponible — cliquez \"Comparer\" avant l'export.",
-          "Rapport généré automatiquement par TranscriptoShiny — module Bulk RNA-seq.",
+          "Rapport généré automatiquement par Cerberus — module Bulk RNA-seq.",
           "Contraste actif : {c} | Échantillons : {n} | Gènes testés : {g} | Gènes significatifs : {s}",
           "Petits multiples pour chacun des {n} contrastes calculés — mise en page : {layout}.",
           "Heatmaps par paire non affichées ({n} contrastes > 6) — changez le contraste actif dans l'onglet Heatmap.",

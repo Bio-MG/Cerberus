@@ -245,7 +245,7 @@ mod_spatial_report_server <- function(id, global_data, shared_rv) {
                       "Aucune section calculee pour cet echantillon au moment de l'export.",
                       "Seuils appliques :", "elements retenus", "clusters",
                       "Methode :", "genes testes", "niches",
-                      "Rapport genere automatiquement par TranscriptoShiny - module Spatial.",
+                      "Rapport genere automatiquement par Cerberus - module Spatial.",
                       "Multi-echantillons - Integration conjointe",
                       "Reduction utilisee : **%s** - %s elements sur %d echantillon(s) : %s.",
                       "Colore par echantillon (effet de lot)",

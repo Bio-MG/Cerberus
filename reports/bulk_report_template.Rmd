@@ -391,4 +391,4 @@ cat("*", tr("Aucune comparaison multi-méthodes disponible — cliquez \"Compare
 
 ---
 
-<small>`r tr("Rapport généré automatiquement par TranscriptoShiny — module Bulk RNA-seq.")`</small>
+<small>`r tr("Rapport généré automatiquement par Cerberus — module Bulk RNA-seq.")`</small>

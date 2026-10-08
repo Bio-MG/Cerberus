@@ -198,4 +198,4 @@ res <- lapply(names(params$datasets), function(nm) {
 cat(unlist(res), sep = "\n")
 ```
 
-<small>`r tr("Rapport genere automatiquement par TranscriptoShiny - module Spatial.")`</small>
+<small>`r tr("Rapport genere automatiquement par Cerberus - module Spatial.")`</small>

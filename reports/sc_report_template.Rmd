@@ -600,4 +600,4 @@ for (nm in names(params$saved_viz_list)) {
 
 ---
 
-<small>Rapport généré automatiquement par TranscriptoShiny — module Single-Cell.</small>
+<small>Rapport généré automatiquement par Cerberus — module Single-Cell.</small>
