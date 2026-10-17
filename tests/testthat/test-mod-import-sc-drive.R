@@ -812,3 +812,50 @@ test_that("a FAILED import_sc never makes the probe claim the sample it failed t
   expect_false(v$ok)
   expect_identical(probe()$sample_name, "P1")
 })
+
+# ---------------------------------------------------------------------------
+# M3 (2026-10-17) — a driven import REPLACES the dataset, so it must bump
+# ---------------------------------------------------------------------------
+# `app.R` states the epoch's semantics: "incremented ONLY when the dataset is
+# replaced (imports / merge / activation) — it triggers the purge of shared
+# results". The ENRICHMENT sites (mapping, design, pipeline, trajectory,
+# clustering) must therefore NOT bump: doing so would purge the results the user
+# just computed. The importer, by definition, replaces the dataset.
+#
+# Measured before this test existed: the FOUR human paths in this file all
+# bumped; the DRIVE importer (`ts_drive_publish_importer`, the closure the
+# watcher actually calls) assigned `sc_obj` and did not. A driven import
+# therefore kept the PREVIOUS dataset's DE / pathways / contrasts attached to
+# the new object — the purge never fired, and nothing said so.
+test_that("every sc_obj replacement in the IMPORTER bumps the epoch", {
+  lines <- .sc_src()
+  code  <- .sc_code()
+
+  n_assign <- sum(grepl("^[[:space:]]*global_data\\$sc_obj[[:space:]]*<-", code))
+  n_bump   <- sum(grepl("sc_obj_epoch[[:space:]]*<-", code))
+  expect_gt(n_assign, 0L)
+
+  # (1) Cardinality: one bump per replacement, no more, no fewer.
+  expect_equal(n_bump, n_assign)
+
+  # (2) Adjacency: the bump must be the NEXT STATEMENT of the SAME replacement.
+  # A bump parked elsewhere in the file would satisfy (1) while leaving this
+  # site unprotected — the count alone is not the claim.
+  # Comments and blank lines are NOT statements: they are skipped, exactly as
+  # `.sc_code()` skips them (a comment between the two lines is not a second
+  # statement, and counting it as one is the "measures the prose" mistake this
+  # file already documents at its head).
+  idx <- grep("^[[:space:]]*global_data\\$sc_obj[[:space:]]*<-", lines)
+  bad <- character(0)
+  for (i in idx) {
+    j <- i + 1L
+    while (j <= length(lines) &&
+           (!nzchar(trimws(lines[j])) || grepl("^[[:space:]]*#", lines[j]))) {
+      j <- j + 1L
+    }
+    ok <- j <= length(lines) && grepl("sc_obj_epoch[[:space:]]*<-", lines[j])
+    if (!isTRUE(ok)) bad <- c(bad, sprintf("ligne %d: %s", i, trimws(lines[i])))
+  }
+  expect_identical(bad, character(0),
+                   info = paste("remplacements sans bump :", paste(bad, collapse = " | ")))
+})

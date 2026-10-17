@@ -667,6 +667,11 @@ mod_import_sc_server <- function(id, global_data) {
     ts_drive_publish_importer(global_data, TS_DRIVE_SC_IMPORT_MODULE, function(request) {
       obj <- sc_sample_object(request$dir_path, request$sample_name, add_log)
       global_data$sc_obj <- obj
+      # Same bump as the four human paths above: this REPLACES the dataset, so
+      # the shared results of the previous one (DE, pathways, contrasts) must be
+      # purged. Without it a driven import kept the old dataset's results
+      # attached to the new object, and nothing said so.
+      global_data$sc_obj_epoch <- (global_data$sc_obj_epoch %||% 0L) + 1L
       .register_sc_multi_dataset(obj)
       add_log(paste("✅", ncol(obj), .tr("cellules,"), request$sample_name))
       list(ok = TRUE, status = "applied", errors = character(0),
