@@ -17,6 +17,67 @@
 
 
 
+# M12 (2026-10-17) — resolution of the ORA background, extracted so that it can
+# be DECIDED without clusterProfiler.
+#
+# Two things were wrong when this lived inline inside run_pathway_enrichment():
+#   1. `universe = NULL` — or a universe that cleaned down to nothing, or one
+#      that mapped to zero Entrez ids — left `universe_entrez` at NULL and was
+#      forwarded as-is to enrichGO/enrichKEGG/enrichPathway. clusterProfiler
+#      then silently used its DEFAULT background (every annotated gene), which
+#      is a different analysis wearing the same name (see the measured gap in
+#      test-stats-quickwins.R, "the enrichment BACKGROUND"). Only the
+#      "universe supplied but nothing converted" branch warned; the two other
+#      fallbacks were mute.
+#   2. The note was a bare `warning()`, so a downstream consumer (export,
+#      report, drive verdict) could not tell a default-background run from a
+#      declared-background one without scraping the console.
+#
+# `map_fun` is injected (it is `bitr` in production) so the resolution is a
+# pure function: no OrgDb, no network, no package needed to test it.
+#
+# Returns list(entrez = <character or NULL>, note = <character or NULL>).
+# `note` is non-NULL exactly when the background FELL BACK; `entrez` is then
+# NULL, which is what the enrichment functions receive as "use the default".
+.resolve_ora_universe <- function(universe, ids, map_fun) {
+  ids <- as.character(ids)
+  ids <- ids[!is.na(ids)]
+
+  if (is.null(universe)) {
+    return(list(entrez = NULL, note = paste0(
+      "ORA : aucun univers fourni — le fond par défaut de clusterProfiler ",
+      "(tous les gènes annotés) est utilisé. Déclarez l'univers (les gènes ",
+      "détectables) pour une ORA comparable.")))
+  }
+
+  universe_clean <- unique(trimws(universe[!is.na(universe) &
+                                             nchar(trimws(universe)) > 0]))
+  if (length(universe_clean) == 0L) {
+    return(list(entrez = NULL, note = paste0(
+      "ORA : l'univers fourni est VIDE après nettoyage — repli sur le fond ",
+      "par défaut de clusterProfiler (tous les gènes annotés).")))
+  }
+
+  universe_map <- tryCatch(map_fun(universe_clean), error = function(e) NULL)
+  if (is.null(universe_map) || nrow(universe_map) == 0L) {
+    return(list(entrez = NULL, note = paste0(
+      "ORA : aucun ID de l'univers n'a pu être converti en Entrez — repli sur ",
+      "le fond par défaut de clusterProfiler (tous les gènes annotés).")))
+  }
+
+  list(entrez = union(unique(universe_map$ENTREZID), ids), note = NULL)
+}
+
+
+# One place that stamps the fallback note on the returned table, so the two
+# return paths of run_pathway_enrichment() cannot drift apart (the M8 lesson:
+# a duplicated expression is two truths waiting to diverge).
+.ora_attach_universe_note <- function(df, note) {
+  if (!is.null(note)) attr(df, "universe_fallback") <- note
+  df
+}
+
+
 #' Pathway Enrichment Analysis (Robust v3)
 
 #' @param genes Vecteur de gènes (Symbols)
@@ -26,6 +87,13 @@
 #' @param database Base de données ("GOBP", "KEGG", "Reactome")
 
 #' @param pval_cutoff Seuil p-value
+
+#' @param qval_cutoff Seuil q-value, dans ]0, 1]. C'était une CONSTANTE CACHÉE
+#'   (0.2, écrite en dur sur le seul site GOBP) alors que `pval_cutoff` était
+#'   exposé : un second filtre que l'appelant ne pouvait ni voir ni régler.
+#'   Défaut 0.2 = la valeur que les trois bases appliquaient déjà, donc le
+#'   comportement des appelants existants est inchangé. Validé avant tout
+#'   chargement de paquet (M12).
 
 #' @param p_adjust_method Méthode de correction pour tests multiples ("BH",
 #'   "BY", "bonferroni", "holm", ... — voir stats::p.adjust.methods).
@@ -38,6 +106,7 @@ run_pathway_enrichment <- function(genes, organism = "human",
                                    database = "GOBP",
 
                                    pval_cutoff = 0.05, universe = NULL,
+                                   qval_cutoff = 0.2,
                                    p_adjust_method = "BH") {
 
   
@@ -47,6 +116,17 @@ run_pathway_enrichment <- function(genes, organism = "human",
   # TS_PADJ_METHODS, qui n'est que le sous-ensemble offert dans l'UI — un
   # appelant programmatique reste libre d'utiliser "none" ou "hommel".
   p_adjust_method <- match.arg(p_adjust_method, stats::p.adjust.methods)
+
+  # M12 : le q-filtre était une CONSTANTE CACHÉE (0.2, écrite en dur sur le seul
+  # site GOBP) alors que `pvalueCutoff` est exposé. Il devient un argument, validé
+  # AVANT tout chargement de paquet : le refus est immédiat et testable sans
+  # Bioconductor. Défaut 0.2 = la valeur que les trois bases appliquaient déjà.
+  qval_cutoff <- suppressWarnings(as.numeric(qval_cutoff))
+  if (length(qval_cutoff) != 1L || is.na(qval_cutoff) ||
+      qval_cutoff <= 0 || qval_cutoff > 1) {
+    stop(errorCondition("qval_cutoff doit être un nombre dans ]0, 1].",
+                        class = "pathway_error"))
+  }
 
   # 1. Check Core Dependencies
 
@@ -154,19 +234,17 @@ run_pathway_enrichment <- function(genes, organism = "human",
 
   ids <- gene_entrez$ENTREZID
 
-  universe_entrez <- NULL
-  if (!is.null(universe)) {
-    universe_clean <- unique(trimws(universe[!is.na(universe) & nchar(trimws(universe)) > 0]))
-    if (length(universe_clean) > 0) {
-      universe_map <- tryCatch(bitr(universe_clean, fromType = "SYMBOL", toType = "ENTREZID", OrgDb = orgdb),
-                               error = function(e) NULL)
-      if (!is.null(universe_map) && nrow(universe_map) > 0) {
-        universe_entrez <- union(unique(universe_map$ENTREZID), ids)
-      } else {
-        warning("Univers fourni mais aucun ID converti — repli sur le fond par défaut.")
-      }
-    }
-  } 
+  # M12 : résolution PURE du fond (cf. .resolve_ora_universe() en tête de
+  # fichier). La note de repli est conservée : elle est à la fois avertie ici
+  # et estampillée sur la table rendue, pour qu'un consommateur en aval (export,
+  # rapport, verdict drive) puisse distinguer un fond DÉCLARÉ d'un fond par
+  # défaut sans lire la console.
+  universe_res <- .resolve_ora_universe(
+    universe, ids,
+    function(keys) bitr(keys, fromType = "SYMBOL", toType = "ENTREZID", OrgDb = orgdb))
+  universe_entrez <- universe_res$entrez
+  universe_note <- universe_res$note
+  if (!is.null(universe_note)) warning(universe_note)
 
   # 3. Run Enrichment based on Database
 
@@ -188,7 +266,7 @@ run_pathway_enrichment <- function(genes, organism = "human",
 
       pvalueCutoff  = pval_cutoff,
 
-      qvalueCutoff  = 0.2,
+      qvalueCutoff  = qval_cutoff,
 
       readable      = FALSE, # Keep as Entrez for consistency, or TRUE for Symbols
 
@@ -226,6 +304,8 @@ run_pathway_enrichment <- function(genes, organism = "human",
 
       pvalueCutoff  = pval_cutoff,
 
+      qvalueCutoff  = qval_cutoff,
+
       universe      = universe_entrez
 
     )
@@ -258,6 +338,8 @@ run_pathway_enrichment <- function(genes, organism = "human",
 
       pvalueCutoff  = pval_cutoff,
 
+      qvalueCutoff  = qval_cutoff,
+
       universe      = universe_entrez
 
     )
@@ -274,7 +356,7 @@ run_pathway_enrichment <- function(genes, organism = "human",
 
   if (is.null(enrich_result) || nrow(as.data.frame(enrich_result)) == 0) {
 
-    return(data.frame(
+    return(.ora_attach_universe_note(data.frame(
 
       ID          = character(0),
 
@@ -286,7 +368,7 @@ run_pathway_enrichment <- function(genes, organism = "human",
 
       GeneRatio   = character(0)
 
-    ))
+    ), universe_note))
 
   }
 
@@ -301,7 +383,9 @@ run_pathway_enrichment <- function(genes, organism = "human",
   # the data.frame contract for existing callers is unchanged.
   attr(res_df, "enrich_obj") <- enrich_result
 
-  return(res_df)
+  # M12 : même estampille sur le chemin NOMINAL que sur le chemin vide — deux
+  # retours, un seul helper, donc aucune dérive possible entre les deux.
+  return(.ora_attach_universe_note(res_df, universe_note))
 
 }
 

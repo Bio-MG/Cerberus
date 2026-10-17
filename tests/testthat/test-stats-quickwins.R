@@ -239,7 +239,8 @@ test_that("bulk_r_script_text defaults to BH and rejects an injected/unknown met
 # The background of an over-representation analysis is the set of genes that COULD
 # have been detected. This app already knows that rule and applies it everywhere:
 # `run_pathway_enrichment()` takes a `universe`, maps it SYMBOL->ENTREZID, unions
-# the tested set into it (pathway_helpers.R:164) and forwards it to `enrichGO`,
+# the tested set into it (`.resolve_ora_universe()`, pathway_helpers.R:68) and
+# forwards it to `enrichGO`,
 # `enrichKEGG` AND `enrichPathway` (lines 195 / 229 / 261). Four app call sites
 # pass their own gene list: sc_pipeline.R:309, mod_bulk.R:506, and
 # mod_sc_pathways.R:173 / :427.
@@ -390,7 +391,8 @@ test_that("the script's background is the TESTED set, not the significant subset
   expect_true("res_df" %in% syms)
   expect_false("sig_g" %in% syms)
   # And the significant set must be unioned INTO the universe, as the app does
-  # (pathway_helpers.R:164): a background excluding the query is an arithmetic
+  # (`.resolve_ora_universe()`, pathway_helpers.R:68): a background excluding the
+  # query is an arithmetic
   # impossibility, and clusterProfiler would silently return nothing.
   uni_ids <- .sc_find_assign("uni_ids")
   if (!.sc_need(length(uni_ids) >= 1L, "the script must build `uni_ids`")) {
@@ -422,9 +424,20 @@ test_that("EVERY ORA call site in R/ passes a background (no fourth violator)", 
   }
   # The app side is the single definition: the union of the query into the
   # universe is done ONCE, in the helper, and not re-implemented per call site.
+  #
+  # M12 (2026-10-17) a DÉPLACÉ cette expression : elle vivait en ligne dans
+  # run_pathway_enrichment(), elle vit maintenant dans `.resolve_ora_universe()`
+  # (pathway_helpers.R, en tête de fichier) pour être décidable sans paquet.
+  # L'assertion épinglait le TEXTE EXACT `universe_entrez <- union(...)`, donc
+  # elle rougissait sur un simple déplacement — elle mesurait un emplacement, pas
+  # la propriété. Elle mesure maintenant la propriété : l'union n'existe qu'UNE
+  # fois dans le fichier (une seconde occurrence = la re-divergence qu'on
+  # cherche à interdire), et son comportement est épinglé par
+  # test-pathway-helpers.R ("la resolution d'univers dit QUAND elle se replie").
   h <- paste(readLines(file.path(ts_project_root(), "R/core/pathway_helpers.R"),
                        warn = FALSE), collapse = "\n")
-  expect_true(grepl("universe_entrez <- union\\(unique\\(universe_map\\$ENTREZID\\), ids\\)", h))
+  m_union <- gregexpr("union(unique(universe_map$ENTREZID), ids)", h, fixed = TRUE)[[1]]
+  expect_equal(sum(m_union > 0L), 1L)   # 0 occurrence => 0, pas 1
   # ...and it reaches all THREE backends. Two of three would leave Reactome on
   # the old behaviour while GO and KEGG looked unified.
   expect_equal(length(gregexpr("universe      = universe_entrez", h, fixed = TRUE)[[1]]), 3L)

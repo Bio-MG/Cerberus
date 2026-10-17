@@ -7,11 +7,12 @@
 # annotation stack + network access to bitr()/enrichGO() and are integration-
 # tested manually against a real dataset, not unit-tested here).
 #
-# run_pathway_enrichment() / run_gsea_enrichment() themselves are NOT
-# covered: every code path needs clusterProfiler + an org.*.eg.db package
-# before it can even validate its inputs (see each function's own early
-# requireNamespace() guards) — there's no meaningful pure-logic slice to
-# isolate without those.
+# run_pathway_enrichment() / run_gsea_enrichment() : leur logique PURE est
+# couverte depuis M12 (2026-10-17) — `.resolve_ora_universe()` se décide sans
+# Bioconductor, et un cas d'intégration (skip_if_not_installed) vérifie le
+# câblage de bout en bout sur un vrai enrichGO. Le reste de ces deux fonctions
+# (chargement OrgDb, bitr, appels d'enrichissement) reste intégration-testé
+# manuellement contre un vrai jeu de données.
 # =============================================================================
 
 source_project_file("R/plotting/palettes.R")
@@ -267,4 +268,130 @@ test_that("C10 : les erreurs joignables de pathway_helpers.R portent pathway_err
     organism = "human", database = "NOPE"))
   expect_s3_class(e, "pathway_error")
   expect_match(conditionMessage(e), "Base de donn", fixed = TRUE)
+})
+
+# ---------------------------------------------------------------------------
+# M12 (2026-10-17) — le repli d'univers doit se DIRE, et le q-filtre n'est
+# plus une constante cachee
+# ---------------------------------------------------------------------------
+# Deux defauts mesures dans `run_pathway_enrichment()` :
+#   (a) `universe = NULL` — ou un univers fourni mais VIDE, ou non convertible —
+#       laissait `universe_entrez` a NULL et le passait tel quel a enrichGO /
+#       enrichKEGG / enrichPathway : clusterProfiler retombait alors sur son
+#       fond par defaut (TOUS les genes annotes) sans le moindre signal. Ce
+#       n'est pas le meme metier sous le meme nom (cf. la section « enrichment
+#       BACKGROUND » de test-stats-quickwins.R, qui mesure l'ecart).
+#   (b) `qvalueCutoff = 0.2` etait ecrit EN DUR sur le seul site GOBP, alors que
+#       `pvalueCutoff` est expose a l'appelant : un second filtre, invisible, qui
+#       pouvait retirer des lignes sous un seuil que personne n'avait demande.
+#
+# Le correctif extrait la resolution dans une fonction PURE
+# (`.resolve_ora_universe()`, injectable donc decidable sans paquet) qui rend
+# l'univers ET la note de repli, et expose `qval_cutoff` (defaut 0.2 : le
+# comportement des trois bases est inchange, la valeur devient seulement lisible
+# et reglable).
+test_that("M12: la resolution d'univers dit QUAND elle se replie", {
+  ids <- c("7157", "672")
+  boom <- function(k) stop("le mapper ne doit pas etre appele")
+
+  # 1. aucun univers fourni : c'est un choix, pas un silence
+  r <- .resolve_ora_universe(NULL, ids, boom)
+  expect_null(r$entrez)
+  expect_true(nzchar(r$note))
+  expect_match(r$note, "univers", ignore.case = TRUE)
+
+  # 2. univers fourni mais vide apres nettoyage (NA, "", blancs)
+  r <- .resolve_ora_universe(c(NA, "", "   "), ids, boom)
+  expect_null(r$entrez)
+  expect_true(nzchar(r$note))
+  expect_match(r$note, "vide", ignore.case = TRUE)
+
+  # 3. conversion impossible (bitr echoue)
+  r <- .resolve_ora_universe("TP53", ids, function(k) NULL)
+  expect_null(r$entrez)
+  expect_true(nzchar(r$note))
+
+  # 4. conversion a ZERO ligne (cas distinct du precedent : pas une erreur)
+  r <- .resolve_ora_universe("TP53", ids,
+                             function(k) data.frame(SYMBOL = character(0),
+                                                    ENTREZID = character(0)))
+  expect_null(r$entrez)
+  expect_true(nzchar(r$note))
+
+  # 5. succes : l'univers converti ET les ids testes (l'univers ne peut pas
+  #    exclure un gene teste — c'est la regle que le code appliquait deja)
+  r <- .resolve_ora_universe(c("TP53", "BRCA1"), "1000",
+                             function(k) data.frame(SYMBOL = k,
+                                                    ENTREZID = c("7157", "672")))
+  expect_null(r$note)
+  expect_setequal(r$entrez, c("7157", "672", "1000"))
+})
+
+test_that("M12: l'estampille de repli est posee par UN seul helper", {
+  df <- data.frame(ID = character(0), p.adjust = numeric(0))
+
+  # Un fond DÉCLARÉ n'est pas un repli : pas d'attribut du tout (et non un
+  # attribut vide, qui se lirait comme un repli sans message).
+  expect_null(attr(.ora_attach_universe_note(df, NULL), "universe_fallback"))
+
+  out <- .ora_attach_universe_note(df, "repli sur le fond par defaut")
+  expect_identical(attr(out, "universe_fallback"), "repli sur le fond par defaut")
+  # La table elle-même n'est pas touchée : même forme, même contenu.
+  expect_identical(dim(out), dim(df))
+  expect_identical(names(out), names(df))
+})
+
+test_that("M12: qval_cutoff est expose, documente par son defaut, et valide tot", {
+  f <- formals(run_pathway_enrichment)
+  expect_true("qval_cutoff" %in% names(f))
+  expect_identical(f$qval_cutoff, 0.2)          # defaut = comportement inchange
+
+  # La validation doit tomber AVANT tout chargement de paquet (donc sans
+  # clusterProfiler ni org.Hs.eg.db) : c'est ce qui rend le test rapide ET
+  # vrai sur un hote sans Bioconductor.
+  expect_error(run_pathway_enrichment(c("TP53"), qval_cutoff = 2), class = "pathway_error")
+  expect_error(run_pathway_enrichment(c("TP53"), qval_cutoff = 0), class = "pathway_error")
+  expect_error(run_pathway_enrichment(c("TP53"), qval_cutoff = NA_real_),
+               class = "pathway_error")
+})
+
+test_that("M12: les trois appels d'enrichissement passent qval_cutoff", {
+  exprs <- ts_ast_parse("R/core/pathway_helpers.R")
+  calls <- list()
+  for (e in exprs) {
+    ts_ast_walk(e, function(y) {
+      head <- tryCatch(ts_ast_deparse(y[[1]]), error = function(err) "")
+      if (head %in% c("enrichGO", "enrichKEGG", "enrichPathway")) {
+        calls[[length(calls) + 1L]] <<- y
+      }
+      FALSE
+    })
+  }
+  # Un par base (GOBP / KEGG / Reactome) : la garde est exhaustive par
+  # construction, une quatrieme base ajoutee sans qvalueCutoff la ferait rougir.
+  expect_length(calls, 3L)
+  for (cl in calls) {
+    a <- as.list(cl)
+    expect_true("qvalueCutoff" %in% names(a), info = ts_ast_deparse(cl))
+    expect_identical(ts_ast_deparse(a$qvalueCutoff), "qval_cutoff")
+  }
+})
+
+test_that("M12: un univers vide avertit ET laisse une trace sur le resultat", {
+  skip_if_not_installed("clusterProfiler")
+  skip_if_not_installed("org.Hs.eg.db")
+  genes <- c("TP53", "BRCA1", "EGFR", "MYC", "CDK1")
+  w <- character(0)
+  res <- withCallingHandlers(
+    run_pathway_enrichment(genes, organism = "human", database = "GOBP",
+                           pval_cutoff = 0.05, universe = c(NA, "")),
+    warning = function(x) {
+      w <<- c(w, conditionMessage(x))
+      invokeRestart("muffleWarning")
+    })
+  expect_true(any(grepl("univers", w, ignore.case = TRUE)))
+  # La trace survit a la conversion en data.frame : un consommateur en aval
+  # (export, rapport) peut la relire au lieu de deviner.
+  expect_true(!is.null(attr(res, "universe_fallback")))
+  expect_true(nzchar(attr(res, "universe_fallback")))
 })
