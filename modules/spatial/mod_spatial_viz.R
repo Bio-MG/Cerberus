@@ -2218,7 +2218,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       content = function(file) {
         ids <- roi_ids()
         validate(need(!is.null(ids) && length(ids) > 0, .tr("Aucune ROI selectionnee.")))
-        sub_obj <- materialize_seurat_subset(global_data$spatial_obj, cellids = ids)
+        sub_obj <- materialize_seurat_subset(global_data$spatial_obj, cell_ids = ids)
         saveRDS(sub_obj, file)
       }
     )
