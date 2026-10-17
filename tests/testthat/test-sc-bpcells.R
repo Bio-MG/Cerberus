@@ -119,3 +119,79 @@ test_that("sc_bpcells.R ne contribue aucun signalement C10", {
   }
   expect_equal(n, 0L)
 })
+
+# ---------------------------------------------------------------------------
+# Régression métadonnées : la conversion BPCells préserve TOUTES les colonnes
+# ---------------------------------------------------------------------------
+# Le design DA (Stage 13 : pseudobulk, Milo, scCODA) déclare ses colonnes de
+# métadonnées APRÈS la conversion (elle court juste après la QC). La version
+# historique ne préservait que `orig.ident` ⇒ toute colonne de design (batch,
+# condition, patient, ...) était détruite SILENCIEUSEMENT avant même d'avoir pu
+# être déclarée. Contrat : chaque colonne d'entrée survit à l'identique ; seules
+# nCount_RNA/nFeature_RNA sont recalculées depuis les nouveaux comptes ; la
+# branche no-op `already_disk` reste inchangée.
+#
+# 🔴 Écrit AVANT le correctif (règle P0 : le test qui échoue d'abord). Rouge
+# attendu = des ÉCHECS (expect_*), pas des erreurs : la conversion réussit sur
+# l'arbre non corrigé, elle perd simplement les colonnes.
+test_that("convert_seurat_to_bpcells preserve TOUTES les colonnes de meta.data", {
+  skip_if_not_installed("BPCells")
+  # convert_seurat_to_bpcells() appelle GetAssayData()/CreateSeuratObject() non
+  # préfixés ; suppressWarnings : évite le warning bénin "built under R …"
+  suppressWarnings(suppressPackageStartupMessages(library(Seurat)))
+
+  # Fixture minimaliste : comptes bruts déterministes + meta.data portant
+  # orig.ident ET des colonnes de design.
+  set.seed(31)
+  n <- 12
+  genes  <- paste0("gene", seq_len(8))
+  counts <- Matrix::Matrix(
+    seq_len(length(genes) * n) %% 5L,
+    nrow = length(genes), ncol = n, sparse = TRUE
+  )
+  dimnames(counts) <- list(genes, paste0("cell", seq_len(n)))
+  meta <- data.frame(
+    orig.ident = factor(rep(c("s1", "s2"), each = n / 2)),
+    batch      = factor(rep(c("b1", "b2"), times = n / 2)),
+    condition  = rep(c("ctrl", "stim"), times = n / 2),
+    patient    = sprintf("P%02d", seq_len(n)),
+    row.names  = colnames(counts),
+    stringsAsFactors = FALSE
+  )
+  obj <- CreateSeuratObject(counts = counts, meta.data = meta)
+
+  conv <- convert_seurat_to_bpcells(obj)
+  expect_false(conv$already_disk)
+  on.exit(unlink(conv$dir, recursive = TRUE), add = TRUE)
+  expect_equal(c(conv$n_genes, conv$n_cells), dim(counts))
+
+  new_obj <- conv$object
+
+  # (a) chaque colonne d'entrée survit avec des valeurs IDENTIQUES
+  expect_true(all(colnames(meta) %in% colnames(new_obj@meta.data)))
+  for (cl in colnames(meta)) {
+    expect_identical(
+      as.character(new_obj@meta.data[[cl]]),
+      as.character(meta[[cl]]),
+      info = paste("colonne perdue ou mutée :", cl)
+    )
+  }
+  # nCount_RNA/nFeature_RNA recalculées depuis les nouveaux comptes
+  expect_equal(unname(new_obj$nCount_RNA), unname(as.numeric(Matrix::colSums(counts))))
+  expect_equal(unname(new_obj$nFeature_RNA), unname(as.numeric(Matrix::colSums(counts > 0))))
+
+  # (b) les comptes sont identiques, et bien portés par le disque (BPCells)
+  new_counts <- GetAssayData(new_obj, assay = "RNA", layer = "counts")
+  expect_s4_class(new_counts, "IterableMatrix")
+  expect_identical(rownames(new_counts), rownames(counts))
+  expect_identical(colnames(new_counts), colnames(counts))
+  expect_equal(as.matrix(new_counts), as.matrix(counts))
+
+  # (c) branche no-op already_disk : objet inchangé, dir NULL, rien à nettoyer
+  conv2 <- convert_seurat_to_bpcells(new_obj)
+  expect_true(conv2$already_disk)
+  expect_null(conv2$dir)
+  expect_identical(conv2$object, new_obj)
+  expect_identical(conv2$n_cells, ncol(new_obj))
+  expect_identical(conv2$n_genes, nrow(new_obj))
+})

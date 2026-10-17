@@ -40,7 +40,8 @@ sc_backend_status <- function(obj) {
 #'
 #' Writes counts to `dir` (a fresh tempdir() subdirectory by default) and
 #' rebuilds a lean Seurat object pointing at that on-disk matrix, carrying
-#' over `orig.ident` only. Any existing normalization/PCA/UMAP/clusters is
+#' over the COMPLETE cell metadata (`obj@meta.data`, design columns included).
+#' Any existing normalization/PCA/UMAP/clusters is
 #' lost -- same constraint as ID mapping (mod_sc_mapping.R): this MUST run
 #' BEFORE Normalisation, right after QC.
 #'
@@ -74,9 +75,14 @@ convert_seurat_to_bpcells <- function(obj, dir = NULL) {
   BPCells::write_matrix_dir(mat = counts, dir = dir, overwrite = TRUE)
   disk_mat <- BPCells::open_matrix_dir(dir = dir)
 
-  meta_keep <- obj@meta.data[, intersect("orig.ident", colnames(obj@meta.data)), drop = FALSE]
-  new_obj   <- CreateSeuratObject(counts = disk_mat, meta.data = meta_keep, project = Project(obj))
-  if ("orig.ident" %in% colnames(meta_keep)) new_obj$orig.ident <- meta_keep$orig.ident
+  # Preserve the COMPLETE cell metadata: design columns (batch, condition,
+  # patient id, ...) are declared AFTER conversion (Stage-13 design panel),
+  # so keeping only `orig.ident` would silently destroy the user's declared
+  # design. CreateSeuratObject() recomputes nCount_RNA/nFeature_RNA from the
+  # new counts; normalization/PCA/UMAP/cluster slots are still dropped
+  # (conversion MUST run before normalisation).
+  new_obj <- CreateSeuratObject(counts = disk_mat, meta.data = obj@meta.data,
+                                project = Project(obj))
 
   list(object = new_obj, dir = dir, n_cells = ncol(new_obj), n_genes = nrow(new_obj), already_disk = FALSE)
 }
