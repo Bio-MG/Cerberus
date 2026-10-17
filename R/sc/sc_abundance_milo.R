@@ -168,6 +168,52 @@ milo_error_state <- function(e) ts_error_state(e, "milo_error")
   is.na(x) | trimws(as.character(x)) == ""
 }
 
+#' Prefixer des messages miloR — et rendre `character(0)` sur une liste vide
+#'
+#' ⚠️ `paste0("miloR : ", character(0))` rend `"miloR : "` (MESURE) : R recycle
+#' sur la longueur 1 du prefixe, il ne rend PAS `character(0)`. Sans le garde
+#' ci-dessous, une absence d'avertissement ajoutait un prefixe ORPHELIN a la
+#' liste des warnings — et faisait donc passer le statut a
+#' `valid_with_warnings` sans qu'aucun avertissement n'existe.
+#'
+#' @param w Vecteur character de messages (peut etre vide).
+#' @return Vecteur character, de meme longueur que `w`, prefixe `"miloR : "`.
+.milo_prefix_warnings <- function(w) {
+  if (length(w) == 0L) return(character(0))
+  paste0("miloR : ", w)
+}
+
+#' Executer `expr` en COLLECTANT ses warnings au lieu de les perdre
+#'
+#' @param expr Expression a evaluer (evaluee PARESSEUSEMENT, dans la frame
+#'   appelante : les warnings qu'elle emet sont donc tous captures).
+#' @return list(value = resultat, warnings = character()).
+#'
+#' Defaut mesure (M15, 2026-10-17) : le site d'appel ecrivait
+#'
+#'     warning = function(w) { warnings_all <- c(warnings_all, ...) }
+#'
+#' Un `<-` DANS un gestionnaire cree une liaison LOCALE au gestionnaire : le
+#' `warnings_all` de la fonction appelante ne recevait jamais rien, donc
+#' `extra_warnings` annoncait « aucun avertissement » meme quand miloR en avait
+#' emis. Le canal de diagnostic mentait, silencieusement.
+#'
+#' Fonction PURE vis-a-vis de miloR : c'est ce qui rend le defaut decidable sans
+#' construire d'objet milo ni lancer `testNhoods()`.
+.milo_with_warnings <- function(expr) {
+  collected <- character(0)
+  value <- withCallingHandlers(
+    expr,
+    warning = function(w) {
+      # `<<-` : ecrit dans la frame de `.milo_with_warnings`, pas dans le
+      # gestionnaire. Un `<-` ici perdrait l'avertissement (cf. M15).
+      collected <<- c(collected, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    }
+  )
+  list(value = value, warnings = collected)
+}
+
 #' miloR est-il disponible ? (versions enregistrees dans la provenance)
 #'
 #' @param stop_if_missing Logical — lever une erreur explicite si absent.
@@ -444,17 +490,19 @@ run_milo_da <- function(seurat_obj,
     }
     contrast <- paste(target_coef, "-", ref_coef)
 
-    withCallingHandlers({
-      da_results <- miloR::testNhoods(
+    milo_run <- .milo_with_warnings(
+      miloR::testNhoods(
         milo_obj, design = design, design.df = design.df,
         fdr.weighting = fdr_weighting, min.mean = TS_DA_MILO_MIN_MEAN,
         robust = TS_DA_MILO_ROBUST, reduced.dim = "MILO",
         model.contrasts = contrast, fail.on.error = FALSE
       )
-    }, warning = function(w) {
-      warnings_all <- c(warnings_all, paste("miloR :", conditionMessage(w)))
-      invokeRestart("muffleWarning")
-    })
+    )
+    da_results   <- milo_run$value
+    # Le prefixe est applique par un helper PUR : `paste0("miloR : ",
+    # character(0))` rend `"miloR : "` et non `character(0)` (mesure), donc un
+    # prefixe orphelin suffirait a faire basculer le statut.
+    warnings_all <- c(warnings_all, .milo_prefix_warnings(milo_run$warnings))
 
     if (is.null(da_results) || nrow(da_results) == 0L) {
       .milo_stop(

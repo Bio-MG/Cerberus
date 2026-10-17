@@ -94,7 +94,20 @@ test_that("Milo rend le meme resultat dans le pool applicatif qu'en synchrone", 
     seurat_obj = obj, da_design_result = des, reduction = "pca",
     target_condition = "B", reference_condition = "A"
   )
-  expect_identical(sync_res$status, "valid")
+  # ⚠️ M15 (2026-10-17) : ce statut etait epingle a `"valid"` parce que les
+  # warnings de miloR etaient PERDUS (le gestionnaire ecrivait `<-`, donc le
+  # vecteur de la fonction appelante ne recevait rien). Depuis le correctif ils
+  # remontent, et le statut suit : `valid_with_warnings`.
+  #
+  # MESURE, et c'est pourquoi la valeur exacte n'est PAS epinglee ici : le seul
+  # avertissement emis sur cette fixture est la depreciation Matrix
+  # (`as(<dgTMatrix>, "dgCMatrix")`), et R ne l'emet qu'UNE FOIS PAR SESSION
+  # (mesure : 2 appels consecutifs -> 1er `valid_with_warnings`, 2e `valid`).
+  # Le statut depend donc de l'historique de session, pas du calcul. Epingler
+  # une valeur ici rendrait le test dependant de l'ordre d'execution.
+  # Ce que CE test doit garantir, c'est son titre : que le pool rende le MEME
+  # resultat que le synchrone. C'est asserte juste en dessous.
+  expect_true(sync_res$status %in% c("valid", "valid_with_warnings"))
 
   expect_true(isTRUE(ensure_app_daemons(n_daemons = 2L)))
 

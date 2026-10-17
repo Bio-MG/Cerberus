@@ -246,3 +246,82 @@ test_that("milo exports are traced by analysis_id and stable", {
                "^milo_summary_sc-da-milo_\\d{4}-\\d{2}-\\d{2}\\.csv$")
   expect_error(build_milo_summary(list()), class = "milo_error")
 })
+
+# ---------------------------------------------------------------------------
+# M15 (2026-10-17) — les warnings miloR doivent être COLLECTÉS, pas perdus
+# ---------------------------------------------------------------------------
+# Défaut mesuré : le gestionnaire écrivait
+#
+#     warning = function(w) { warnings_all <- c(warnings_all, ...) }
+#
+# Un `<-` DANS un gestionnaire crée une liaison LOCALE au gestionnaire : le
+# `warnings_all` de la fonction appelante ne recevait jamais rien, donc
+# `extra_warnings` (plus bas) annonçait « aucun avertissement » même quand
+# miloR en avait émis. Le canal de diagnostic mentait, silencieusement.
+# `<<-` écrit dans la frame appelante — c'est le seul remède, et c'est
+# exactement ce que la garde ci-dessous exige.
+test_that("milo : le gestionnaire de warning écrit avec `<<-`, jamais `<-`", {
+  p <- ts_ast_parse("R/sc/sc_abundance_milo.R")
+
+  handlers <- ts_ast_find_all(p, function(x) {
+    if (!ts_ast_is_call_to(x, "withCallingHandlers")) return(FALSE)
+    nm <- names(as.list(x))
+    !is.null(nm) && "warning" %in% nm
+  })
+  # Témoin de non-vacuité : sans gestionnaire trouvé, la garde passerait pour
+  # la mauvaise raison (elle n'aurait rien regardé).
+  expect_gt(length(handlers), 0L)
+
+  bad <- character(0)
+  for (h in handlers) {                          # (1) par INDEX
+    l  <- as.list(h)
+    nm <- names(l)
+    for (i in seq_along(l)) {                    # (1) par INDEX
+      if (!identical(nm[i], "warning")) next
+      body <- l[[i]]
+      # Toute affectation `<-` DANS le gestionnaire est suspecte : elle ne peut
+      # pas atteindre la frame appelante. On nomme les cibles pour que l'échec
+      # soit actionnable.
+      ts_ast_walk(body, function(x) {
+        if (!ts_ast_is_call_to(x, "<-")) return(FALSE)
+        tgt <- tryCatch(ts_ast_deparse(as.list(x)[[2]]), error = function(e) "")
+        bad <<- c(bad, sprintf("warning handler: %s <- ...", tgt))
+        FALSE
+      })
+    }
+  }
+  expect_identical(bad, character(0),
+                   info = paste("affectations locales dans un gestionnaire :",
+                                paste(bad, collapse = " | ")))
+})
+
+test_that("milo : les warnings sont COLLECTÉS, pas perdus (comportement)", {
+  r <- .milo_with_warnings({
+    warning("premier")
+    warning("second")
+    42L
+  })
+  expect_identical(r$value, 42L)
+  expect_identical(r$warnings, c("premier", "second"))
+
+  # Collectés, donc MÛRS : aucun ne s'échappe vers l'appelant.
+  expect_silent(.milo_with_warnings({ warning("x"); "ok" }))
+
+  # Sans warning : liste vide et valeur intacte.
+  r0 <- .milo_with_warnings(7L)
+  expect_identical(r0$value, 7L)
+  expect_identical(r0$warnings, character(0))
+})
+
+test_that("milo : le préfixe des warnings ne fabrique pas d'entrée orpheline", {
+  # PIÈGE MESURÉ : `paste0("miloR : ", character(0))` rend `"miloR : "` — R
+  # recycle sur la longueur 1 du préfixe — et NON `character(0)`. Un préfixe
+  # orphelin suffirait à faire passer le statut à `valid_with_warnings` alors
+  # qu'aucun avertissement n'existe.
+  expect_identical(paste0("miloR : ", character(0)), "miloR : ")
+  # Le helper PUR neutralise ce piège.
+  expect_identical(.milo_prefix_warnings(character(0)), character(0))
+  expect_identical(.milo_prefix_warnings("a"), "miloR : a")
+  expect_identical(.milo_prefix_warnings(c("a", "b")),
+                   c("miloR : a", "miloR : b"))
+})
