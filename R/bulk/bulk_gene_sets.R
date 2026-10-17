@@ -191,9 +191,39 @@ bulk_gene_set_catalog <- function() {
   if (is.null(genes) || !any(nzchar(genes))) {
     .bulk_gs_error("PROGENy : gènes absents du modèle.", "compute_failed")
   }
-  # `top` borne déjà le nombre de gènes par voie dans getModel() : on expose
-  # simplement voie -> ses gènes.
-  stats::setNames(lapply(seq_len(ncol(m)), function(j) genes), colnames(m))
+  .bulk_gs_progeny_sets_from_matrix(m, top = top)
+}
+
+#' Découper une matrice de poids PROGENy en jeux de gènes PAR VOIE
+#'
+#' `m` : matrice gènes x voies rendue par `progeny::getModel()`. Un gène peut
+#' peser 0 dans une voie (il n'en est pas une cible) : il doit alors être exclu
+#' de CETTE voie seulement, jamais des autres.
+#'
+#' ⚠️ Défaut historique (M5, corrigé le 2026-10-17) : la version précédente
+#' rendait `lapply(seq_len(ncol(m)), function(j) genes)` — l'indice `j` n'était
+#' jamais lu, donc les 14 voies recevaient l'UNION des lignes du modèle au lieu
+#' de leurs ~`top` cibles. Les scores de voies devenaient quasi colinéaires,
+#' silencieusement (aucune erreur, aucun avertissement, des résultats
+#' plausibles).
+#'
+#' Fonction PURE (aucune dépendance à `progeny`) : c'est ce qui rend le défaut
+#' testable sur un hôte où le paquet est absent.
+#'
+#' Précondition : `rownames(m)` non NULL — vérifié par `.bulk_gs_progeny_sets()`.
+.bulk_gs_progeny_sets_from_matrix <- function(m, top = 500L) {
+  n_top <- suppressWarnings(as.integer(top))
+  if (length(n_top) != 1L || is.na(n_top) || n_top < 1L) n_top <- 500L
+  pws <- colnames(m)
+  if (is.null(pws)) pws <- paste0("pathway", seq_len(ncol(m)))
+  g <- rownames(m)
+  stats::setNames(lapply(seq_len(ncol(m)), function(j) {
+    w    <- suppressWarnings(as.numeric(m[, j]))
+    keep <- which(is.finite(w) & w != 0)
+    if (length(keep) == 0L) return(character(0))
+    keep <- keep[order(abs(w[keep]), decreasing = TRUE)]
+    g[utils::head(keep, n_top)]
+  }), pws)
 }
 
 #' DoRothEA — jeux de gènes (facteur de transcription -> cibles) LOCAUX

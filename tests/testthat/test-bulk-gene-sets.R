@@ -151,3 +151,151 @@ test_that("bulk_write_gmt : aller-retour EXACT, et refuse ce qui serait vide", {
   expect_error(bulk_write_gmt(list(A = character(0)), p), class = "bulk_gene_sets_error")
   expect_error(bulk_write_gmt(setNames(list("G1"), ""), p), class = "bulk_gene_sets_error")
 })
+
+# -----------------------------------------------------------------------------
+# M5 (2026-10-17) — PROGENy : chaque voie doit recevoir SES propres cibles
+# -----------------------------------------------------------------------------
+# Défaut mesuré sur `main` : `lapply(seq_len(ncol(m)), function(j) genes)` —
+# l'indice `j` n'était JAMAIS lu. Les 14 voies recevaient donc l'UNION des
+# lignes du modèle (jusqu'à plusieurs milliers de gènes) au lieu de leurs ~`top`
+# cibles. Conséquence : les scores de voies devenaient quasi colinéaires, sans
+# la moindre erreur ni le moindre avertissement — un défaut de SCIENCE
+# silencieux, pas un plantage.
+#
+# ⚠️ `progeny` est ABSENT de la bibliothèque du projet sur cet hôte : le bloc
+# d'exécution de `bulk_load_gene_sets("progeny", ...)` plus haut est donc SAUTÉ.
+# Le défaut est néanmoins décidable sans le paquet, par deux voies :
+#   (1) un garde AST interdit le retour de l'argument MORT (c'est la CAUSE) ;
+#   (2) la logique de découpage est extraite en fonction PURE, testée sur une
+#       matrice synthétique (le COMPORTEMENT, pas la forme).
+# -----------------------------------------------------------------------------
+
+#' Les définitions `<- function(...)` du fichier, par NOM.
+.bgs_progeny_defs <- function(names_wanted) {
+  p   <- ts_ast_parse("R/bulk/bulk_gene_sets.R")
+  out <- list()
+  for (i in seq_along(p)) {                      # (1) par INDEX — cf. helper-ast.R
+    ts_ast_walk(p[[i]], function(x) {
+      if (!ts_ast_is_call_to(x, "<-")) return(FALSE)
+      l <- tryCatch(as.list(x), error = function(e) NULL)
+      if (is.null(l) || length(l) != 3L) return(FALSE)
+      nm <- tryCatch(as.character(l[[2]]), error = function(e) "")
+      if (!nzchar(nm) || !nm %in% names_wanted) return(FALSE)
+      out[[nm]] <<- l[[3]]
+      FALSE
+    })
+  }
+  out
+}
+
+#' Le symbole `name` apparaît-il dans `expr` ? (parcours de TOUT l'arbre)
+.bgs_uses_symbol <- function(expr, name) {
+  hit <- FALSE
+  rec <- function(e) {
+    if (hit) return(invisible(NULL))
+    if (is.symbol(e)) {
+      if (identical(as.character(e), name)) hit <<- TRUE
+      return(invisible(NULL))
+    }
+    if (!is.call(e)) return(invisible(NULL))
+    l <- as.list(e)
+    for (i in seq_along(l)) rec(l[[i]])         # (1) par INDEX
+    invisible(NULL)
+  }
+  rec(expr)
+  hit
+}
+
+#' Les arguments formels DÉCLARÉS mais JAMAIS lus dans les lambdas de `expr`.
+.bgs_dead_formals <- function(expr) {
+  dead <- character(0)
+  walk <- function(e) {
+    if (!is.call(e)) return(invisible(NULL))
+    head <- tryCatch(e[[1]], error = function(err) NULL)
+    if (identical(head, as.name("function"))) {
+      fs <- tryCatch(names(as.list(e[[2]])), error = function(err) NULL)
+      for (a in fs) {                            # (1) par INDEX
+        if (!.bgs_uses_symbol(e[[3]], a)) dead <<- c(dead, a)
+      }
+    }
+    l <- as.list(e)
+    for (i in seq_along(l)) {                    # (1) par INDEX
+      ok <- tryCatch(is.call(l[[i]]), error = function(err) FALSE)
+      if (isTRUE(ok)) walk(l[[i]])
+    }
+    invisible(NULL)
+  }
+  walk(expr)
+  unique(dead)
+}
+
+test_that("PROGENy : aucune lambda à argument mort dans le découpage par voie", {
+  defs <- .bgs_progeny_defs(c(".bulk_gs_progeny_sets",
+                              ".bulk_gs_progeny_sets_from_matrix"))
+  expect_true(".bulk_gs_progeny_sets" %in% names(defs))
+
+  bad <- character(0)
+  for (nm in names(defs)) {                      # (1) par INDEX
+    d <- .bgs_dead_formals(defs[[nm]])
+    if (length(d) > 0L) {
+      bad <- c(bad, sprintf("%s(function(%s))", nm, paste(d, collapse = ", ")))
+    }
+  }
+  # Un `function(j) <corps>` qui n'emploie pas `j` est EXACTEMENT la forme du
+  # défaut : la voie reçoit alors la même liste que ses 13 voies sœurs.
+  expect_identical(bad, character(0),
+                   info = paste("lambdas à argument mort :",
+                                paste(bad, collapse = " | ")))
+})
+
+test_that("PROGENy : chaque voie reçoit SES cibles, pas l'union du modèle", {
+  # Matrice synthétique 5 gènes x 3 voies. Un 0 = « ce gène n'est pas une cible
+  # de CETTE voie » — exactement la structure d'un modèle PROGENy découpé par
+  # `top`.
+  m <- matrix(c(
+     3,  0, -2,
+     0,  4,  0,
+    -1,  0,  5,
+     0, -3,  0,
+     2,  0,  0
+  ), nrow = 5L, byrow = TRUE,
+  dimnames = list(c("G1", "G2", "G3", "G4", "G5"), c("p1", "p2", "p3")))
+
+  sets <- .bulk_gs_progeny_sets_from_matrix(m, top = 500L)
+
+  expect_identical(names(sets), c("p1", "p2", "p3"))
+  # Classement par |poids| décroissant, poids nuls exclus.
+  expect_identical(sets$p1, c("G1", "G5", "G3"))   # |3| > |2| > |1|
+  expect_identical(sets$p2, c("G2", "G4"))         # |4| > |3|
+  expect_identical(sets$p3, c("G3", "G1"))         # |5| > |2|
+  # Le défaut historique rendait TROIS copies de `rownames(m)` : ceci l'interdit.
+  expect_identical(sum(duplicated(sets)), 0L)
+  expect_false(identical(sets$p1, rownames(m)))
+
+  # `top` borne les cibles PAR VOIE (pas globalement), et la troncature garde
+  # les poids les plus forts.
+  t2 <- .bulk_gs_progeny_sets_from_matrix(m, top = 2L)
+  expect_identical(t2$p1, c("G1", "G5"))
+  expect_identical(t2$p2, c("G2", "G4"))
+  expect_identical(t2$p3, c("G3", "G1"))
+
+  # Une voie sans aucune cible rend un vecteur VIDE (le chargeur écarte ensuite
+  # les jeux vides) — jamais les gènes des autres voies.
+  m2 <- m; m2[, "p2"] <- 0
+  s2 <- .bulk_gs_progeny_sets_from_matrix(m2)
+  expect_identical(s2$p2, character(0))
+  expect_identical(s2$p1, c("G1", "G5", "G3"))
+
+  # `top` invalide retombe sur 500 sans erreur (jamais un `head(, NA)`).
+  expect_identical(.bulk_gs_progeny_sets_from_matrix(m, top = NA)$p1,
+                   c("G1", "G5", "G3"))
+})
+
+test_that("PROGENy : le chargeur public passe par le découpage par voie", {
+  defs <- .bgs_progeny_defs(".bulk_gs_progeny_sets")
+  expect_length(defs, 1L)
+  # Le helper n'est utile que s'il est réellement CÂBLÉ : on l'exige dans le
+  # corps du chargeur, pas seulement sur le disque.
+  expect_match(ts_ast_deparse(defs[[1]]),
+               ".bulk_gs_progeny_sets_from_matrix", fixed = TRUE)
+})
