@@ -99,7 +99,10 @@ mod_sc_metadata_server <- function(id, global_data) {
       # Reprendre le design déjà appliqué si l'objet le porte déjà.
       if ("condition" %in% colnames(meta) && "orig.ident" %in% colnames(meta)) {
         hit <- match(tbl$sample, as.character(meta$orig.ident))
-        if (!is.na(hit)) tbl$condition[!is.na(hit)] <- as.character(meta$condition)[na.omit(hit)]
+        # `hit` a UN ÉLÉMENT PAR ÉCHANTILLON : un `if (!is.na(hit))` serait une
+        # condition de longueur > 1 (erreur R >= 4.2) dès 2 échantillons.
+        # L'affectation sur un index vide est un no-op — pas de garde scalaire.
+        tbl$condition[!is.na(hit)] <- as.character(meta$condition)[na.omit(hit)]
         if ("replicate" %in% colnames(meta)) {
           tbl$replicate[!is.na(hit)] <- as.character(meta$replicate)[na.omit(hit)]
         }
