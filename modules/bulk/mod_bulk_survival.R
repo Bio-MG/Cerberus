@@ -49,8 +49,8 @@ mod_bulk_survival_output_ui <- function(id) {
     card_header(i18n$t("Survie & association clinique")),
     navset_tab(
       id = ns("survival_tabs"),
-      nav_panel("Kaplan-Meier", uiOutput(ns("surv_km_ui"))),
-      nav_panel("Cox", DTOutput(ns("surv_cox_table"))),
+      nav_panel("Kaplan-Meier", value = "surv_km_tab", uiOutput(ns("surv_km_ui"))),
+      nav_panel("Cox", value = "surv_cox_tab", DTOutput(ns("surv_cox_table"))),
       nav_panel(i18n$t("Notes"), uiOutput(ns("surv_notes_ui")))
     ),
     fluidRow(

@@ -305,7 +305,7 @@ mod_bulk_signatures_output_ui <- function(id) {
         icon("info-circle"), " ", i18n$t("Scores de signatures relatifs : estimation d'abondance relative ne rempla\u00e7ant pas une quantification cytom\u00e9trique.")),
     navset_tab(
       id = ns("sig_tabs"),
-      nav_panel(i18n$t("Heatmap"), plotOutput(ns("sig_heatmap"), height = "640px")),
+      nav_panel(i18n$t("Heatmap"), value = "sig_heatmap_tab", plotOutput(ns("sig_heatmap"), height = "640px")),
       nav_panel("PCA",              plotOutput(ns("sig_pca"), height = "420px")),
       nav_panel(i18n$t("Table"),    DTOutput(ns("sig_table"))),
       nav_panel(i18n$t("Rejets"),   uiOutput(ns("sig_dropped_ui")))

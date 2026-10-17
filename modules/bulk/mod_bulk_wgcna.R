@@ -50,10 +50,12 @@ mod_bulk_wgcna_output_ui <- function(id) {
     card_header("WGCNA"),
     navset_tab(
       id = ns("wgcna_tabs"),
-      nav_panel(i18n$t("Power"), plotOutput(ns("wgcna_power_fit"), height = "380px"),
+      nav_panel(i18n$t("Power"), value = "wgcna_power_tab",
+                plotOutput(ns("wgcna_power_fit"), height = "380px"),
                 plotOutput(ns("wgcna_power_conn"), height = "380px")),
       nav_panel(i18n$t("Dendrogramme"), uiOutput(ns("wgcna_dendro_ui"))),
-      nav_panel(i18n$t("Modules <-> Traits"), plotOutput(ns("wgcna_trait_plot"), height = "520px")),
+      nav_panel(i18n$t("Modules <-> Traits"), value = "wgcna_trait_tab",
+                plotOutput(ns("wgcna_trait_plot"), height = "520px")),
       nav_panel(i18n$t("Table modules"), DTOutput(ns("wgcna_module_table")))
     )
   )
