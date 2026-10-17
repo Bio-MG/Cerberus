@@ -61,6 +61,49 @@
 }
 
 
+# ── Private helper: deterministic marker ordering ─────────────────────────────
+#
+# `order(df$p_val_adj)` est un NO-OP silencieux dès que la colonne est constante
+# — exactement ce que produit `.normalize_marker_cols()` sur un jeu SANS
+# p-valeur (elle remplit `p_val_adj` de 1, cf. plus haut). Le sélecteur
+# « Trier Table » promettait alors un tri qui n'avait pas lieu et la table
+# gardait l'ordre d'arrivée.
+#
+# On ne trie donc sur `p_val_adj` que si la clé PORTE une information (au moins
+# deux valeurs finies distinctes) ; sinon on retombe sur une métrique réelle :
+# |avg_log2FC| décroissant, égalités tranchées par le NOM du gène — jamais par
+# l'ordre d'arrivée, qui n'est pas reproductible d'un run à l'autre.
+#
+# ⚠️ UN SEUL tri, appelé par les DEUX consommateurs (rendu de la table ET
+# résolution des lignes sélectionnées) : s'ils divergeaient, la sélection
+# désignerait d'autres gènes que ceux affichés.
+.markers_sort <- function(df, sort_by = NULL) {
+  if (is.null(df) || nrow(df) == 0L) return(df)
+  n <- nrow(df)
+
+  fc <- suppressWarnings(as.numeric(df$avg_log2FC))
+  if (length(fc) != n) fc <- rep(0, n)
+  fc[!is.finite(fc)] <- 0
+
+  tie <- if (!is.null(df$gene) && length(df$gene) == n) {
+    as.character(df$gene)
+  } else {
+    rep("", n)
+  }
+
+  p      <- suppressWarnings(as.numeric(df$p_val_adj))
+  usable <- length(p) == n && sum(is.finite(p)) >= 2L &&
+    length(unique(p[is.finite(p)])) >= 2L
+
+  # `key` : plus PETIT = meilleur (p croissant, |log2FC| décroissant).
+  key <- if (identical(sort_by, "logfc")) -fc else if (usable) p else -abs(fc)
+
+  # `na.last = TRUE` : une p-valeur inconnue descend en bas, elle ne prend pas
+  # la tête du classement.
+  df[order(key, tie, na.last = TRUE, method = "radix"), , drop = FALSE]
+}
+
+
 # ── UI: sidebar controls ──────────────────────────────────────────────────────
 
 mod_sc_markers_ui <- function(id) {
@@ -289,11 +332,7 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
                             scroll_x = FALSE, rownames = TRUE))
       }
 
-      df_sorted <- if (input$sort_by == "logfc") {
-        df[order(-df$avg_log2FC), ]
-      } else {
-        df[order(df$p_val_adj), ]
-      }
+      df_sorted <- .markers_sort(df, input$sort_by)
 
       df_display <- data.frame(
         Gene    = df_sorted$gene,
@@ -337,7 +376,7 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
     observeEvent(input$table_markers_rows_selected, {
       req(markers_rv())
       df <- markers_rv()
-      df_sorted <- if (input$sort_by == "logfc") df[order(-df$avg_log2FC), ] else df[order(df$p_val_adj), ]
+      df_sorted <- .markers_sort(df, input$sort_by)
       idx   <- input$table_markers_rows_selected
       valid <- idx[idx > 0 & idx <= nrow(df_sorted)]
       if (length(valid) > 0) {

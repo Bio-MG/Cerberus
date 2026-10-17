@@ -278,3 +278,87 @@ test_that("le garde 213 porte la classe sc_markers_error (verrou source cible)",
 test_that("mod_sc_markers.R ne contribue aucun signalement C10", {
   expect_equal(ts_c10_sites(.SM_FILE), integer(0))
 })
+
+
+# ---------------------------------------------------------------------------
+# M8 (2026-10-17) — tri des marqueurs : une seule clé, partagée, jamais no-op
+# ---------------------------------------------------------------------------
+# Défaut mesuré : `order(df$p_val_adj)` est un NO-OP silencieux dès que la
+# colonne est constante — c'est exactement ce que produit
+# `.normalize_marker_cols()` sur un jeu SANS p-valeur (elle remplit
+# `p_val_adj` de 1). Le sélecteur « Trier Table » promet alors un tri qui n'a
+# pas lieu, et la table garde l'ordre d'arrivée.
+#
+# ⚠️ Le défaut était DOUBLÉ : la même expression vivait dans le rendu de la
+# table ET dans la résolution des lignes sélectionnées. Deux copies peuvent
+# diverger en silence, et la sélection désignerait alors d'AUTRES gènes que
+# ceux affichés. D'où l'invariant ci-dessous : UN seul tri, appelé par les deux.
+test_that("marqueurs : le tri est un helper unique, jamais un `order()` nu", {
+  p     <- ts_ast_parse(.SM_FILE)
+  calls <- ts_ast_find_all(p, function(x) TRUE)
+  d     <- vapply(calls, ts_ast_deparse, character(1))
+
+  # (1) La forme fautive ne doit plus exister nulle part : trier la colonne
+  # brute, c'est trier sur une constante sans le savoir.
+  expect_identical(sum(d == "order(df$p_val_adj)"), 0L)
+
+  # (2) Les deux consommateurs doivent passer par le MÊME helper.
+  expect_true(sum(grepl(".markers_sort(", d, fixed = TRUE)) >= 2L)
+})
+
+test_that("marqueurs : sans p-valeur, le tri retombe sur |log2FC| (pas un no-op)", {
+  # Jeu SANS colonne de p-valeur — le cas réel d'un tableau importé (gene +
+  # logFC seulement). `.normalize_marker_cols()` remplit `p_val_adj` de 1 : la
+  # colonne est CONSTANTE, et `order()` dessus ne trie rien du tout.
+  df <- .normalize_marker_cols(data.frame(
+    gene       = c("G_low", "G_high", "G_mid"),
+    avg_log2FC = c(0.3, 4.1, 1.7),
+    cluster    = "0",
+    stringsAsFactors = FALSE
+  ))
+  expect_true(all(df$p_val_adj == 1))
+
+  # L'ordre d'arrivée est G_low, G_high, G_mid : le tri doit le CHANGER.
+  expect_identical(.markers_sort(df, "pval")$gene,
+                   c("G_high", "G_mid", "G_low"))
+
+  # Le mode « logfc » donne le MÊME ordre : c'est la preuve que le repli n'est
+  # pas un ordre arbitraire, mais bien |log2FC| décroissant.
+  expect_identical(.markers_sort(df, "logfc")$gene,
+                   c("G_high", "G_mid", "G_low"))
+})
+
+test_that("marqueurs : avec des p-valeurs informatives, c'est BIEN p qui trie", {
+  df <- .normalize_marker_cols(data.frame(
+    gene       = c("G_a", "G_b", "G_c"),
+    avg_log2FC = c(5.0, 0.2, 2.0),
+    p_val_adj  = c(0.30, 0.001, 0.02),
+    cluster    = "0",
+    stringsAsFactors = FALSE
+  ))
+
+  expect_identical(.markers_sort(df, "pval")$gene, c("G_b", "G_c", "G_a"))
+  # ...et le mode logfc reste indépendant de p.
+  expect_identical(.markers_sort(df, "logfc")$gene, c("G_a", "G_c", "G_b"))
+})
+
+test_that("marqueurs : le tri est déterministe (égalités tranchées par le gène)", {
+  df <- data.frame(gene       = c("G_z", "G_a", "G_m"),
+                   avg_log2FC = c(1, 1, 1),
+                   p_val_adj  = c(1, 1, 1),
+                   cluster    = "0",
+                   stringsAsFactors = FALSE)
+  # Tout est à égalité : l'ordre d'arrivée ne doit PAS survivre, sinon deux
+  # runs peuvent afficher deux ordres différents.
+  expect_identical(.markers_sort(df, "pval")$gene,  c("G_a", "G_m", "G_z"))
+  expect_identical(.markers_sort(df, "logfc")$gene, c("G_a", "G_m", "G_z"))
+})
+
+test_that("marqueurs : une p-valeur inconnue descend, elle ne prend pas la tête", {
+  df <- data.frame(gene       = c("G_na", "G_sig", "G_weak"),
+                   avg_log2FC = c(9.0, 1.0, 0.5),
+                   p_val_adj  = c(NA_real_, 0.001, 0.2),
+                   cluster    = "0",
+                   stringsAsFactors = FALSE)
+  expect_identical(.markers_sort(df, "pval")$gene, c("G_sig", "G_weak", "G_na"))
+})
