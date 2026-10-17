@@ -334,7 +334,9 @@ run_sc_auto_pipeline <- function(input, global_data, shared_rv, session, sc_log_
           }
 
           p$set(0.55,.tr("Clustering..."))
-          obj <- FindNeighbors(obj, dims=1:pca_dim, verbose=FALSE)
+          # Le graphe doit suivre l'espace SÉLECTIONNÉ (harmony ou pca) ET ses
+          # dimensions : sans `reduction=`, FindNeighbors prend la PCA de l'assay.
+          obj <- FindNeighbors(obj, dims=1:clust_dims, reduction=clust_red, verbose=FALSE)
           obj <- robust_find_clusters(obj, resolution=params$sc_ap_res, algo=params$sc_ap_cluster_algo,
                                       log_fn=function(m) log_sc(paste("\u26a0\ufe0f", m)))
           log_sc(sprintf(.tr("✓ %d clusters (res %.1f)"), length(unique(obj$seurat_clusters)), params$sc_ap_res))
