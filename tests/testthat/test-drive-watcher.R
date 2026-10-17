@@ -4240,3 +4240,40 @@ test_that("the resume helper is WIRED, not a documented function nobody calls", 
   d <- ts_drive_attach(.drv_fake_session(new.env()), list())
   expect_identical(as.integer(d$last_seq()), 9L)  # the helper is what feeds it
 })
+
+# ---------------------------------------------------------------------------
+# M10 (2026-10-17) — les tirages du drive ne doivent pas deplacer le RNG
+# ---------------------------------------------------------------------------
+# `ts_drive_new_token()` et `ts_drive_tmp_name()` tirent dans le generateur
+# GLOBAL. Chaque tick du watcher avance donc `.Random.seed` : une analyse
+# ensemencee qui suit depend du NOMBRE de ticks survenus, pas de sa graine.
+# Defaut de REPRODUCTIBILITE, invisible (aucun resultat ne change de forme).
+#
+# Le correctif garde le tirage ALEATOIRE (pas de graine fixe : un token
+# deterministe violerait l'unicite) mais DERIVE la graine de l'horloge et d'un
+# compteur monotone, puis la consomme dans `withr::with_seed()`, qui restaure
+# `.Random.seed` en sortie.
+#
+# ⚠️ `withr::with_preserve_seed()` est le remede EVIDENT et il est FAUX : mesure,
+# il restaure la graine et rend donc DEUX FOIS le meme identifiant (`836`, `836`).
+# La premiere version de ce correctif l'utilisait et `test-drive-watcher.R` l'a
+# attrape (11 echecs, deux sessions recevant le meme token).
+test_that("les tirages du drive ne perturbent pas le RNG de l'appelant", {
+  set.seed(20261017)
+  before <- .Random.seed
+
+  tok <- ts_drive_new_token()
+  # ⚠️ `expect_identical(.Random.seed, before)` fait PLANTER le formateur de
+  # diff de testthat (`compare.numeric` sur un long vecteur entier) : on
+  # asserte donc un booleen, qui ne declenche aucun diff.
+  expect_true(identical(.Random.seed, before))
+
+  before2 <- .Random.seed
+  invisible(ts_drive_tmp_name(file.path(tempdir(), "x")))
+  expect_true(identical(.Random.seed, before2))
+
+  # Le tirage reste REELLEMENT aleatoire : restaurer l'etat ne doit pas etre
+  # obtenu en figeant la graine (un token constant casserait l'unicite).
+  expect_false(identical(tok, ts_drive_new_token()))
+  expect_match(tok, "^[a-z0-9]{8}$")
+})

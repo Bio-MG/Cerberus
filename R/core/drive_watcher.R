@@ -44,6 +44,10 @@
 .ts_drive_state$write_error <- NULL
 # Monotonic counter, used to make every temporary write name unique.
 .ts_drive_state$write_attempts <- 0L
+# Monotonic counter that SEEDS the id draw, so two calls in the same millisecond
+# still differ (M10). Declared here like every other field: the helper's `%||%`
+# is a fallback for an environment built elsewhere, not the initialisation.
+.ts_drive_state$id_seq <- 0L
 # The in-flight job, or NULL. See the "Job lifecycle" section for why this
 # exists and what an agent may conclude from it.
 .ts_drive_state$job <- NULL
@@ -159,6 +163,33 @@ ts_drive_last_write_error <- function() {
   .ts_drive_state$write_error
 }
 
+#' Random lowercase-alphanumeric id, WITHOUT disturbing the caller's RNG
+#'
+#' @param n Length of the id.
+#' @return A length-1 character, `[a-z0-9]{n}`.
+#'
+#' M10 (2026-10-17). Two measured facts drive this implementation:
+#'  1. `sample()` draws from the GLOBAL generator. Every watcher tick used to
+#'     advance `.Random.seed`, so a seeded analysis that followed depended on
+#'     how many ticks had happened, not on its own seed.
+#'  2. `withr::with_preserve_seed()` does NOT solve it: measured, it restores
+#'     the seed and therefore returns the SAME id twice in a row (`836`, `836`).
+#'     A repeated token breaks session identity, and `test-drive-watcher.R`
+#'     caught exactly that (11 failures) when this helper was first written
+#'     with it.
+#'
+#' So the seed is DERIVED (clock in milliseconds + a monotonic counter) rather
+#' than taken from the global state: two consecutive calls always differ, and
+#' `withr::with_seed()` restores the previous `.Random.seed` on exit.
+.ts_drive_rand_id <- function(n) {
+  .ts_drive_state$id_seq <- (.ts_drive_state$id_seq %||% 0L) + 1L
+  raw <- as.numeric(Sys.time()) * 1000 + .ts_drive_state$id_seq
+  seed <- as.integer(raw %% 2147483647)
+  withr::with_seed(
+    seed,
+    paste(sample(c(letters, 0:9), as.integer(n), replace = TRUE), collapse = ""))
+}
+
 #' Unique temporary name for one write attempt.
 #'
 #' The name is unique PER ATTEMPT (pid + monotonic counter + random tag) rather
@@ -169,7 +200,7 @@ ts_drive_last_write_error <- function() {
 #' Uniqueness removes the collision by construction instead of retrying into it.
 ts_drive_tmp_name <- function(path) {
   .ts_drive_state$write_attempts <- .ts_drive_state$write_attempts + 1L
-  tag <- paste(sample(c(letters, 0:9), 6L, replace = TRUE), collapse = "")
+  tag <- .ts_drive_rand_id(6L)
   sprintf("%s.%d.%d.%s.tmp", path, Sys.getpid(), .ts_drive_state$write_attempts, tag)
 }
 
@@ -369,9 +400,7 @@ ts_drive_now_iso <- function() {
 }
 
 #' Per-session token: 8 lowercase alphanumerics (spec §2.1 example).
-ts_drive_new_token <- function() {
-  paste(sample(c(letters, 0:9), 8L, replace = TRUE), collapse = "")
-}
+ts_drive_new_token <- function() .ts_drive_rand_id(8L)
 
 
 # =============================================================================
