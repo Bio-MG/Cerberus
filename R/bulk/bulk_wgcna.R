@@ -80,7 +80,11 @@ bulk_wgcna_select_hvg <- function(vst_matrix, n_top = NULL) {
   n_top <- max(1L, as.integer(n_top))
 
   min_g <- if (exists("TS_BULK_WGCNA_MIN_GENES", inherits = TRUE)) TS_BULK_WGCNA_MIN_GENES else 2000L
-  max_g <- if (exists("TS_BULK_WGCNA_WGCNA_MAX_GENES", inherits = TRUE)) TS_BULK_WGCNA_MAX_GENES else 5000L
+  # M11 : le nom portait un DOUBLE `WGCNA` (`TS_BULK_WGCNA_WGCNA_MAX_GENES`),
+  # donc `exists()` était TOUJOURS faux et `max_g` toujours 5000L : le plafond de
+  # config/thresholds.R ne pouvait pas être relevé. Neutre en comportement
+  # aujourd'hui (les deux valent 5000L), actif dès qu'on change la config.
+  max_g <- if (exists("TS_BULK_WGCNA_MAX_GENES", inherits = TRUE)) TS_BULK_WGCNA_MAX_GENES else 5000L
   max_g <- max(min_g, max_g)
   n_top <- min(max(n_top, min_g), max_g)
 
@@ -382,11 +386,33 @@ bulk_wgcna_prepare_traits <- function(metadata, candidate_cols = NULL) {
   2 * stats::pt(-abs(t_stat), df = dof)
 }
 
+#' Ajustement multi-tests de la matrice module <-> trait (M11, 2026-10-17)
+#'
+#' La famille testée est l'ENSEMBLE des couples module x trait : une heatmap de
+#' 20 modules et 10 traits, c'est 200 tests, et ~10 étoiles à 0.05 brut sont
+#' attendues par hasard. La correction porte donc sur la matrice aplatie, pas
+#' ligne par ligne (un module seul ne constitue pas une famille).
+#'
+#' `stats::p.adjust` traite les NA comme absents : ils restent NA et ne gonflent
+#' pas `n` — c'est ce qu'on veut pour un trait à variance nulle.
+#'
+#' @param pmat Matrice de p-values brutes.
+#' @param method Méthode de `stats::p.adjust.methods` (défaut "BH").
+#' @return Matrice de même dimension et mêmes dimnames, ajustée.
+.bulk_wgcna_adjust_p <- function(pmat, method = "BH") {
+  if (is.null(pmat) || length(pmat) == 0L) return(pmat)
+  adj <- stats::p.adjust(as.vector(pmat), method = method)
+  matrix(adj, nrow = nrow(pmat), ncol = ncol(pmat), dimnames = dimnames(pmat))
+}
+
 #' Corrélations modules <-> traits (bicor robuste, repli cor documenté)
 #'
 #' @param module_result Résultat bulk_wgcna_build_modules().
 #' @param traits data.frame numérique (bulk_wgcna_prepare_traits()$traits).
-#' @return list(cor, pval, method = "bicor"|"cor", n_samples, warnings).
+#' @return list(cor, pval, p_adj, method = "bicor"|"cor", n_samples, warnings).
+#'   `pval` reste la p brute (contrat inchangé pour les appelants existants) ;
+#'   `p_adj` est l'ajustement BH sur l'ensemble des couples module x trait —
+#'   ajout ADDITIF, sans quoi la table affichée ne portait aucun ajustement.
 bulk_wgcna_module_trait <- function(module_result, traits) {
   mes <- module_result$MEs
   if (is.null(mes) || ncol(mes) == 0L) {
@@ -412,9 +438,11 @@ bulk_wgcna_module_trait <- function(module_result, traits) {
     method <<- "cor"
     stats::cor(mes_use, traits_use, use = "pairwise.complete.obs")
   })
+  pval_mat <- .bulk_wgcna_cor_pvalue(cor_mat, nrow(mes_use))
   list(
     cor       = cor_mat,
-    pval      = .bulk_wgcna_cor_pvalue(cor_mat, nrow(mes_use)),
+    pval      = pval_mat,
+    p_adj     = .bulk_wgcna_adjust_p(pval_mat),
     method    = method,
     n_samples = nrow(mes_use)
   )
@@ -468,12 +496,20 @@ plot_wgcna_trait_heatmap <- function(trait_cor, tr = NULL) {
   tr <- tr %||% function(x) x
   cm <- trait_cor$cor
   pm <- trait_cor$pval
-  stars <- ifelse(pm < 0.001, "***", ifelse(pm < 0.01, "**",
-          ifelse(pm < 0.05, "*", "")))
+  # M11 : les étoiles suivent la p AJUSTÉE. Un `trait_cor` fabriqué à la main
+  # sans `p_adj` (ou avec une dimension incohérente) reste affiché sur la p
+  # brute, exactement comme avant — mais le producteur réel
+  # (bulk_wgcna_module_trait) fournit toujours l'ajustement.
+  pa <- trait_cor$p_adj
+  if (is.null(pa) || !identical(dim(pa), dim(pm))) pa <- pm
+  stars <- ifelse(pa < 0.001, "***", ifelse(pa < 0.01, "**",
+          ifelse(pa < 0.05, "*", "")))
   df <- data.frame(
     module = rep(rownames(cm), times = ncol(cm)),
     trait  = rep(colnames(cm), each = nrow(cm)),
     cor    = as.vector(cm),
+    p      = as.vector(pm),
+    p_adj  = as.vector(pa),
     stars  = as.vector(stars),
     stringsAsFactors = FALSE
   )
@@ -486,8 +522,10 @@ plot_wgcna_trait_heatmap <- function(trait_cor, tr = NULL) {
                                   midpoint = 0, limits = c(-1, 1),
                                   name = tr(sprintf("Corr. (%s)", trait_cor$method))) +
     ggplot2::labs(title = tr("Modules <-> traits cliniques"),
-                  subtitle = tr(sprintf("Méthode : %s — %d échantillons",
-                                        trait_cor$method, trait_cor$n_samples))) +
+                  subtitle = tr(sprintf(paste0(
+                    "Méthode : %s — %d échantillons — étoiles : p ajustée (BH) ",
+                    "sur les %d couples module x trait"),
+                    trait_cor$method, trait_cor$n_samples, sum(!is.na(pm))))) +
     ts_theme("minimal", 12) +
     ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 30, hjust = 1))
 }

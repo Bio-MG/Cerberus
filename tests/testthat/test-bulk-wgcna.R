@@ -131,6 +131,15 @@ test_that("pipeline réel WGCNA : power -> modules -> bicor MEs/traits", {
   expect_identical(mt$method, "bicor")
   expect_identical(dim(mt$cor), c(ncol(mods$MEs), 2L))
   expect_true(all(mt$pval >= 0 & mt$pval <= 1))
+  # M11 : l'ajustement doit être PRODUIT par le moteur, pas seulement attendu par
+  # la table. Sans cette assertion, retirer `p_adj` du retour laisserait la
+  # heatmap retomber sur la p brute en silence (son repli documenté) et tout
+  # resterait vert : la couture ne serait pas couverte.
+  expect_true("p_adj" %in% names(mt))
+  expect_identical(dim(mt$p_adj), dim(mt$pval))
+  expect_identical(dimnames(mt$p_adj), dimnames(mt$pval))
+  expect_true(all(mt$p_adj >= mt$pval - 1e-12))
+  expect_true(all(mt$p_adj <= 1))
   expect_true(mt$n_samples == 20L)
 })
 
@@ -178,4 +187,114 @@ test_that("plots et export : consommateurs purs", {
   expect_identical(nrow(ex), 3L)
   expect_error(build_wgcna_export(list()), class = "bulk_wgcna_error")
   expect_error(plot_wgcna_soft_threshold(list()), class = "bulk_wgcna_error")
+})
+
+# ---------------------------------------------------------------------------
+# M11 (2026-10-17) — les p module<->trait doivent être AJUSTÉES, et le plafond
+# de gènes ne doit plus passer par une branche morte
+# ---------------------------------------------------------------------------
+# Deux défauts mesurés dans R/bulk/bulk_wgcna.R :
+#   (a) `grep -c 'p.adjust|corPvalueStudent'` = 0 : la table module<->trait
+#       n'ajustait RIEN. Une heatmap de 20 modules x 10 traits, c'est 200 tests ;
+#       à 0.05 brut, ~10 étoiles sont attendues par hasard. Les étoiles
+#       affirmaient donc une significativité que rien ne soutenait.
+#   (b) `exists("TS_BULK_WGCNA_WGCNA_MAX_GENES")` — nom à double `WGCNA`, donc
+#       TOUJOURS faux, donc `max_g` toujours 5000L : le plafond de
+#       config/thresholds.R ne pouvait pas être relevé. Relevé par la mission
+#       « corriger la typo est neutre en comportement » (les deux valent 5000L
+#       aujourd'hui) — le défaut est LATENT, pas actif.
+
+test_that("M11: l'ajustement BH est celui de stats::p.adjust, calculé à la main", {
+  # Cas 2x2 dont l'ajustement est calculable sans appeler p.adjust : c'est ce qui
+  # distingue un test d'une tautologie (comparer p.adjust() à p.adjust()).
+  # Aplatissement colonne par colonne : 0.01, 0.04, 0.03, 0.20 (n = 4).
+  #   rang 1 (0.01) : min(4*0.01, 2*0.03, 4/3*0.04, 1*0.20) = 0.04
+  #   rang 2 (0.03) : min(2*0.03, 4/3*0.04, 1*0.20)          = 0.05333...
+  #   rang 3 (0.04) : min(4/3*0.04, 1*0.20)                  = 0.05333...
+  #   rang 4 (0.20) : 0.20
+  p <- matrix(c(0.01, 0.04, 0.03, 0.20), nrow = 2,
+              dimnames = list(c("MEblue", "MEred"), c("age", "sex")))
+  adj <- .bulk_wgcna_adjust_p(p)
+  expect_identical(dim(adj), dim(p))
+  expect_identical(dimnames(adj), dimnames(p))
+  expect_equal(adj["MEblue", "age"],  0.04,     tolerance = 1e-12)
+  expect_equal(adj["MEred",  "age"],  0.0533333333333333, tolerance = 1e-12)
+  expect_equal(adj["MEblue", "sex"],  0.0533333333333333, tolerance = 1e-12)
+  expect_equal(adj["MEred",  "sex"],  0.20,     tolerance = 1e-12)
+
+  # Propriétés qui tiennent pour TOUT ajustement BH, et que le brut viole :
+  # jamais plus petit que la p brute, jamais au-dessus de 1.
+  expect_true(all(adj >= p - 1e-12))
+  expect_true(all(adj <= 1))
+
+  # NA traverse l'ajustement (les traits à variance nulle en produisent) : il ne
+  # doit ni devenir 0, ni contaminer les autres cellules.
+  p_na <- p
+  p_na[1, 1] <- NA_real_
+  adj_na <- .bulk_wgcna_adjust_p(p_na)
+  expect_true(is.na(adj_na[1, 1]))
+  expect_false(any(is.na(adj_na[-1, , drop = FALSE])))
+})
+
+test_that("M11: la table module<->trait porte p ET p_adj, et les étoiles suivent p_adj", {
+  cm <- matrix(c(0.9, -0.2, 0.1, 0.4), 2, 2,
+               dimnames = list(c("MEblue", "MEred"), c("age", "sex")))
+  pv <- .bulk_wgcna_cor_pvalue(cm, 20)
+  mt <- list(cor = cm, pval = pv, method = "bicor", n_samples = 20)
+  built <- plot_wgcna_trait_heatmap(mt)
+  # La table sous la heatmap EST la table module<->trait : elle doit porter
+  # l'ajustement, sinon le seul endroit où l'utilisateur lit une p-value reste
+  # non corrigé.
+  expect_true(all(c("p", "p_adj") %in% colnames(built$data)))
+
+  # Une corrélation FORTE mais non significative après correction ne doit pas
+  # porter d'étoile. Construit à la main : p brute = 1e-4, p ajustée = 0.4.
+  mt_forced <- mt
+  mt_forced$pval  <- matrix(1e-4, 2, 2, dimnames = dimnames(cm))
+  mt_forced$p_adj <- matrix(0.40, 2, 2, dimnames = dimnames(cm))
+  d <- plot_wgcna_trait_heatmap(mt_forced)$data
+  expect_true(all(d$stars == ""))
+
+  # ...et l'inverse : significative après correction => étoiles présentes.
+  mt_ok <- mt
+  mt_ok$pval  <- matrix(1e-6, 2, 2, dimnames = dimnames(cm))
+  mt_ok$p_adj <- matrix(1e-5, 2, 2, dimnames = dimnames(cm))
+  expect_true(all(plot_wgcna_trait_heatmap(mt_ok)$data$stars == "***"))
+})
+
+test_that("M11: le plafond de gènes lit la constante réelle, sans nom fantôme", {
+  src <- readLines(file.path(ts_project_root(), "R", "bulk", "bulk_wgcna.R"),
+                   warn = FALSE, encoding = "UTF-8")
+  # On scanne le CODE, pas les commentaires : le correctif lui-même doit pouvoir
+  # nommer le nom fantôme pour expliquer le piège. Un garde qui rougit sur sa
+  # propre documentation se ferait désactiver — c'est le défaut classique de ce
+  # genre d'assertion textuelle.
+  code <- src[!grepl("^\\s*#", src)]
+  txt <- paste(code, collapse = "\n")
+  # Le nom à double WGCNA rendait `exists()` toujours faux : branche morte.
+  expect_false(grepl("WGCNA_WGCNA", txt, fixed = TRUE))
+  expect_true(grepl("exists(\"TS_BULK_WGCNA_MAX_GENES\"", txt, fixed = TRUE))
+
+  # Et la valeur suit vraiment la config : on la déplace, on observe.
+  old <- if (exists("TS_BULK_WGCNA_MAX_GENES", inherits = TRUE)) TS_BULK_WGCNA_MAX_GENES else NULL
+  on.exit({
+    if (is.null(old)) {
+      if (exists("TS_BULK_WGCNA_MAX_GENES", inherits = TRUE))
+        rm("TS_BULK_WGCNA_MAX_GENES", envir = globalenv())
+    } else {
+      assign("TS_BULK_WGCNA_MAX_GENES", old, envir = globalenv())
+    }
+  }, add = TRUE)
+  assign("TS_BULK_WGCNA_MAX_GENES", 2600L, envir = globalenv())
+
+  set.seed(11)
+  sim <- matrix(rnorm(3000 * 16), 3000, 16,
+                dimnames = list(paste0("g", 1:3000), paste0("s", 1:16))) + 8
+  sel <- bulk_wgcna_select_hvg(sim, n_top = NULL)
+  # 2600 est le plafond effectif : sans la correction, max_g restait à 5000 et
+  # le défaut `n_top` (lui aussi 2600) passait — mais un appel EXPLICITE à 3000
+  # n'aurait plus été rabattu. On éprouve donc les deux bords.
+  expect_identical(sel$n_used, 2600L)
+  sel2 <- bulk_wgcna_select_hvg(sim, n_top = 3000)
+  expect_identical(sel2$n_used, 2600L)   # rabattu par max_g, pas par n_top
 })
