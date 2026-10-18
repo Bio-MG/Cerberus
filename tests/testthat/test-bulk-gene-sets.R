@@ -188,29 +188,23 @@ test_that("bulk_write_gmt : aller-retour EXACT, et refuse ce qui serait vide", {
   out
 }
 
-#' Le symbole `name` apparaît-il dans `expr` ? (parcours de TOUT l'arbre)
+#' Le symbole `name` apparaît-il dans `expr` ?
+#'
+#' `all.names()` est le parcours de R : inutile d'en écrire un. (Première version :
+#' un `rec()` récursif local — une copie de plus du parcours que `helper-ast.R`
+#' centralise ; `all.names` la supprime au lieu de la déplacer.)
 .bgs_uses_symbol <- function(expr, name) {
-  hit <- FALSE
-  rec <- function(e) {
-    if (hit) return(invisible(NULL))
-    if (is.symbol(e)) {
-      if (identical(as.character(e), name)) hit <<- TRUE
-      return(invisible(NULL))
-    }
-    if (!is.call(e)) return(invisible(NULL))
-    l <- as.list(e)
-    for (i in seq_along(l)) rec(l[[i]])         # (1) par INDEX
-    invisible(NULL)
-  }
-  rec(expr)
-  hit
+  name %in% all.names(expr, functions = TRUE, unique = TRUE)
 }
 
 #' Les arguments formels DÉCLARÉS mais JAMAIS lus dans les lambdas de `expr`.
+#'
+#' Le parcours est celui de `helper-ast.R` (`ts_ast_walk`) : une copie locale
+#' nommée `walk` faisait rougir `test-helper-ast-no-local-walk.R` — le garde a
+#' joué son rôle sur du code neuf, ce qui est exactement ce qu'on lui demande.
 .bgs_dead_formals <- function(expr) {
   dead <- character(0)
-  walk <- function(e) {
-    if (!is.call(e)) return(invisible(NULL))
+  ts_ast_walk(expr, function(e) {
     head <- tryCatch(e[[1]], error = function(err) NULL)
     if (identical(head, as.name("function"))) {
       fs <- tryCatch(names(as.list(e[[2]])), error = function(err) NULL)
@@ -218,14 +212,8 @@ test_that("bulk_write_gmt : aller-retour EXACT, et refuse ce qui serait vide", {
         if (!.bgs_uses_symbol(e[[3]], a)) dead <<- c(dead, a)
       }
     }
-    l <- as.list(e)
-    for (i in seq_along(l)) {                    # (1) par INDEX
-      ok <- tryCatch(is.call(l[[i]]), error = function(err) FALSE)
-      if (isTRUE(ok)) walk(l[[i]])
-    }
-    invisible(NULL)
-  }
-  walk(expr)
+    FALSE                                        # jamais d'arrêt : tout l'arbre
+  })
   unique(dead)
 }
 
