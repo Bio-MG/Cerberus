@@ -1338,7 +1338,11 @@ ts_drive_read_export_respond <- function(seq, max_rows = NULL) {
     con <- file(path, "r")
     h <- readLines(con, n = 1L, warn = FALSE)
     close(con)
-    if (length(h) == 0L) stop("the file has no header line")
+    # Jet internal, immediatement capture par le tryCatch ci-dessus : seule sa
+    # `conditionMessage` survit (elle devient le motif du refus READ_IO_ERROR).
+    # Aucun appelant ne dispatche sur sa classe — `call. = FALSE` suffit donc a
+    # satisfaire C10 sans fabriquer une classe que personne ne lit.
+    if (length(h) == 0L) stop("the file has no header line", call. = FALSE)
     h
   }, error = function(e) {
     io_err <<- conditionMessage(e); NULL
