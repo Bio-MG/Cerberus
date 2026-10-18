@@ -132,6 +132,26 @@ test_that("the resolver passes plain strings through and refuses honestly", {
   expect_false(r2$ok)
   expect_true(startsWith(r2$errors[1], "INPUT_NOT_READY"))
 
+  # M17 (2026-10-18) — LE TROU QUE CE BLOC N'EXERÇAIT PAS : une valeur STRING
+  # ne doit pas RÉCLAMER de vocabulaire, même sans sonde. C'est le contrat
+  # écrit juste au-dessus (chemin interne) et c'est ce qui rend les scénarios
+  # d'injection par étages exécutables sans booter l'app. Mesuré : sur `main`,
+  # ce cas rend `INPUT_NOT_READY` et 24 assertions de deux fichiers tombent.
+  r1b <- ts_drive_resolve_session_inputs(
+    list(`bulk-de-condition_col` = "condition", `bulk-de-group_ref` = "mock"),
+    "bulk_de", NULL)
+  expect_true(r1b$ok)
+  expect_identical(r1b$values$`bulk-de-condition_col`, "condition")
+
+  # TÉMOIN ANTI-AFFAIBLISSEMENT : la garde ne doit pas relâcher la surface
+  # INDEXÉE — un payload {index, vocab_rev} réclame TOUJOURS la sonde.
+  r1c <- ts_drive_resolve_session_inputs(
+    list(`bulk-de-condition_col` = list(index = 1L, vocab_rev = 3L),
+         `bulk-de-group_ref`     = "mock"),
+    "bulk_de", NULL)
+  expect_false(r1c$ok)
+  expect_true(startsWith(r1c$errors[1], "INPUT_NOT_READY"))
+
   # Domaine vide (données non chargées) : INPUT_NOT_READY — fail closed, avec
   # la raison.
   voc_empty <- .VOC

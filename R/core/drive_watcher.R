@@ -1136,6 +1136,21 @@ ts_drive_resolve_session_inputs <- function(inputs, module, vocab_fn = NULL) {
   sess_ids <- intersect(names(inputs), names(TS_DRIVE_SESSION_INPUTS))
   if (!length(sess_ids)) return(list(ok = TRUE, values = inputs, errors = character(0)))
 
+  # M17 (2026-10-18) — un scénario qui ne porte QUE des chaînes est le chemin
+  # INTERNE (contrat ci-dessus) : rien à résoudre, donc rien à exiger. Sans ce
+  # retour, la sonde devient obligatoire pour TOUTE valeur session-dérivée et le
+  # résolveur contredit sa propre documentation. Mesuré : 24 assertions rouges
+  # dans test-bulk-de-input-confirm.R et test-bulk-de-staged-injection.R, et les
+  # scénarios d'injection par étages refusés en `INPUT_NOT_READY`.
+  # La surface INDEXÉE, elle, exige toujours la sonde (témoin dans
+  # test-drive-session-vocabulary.R).
+  has_indexed <- vapply(sess_ids, function(id) {
+    is.list(inputs[[id]]) && !is.null(inputs[[id]]$index)
+  }, logical(1))
+  if (!any(has_indexed)) {
+    return(list(ok = TRUE, values = inputs, errors = character(0)))
+  }
+
   vocab <- NULL
   if (!is.null(vocab_fn) && is.function(vocab_fn)) {
     vocab <- tryCatch(vocab_fn(), error = function(e) NULL)
