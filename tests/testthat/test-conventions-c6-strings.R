@@ -187,33 +187,70 @@ test_that("C6 : la profondeur d'accolades est REELLEMENT mesuree", {
                                  paste(flagged, collapse = ",")))
 })
 
+#' Sites `library()`/`require()` d'un fichier annote, avec leur PROFONDEUR
+#' d'accolades, mesuree exactement comme la regle C6 la mesure : l'etat AVANT
+#' la ligne, borne a zero. Dupliquer la formule est VOULU — un test qui
+#' mesurerait la profondeur autrement que le garde ne surveillerait pas le garde.
+.c6_library_sites <- function(ann) {
+  depth <- 0L
+  line <- integer(0); dep <- integer(0)
+  for (i in seq_len(nrow(ann))) {
+    ln <- ann$code[i]
+    if (grepl("(^|[^A-Za-z0-9_.])(library|require)\\s*\\(", ln, perl = TRUE)) {
+      line <- c(line, ann$line_no[i]); dep <- c(dep, depth)
+    }
+    depth <- max(0L, depth + .count_chars(ln, "{") - .count_chars(ln, "}"))
+  }
+  data.frame(line = line, depth = dep)
+}
+
 test_that("C6 : les library() imbriques du depot ne sont plus signales", {
   # Les 11 signalements restants etaient TOUS imbriques. On verifie la mesure
   # sur les fichiers reels, avec la profondeur en PRE-REQUIS : si un de ces
   # appels remontait un jour au top-level, c'est le TEST qu'il faut reecrire —
   # pas laisser passer en silence.
-  sites <- list(
-    c("R/core/pathway_helpers.R", 59L),   # library(clusterProfiler)
-    c("R/core/pathway_helpers.R", 75L),   # library(org.Hs.eg.db)
-    c("R/spatial/spatial_async.R", 222L), # library(Seurat) dans un worker mirai
-    c("R/bulk/bulk_wgcna.R", 52L)         # require("WGCNA") dans une fonction
-  )
-  for (site in sites) {
-    f <- .c6_repo(site[1]); ln <- as.integer(site[2])
-    code <- .read_code_lines(f)$code
-    depth <- 0L
-    if (ln > 1L) {
-      for (i in seq_len(ln - 1L)) {
-        depth <- depth + .count_chars(code[i], "{") - .count_chars(code[i], "}")
-      }
-    }
-    expect_true(depth > 0L,
-                info = sprintf("%s:%d n'est plus imbrique (profondeur %d) : test a reecrire",
-                               site[1], ln, depth))
-    expect_false(ln %in% .c6_flagged_lines(f),
-                 info = sprintf("%s:%d (profondeur %d) signale a tort",
-                                site[1], ln, depth))
+  #
+  # REGRESSION (mesuree le 2026-10-18). Les sites etaient reperes par NUMERO DE
+  # LIGNE ECRIT EN DUR, et c'est exactement ce qui a casse : l'insertion d'un
+  # bloc au-dessus de `library(org.Hs.eg.db)` (M12, commit 1094a44) l'a fait
+  # descendre de la ligne 75 a la 155, et le test est alle mesurer la profondeur
+  # d'une ligne qui n'etait plus un `library()` du tout — profondeur 0, echec,
+  # alors que le garde C6 lui-meme etait vert. Le meme pourrissement etait deja
+  # en cours ailleurs : `R/spatial/spatial_async.R` avait glisse de 222 a 224,
+  # et son `library(BPCells)` de la ligne 225 n'avait JAMAIS ete liste.
+  # On re-localise donc par CONTENU : le site est trouve parce qu'il matche la
+  # regle, pas parce qu'il occupe une ligne donnee. La couverture s'elargit au
+  # passage (tous les sites des fichiers temoins, plus 4 lignes choisies a la
+  # main).
+  files <- c("R/core/pathway_helpers.R",   # clusterProfiler / org.*.eg.db / ReactomePA
+             "R/spatial/spatial_async.R",  # Seurat + BPCells dans un worker mirai
+             "R/bulk/bulk_wgcna.R")        # require("WGCNA") dans une fonction
+  total <- 0L
+  for (rel in files) {
+    f <- .c6_repo(rel)
+    sites <- .c6_library_sites(.read_code_lines(f))
+    # Anti-vacuite PAR FICHIER : sans site, la boucle ci-dessous ne prouve rien.
+    # (`expect_true` et non `expect_gt` : la famille de comparaison de cette
+    # version de testthat n'accepte pas `info=`, et un echec muet ne se
+    # diagnostique pas.)
+    expect_true(nrow(sites) > 0L,
+                info = sprintf("%s : plus aucun library()/require() — site temoin disparu, test a reecrire", rel))
+    top <- sites$line[sites$depth == 0L]
+    expect_identical(top, integer(0),
+                     info = sprintf("%s : au top-level (profondeur 0) : lignes %s",
+                                    rel, paste(top, collapse = ", ")))
+    flagged <- .c6_flagged_lines(f)
+    expect_identical(intersect(sites$line, flagged), integer(0),
+                     info = sprintf("%s : signale(s) a tort : ligne(s) %s",
+                                    rel, paste(intersect(sites$line, flagged), collapse = ", ")))
+    total <- total + nrow(sites)
   }
+  # Anti-affaiblissement : 11 sites mesures le 2026-10-18 (8 + 2 + 1). Ce
+  # plancher est la seule chose qui distingue « tous imbriques » de « plus rien
+  # a mesurer ». S'il baisse, c'est une decision a prendre explicitement, pas un
+  # ajustement de constante en passant.
+  expect_identical(total, 11L,
+                   info = sprintf("attendu 11 sites library()/require() dans les fichiers temoins ; mesure : %d", total))
 })
 
 #' Rejoue la SEULE règle C10 sur un fichier et rend les lignes signalées.
