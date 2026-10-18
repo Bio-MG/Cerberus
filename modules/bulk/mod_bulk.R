@@ -418,6 +418,10 @@ mod_bulk_server <- function(id, global_data) {
               .normalize_de_cols(r, counts_for_basemean = filtered)
             }, error = function(e) { failed <<- c(failed, name_i); NULL })
             if (!is.null(res_i)) {
+              # M13 : ce panneau dispatche sur `ap_engine`, PAS sur `de_engine`
+              # du module DE. Le moteur est donc estampillé sur le résultat,
+              # sinon le sous-titre des onglets DE décrirait l'autre select.
+              res_i <- bulk_de_stamp_engine(res_i, if (bypass) "edger" else input$ap_engine)
               cur_c <- shared_rv$contrasts; cur_c[[name_i]] <- res_i; shared_rv$contrasts <- cur_c
               ok <- ok + 1
             }
@@ -445,6 +449,7 @@ mod_bulk_server <- function(id, global_data) {
             run_bulk_de_dispatch(input$ap_engine, filtered, meta, cond_col, grp_target, grp_ref)
           }
           res   <- .normalize_de_cols(res, counts_for_basemean=filtered)
+          res   <- bulk_de_stamp_engine(res, if (bypass) "edger" else input$ap_engine)  # M13
           cname <- paste0(grp_target, "_vs_", grp_ref)
           cur_c <- shared_rv$contrasts; cur_c[[cname]] <- res; shared_rv$contrasts <- cur_c
           shared_rv$active_contrast <- cname

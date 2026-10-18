@@ -105,7 +105,8 @@
         }, error = function(e) { failed <<- c(failed, name); NULL })
 
         if (!is.null(res)) {
-          helpers$register_contrast(name, res)
+          helpers$register_contrast(name, res,
+                                    engine = if (bypass) "edger" else input$de_engine)
           # STAT-Q1 : un dds partagé est réutilisé pour TOUTES les paires, mais
           # chaque contraste conserve son propre contexte de recalcul de padj.
           if (!is.null(dds_full)) {

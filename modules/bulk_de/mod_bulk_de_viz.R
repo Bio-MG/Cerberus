@@ -68,13 +68,22 @@
     req(ac, shared_rv$contrasts[[ac]])
     base_res <- shared_rv$contrasts[[ac]]
 
+    # M13 : le moteur estampillé sur le résultat stocké. Le recalcul ci-dessous
+    # RECONSTRUIT le data.frame (extract_deseq2_contrast) — et un data.frame
+    # neuf ne transporte pas les attributs personnalisés : sans re-stampille,
+    # le sous-titre deviendrait muet précisément quand l'utilisateur change la
+    # méthode de correction.
+    base_engine <- bulk_de_engine_of(base_res)
+
     method <- input$padj_method %||% TS_PADJ_METHOD_DEFAULT
     ctx    <- (shared_rv$de_padj_ctx %||% list())[[ac]]
     if (is.null(ctx) || identical(ctx$method, method)) return(base_res)
 
     tryCatch(
-      extract_deseq2_contrast(ctx$dds, ctx$condition_col, ctx$group_target, ctx$group_ref,
-                              shrink = ctx$shrink, p_adjust_method = method),
+      bulk_de_stamp_engine(
+        extract_deseq2_contrast(ctx$dds, ctx$condition_col, ctx$group_target, ctx$group_ref,
+                                shrink = ctx$shrink, p_adjust_method = method),
+        base_engine),
       # Repli silencieux : un échec de recalcul ne doit JAMAIS effacer un
       # résultat déjà affiché (l'utilisateur garde la version précédente).
       error = function(e) base_res
@@ -146,13 +155,15 @@
   })
 
   # Human-readable DE engine label for the statistical subtitles (PLOT-Q3).
-  # Reads the SAME input$de_engine the run step dispatched on — never a
-  # hardcoded name, so the subtitle cannot lie about which engine produced
-  # the displayed contrast.
+  # M13 (2026-10-17) : lit le moteur ESTAMPILLÉ SUR LE RÉSULTAT affiché, jamais
+  # `input$de_engine` — celui-ci n'est que la sélection courante du panneau, et
+  # elle ne décrit le contraste que par coïncidence : le panneau pairwise
+  # dispatche sur `input$ap_engine`, et le mode exploratoire sans réplicat
+  # impose "edger". Lire la sélection revenait à réécrire le passé dès qu'on
+  # changeait le select après le run. Moteur inconnu (contraste restauré d'une
+  # session antérieure) ⇒ "" ⇒ le sous-titre OMET le moteur au lieu de deviner.
   .engine_label <- function() {
-    switch(input$de_engine %||% "",
-           deseq2 = "DESeq2", edger = "edgeR", limma = "limma-voom",
-           toupper(input$de_engine %||% ""))
+    bulk_de_active_engine_label(shared_rv$contrasts, shared_rv$active_contrast)
   }
 
   volcano_plot <- reactive({
@@ -386,8 +397,13 @@
     ok  <- !is.na(res$padj)
     n_up   <- sum(ok & res$padj < pv & res$log2FoldChange >  lfc)
     n_down <- sum(ok & res$padj < pv & res$log2FoldChange < -lfc)
-    sprintf("%d Up · %d Down · %d testés — %s (padj<%.2g, |log2FC|>%.2g)",
-            n_up, n_down, sum(ok), .engine_label(), pv, lfc)
+    # M13 : le moteur est OMIS quand il est inconnu — sinon on obtiendrait un
+    # séparateur orphelin (« … —  (padj<… ) »), la même classe de piège que le
+    # préfixe orphelin de `paste0("x", character(0))`.
+    eng <- .engine_label()
+    tail <- if (nzchar(eng)) sprintf(" — %s (padj<%.2g, |log2FC|>%.2g)", eng, pv, lfc)
+            else sprintf(" (padj<%.2g, |log2FC|>%.2g)", pv, lfc)
+    sprintf("%d Up · %d Down · %d testés%s", n_up, n_down, sum(ok), tail)
   }
 
   .heatmap_obj <- function() {

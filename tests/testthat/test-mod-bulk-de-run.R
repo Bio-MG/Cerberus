@@ -117,9 +117,18 @@
     contrasts = list(), active_contrast = NULL,
     de_bypass = NULL, dds_full = NULL), parent = emptyenv())
 
+  # M13 : ce que le run step a déclaré comme moteur, par contraste.
+  e$registered <- list()
+
   e$helpers <- list(
     design_str         = function() "~ cond",
-    register_contrast  = function(name, res) { e$shared_rv$contrasts[[name]] <- res },
+    # M13 : le contrat RÉEL accepte `engine` (le moteur voyage avec le résultat).
+    # Le double l'accepte et le MÉMORISE — il ne ré-estampille pas (ce serait une
+    # seconde vérité) : il permet d'observer ce que le run step a DÉCLARÉ.
+    register_contrast  = function(name, res, engine = NULL) {
+      e$shared_rv$contrasts[[name]] <- res
+      e$registered[[name]] <- engine
+    },
     remember_padj_ctx  = function(...) invisible(NULL))
 
   e$TS_PADJ_METHOD_DEFAULT    <- "BH"
@@ -220,6 +229,12 @@ test_that("une DE reussie reste `done`", {
   expect_identical(.mdr_status(e), "done")
   expect_null(.mdr_last(e)$error,
               info = "le champ error doit rester NULL hors `error`")
+
+  # M13 : le contraste enregistré porte le moteur RÉELLEMENT dispatché. Le
+  # double ne l'estampille pas (il le mémorise) : c'est bien le run step qui
+  # doit le déclarer, sinon le sous-titre des onglets DE retomberait sur la
+  # sélection courante.
+  expect_identical(e$registered[["b_vs_a"]], "deseq2")
 })
 
 # ---------------------------------------------------------------------------

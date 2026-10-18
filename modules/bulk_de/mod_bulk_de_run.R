@@ -495,7 +495,11 @@
         paste0(input$group_target, "_vs_", input$group_ref)
       }
 
-      helpers$register_contrast(contrast_name, res)
+      # M13 : le moteur qui a RÉELLEMENT produit ce contraste — "edger" quand le
+      # mode exploratoire sans réplicat impose la dispersion, quelle que soit la
+      # sélection affichée dans le panneau.
+      helpers$register_contrast(contrast_name, res,
+                                engine = if (bypass) "edger" else input$de_engine)
       shared_rv$active_contrast <- contrast_name
 
       # STAT-Q1 : mémorise le contexte de recalcul de padj. Non-NULL uniquement
@@ -599,7 +603,7 @@
       }
       res <- .normalize_de_cols(res, counts_for_basemean = counts_sub)
       cname <- if (nchar(trimws(input$adhoc_contrast_name %||% "")) > 0) trimws(input$adhoc_contrast_name) else "GroupA_vs_GroupB_adhoc"
-      helpers$register_contrast(cname, res)
+      helpers$register_contrast(cname, res, engine = input$de_engine)
       shared_rv$active_contrast <- cname
       # STAT-Q1 : contexte de recalcul padj (DESeq2 ad-hoc uniquement)
       if (!is.null(dds_a)) {

@@ -759,6 +759,83 @@ run_bulk_de_dispatch <- function(engine, counts_matrix, metadata, condition_col,
 
 
 
+# =============================================================================
+# M13 (MASTERPLAN 2026-10-17) — le moteur DE VOYAGE avec son résultat
+# =============================================================================
+# Le sous-titre statistique (Volcano / MA-Plot / Heatmap) annonce le moteur qui
+# a produit le contraste AFFICHÉ. Lire `input$de_engine` à cet endroit décrivait
+# en réalité la sélection COURANTE du panneau : le panneau pairwise dispatche
+# sur `input$ap_engine` (autre select), et le mode exploratoire sans réplicat
+# dispatche toujours "edger". Changer le select après coup réécrivait donc le
+# passé — un contraste edgeR s'affichait « — DESeq2 ».
+#
+# L'information est donc portée par le RÉSULTAT (attribut `de_engine`), jamais
+# par l'état de l'UI. Quatre primitives : normaliser, estampiller, relire,
+# traduire — plus un résolveur unique pour le contraste actif.
+
+#' Nom technique d'un moteur, normalisé — NULL si absent ou vide
+.bulk_de_engine_norm <- function(engine) {
+  if (is.null(engine) || length(engine) != 1L) return(NULL)
+  eng <- suppressWarnings(as.character(engine))
+  if (length(eng) != 1L || is.na(eng)) return(NULL)
+  eng <- trimws(eng)
+  if (!nzchar(eng)) NULL else eng
+}
+
+#' Estampille un résultat DE de son moteur
+#'
+#' @param res data.frame de résultats DE.
+#' @param engine Nom technique du moteur ("deseq2", "edger", "limma").
+#' @return `res` avec l'attribut `de_engine`. Un moteur absent/vide ne pose
+#'   AUCUN attribut : une fausse trace serait pire que pas de trace.
+bulk_de_stamp_engine <- function(res, engine) {
+  if (is.null(res)) return(res)
+  eng <- .bulk_de_engine_norm(engine)
+  if (is.null(eng)) return(res)
+  attr(res, "de_engine") <- eng
+  res
+}
+
+#' Moteur enregistré avec un résultat DE — NULL s'il est inconnu
+#'
+#' @param res data.frame de résultats DE.
+#' @return Le nom technique du moteur, ou NULL.
+bulk_de_engine_of <- function(res) {
+  if (is.null(res)) return(NULL)
+  .bulk_de_engine_norm(attr(res, "de_engine", exact = TRUE))
+}
+
+#' Étiquette lisible d'un moteur DE — "" si inconnu
+#'
+#' Rend "" (et non "inconnu") : les sous-titres omettent alors le moteur au lieu
+#' d'afficher un mot qui n'apprend rien.
+#'
+#' @param engine Nom technique ("deseq2", "edger", "limma") ou déjà lisible.
+#' @return Chaîne prête à afficher.
+bulk_de_engine_label <- function(engine) {
+  eng <- .bulk_de_engine_norm(engine)
+  if (is.null(eng)) return("")
+  switch(tolower(eng),
+         deseq2 = "DESeq2",
+         edger  = "edgeR",
+         limma  = "limma-voom",
+         toupper(eng))
+}
+
+#' Étiquette du moteur du contraste ACTIF
+#'
+#' Résolveur unique, sans état d'UI : c'est lui que lisent les sous-titres.
+#'
+#' @param contrasts Liste des contrastes (`shared_rv$contrasts`).
+#' @param active Nom du contraste affiché.
+#' @return Étiquette, ou "" si le moteur n'est pas connu.
+bulk_de_active_engine_label <- function(contrasts, active) {
+  if (is.null(contrasts) || is.null(active) || length(active) != 1L) return("")
+  if (is.na(active) || !nzchar(active)) return("")
+  if (!active %in% names(contrasts)) return("")
+  bulk_de_engine_label(bulk_de_engine_of(contrasts[[active]]))
+}
+
 #' Run the SAME contrast through DESeq2 + edgeR + limma-voom (when available)
 #'
 #' Multi-method comparison helper: dispatches the same group_target vs

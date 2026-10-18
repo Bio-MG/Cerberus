@@ -63,16 +63,20 @@
 #'
 #' @param input Shiny `input` object for the "de" module namespace.
 #' @param shared_rv reactiveValues shared across bulk sibling modules.
-#' @return list(design_str = function(), register_contrast = function(name, res),
+#' @return list(design_str = function(), register_contrast = function(name, res, engine),
 #'   remember_padj_ctx = function(...))
 .de_make_helpers <- function(input, shared_rv) {
   design_str <- function() {
     terms <- unique(c(input$covariates, input$condition_col))
     paste0("~ ", paste(terms, collapse = " + "))
   }
-  register_contrast <- function(name, res) {
+  # M13 : le moteur estampillé sur le RÉSULTAT, pas sur la sélection courante.
+  # Le sous-titre des 3 onglets de visualisation lit cet attribut : il décrit
+  # donc le contraste affiché même si l'utilisateur change `de_engine` après
+  # coup (ou si le contraste vient du panneau pairwise / du mode sans réplicat).
+  register_contrast <- function(name, res, engine = NULL) {
     current <- shared_rv$contrasts
-    current[[name]] <- res
+    current[[name]] <- bulk_de_stamp_engine(res, engine)
     shared_rv$contrasts <- current
   }
   # STAT-Q1 — enregistre de quoi RECALCULER padj à partir du dds DÉJÀ ajusté
