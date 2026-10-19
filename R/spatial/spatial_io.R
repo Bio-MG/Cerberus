@@ -708,6 +708,54 @@ check_histology_coord_alignment <- function(coords, hist_img) {
 # Main conversion pipeline
 # -----------------------------------------------------------------------------
 
+#' Swap a fully-written staging directory into the live cache path
+#'
+#' Chantier #1 (réouvert par l'opérateur le 2026-10-19). Le cache BPCells d'un
+#' jeu est un dossier VIVANT : des handles peuvent être ouverts dessus (objet
+#' en RAM, daemons mirai, second onglet du même compte OS). L'ancien code
+#' faisait `unlink(live)` PUIS écrivait dedans : un réimport du même nom
+#' détruisait le cache — et ces handles — avant même de savoir si la nouvelle
+#' écriture réussirait.
+#'
+#' L'échange se fait en deux temps : `live -> <live>.old_<uniq>`, puis
+#' `staging -> live`. Si le second renommage échoue, l'ancien est remis en
+#' place : on ne laisse jamais l'appelant sans cache.
+#'
+#' ⚠️ `file.rename()` rend `FALSE` (avec un warning) en cas d'échec — il ne
+#' LÈVE pas. Un `tryCatch(error = ...)` seul laisserait donc passer un échec
+#' silencieux : d'où `isTRUE()` sur chaque appel.
+#'
+#' MESURÉ sur cet hôte : un dossier BPCells simplement ouvert se renomme sans
+#' difficulté (BPCells relit à la demande) ; c'est un handle de fichier
+#' réellement ouvert par un autre processus qui bloque le renommage.
+#'
+#' @param staging_dir Dossier complet, déjà écrit ET vérifié par l'appelant.
+#' @param live_dir Chemin final attendu par les consommateurs.
+#' @return `list(ok = logical, reason = character)`. `reason` vaut
+#'   "staging_missing", "live_busy", "rename_failed", ou `NA` quand `ok`.
+.spatial_swap_dir <- function(staging_dir, live_dir) {
+  if (!dir.exists(staging_dir)) {
+    return(list(ok = FALSE, reason = "staging_missing"))
+  }
+  trash <- NULL
+  if (dir.exists(live_dir)) {
+    trash <- paste0(live_dir, ".old_", basename(tempfile(pattern = "")))
+    if (!isTRUE(suppressWarnings(file.rename(live_dir, trash)))) {
+      # Un handle ouvert ailleurs (daemon, autre onglet) bloque le renommage.
+      # RIEN n'a été détruit : le cache d'origine est intact.
+      return(list(ok = FALSE, reason = "live_busy"))
+    }
+  }
+  if (!isTRUE(suppressWarnings(file.rename(staging_dir, live_dir)))) {
+    if (!is.null(trash) && dir.exists(trash)) {
+      suppressWarnings(file.rename(trash, live_dir))   # rollback best-effort
+    }
+    return(list(ok = FALSE, reason = "rename_failed"))
+  }
+  if (!is.null(trash) && dir.exists(trash)) unlink(trash, recursive = TRUE)
+  list(ok = TRUE, reason = NA_character_)
+}
+
 #' Convert a raw Seurat spatial object to an on-disk BPCells-backed assay
 #'
 #' @param seurat_obj Seurat object as returned by load_spatial_visium()
@@ -752,11 +800,31 @@ convert_to_bpcells_and_fov <- function(seurat_obj, dataset_id,
   dataset_id <- gsub("[^A-Za-z0-9_-]", "_", dataset_id)
   bpcells_dir <- file.path(bpcells_cache_root(), dataset_id, "counts_bpcells")
   dir.create(dirname(bpcells_dir), showWarnings = FALSE, recursive = TRUE)
-  if (dir.exists(bpcells_dir)) unlink(bpcells_dir, recursive = TRUE)
-  
-  # --- 1. Counts -> disk (BPCells).
+
+  # --- 1. Counts -> disk (BPCells), via une STAGING (chantier #1).
+  # On n'écrit PLUS dans le cache vivant : un réimport du même nom détruisait
+  # les handles ouverts (daemons, second onglet) avant que la nouvelle matrice
+  # existe. Écriture -> relecture de contrôle -> échange atomique.
+  staging_dir <- file.path(dirname(bpcells_dir),
+                           basename(tempfile(pattern = paste0(".staging_", dataset_id, "_"))))
+  # no-op si l'échange a réussi (la staging a été renommée) ; nettoie les
+  # tentatives échouées pour ne pas accumuler de dossiers dans le cache.
+  on.exit(unlink(staging_dir, recursive = TRUE), add = TRUE)
+  dir.create(staging_dir, recursive = TRUE, showWarnings = FALSE)
+
   counts <- SeuratObject::LayerData(seurat_obj, assay = assay, layer = "counts")
-  BPCells::write_matrix_dir(counts, bpcells_dir, overwrite = TRUE)
+  BPCells::write_matrix_dir(counts, staging_dir, overwrite = TRUE)
+  # Vérifier AVANT l'échange : une staging illisible ne doit jamais remplacer
+  # un cache sain.
+  invisible(BPCells::open_matrix_dir(staging_dir))
+  swap <- .spatial_swap_dir(staging_dir, bpcells_dir)
+  if (!isTRUE(swap$ok)) {
+    stop(errorCondition(sprintf(
+      paste0("Remplacement du cache BPCells impossible pour '%s' (%s) — le cache ",
+             "existant est INTACT. Fermez les autres onglets ou attendez la fin des ",
+             "calculs en cours, puis relancez l'import."),
+      dataset_id, swap$reason), class = "spatial_io_error"))
+  }
   bpcells_mat <- BPCells::open_matrix_dir(bpcells_dir)
   SeuratObject::LayerData(seurat_obj, assay = assay, layer = "counts") <- bpcells_mat
   
@@ -773,11 +841,23 @@ convert_to_bpcells_and_fov <- function(seurat_obj, dataset_id,
   if (!is.null(raw_bg_obj) && inherits(raw_bg_obj, "Seurat")) {
     raw_bpcells_dir <- file.path(bpcells_cache_root(), dataset_id, "counts_bpcells_raw")
     dir.create(dirname(raw_bpcells_dir), showWarnings = FALSE, recursive = TRUE)
-    if (dir.exists(raw_bpcells_dir)) unlink(raw_bpcells_dir, recursive = TRUE)
+    # Même échange stagé que la matrice filtrée (chantier #1) : la matrice
+    # brute est optionnelle, mais elle ne doit pas non plus détruire son cache
+    # avant d'avoir écrit la nouvelle version.
+    raw_staging <- file.path(dirname(raw_bpcells_dir),
+                             basename(tempfile(pattern = paste0(".staging_raw_", dataset_id, "_"))))
+    on.exit(unlink(raw_staging, recursive = TRUE), add = TRUE)
     tryCatch({
+      dir.create(raw_staging, recursive = TRUE, showWarnings = FALSE)
       raw_assay  <- Seurat::DefaultAssay(raw_bg_obj)
       raw_counts <- SeuratObject::LayerData(raw_bg_obj, assay = raw_assay, layer = "counts")
-      BPCells::write_matrix_dir(raw_counts, raw_bpcells_dir, overwrite = TRUE)
+      BPCells::write_matrix_dir(raw_counts, raw_staging, overwrite = TRUE)
+      invisible(BPCells::open_matrix_dir(raw_staging))
+      swap_raw <- .spatial_swap_dir(raw_staging, raw_bpcells_dir)
+      if (!isTRUE(swap_raw$ok)) {
+        stop(errorCondition(sprintf("echange du cache brut impossible (%s)", swap_raw$reason),
+                            class = "spatial_io_error"))
+      }
       n_raw_total <- ncol(raw_bg_obj)
     }, error = function(e) {
       ts_log_swallow("spatial_io.convert_to_bpcells_and_fov", e)

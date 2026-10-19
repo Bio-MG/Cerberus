@@ -136,3 +136,103 @@ test_that("spatial_io.R ne contribue aucun signalement C10", {
   }
   expect_equal(n, 0L)
 })
+
+# ---------------------------------------------------------------------------
+# .spatial_swap_dir() — échange staging -> live du cache BPCells (chantier #1)
+# ---------------------------------------------------------------------------
+# CONSTAT (audit externe 2026-10-11 §5.2, RÉOUVERT par l'opérateur le
+# 2026-10-19) : convert_to_bpcells_and_fov() faisait
+# `unlink(bpcells_dir, recursive = TRUE)` AVANT d'écrire la nouvelle matrice,
+# puis écrivait DANS le dossier vivant. Un réimport du même nom détruisait
+# donc le cache — et les handles déjà ouverts (daemons mirai, second onglet,
+# objet en RAM) — avant même de savoir si la nouvelle écriture réussirait.
+#
+# Le correctif déplace l'écriture dans un dossier de staging puis ÉCHANGE
+# atomiquement. Ces tests épinglent les trois propriétés qui comptent :
+#   (1) succès  => le live porte le nouveau contenu, aucun résidu ;
+#   (2) échec   => le live est INTACT (jamais détruit « en avance ») ;
+#   (3) verrou  => refus explicite plutôt que corruption silencieuse.
+# MESURÉ sur cet hôte : file.rename() rend FALSE (warning, PAS une erreur)
+# quand un handle ouvert vit dans le dossier ; un dossier BPCells simplement
+# ouvert, lui, se renomme sans problème (BPCells relit à la demande).
+
+.sio_mkdir_with <- function(dir, marker) {
+  dir.create(dir, recursive = TRUE, showWarnings = FALSE)
+  writeLines(marker, file.path(dir, "marker.txt"))
+  dir
+}
+
+test_that("swap : succès — le live porte la staging, aucun résidu", {
+  root <- file.path(tempdir(), paste0("sio_swap_ok_", Sys.getpid()))
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+  live <- .sio_mkdir_with(file.path(root, "counts_bpcells"), "ANCIEN")
+  staging <- .sio_mkdir_with(file.path(root, ".staging_x"), "NOUVEAU")
+
+  r <- .spatial_swap_dir(staging, live)
+
+  expect_true(isTRUE(r$ok))
+  expect_identical(readLines(file.path(live, "marker.txt")), "NOUVEAU")
+  expect_false(dir.exists(staging), info = "la staging a été consommée")
+  expect_length(list.files(root, pattern = "^\\.staging"), 0L)
+  expect_length(list.files(root, pattern = "\\.old_"), 0L)
+})
+
+test_that("swap : staging absente — le cache vivant reste INTACT", {
+  # Simule un échec d'extraction/écriture AVANT l'échange : rien ne doit
+  # avoir touché au cache d'origine.
+  root <- file.path(tempdir(), paste0("sio_swap_missing_", Sys.getpid()))
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+  live <- .sio_mkdir_with(file.path(root, "counts_bpcells"), "ANCIEN")
+
+  r <- .spatial_swap_dir(file.path(root, ".staging_absente"), live)
+
+  expect_false(isTRUE(r$ok))
+  expect_identical(r$reason, "staging_missing")
+  expect_true(dir.exists(live), info = "le cache d'origine doit survivre à un échec d'extraction")
+  expect_identical(readLines(file.path(live, "marker.txt")), "ANCIEN")
+})
+
+test_that("swap : cache vivant verrouillé — refus explicite, cache INTACT", {
+  root <- file.path(tempdir(), paste0("sio_swap_busy_", Sys.getpid()))
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+  live <- .sio_mkdir_with(file.path(root, "counts_bpcells"), "ANCIEN")
+  staging <- .sio_mkdir_with(file.path(root, ".staging_y"), "NOUVEAU")
+  # Un handle ouvert dans le live reproduit le cas réel (daemon / autre onglet).
+  con <- file(file.path(live, "marker.txt"), open = "r")
+  on.exit(try(close(con), silent = TRUE), add = TRUE)
+
+  r <- .spatial_swap_dir(staging, live)
+
+  expect_false(isTRUE(r$ok))
+  expect_identical(r$reason, "live_busy")
+  expect_identical(readLines(file.path(live, "marker.txt")), "ANCIEN")
+  expect_true(dir.exists(staging), info = "la staging est conservée pour diagnostic")
+  close(con)
+  # une fois le verrou levé, le même échange doit aboutir
+  r2 <- .spatial_swap_dir(staging, live)
+  expect_true(isTRUE(r2$ok))
+  expect_identical(readLines(file.path(live, "marker.txt")), "NOUVEAU")
+})
+
+test_that("swap : pas de cache vivant — la staging devient le live", {
+  root <- file.path(tempdir(), paste0("sio_swap_new_", Sys.getpid()))
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+  live <- file.path(root, "counts_bpcells")
+  staging <- .sio_mkdir_with(file.path(root, ".staging_z"), "PREMIER")
+
+  r <- .spatial_swap_dir(staging, live)
+
+  expect_true(isTRUE(r$ok))
+  expect_identical(readLines(file.path(live, "marker.txt")), "PREMIER")
+})
+
+test_that("convert_to_bpcells_and_fov écrit en staging et n'unlink plus le live", {
+  # VERROU SOURCE : la propriété « ne jamais détruire le cache vivant avant
+  # d'avoir une staging valide » doit tenir même sur les branches que le test
+  # d'exécution n'atteint pas (Seurat spatial complet requis).
+  src <- paste(deparse(body(convert_to_bpcells_and_fov)), collapse = "\n")
+  expect_match(src, ".spatial_swap_dir(", fixed = TRUE)
+  expect_match(src, ".staging", fixed = TRUE)
+  expect_false(grepl("unlink(bpcells_dir", src, fixed = TRUE),
+               info = "le live ne doit plus être unlink() avant l'écriture")
+})
