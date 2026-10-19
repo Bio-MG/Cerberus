@@ -569,6 +569,40 @@
         lapply(issues, tags$div))
   })
 
+  # ── D4 (2026-10-20) : calcul DE ad-hoc NON BLOQUANT ──────────────────────
+  # Pattern identique aux sous-onglets spatiaux : ExtendedTask$new(fn) où fn
+  # rend un mirai. Le corps appelle run_de_core() (R/bulk/bulk_helpers.R,
+  # préchargé dans les daemons via APP_DAEMON_SOURCE_FILES) : le daemon et le
+  # repli synchrone exécutent donc le MÊME code, pas deux copies.
+  de_adhoc_task <- ExtendedTask$new(function(counts, meta, engine, shrink_lfc, padj_method) {
+    mirai::mirai(
+      run_de_core(counts, meta, engine, "condition", "GroupA", "GroupB",
+                  shrink = shrink_lfc, p_adjust_method = padj_method),
+      counts = counts, meta = meta, engine = engine,
+      shrink_lfc = shrink_lfc, padj_method = padj_method
+    )
+  })
+  # Le résultat ne transporte que le CALCUL : le nom du contraste est une
+  # décision d'interface, prise ici, jamais dans le daemon.
+  de_adhoc_ctx <- shiny::reactiveVal(NULL)
+
+  .de_adhoc_commit <- function(out, ctx) {
+    res <- out$res
+    helpers$register_contrast(ctx$cname, res, engine = ctx$engine)
+    shared_rv$active_contrast <- ctx$cname
+    # STAT-Q1 : le dds revient du daemon avec le résultat, donc le recalcul
+    # « live » de padj reste disponible sans réajuster le modèle.
+    if (!is.null(out$dds)) {
+      helpers$remember_padj_ctx(ctx$cname, out$dds, "condition", "GroupA", "GroupB",
+                                ctx$shrink_lfc, ctx$padj_method)
+    }
+    updateSelectInput(session, "active_contrast_view",
+                      choices = names(shared_rv$contrasts), selected = ctx$cname)
+    n_sig <- sum(res$padj < input$padj_thresh & abs(res$log2FoldChange) > input$lfc_thresh, na.rm = TRUE)
+    showNotification(.t_fmt(.tr("\u2713 Ad-hoc '{c}': {n} g\u00e8nes sig."), c = ctx$cname, n = n_sig),
+                     type = "message", duration = 6)
+  }
+
   observeEvent(input$run_de_adhoc, {
     req(shared_rv$filtered_counts, input$de_engine)
     a <- input$adhoc_group_a %||% character(0)
@@ -576,44 +610,62 @@
     if (length(intersect(a, b)) > 0) { showNotification(.tr("❌ Même échantillon dans les 2 groupes."), type = "error", duration = 6); return() }
     if (length(a) == 0 || length(b) == 0) { showNotification(.tr("❌ Sélectionnez au moins 1 échantillon / groupe."), type = "error", duration = 6); return() }
 
-    # `add = TRUE` is LOAD-BEARING, not style. A bare `on.exit()` REPLACES every
-    # expression already pending, so this line silently discarded the drive job
-    # declaration registered at the top of the observer above — the job would
-    # have stayed `running` forever, and the agent would have polled a
-    # completion that could never be written. Exactly the silent-seam failure
-    # this repo keeps finding: nothing errors, nothing warns, the wire just
-    # stops telling the truth.
-    p <- shiny::Progress$new(); on.exit(p$close(), add = TRUE)
-    p$set(message = .tr("Analyse ad-hoc..."), value = 0.2)
-    tryCatch({
-      counts_sub <- shared_rv$filtered_counts[, c(a, b), drop = FALSE]
-      meta_adhoc <- data.frame(
-        condition = factor(c(rep("GroupA", length(a)), rep("GroupB", length(b))), levels = c("GroupB", "GroupA")),
-        row.names = c(a, b)
-      )
-      padj_method <- input$padj_method %||% TS_PADJ_METHOD_DEFAULT
-      dds_a <- NULL
-      res <- if (input$de_engine == "deseq2") {
-        dds_a <- build_dds(counts_sub, meta_adhoc, "~condition", run_deseq = TRUE)
-        run_bulk_de_dispatch("deseq2", counts_sub, meta_adhoc, "condition", "GroupA", "GroupB", dds = dds_a, shrink = input$shrink_lfc,
-                             p_adjust_method = padj_method)
+    counts_sub <- shared_rv$filtered_counts[, c(a, b), drop = FALSE]
+    meta_adhoc <- data.frame(
+      condition = factor(c(rep("GroupA", length(a)), rep("GroupB", length(b))), levels = c("GroupB", "GroupA")),
+      row.names = c(a, b)
+    )
+    padj_method <- input$padj_method %||% TS_PADJ_METHOD_DEFAULT
+    ctx <- list(
+      cname = if (nchar(trimws(input$adhoc_contrast_name %||% "")) > 0) trimws(input$adhoc_contrast_name) else "GroupA_vs_GroupB_adhoc",
+      engine = input$de_engine,
+      shrink_lfc = input$shrink_lfc,
+      padj_method = padj_method
+    )
+    de_adhoc_ctx(ctx)
+
+    # Le repli synchrone est DÉCLARÉ (notification), jamais muet : même
+    # doctrine que mod_sc_da_milo.R — l'utilisateur doit savoir que
+    # l'interface va rester bloquée.
+    pool_ok <- isTRUE(ensure_app_daemons()) &&
+               requireNamespace("mirai", quietly = TRUE) &&
+               isTRUE(mirai::daemons_set())
+    if (!pool_ok) {
+      showNotification(
+        .tr("Pool de calcul indisponible : l'analyse ad-hoc tourne en synchrone — l'interface restera bloquée pendant le calcul."),
+        type = "warning", duration = 10)
+      out <- tryCatch(
+        run_de_core(counts_sub, meta_adhoc, ctx$engine, "condition", "GroupA", "GroupB",
+                    shrink = ctx$shrink_lfc, p_adjust_method = ctx$padj_method),
+        error = function(e) e)
+      if (inherits(out, "error")) {
+        showNotification(paste(.tr("Erreur DE ad-hoc:"), conditionMessage(out)),
+                         type = "error", duration = 10)
       } else {
-        run_bulk_de_dispatch(input$de_engine, counts_sub, meta_adhoc, "condition", "GroupA", "GroupB",
-                             p_adjust_method = padj_method)
+        .de_adhoc_commit(out, ctx)
       }
-      res <- .normalize_de_cols(res, counts_for_basemean = counts_sub)
-      cname <- if (nchar(trimws(input$adhoc_contrast_name %||% "")) > 0) trimws(input$adhoc_contrast_name) else "GroupA_vs_GroupB_adhoc"
-      helpers$register_contrast(cname, res, engine = input$de_engine)
-      shared_rv$active_contrast <- cname
-      # STAT-Q1 : contexte de recalcul padj (DESeq2 ad-hoc uniquement)
-      if (!is.null(dds_a)) {
-        helpers$remember_padj_ctx(cname, dds_a, "condition", "GroupA", "GroupB",
-                                  input$shrink_lfc, padj_method)
-      }
-      updateSelectInput(session, "active_contrast_view", choices = names(shared_rv$contrasts), selected = cname)
-      n_sig <- sum(res$padj < input$padj_thresh & abs(res$log2FoldChange) > input$lfc_thresh, na.rm = TRUE)
-      showNotification(.t_fmt(.tr("\u2713 Ad-hoc '{c}': {n} g\u00e8nes sig."), c = cname, n = n_sig),
-                       type = "message", duration = 6)
-    }, error = function(e) showNotification(paste(.tr("Erreur DE ad-hoc:"), e$message), type = "error", duration = 10))
+      return()
+    }
+
+    showNotification(.tr("Analyse ad-hoc en cours..."),
+                     id = "de_adhoc_progress", type = "message", duration = NULL)
+    de_adhoc_task$invoke(counts_sub, meta_adhoc, ctx$engine, ctx$shrink_lfc, ctx$padj_method)
+  })
+
+  # Convention du dépôt (cf. mod_spatial_cluster.R) : on observe le STATUT et
+  # on n'appelle result() QUE sur succès — un result() sur un job échoué lève.
+  observeEvent(de_adhoc_task$status(), {
+    st <- de_adhoc_task$status()
+    if (identical(st, "success")) {
+      removeNotification("de_adhoc_progress")
+      out <- de_adhoc_task$result()
+      ctx <- de_adhoc_ctx()
+      if (!is.null(ctx)) .de_adhoc_commit(out, ctx)
+    } else if (identical(st, "error")) {
+      removeNotification("de_adhoc_progress")
+      showNotification(
+        .tr("Erreur pendant l'analyse ad-hoc — voir le journal. Relancez, ou utilisez 'Reinitialiser les daemons'."),
+        type = "error", duration = 10)
+    }
   })
 }

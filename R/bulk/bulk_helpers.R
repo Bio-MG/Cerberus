@@ -757,6 +757,50 @@ run_bulk_de_dispatch <- function(engine, counts_matrix, metadata, condition_col,
 
 }
 
+#' One differential-expression computation, from counts to normalized table
+#'
+#' Jalon D4 (2026-10-20). Le calcul DE était recopié dans deux observateurs de
+#' `mod_bulk_de_run.R` (contraste piloté par l'agent, et comparaison ad-hoc) :
+#' construire le `dds` si besoin, lancer le moteur, normaliser les colonnes.
+#' Recopier cette séquence dans le corps d'un `mirai` l'aurait dupliquée une
+#' troisième fois — et deux copies d'une même vérité divergent toujours.
+#'
+#' Cette fonction est PURE (aucune réactivité, aucun accès à `input`), donc :
+#'   - elle tourne à l'identique dans un daemon mirai (préchargée via
+#'     `APP_DAEMON_SOURCE_FILES`) et dans le processus principal ;
+#'   - c'est le repli SYNCHRONE et le chemin asynchrone qui partagent le MÊME
+#'     code, au lieu de deux implémentations qui peuvent se contredire.
+#'
+#' @param counts_matrix Matrice de comptages bruts (gènes x échantillons).
+#' @param metadata data.frame d'échantillons, aligné sur les colonnes.
+#' @param engine "deseq2", "edger" ou "limma".
+#' @param condition_col,group_target,group_ref Contraste à extraire.
+#' @param dds `DESeqDataSet` déjà ajusté (le modèle peut porter des covariables
+#'   que cette fonction ne saurait pas reconstruire). `NULL` = à construire
+#'   ici quand `engine == "deseq2"`.
+#' @param shrink,p_adjust_method,covariates,fixed_dispersion Voir
+#'   `run_bulk_de_dispatch()`.
+#' @param design_formula Formule utilisée SI `dds` doit être construit ici.
+#' @return `list(res = <data.frame normalisé>, dds = <DESeqDataSet ou NULL>)`.
+run_de_core <- function(counts_matrix, metadata, engine,
+                        condition_col, group_target, group_ref,
+                        dds = NULL, shrink = TRUE, p_adjust_method = "BH",
+                        covariates = character(0), fixed_dispersion = NULL,
+                        design_formula = "~condition") {
+  dds_out <- dds
+  if (is.null(dds_out) && identical(engine, "deseq2")) {
+    dds_out <- build_dds(counts_matrix, metadata, design_formula = design_formula,
+                         run_deseq = TRUE)
+  }
+  res <- run_bulk_de_dispatch(engine, counts_matrix, metadata, condition_col,
+                              group_target, group_ref, dds = dds_out,
+                              shrink = shrink, p_adjust_method = p_adjust_method,
+                              covariates = covariates,
+                              fixed_dispersion = fixed_dispersion)
+  res <- .normalize_de_cols(res, counts_for_basemean = counts_matrix)
+  list(res = res, dds = dds_out)
+}
+
 
 
 # =============================================================================

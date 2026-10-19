@@ -166,7 +166,16 @@ APP_DAEMON_SOURCE_FILES <- c(
   "R/sc/sc_velocity.R",
   "R/sc/sc_abundance_design.R",
   "R/sc/sc_abundance_milo.R",
-  "R/sc/sc_abundance_milo_views.R"
+  "R/sc/sc_abundance_milo_views.R",
+  # --- Bulk : analyse differentielle (D4, 2026-10-20) ----------------------
+  # bulk_helpers.R est PUR (aucune reactivite) : le meme run_de_core() sert le
+  # chemin daemon ET le repli synchrone. Sans ce preload le job echoue avec
+  # « could not find function » — la panne silencieuse mesuree sur Milo (4E-4).
+  # ORDRE : batch_correction.R AVANT bulk_helpers.R — run_bulk_de_dispatch()
+  # appelle bulk_assert_raw_counts(), defini dans le premier. Mesure : sourcer
+  # bulk_helpers.R seul laisse cette fonction introuvable dans le daemon.
+  "R/bulk/batch_correction.R",
+  "R/bulk/bulk_helpers.R"
 )
 
 #' Resolve the application root WITHOUT trusting getwd() (4E-4)

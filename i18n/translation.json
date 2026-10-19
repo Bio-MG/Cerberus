@@ -10748,6 +10748,18 @@
     {
       "fr": "Lecture stricte des couches spliced/unspliced (+ ambiguous si present). Aucune inference ; les symboles de gènes dupliqués sont rendus uniques (avertissement affiché).",
       "en": "Strict reading of the spliced/unspliced layers (+ ambiguous when present). No inference; duplicated gene symbols are made unique (warning shown)."
+    },
+    {
+      "fr": "Analyse ad-hoc en cours...",
+      "en": "Ad-hoc analysis running..."
+    },
+    {
+      "fr": "Pool de calcul indisponible : l'analyse ad-hoc tourne en synchrone — l'interface restera bloquée pendant le calcul.",
+      "en": "Compute pool unavailable: the ad-hoc analysis runs synchronously — the interface will stay frozen during the computation."
+    },
+    {
+      "fr": "Erreur pendant l'analyse ad-hoc — voir le journal. Relancez, ou utilisez 'Reinitialiser les daemons'.",
+      "en": "Error during the ad-hoc analysis — see the log. Retry, or use 'Reset daemons'."
     }
   ]
 }

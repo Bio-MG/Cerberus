@@ -547,3 +547,93 @@ test_that("la sonde ne publie JAMAIS le cadre de resultats ni une valeur de lign
   }
   expect_false(any(grepl("TOKEN|secret|baseMean", unlist(st), ignore.case = TRUE)))
 })
+# =============================================================================
+# D4 (2026-10-20) — le calcul DE ad-hoc ne bloque plus le thread Shiny
+# =============================================================================
+# Le défaut : l'observateur `run_de_adhoc` construisait le dds, lançait le
+# moteur et normalisait DANS le thread du serveur. Sur DESeq2 mesuré à
+# 852,7 s (17 925 gènes x 18 échantillons, `docs/audits/BASELINES.txt`), cela
+# gèle l'interface pendant quatorze minutes.
+#
+# Le correctif suit le pattern déjà en place pour le spatial : ExtendedTask +
+# mirai. Le corps du job appelle run_de_core(), fonction PURE de
+# bulk_helpers.R, préchargée dans les daemons — le chemin asynchrone et le
+# repli synchrone exécutent donc le MÊME code.
+source_project_file("R/bulk/batch_correction.R")
+source_project_file("R/bulk/bulk_helpers.R")
+source_project_file("R/spatial/spatial_async.R")
+
+.d4_counts <- function() {
+  set.seed(42)
+  m <- matrix(as.integer(rnbinom(60 * 6, mu = 50, size = 5)), nrow = 60)
+  rownames(m) <- sprintf("G%02d", seq_len(60))
+  colnames(m) <- paste0("s", seq_len(6))
+  m
+}
+.d4_meta <- function() {
+  data.frame(
+    condition = factor(c(rep("GroupA", 3), rep("GroupB", 3)),
+                       levels = c("GroupB", "GroupA")),
+    row.names = paste0("s", seq_len(6))
+  )
+}
+
+test_that("D4 : run_de_core() rend un tableau normalisé", {
+  skip_if_not_installed("edgeR")
+  out <- run_de_core(.d4_counts(), .d4_meta(), "edger", "condition", "GroupA", "GroupB")
+  expect_true(all(c("gene", "log2FoldChange", "pvalue", "padj", "baseMean") %in%
+                    colnames(out$res)))
+  expect_equal(nrow(out$res), 60L)
+  expect_null(out$dds, info = "edgeR ne produit pas de DESeqDataSet")
+})
+
+test_that("D4 : le daemon préchargé rend le MÊME résultat que le thread principal", {
+  # Ce test est le SEUL qui prouve que le préchargement est complet : un
+  # fichier manquant dans APP_DAEMON_SOURCE_FILES ferait échouer le job avec
+  # « could not find function », exactement la panne silencieuse mesurée sur
+  # Milo (4E-4).
+  skip_if_not_installed("mirai")
+  skip_if_not_installed("edgeR")
+  counts <- .d4_counts(); meta <- .d4_meta()
+  sync <- run_de_core(counts, meta, "edger", "condition", "GroupA", "GroupB")
+
+  on.exit(tryCatch(mirai::daemons(0), error = function(e) NULL), add = TRUE)
+  if (!mirai::daemons_set()) suppressMessages(mirai::daemons(1))
+  # ⚠️ CHEMINS ABSOLUS : sous testthat le répertoire courant est tests/testthat,
+  # donc un chemin relatif ne résout RIEN dans le daemon et le préchargement
+  # échoue en silence (panne mesurée le 2026-09-16, en-tête de spatial_async.R).
+  abs_files <- normalizePath(file.path(ts_project_root(), APP_DAEMON_SOURCE_FILES),
+                             winslash = "/", mustWork = FALSE)
+  expect_true(all(file.exists(abs_files)), info = "tous les fichiers de préchargement doivent exister")
+  mirai::everywhere({
+    for (.f in .files) source(.f, local = globalenv())
+  }, .files = abs_files)
+
+  async <- mirai::mirai(
+    run_de_core(counts, meta, "edger", "condition", "GroupA", "GroupB"),
+    counts = counts, meta = meta)[]
+  expect_false(inherits(async, "error"),
+               info = paste("le job a échoué :", if (inherits(async, "error")) conditionMessage(async) else ""))
+
+  expect_equal(nrow(async$res), nrow(sync$res))
+  expect_equal(async$res$log2FoldChange, sync$res$log2FoldChange, tolerance = 1e-8)
+  expect_equal(async$res$padj, sync$res$padj, tolerance = 1e-8)
+})
+
+test_that("D4 : le module soumet le calcul ad-hoc via ExtendedTask + mirai", {
+  txt <- paste(readLines(file.path(ts_project_root(), .MDR_FILE)), collapse = "\n")
+  expect_match(txt, "ExtendedTask$new", fixed = TRUE)
+  expect_match(txt, "mirai::mirai", fixed = TRUE)
+  expect_match(txt, "run_de_core(", fixed = TRUE)
+  # Le repli synchrone doit rester DÉCLARÉ, jamais muet (doctrine Milo).
+  expect_match(txt, "Pool de calcul indisponible", fixed = TRUE)
+})
+
+test_that("D4 : le préchargement des daemons inclut les fichiers DE, dans l'ordre", {
+  files <- APP_DAEMON_SOURCE_FILES
+  i_batch <- match("R/bulk/batch_correction.R", files)
+  i_helpers <- match("R/bulk/bulk_helpers.R", files)
+  expect_false(is.na(i_batch), info = "bulk_assert_raw_counts() vit dans batch_correction.R")
+  expect_false(is.na(i_helpers))
+  expect_lt(i_batch, i_helpers)   # la dépendance est sourcée AVANT son appelant
+})
