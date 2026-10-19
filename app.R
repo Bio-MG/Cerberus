@@ -462,6 +462,12 @@ ui <- page_navbar(
 
 server <- function(input, output, session) {
   
+  # Chantier #5 : sans ce hook, fermer l'app laissait les workers mirai vivants
+  # (processus orphelins sur Windows) — stop_spatial_daemons() n'avait AUCUN
+  # appelant au shutdown. onStop() est le point de sortie propre de la session ;
+  # le teardown est idempotent (no-op sans pool).
+  onStop(stop_spatial_daemons)
+  
   
   
   # === DONNÉES GLOBALES PARTAGÉES ===

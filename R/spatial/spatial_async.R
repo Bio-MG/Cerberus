@@ -70,12 +70,39 @@
 
 `%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
 
+#' Nombre de daemons mirai : option > constante de config > 6L
+#'
+#' Chantier #5 (2026-10-19). TROIS sites recodaient cette résolution (défaut de
+#' `init_spatial_daemons()`, init de `.spatial_async_env`, repli de
+#' `reset_spatial_daemons`) et le module spatial passait un `6` EN DUR, qui
+#' court-circuitait `TS_MIRAI_N_DAEMONS` : une constante déclarée mais
+#' contournée par l'appelant n'est pas une configuration.
+#'
+#' `options(ts.mirai.n_daemons = 2L)` l'emporte sur la constante : c'est le
+#' levier de réglage (et de test) sans éditer le dépôt. `options()` est
+#' process-global en R — assumé ici par la décision O6 (1 utilisateur /
+#' 1 processus).
+#'
+#' Une valeur invalide (NA, 0, négative, non numérique) retombe sur la
+#' constante : jamais un pool de 0 worker par accident.
+#'
+#' @return Un entier scalaire >= 1.
+ts_mirai_n_daemons <- function() {
+  .const <- if (exists("TS_MIRAI_N_DAEMONS")) TS_MIRAI_N_DAEMONS else 6L
+  .valid <- function(x) {
+    x <- suppressWarnings(as.integer(x)[1L])
+    if (length(x) == 1L && !is.na(x) && x >= 1L) x else NULL
+  }
+  .valid(getOption("ts.mirai.n_daemons", NULL)) %||% .valid(.const) %||% 6L
+}
+
 .spatial_async_env <- new.env(parent = emptyenv())
 .spatial_async_env$daemons_ready    <- FALSE
 .spatial_async_env$daemons_verified <- FALSE
 # QW-3 (2026-09-30) : le nombre de daemons se lit dans la config — la
 # constante TS_MIRAI_N_DAEMONS existait mais était ignorée (audit C-2).
-.spatial_async_env$n_daemons        <- if (exists("TS_MIRAI_N_DAEMONS")) TS_MIRAI_N_DAEMONS else 6L
+# Chantier #5 : via le résolveur UNIQUE (option > constante > 6L).
+.spatial_async_env$n_daemons        <- ts_mirai_n_daemons()
 .spatial_async_env$base_dir         <- NULL
 .spatial_async_env$source_files_abs <- character(0)
 .spatial_async_env$last_diagnostics <- NULL
@@ -183,7 +210,7 @@ APP_DAEMON_SOURCE_FILES <- c(
 #'   because the pool is started once and its preload is frozen at that moment
 #'   (see the v6 changelog above).
 #' @return invisible(TRUE) on success, invisible(FALSE) if mirai is missing.
-init_spatial_daemons <- function(n_daemons = if (exists("TS_MIRAI_N_DAEMONS")) TS_MIRAI_N_DAEMONS else 6L,
+init_spatial_daemons <- function(n_daemons = ts_mirai_n_daemons(),
                                  source_files = APP_DAEMON_SOURCE_FILES) {
   if (!requireNamespace("mirai", quietly = TRUE)) {
     warning("Package 'mirai' manquant : les calculs spatiaux asynchrones (clustering, ",
@@ -394,9 +421,22 @@ spatial_daemon_diagnostics_text <- function() {
 }
 
 #' Stop and free the daemon pool (e.g. on app shutdown / testing teardown)
+#'
+#' Chantier #5 : appelé par `shiny::onStop()` dans `app.R`. Idempotent — sans
+#' pool, il ne fait que remettre les drapeaux à FALSE, et peut donc courir
+#' plusieurs fois (teardown manuel puis fermeture de session).
+#'
+#' Le test d'existence est `mirai::daemons_set()`, PAS le drapeau
+#' `.spatial_async_env$daemons_ready` : un pool démarré par un init
+#' partiellement échoué (ou par un état précédent) laisserait sinon des
+#' workers orphelins — précisément le défaut constaté sur Windows.
+#' L'échec du teardown lui-même reste silencieux : à la fermeture il n'y a
+#' plus d'utilisateur à notifier, et le processus se termine de toute façon.
 stop_spatial_daemons <- function() {
-  if (isTRUE(.spatial_async_env$daemons_ready) && requireNamespace("mirai", quietly = TRUE)) {
-    tryCatch(mirai::daemons(0), error = function(e) NULL)
+  if (requireNamespace("mirai", quietly = TRUE)) {
+    tryCatch({
+      if (isTRUE(mirai::daemons_set())) mirai::daemons(0)
+    }, error = function(e) NULL)
   }
   .spatial_async_env$daemons_ready    <- FALSE
   .spatial_async_env$daemons_verified <- FALSE
@@ -417,7 +457,7 @@ stop_spatial_daemons <- function() {
 #' @param n_daemons Integer, pool size (default: whatever was last used).
 #' @return invisible(TRUE)/(FALSE), see init_spatial_daemons().
 reset_spatial_daemons <- function(n_daemons = NULL) {
-  n <- n_daemons %||% .spatial_async_env$n_daemons %||% 6L
+  n <- n_daemons %||% .spatial_async_env$n_daemons %||% ts_mirai_n_daemons()
   stop_spatial_daemons()
   init_spatial_daemons(n_daemons = n)
 }

@@ -227,7 +227,11 @@ mod_spatial_server <- function(id, global_data) {
       tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
     }
 
-    if (!spatial_daemons_ready()) init_spatial_daemons(n_daemons = 6)
+    # Chantier #5 : NE PAS passer de compte ici. `n_daemons = 6` court-circuitait
+    # TS_MIRAI_N_DAEMONS / options(ts.mirai.n_daemons) : le pool démarrait à 6
+    # quel que soit le réglage. Le défaut de init_spatial_daemons() résout la
+    # config (option > constante > 6L).
+    if (!spatial_daemons_ready()) init_spatial_daemons()
 
     shared_rv <- reactiveValues(
       active_tab       = "qc",
