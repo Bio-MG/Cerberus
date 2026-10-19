@@ -695,6 +695,39 @@ load_spatial_visium_hd <- function(visium_dir, bin_size = 8L, sample_name = "Spa
        "ni fichier DGE dense 'MappedDGEForR.csv', 'dge_matrix.csv/tsv' ou similaire).", call. = FALSE)
 }
 
+#' Detect the field separator of a delimited text line (internal)
+#'
+#' The separator is a property of the FILE, not of its extension: Excel in a
+#' French locale writes `.csv` files with `;`. Read with the default comma,
+#' such a file yields ONE column — which `row.names = 1` then consumes as row
+#' names, leaving a data.frame with ZERO data columns (measured 2026-10-19:
+#' `dim = 2 x 0` for a 3-line `Gene;S1;S2` file).
+#'
+#' Separators inside double-quoted fields do not vote, so a quoted label
+#' containing `;` cannot outvote the real separator.
+#'
+#' @param first_line Character(1): the header (or first) line of the file.
+#' @param default Separator to return when no separator is found (default
+#'   `","`, R's own). Callers keep their extension-based guess here, so a
+#'   single-column file behaves exactly as before.
+#' @return One of `","`, `";"`, `"\t"`. Ties resolve in that order.
+.ts_detect_delim <- function(first_line, default = ",") {
+  if (length(first_line) == 0L) return(default)
+  line <- tryCatch(as.character(first_line[1]), error = function(e) NA_character_)
+  if (is.na(line)) return(default)
+  line <- sub("\r$", "", line)
+  if (!nzchar(line)) return(default)
+  bare <- gsub('"[^"]*"', "", line)          # quoted fields cannot vote
+  seps <- c(",", ";", "\t")
+  # gregexpr() reports -1 when nothing matches: count, never take its length.
+  counts <- vapply(seps, function(s) {
+    hits <- gregexpr(s, bare, fixed = TRUE)[[1]]
+    if (identical(as.integer(hits[1]), -1L)) 0L else length(hits)
+  }, integer(1))
+  if (max(counts) == 0L) return(default)
+  seps[[which.max(counts)]]
+}
+
 #' Read a small delimited table with auto-detected separator AND header
 #' (internal) — handles the real-world Slide-seq location-file variability:
 #' comma vs tab, plain vs .gz, and header vs HEADERLESS (Macosko-lab
@@ -713,11 +746,9 @@ load_spatial_visium_hd <- function(visium_dir, bin_size = 8L, sample_name = "Spa
   }, error = function(e) "")
 
   # Extension-based separator guess can be wrong (some exports use .txt for
-  # comma-delimited data) -- if the guessed separator isn't even present on
-  # the first line, try the other common one before giving up.
-  if (nzchar(first_line) && !grepl(sep, first_line, fixed = TRUE)) {
-    sep <- if (identical(sep, "\t")) "," else "\t"
-  }
+  # comma-delimited data, and Excel in a French locale writes ';' inside a
+  # .csv) -- the first line decides whenever it carries a separator.
+  sep <- .ts_detect_delim(first_line, default = sep)
 
   fields1 <- if (nzchar(first_line)) strsplit(first_line, sep, fixed = TRUE)[[1]] else character(0)
   looks_numeric <- function(v) !is.na(suppressWarnings(as.numeric(v)))

@@ -434,21 +434,32 @@ mod_import_bulk_server <- function(id, global_data) {
     # ── smart_read (inchangé) ──────────────────────────────────────────────
     smart_read <- function(filepath, has_header = TRUE, has_rownames = TRUE) {
       ext <- tolower(tools::file_ext(filepath))
+      # Le separateur est une propriete du FICHIER, pas de son extension :
+      # Excel en locale francaise ecrit ';' DANS un .csv. Lu avec la virgule
+      # par defaut, un tel fichier ne rend qu'UNE colonne -- que row.names = 1
+      # consomme ensuite => zero colonne de donnees (mesure 2026-10-19 :
+      # dim = 2 x 0 pour "Gene;S1;S2"). L'extension ne sert plus que de
+      # valeur par defaut quand la premiere ligne ne porte aucun separateur.
+      ext_default <- if (ext %in% c("tsv", "txt")) "\t" else ","
+      first_line <- tryCatch(readLines(filepath, n = 1L, warn = FALSE),
+                             error = function(e) character(0))
+      sep <- .ts_detect_delim(first_line, default = ext_default)
       tryCatch({
         df <- switch(
           ext,
           "csv"  = read.csv(filepath, header = has_header,
                             row.names = if (has_rownames) 1 else NULL,
-                            check.names = FALSE, stringsAsFactors = FALSE,
+                            sep = sep, check.names = FALSE,
+                            stringsAsFactors = FALSE,
                             fileEncoding = "UTF-8-BOM"),
           "tsv"  = read.delim(filepath, header = has_header,
                               row.names = if (has_rownames) 1 else NULL,
-                              sep = "\t", check.names = FALSE,
+                              sep = sep, check.names = FALSE,
                               stringsAsFactors = FALSE, fileEncoding = "UTF-8-BOM"),
           "txt"  = read.delim(filepath, header = has_header,
                               row.names = if (has_rownames) 1 else NULL,
-                              check.names = FALSE, stringsAsFactors = FALSE,
-                              fileEncoding = "UTF-8-BOM"),
+                              sep = sep, check.names = FALSE,
+                              stringsAsFactors = FALSE, fileEncoding = "UTF-8-BOM"),
           "xlsx" = {
             if (!requireNamespace("readxl", quietly = TRUE))
               stop(errorCondition("Package 'readxl' nécessaire pour lire les fichiers .xlsx", class = "bulk_import_error"))

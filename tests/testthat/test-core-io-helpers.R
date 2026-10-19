@@ -255,6 +255,60 @@ test_that(".read_delimited_table falls back to the other separator if the guesse
 })
 
 # ---------------------------------------------------------------------------
+# .ts_detect_delim() — the separator is a PROPERTY OF THE FILE, not of its
+# extension. A French Excel "CSV" is semicolon-separated; reading it with the
+# default comma yields ONE column, which `row.names = 1` then consumes => a
+# data.frame with ZERO columns (measured 2026-10-19: dim = 2 x 0).
+# ---------------------------------------------------------------------------
+test_that(".ts_detect_delim recognises comma, semicolon and tab headers", {
+  expect_identical(.ts_detect_delim("Gene,S1,S2"), ",")
+  expect_identical(.ts_detect_delim("Gene;S1;S2"), ";")
+  expect_identical(.ts_detect_delim("Gene\tS1\tS2"), "\t")
+})
+
+test_that(".ts_detect_delim ignores separators inside quoted fields", {
+  # two real commas; the semicolons are inside a quoted label
+  expect_identical(.ts_detect_delim('"a;b;c",x,y'), ",")
+})
+
+test_that(".ts_detect_delim defaults to comma when no separator is present", {
+  expect_identical(.ts_detect_delim("Gene"), ",")
+  expect_identical(.ts_detect_delim(""), ",")
+})
+
+test_that(".read_delimited_table reads a semicolon-separated CSV (French Excel export)", {
+  tf <- tempfile(fileext = ".csv")
+  on.exit(unlink(tf))
+  writeLines(c("Gene;S1;S2", "TP53;10;20", "MYC;5;7"), tf)
+  df <- .read_delimited_table(tf)
+  expect_identical(colnames(df), c("Gene", "S1", "S2"))
+  expect_equal(nrow(df), 2)
+})
+
+test_that("every read.csv/read.delim in mod_import_bulk.R names its separator", {
+  # `smart_read()` used `read.csv()` with no `sep=`, i.e. the default comma,
+  # for every `.csv` upload. Naming the separator is the invariant: a reader
+  # that omits it silently re-admits the zero-column import.
+  expr <- ts_ast_parse("modules/import/mod_import_bulk.R")
+  calls <- ts_ast_find_all(expr, function(e) {
+    ts_ast_is_call_to(e, "read.csv") || ts_ast_is_call_to(e, "read.delim")
+  })
+  # Anti-vacuite : `ts_ast_walk()` sur un vecteur expression ne visite RIEN
+  # (mesure 2026-10-19 : la premiere version de ce test passait a vide).
+  expect_true(length(calls) >= 2L,
+              info = sprintf("seulement %d lecteur(s) trouve(s) : test a reecrire", length(calls)))
+  offenders <- character(0)
+  for (i in seq_along(calls)) {
+    nm <- names(as.list(calls[[i]]))[-1]
+    if (is.null(nm) || !"sep" %in% nm) {
+      offenders <- c(offenders, paste0(deparse(calls[[i]][[1]]), "() sans sep="))
+    }
+  }
+  expect_identical(offenders, character(0),
+                   info = "un lecteur sans sep= retombe sur la virgule : un export Excel FR rend 0 colonne")
+})
+
+# ---------------------------------------------------------------------------
 # Slide-seq file detection: .find_slideseq_location_file() / .find_slideseq_counts()
 # ---------------------------------------------------------------------------
 test_that(".find_slideseq_location_file finds a prefixed alignedXYCoords file (not anchored)", {
