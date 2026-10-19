@@ -83,7 +83,7 @@ render_spatial_static_map <- function(df, title = NULL, palette = "default",
           blue  = as.vector(pmin(1, pmax(0, .rgba[, , 3L]))),
           alpha = .alpha
         )), nrow = .d3[1L], ncol = .d3[2L])
-      }, error = function(e) NULL)
+      }, error = ts_swallow("spatial_export.histologie_raster"))
       if (!is.null(.ras)) .hist_bounds <- histology$bounds
     }
   }
@@ -178,10 +178,10 @@ build_spatial_export_bundle <- function(spatial_obj, results, sections, out_dir,
     p1 <- ggplot2::ggplot(df, ggplot2::aes(x = nCount)) + ggplot2::geom_histogram(bins = 50, fill = "#2C3E50") + ts_theme("minimal") + ggplot2::labs(title = "nCount")
     p2 <- ggplot2::ggplot(df, ggplot2::aes(x = nFeature)) + ggplot2::geom_histogram(bins = 50, fill = "#18BC9C") + ts_theme("minimal") + ggplot2::labs(title = "nFeature")
     p3 <- ggplot2::ggplot(df, ggplot2::aes(x = pct_mt)) + ggplot2::geom_histogram(bins = 50, fill = "#E74C3C") + ts_theme("minimal") + ggplot2::labs(title = "%MT")
-    .save_plot(tryCatch(patchwork::wrap_plots(p1, p2, p3, ncol = 3), error = function(e) NULL), "qc_histogrammes")
+    .save_plot(tryCatch(patchwork::wrap_plots(p1, p2, p3, ncol = 3), error = ts_swallow("spatial_export.qc_histogrammes")), "qc_histogrammes")
     .save_plot(tryCatch(ggplot2::ggplot(df, ggplot2::aes(x = nCount, y = nFeature, color = pct_mt)) +
                           ggplot2::geom_point(alpha = 0.5, size = 1) + ggplot2::scale_color_viridis_c(option = "inferno", direction = -1) +
-                          ts_theme("minimal") + ggplot2::labs(title = "nCount vs nFeature"), error = function(e) NULL), "qc_scatter")
+                          ts_theme("minimal") + ggplot2::labs(title = "nCount vs nFeature"), error = ts_swallow("spatial_export.qc_scatter")), "qc_scatter")
   }
   
   if ("cluster" %in% sections && !is.null(results$cluster_labels)) {
@@ -203,7 +203,7 @@ build_spatial_export_bundle <- function(spatial_obj, results, sections, out_dir,
     ids_show <- utils::head(unique(long$id), 60)
     .save_plot(tryCatch(ggplot2::ggplot(long[long$id %in% ids_show, ], ggplot2::aes(x = id, y = proportion, fill = cell_type)) +
                           ggplot2::geom_col() + ts_theme("minimal") + ggplot2::theme(axis.text.x = ggplot2::element_blank()) +
-                          ggplot2::labs(title = "Proportions par type (60 premiers)"), error = function(e) NULL), "deconv_proportions")
+                          ggplot2::labs(title = "Proportions par type (60 premiers)"), error = ts_swallow("spatial_export.deconv_proportions")), "deconv_proportions")
     cts <- setdiff(colnames(results$deconv_props), "id")
     if (length(cts) >= 2) {
       cor_mat <- stats::cor(results$deconv_props[, cts, drop = FALSE], use = "pairwise.complete.obs")
@@ -211,7 +211,7 @@ build_spatial_export_bundle <- function(spatial_obj, results, sections, out_dir,
       .save_plot(tryCatch(ggplot2::ggplot(long_c, ggplot2::aes(x = Type1, y = Type2, fill = correlation)) + ggplot2::geom_tile() +
                             ggplot2::scale_fill_gradient2(low = "#2166AC", mid = "white", high = "#B2182B", midpoint = 0, limits = c(-1, 1)) +
                             ts_theme("minimal") + ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
-                            ggplot2::labs(title = "Colocalisation"), error = function(e) NULL), "deconv_colocalisation")
+                            ggplot2::labs(title = "Colocalisation"), error = ts_swallow("spatial_export.deconv_colocalisation")), "deconv_colocalisation")
     }
   }
   
@@ -230,7 +230,7 @@ build_spatial_export_bundle <- function(spatial_obj, results, sections, out_dir,
       .save_plot(tryCatch(ggplot2::ggplot(long, ggplot2::aes(x = groupe, y = niche, fill = proportion)) + ggplot2::geom_tile() +
                             ggplot2::scale_fill_viridis_c(option = "magma", limits = c(0, 1)) + ts_theme("minimal") +
                             ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) + ggplot2::labs(title = "Composition par niche"),
-                          error = function(e) NULL), "niche_composition")
+                          error = ts_swallow("spatial_export.niche_composition")), "niche_composition")
     }
     readme_lines <- c(readme_lines, sprintf("  - niche_labels.csv / niche_composition.csv : %d niches (%s).",
                                             length(unique(results$niche_labels)), .spatial_params_to_text(results$niche_params)))
@@ -243,7 +243,7 @@ build_spatial_export_bundle <- function(spatial_obj, results, sections, out_dir,
                           ggplot2::geom_text(ggplot2::aes(label = sprintf("%.1f", z_score)), size = 3) +
                           ggplot2::scale_fill_gradient2(low = "#2166AC", mid = "white", high = "#B2182B", midpoint = 0) +
                           ts_theme("minimal") + ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
-                          ggplot2::labs(title = "Enrichissement de voisinage"), error = function(e) NULL), "enrichment_heatmap")
+                          ggplot2::labs(title = "Enrichissement de voisinage"), error = ts_swallow("spatial_export.enrichment_heatmap")), "enrichment_heatmap")
     readme_lines <- c(readme_lines, sprintf("  - enrichment_zscore.csv : %d niveaux (%s).",
                                             length(results$enrichment_result$levels), .spatial_params_to_text(results$enrichment_params)))
   }
@@ -255,7 +255,7 @@ build_spatial_export_bundle <- function(spatial_obj, results, sections, out_dir,
     .save_plot(tryCatch(ggplot2::ggplot(results$hotspot_result, ggplot2::aes(x = gi_star, fill = hotspot)) +
                           ggplot2::geom_histogram(bins = 50) +
                           ggplot2::scale_fill_manual(values = c("Hotspot (chaud)" = "#D55E00", "Coldspot (froid)" = "#0072B2", "NS" = "#CCCCCC")) +
-                          ts_theme("minimal") + ggplot2::labs(title = "Distribution du Gi*"), error = function(e) NULL), "hotspots_distribution")
+                          ts_theme("minimal") + ggplot2::labs(title = "Distribution du Gi*"), error = ts_swallow("spatial_export.hotspots_distribution")), "hotspots_distribution")
     readme_lines <- c(readme_lines, sprintf("  - hotspots_gi.csv : %d hotspots, %d coldspots sur %d (%s).",
                                             n_hot, n_cold, nrow(results$hotspot_result), .spatial_params_to_text(results$hotspot_params)))
   }
@@ -266,7 +266,7 @@ build_spatial_export_bundle <- function(spatial_obj, results, sections, out_dir,
     .save_plot(tryCatch(ggplot2::ggplot(df, ggplot2::aes(x = r)) +
                           ggplot2::geom_ribbon(ggplot2::aes(ymin = k_perm_lo, ymax = k_perm_hi), fill = "grey80", alpha = 0.6) +
                           ggplot2::geom_line(ggplot2::aes(y = k_observed), color = "#D55E00", linewidth = 1) + ts_theme("minimal") +
-                          ggplot2::labs(title = sprintf("Ripley's K -- '%s'", results$ripley_result$target_level)), error = function(e) NULL), "ripley_k")
+                          ggplot2::labs(title = sprintf("Ripley's K -- '%s'", results$ripley_result$target_level)), error = ts_swallow("spatial_export.ripley_k")), "ripley_k")
     readme_lines <- c(readme_lines, sprintf("  - ripley_k_curve.csv : cible '%s' (%s, %s).",
                                             results$ripley_result$target_level, if (isTRUE(results$ripley_result$subsampled)) "sous-echantillonne" else "complet",
                                             .spatial_params_to_text(results$ripley_params)))
@@ -284,9 +284,9 @@ build_spatial_export_bundle <- function(spatial_obj, results, sections, out_dir,
       df_map <- data.frame(x = base_df$x, y = base_df$y, value = map_specs[[nm]])
       if (all(is.na(df_map$value))) next
       png_path <- file.path(maps_dir, sprintf("carte_%s.png", nm))
-      p_gg <- tryCatch(render_spatial_static_map(df_map, title = nm), error = function(e) NULL)
+      p_gg <- tryCatch(render_spatial_static_map(df_map, title = nm), error = ts_swallow("spatial_export.carte_statique"))
       if (!is.null(p_gg)) {
-        tryCatch(ts_export_plot(png_path, p_gg, width = 7, height = 7, dpi = 300, bg = "white"), error = function(e) NULL)
+        tryCatch(ts_export_plot(png_path, p_gg, width = 7, height = 7, dpi = 300, bg = "white"), error = ts_swallow("spatial_export.carte_png"))
         if (file.exists(png_path)) add(png_path)
       }
     }
@@ -298,12 +298,12 @@ build_spatial_export_bundle <- function(spatial_obj, results, sections, out_dir,
     n_saved <- 0L
     for (nm in names(results$saved_viz_list)) {
       cfg <- results$saved_viz_list[[nm]]
-      df_v <- tryCatch(build_saved_viz_df(spatial_obj$sketch, coords, cfg, results), error = function(e) NULL)
+      df_v <- tryCatch(build_saved_viz_df(spatial_obj$sketch, coords, cfg, results), error = ts_swallow("spatial_export.vue_valeurs"))
       if (is.null(df_v)) next
       png_path <- file.path(maps_dir, sprintf("vue_%s.png", gsub("[^A-Za-z0-9_-]+", "_", nm)))
-      p_gg <- tryCatch(render_spatial_static_map(df_v, title = nm), error = function(e) NULL)
+      p_gg <- tryCatch(render_spatial_static_map(df_v, title = nm), error = ts_swallow("spatial_export.vue_carte"))
       if (!is.null(p_gg)) {
-        tryCatch(ts_export_plot(png_path, p_gg, width = 7, height = 7, dpi = 300, bg = "white"), error = function(e) NULL)
+        tryCatch(ts_export_plot(png_path, p_gg, width = 7, height = 7, dpi = 300, bg = "white"), error = ts_swallow("spatial_export.vue_png"))
         if (file.exists(png_path)) { add(png_path); n_saved <- n_saved + 1L }
       }
     }
@@ -314,22 +314,22 @@ build_spatial_export_bundle <- function(spatial_obj, results, sections, out_dir,
     p <- file.path(out_dir, "multi_embeddings.csv"); utils::write.csv(multi_integration$embeddings, p, row.names = FALSE); add(p)
     .save_plot(tryCatch(ggplot2::ggplot(multi_integration$embeddings, ggplot2::aes(x = dim1, y = dim2, color = dataset)) +
                           ggplot2::geom_point(size = 0.7, alpha = 0.7) + ts_theme("minimal") + ggplot2::labs(title = "UMAP conjoint -- par echantillon"),
-                        error = function(e) NULL), "multi_umap_by_dataset")
+                        error = ts_swallow("spatial_export.multi_umap_dataset")), "multi_umap_by_dataset")
     .save_plot(tryCatch(ggplot2::ggplot(multi_integration$embeddings, ggplot2::aes(x = dim1, y = dim2, color = cluster)) +
                           ggplot2::geom_point(size = 0.7, alpha = 0.7) + ts_theme("minimal") + ggplot2::labs(title = "UMAP conjoint -- par cluster"),
-                        error = function(e) NULL), "multi_umap_by_cluster")
+                        error = ts_swallow("spatial_export.multi_umap_cluster")), "multi_umap_by_cluster")
     readme_lines <- c(readme_lines, sprintf("  - multi_embeddings.csv : %s, %d elements, echantillons : %s.",
                                             multi_integration$reduction_used %||% "?", nrow(multi_integration$embeddings),
                                             paste(multi_integration$datasets %||% character(0), collapse = ", ")))
     
-    diffcomp <- tryCatch(compute_composition_differential(multi_integration$embeddings), error = function(e) NULL)
+    diffcomp <- tryCatch(compute_composition_differential(multi_integration$embeddings), error = ts_swallow("spatial_export.multi_diffcomp"))
     if (!is.null(diffcomp)) {
       p3 <- file.path(out_dir, "multi_composition_differentielle.csv"); utils::write.csv(diffcomp$residuals, p3, row.names = FALSE); add(p3)
       .save_plot(tryCatch(ggplot2::ggplot(diffcomp$residuals, ggplot2::aes(x = cluster, y = dataset, fill = std_resid)) + ggplot2::geom_tile() +
                             ggplot2::geom_text(ggplot2::aes(label = sprintf("%.1f", std_resid)), size = 3) +
                             ggplot2::scale_fill_gradient2(low = "#2166AC", mid = "white", high = "#B2182B", midpoint = 0) + ts_theme("minimal") +
                             ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) + ggplot2::labs(title = "Composition differentielle"),
-                          error = function(e) NULL), "multi_composition_differentielle")
+                          error = ts_swallow("spatial_export.multi_composition")), "multi_composition_differentielle")
       readme_lines <- c(readme_lines, sprintf("  - multi_composition_differentielle.csv : Chi2 = %.1f, p = %.4g (%s).",
                                               diffcomp$chisq$statistic, diffcomp$chisq$p_value, diffcomp$chisq$method))
     }
@@ -396,7 +396,7 @@ build_saved_viz_df <- function(sketch, coords, cfg, results = list()) {
       as.numeric(SeuratObject::LayerData(sk, layer = "data")[g, df$id])
     },
     NULL
-  ), error = function(e) NULL)
+  ), error = ts_swallow("spatial_export.vue_valeur"))
 
   if (is.null(value)) return(NULL)
   df$value <- value
