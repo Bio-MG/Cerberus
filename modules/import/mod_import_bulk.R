@@ -235,6 +235,19 @@ mod_import_bulk_ui <- function(id) {
                 value = FALSE
               ),
               
+              # P0 2026-10-21 : sans cette entrée, le mode « un dossier = un
+              # échantillon » ne pouvait PAS produire de `condition` correcte
+              # (elle était déduite du basename, donc NA quand tous les
+              # fichiers s'appellent `counts.tsv` ⇒ DE désactivée). Les vraies
+              # métadonnées vivent dans les dossiers, invisibles du navigateur.
+              fileInput(
+                ns("ps_metadata_file"),
+                "Métadonnées (CSV/TSV, optionnel — 1 ligne par fichier)",
+                accept = c(".csv", ".tsv", ".txt")
+              ),
+              helpText("Alignées par ORDRE des fichiers ci-dessus (ligne 1 ↔ 1er fichier). Si une colonne « sample_id » est présente, elle remplace les identifiants déduits du nom de fichier ; les autres colonnes sont ajoutées telles quelles. La colonne utilisée comme condition doit être choisie ci-dessous."),
+              uiOutput(ns("ps_meta_condition_ui")),
+              
               h6("📝 Métadonnées auto-générées (éditables)",
                  style = "font-weight:bold; margin-top:8px;"),
               DT::DTOutput(ns("ps_metadata_dt")),
@@ -904,8 +917,16 @@ mod_import_bulk_server <- function(id, global_data) {
     ps_preview <- reactive({
       req(input$bulk_import_mode == "per_sample")
       parsed <- ps_raw()
-      
-      rows <- lapply(parsed, function(x) {
+
+      # P0 (mesuré 2026-10-21, GSE52778) : « un dossier = un échantillon »
+      # donne N fichiers de MÊME basename (`counts.tsv`), car `fileInput` ne
+      # transmet jamais le dossier parent. Sans cette unicité, la garde
+      # `anyDuplicated(metadata$sample_id)` refusait l'import sans recours.
+      ids <- .unique_sample_ids(vapply(parsed, function(x) x$sample_id,
+                                       character(1)))
+
+      rows <- lapply(seq_along(parsed), function(i) {
+        x <- parsed[[i]]
         gene_col  <- input[[paste0("ps_gene_col_",  x$file_index)]] %||% x$detection$auto_gene
         count_col <- input[[paste0("ps_count_col_", x$file_index)]] %||% x$detection$auto_count
         
@@ -920,7 +941,7 @@ mod_import_bulk_server <- function(id, global_data) {
         
         data.frame(
           filename       = x$filename,
-          sample_id      = x$sample_id,
+          sample_id      = ids[[i]],
           gene_id_column = gene_col  %||% NA_character_,
           count_column   = count_col %||% NA_character_,
           id_type        = id_type,
@@ -945,6 +966,44 @@ mod_import_bulk_server <- function(id, global_data) {
       )
     })
     
+    # ── Optional metadata upload (per_sample) ─────────────────────────────
+    # Aligned by ROW ORDER, deliberately: in this mode the basenames are not
+    # unique (16 x `counts.tsv`), so no column of the uploaded file can
+    # identify a row reliably. The preview table shows filename ↔ sample_id
+    # side by side, which is the verification step. A row-count mismatch is
+    # reported in the banner and the file is IGNORED (never partially applied).
+    ps_metadata_upload <- reactive({
+      req(input$bulk_import_mode == "per_sample")
+      f <- input$ps_metadata_file
+      if (is.null(f)) return(NULL)
+      tryCatch({
+        df <- smart_read(f$datapath, TRUE, FALSE)
+        df <- as.data.frame(df, check.names = FALSE, stringsAsFactors = FALSE)
+        names(df) <- trimws(names(df))
+        df
+      }, error = function(e) {
+        showNotification(paste("Métadonnées illisibles :", conditionMessage(e)),
+                         type = "error", duration = 8)
+        NULL
+      })
+    })
+    
+    # Which uploaded column is the biological condition? EXPLICIT, never
+    # guessed: on GSE52778 the condition is named `treatment` while
+    # `cell_line` is a blocking factor — a "pick the column with repeated
+    # levels" heuristic would have selected `cell_line` and silently produced
+    # a paired design with the wrong factor. Defaults to `condition` when the
+    # file already uses that name, otherwise nothing is chosen.
+    output$ps_meta_condition_ui <- renderUI({
+      up <- ps_metadata_upload()
+      if (is.null(up)) return(NULL)
+      ch  <- names(up)
+      sel <- if ("condition" %in% ch) "condition" else ""
+      selectInput(ns("ps_meta_condition_col"), "Colonne de condition (métadonnées)",
+                  choices = c("— choisir —" = "", stats::setNames(ch, ch)),
+                  selected = sel)
+    })
+    
     # ── Auto-generate editable metadata whenever preview changes ──────────
     observe({
       req(input$bulk_import_mode == "per_sample")
@@ -959,14 +1018,55 @@ mod_import_bulk_server <- function(id, global_data) {
         stringsAsFactors = FALSE, check.names = FALSE
       )
       
-      # Preserve existing manual edits on filename match
+      # Preserve existing manual edits. ⚠️ P0 MESURÉ 2026-10-21 : la
+      # préservation se faisait par `match(filename)`, or `match()` rend le
+      # MÊME index pour N fichiers homonymes (`counts.tsv` × 16) ⇒ une édition
+      # de la ligne 1 était recopiée sur les 16 lignes (mesuré :
+      # unique(sample_id) restait à 1 après édition, la valeur de la ligne 1
+      # écrasant les 15 autres). L'ordre des fichiers est stable pour un
+      # `fileInput` donné : quand la SÉLECTION est identique, on préserve par
+      # RANG, ce qui est la seule clé qui distingue deux lignes homonymes.
       old <- rv_ps$metadata
-      if (!is.null(old) && nrow(old)) {
+      if (!is.null(old) && nrow(old) == nrow(new_md) &&
+          identical(old$filename, new_md$filename)) {
+        new_md$sample_id <- old$sample_id
+        new_md$condition <- old$condition
+        new_md$batch     <- old$batch
+      } else if (!is.null(old) && nrow(old)) {
+        # Sélection différente : on ne rapproche que les noms de fichiers qui
+        # identifient UNE ligne (jamais les homonymes).
         idx  <- match(new_md$filename, old$filename)
-        keep <- !is.na(idx)
-        new_md$sample_id[keep]  <- old$sample_id[idx[keep]]
-        new_md$condition[keep]  <- old$condition[idx[keep]]
-        new_md$batch[keep]      <- old$batch[idx[keep]]
+        keep <- !is.na(idx) & !duplicated(old$filename) &
+                  !duplicated(new_md$filename)
+        new_md$sample_id[keep] <- old$sample_id[idx[keep]]
+        new_md$condition[keep] <- old$condition[idx[keep]]
+        new_md$batch[keep]     <- old$batch[idx[keep]]
+      }
+      
+      # Uploaded metadata, when present, is AUTHORITATIVE: it replaces both the
+      # filename inference and the preserved edits (the user just supplied it).
+      # A row-count mismatch is NOT partially applied — the file is ignored and
+      # the banner says so; silently pairing 16 rows with 12 would be worse
+      # than refusing.
+      up <- ps_metadata_upload()
+      if (!is.null(up) && nrow(up) == nrow(new_md)) {
+        for (cc in setdiff(names(up), c("filename", "condition"))) {
+          new_md[[cc]] <- up[[cc]]
+        }
+        new_md$filename <- prev$filename          # jamais écrasé par l'upload
+        cond_col <- input$ps_meta_condition_col
+        # Fallback: a file that already names the column `condition` needs no
+        # choice. It is written HERE rather than relying on the widget echoing
+        # its default, because the observer can run before the browser sends
+        # that input back (measured in testServer: `cond_col` was NULL on the
+        # first flush and the condition silently stayed NA).
+        if ((is.null(cond_col) || !nzchar(cond_col)) && "condition" %in% names(up)) {
+          cond_col <- "condition"
+        }
+        if (!is.null(cond_col) && nzchar(cond_col) && cond_col %in% names(up)) {
+          new_md$condition <- as.character(up[[cond_col]])
+        }
+        new_md$sample_id <- .unique_sample_ids(new_md$sample_id)
       }
       
       rv_ps$metadata <- new_md
@@ -1001,6 +1101,17 @@ mod_import_bulk_server <- function(id, global_data) {
                                      !grepl("^OK", prev$status)]
         if (length(bad_files))
           msgs <- c(msgs, paste("Fichiers rejetés:", paste(bad_files, collapse = ", ")))
+
+        # P0 (mesuré 2026-10-21) : le renommage silencieux serait un changement
+        # de PROVENANCE. La bannière est persistante (contrairement au toast de
+        # la garde d'import), donc l'utilisateur voit toujours pourquoi ses
+        # sample_id ne sont pas les noms de fichiers qu'il a choisis.
+        dup_names <- unique(prev$filename[duplicated(prev$filename)])
+        if (length(dup_names)) {
+          msgs <- c(msgs, sprintf(
+            "%d fichiers portent le même nom (%s) : sample_id suffixés (_1, _2, …). Éditez les colonnes sample_id et condition avant de charger.",
+            sum(prev$filename %in% dup_names), paste(dup_names, collapse = ", ")))
+        }
         
         id_types <- unique(prev$id_type[!is.na(prev$id_type) & prev$id_type != "mixed/unknown"])
         if (length(id_types) > 1)
@@ -1049,13 +1160,26 @@ mod_import_bulk_server <- function(id, global_data) {
         n_ok  <- if (!is.null(prev)) sum(grepl("^OK", prev$status)) else 0
         n_tot <- if (!is.null(prev)) nrow(prev) else 0
         
+        # Uploaded metadata: say WHICH source produced the table, and refuse to
+        # call a row-count mismatch "ready" (the file is ignored in that case).
+        up <- ps_metadata_upload()
+        meta_lbl <- if (is.null(rv_ps$metadata)) {
+          "⚪ Métadonnées"
+        } else if (is.null(up)) {
+          "✅ Métadonnées prêtes"
+        } else if (nrow(up) == n_tot) {
+          sprintf("✅ Métadonnées fichier (%d lignes, par ordre)", nrow(up))
+        } else {
+          sprintf("⚠️ Métadonnées ignorées : %d ligne(s) ≠ %d fichier(s)", nrow(up), n_tot)
+        }
+        
         div(style = "font-size:0.8em;",
             if (!is.null(files)) span(sprintf("✅ %d/%d fichiers OK", n_ok, n_tot),
                                       style = "color:#18BC9C;font-weight:bold;")
             else span("⚪ Aucun fichier",       style = "color:#999;"),
             " · ",
-            if (!is.null(rv_ps$metadata)) span("✅ Métadonnées prêtes", style = "color:#18BC9C;font-weight:bold;")
-            else                          span("⚪ Métadonnées",         style = "color:#999;"))
+            if (!is.null(rv_ps$metadata)) span(meta_lbl, style = "color:#18BC9C;font-weight:bold;")
+            else                          span(meta_lbl, style = "color:#999;"))
       }
     })
     

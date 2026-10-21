@@ -55,6 +55,28 @@
   if (length(keep)) keep[[1]] else NA_character_
 }
 
+#' Make a sample_id vector unique, deterministically
+#'
+#' WHY THIS EXISTS (P0, measured 2026-10-21 on GSE52778): the canonical layout
+#' "one folder per sample" (`GSM1275862/counts.tsv`, …) gives EVERY uploaded
+#' file the SAME basename, because `shiny::fileInput` transmits the basename
+#' only — never the parent directory. `.infer_sample_id()` therefore returns
+#' "counts" N times, which used to be a dead end: the import was refused for
+#' duplicate `sample_id` and nothing in the UI could fix it.
+#'
+#' The first occurrence keeps its name; the others get `_1`, `_2`, … (the same
+#' contract as `base::make.unique()`, but with an explicit, stable separator and
+#' an empty-safe path). Callers MUST surface the renaming to the user — an
+#' invented id is a provenance change, not a cosmetic one.
+#'
+#' @param ids Character vector of candidate sample ids.
+#' @return Character vector, same length, with no duplicates.
+.unique_sample_ids <- function(ids) {
+  ids <- as.character(ids)
+  if (!length(ids)) return(ids)
+  make.unique(ids, sep = "_")
+}
+
 .detect_columns_per_sample <- function(df) {
   nms <- names(df)
   if (!length(nms)) {
@@ -129,6 +151,26 @@
 }
 
 .merge_per_sample_tables <- function(tbls) {
+  # FAIL LOUDLY on homonymous sample columns (P0, measured 2026-10-21).
+  # `dplyr::full_join()` does NOT error on duplicate column names: it renames
+  # them `counts.x`, `counts.y`, `counts.x.x`… so a caller that skipped the
+  # uniqueness guard would get a matrix whose columns are no longer sample ids
+  # — with no error anywhere (measured: 39376 x 17 unreadable columns on the
+  # 16 x counts.tsv dataset). The invariant belongs here, not only at the one
+  # call site that happens to check it today.
+  if (length(tbls)) {
+    ids <- vapply(tbls, function(t) {
+      nms <- names(t)
+      if (length(nms) < 2L) NA_character_ else nms[[2L]]
+    }, character(1))
+    dup <- unique(ids[!is.na(ids) & duplicated(ids)])
+    if (length(dup)) {
+      stop(errorCondition(
+        sprintf("Colonnes d'échantillon homonymes : %s", paste(dup, collapse = ", ")),
+        class = "bulk_import_engine_error"
+      ))
+    }
+  }
   Reduce(function(a, b) dplyr::full_join(a, b, by = "feature_id"), tbls)
 }
 

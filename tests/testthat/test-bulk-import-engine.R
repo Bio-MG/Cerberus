@@ -105,6 +105,48 @@ test_that(".read_per_sample_file : le préfixe suit le filename passé", {
 })
 
 # ---------------------------------------------------------------------------
+# P0 2026-10-21 — « un dossier = un échantillon » (GSE52778, 16 x counts.tsv)
+# ---------------------------------------------------------------------------
+# MESURÉ sur le vrai jeu : 16 dossiers `GSMxxxx/converted/by_sample/` contenant
+# CHACUN un `counts.tsv` ⇒ `shiny::fileInput` ne transmet que le BASENAME, donc
+# `.infer_sample_id()` rend "counts" 16 fois. Deux défauts distincts en
+# découlent, et aucun n'était couvert :
+#   1. collision d'identifiants : le module refuse l'import (« sample_id
+#      dupliqués ») et rien dans l'UI ne permet d'en sortir (l'édition de la
+#      table était diffusée à toutes les lignes — cf. test-mod-import-bulk.R) ;
+#   2. `.merge_per_sample_tables()` ne se plaint PAS : `dplyr::full_join()`
+#      renomme silencieusement en `counts.x`, `counts.y`, `counts.x.x`… (mesuré
+#      39376 x 17 colonnes illisibles) ⇒ un appelant qui oublierait la garde
+#      produirait une matrice aux noms d'échantillons faux, sans erreur.
+# ---------------------------------------------------------------------------
+test_that(".unique_sample_ids : basenames homonymes ⇒ identifiants uniques", {
+  out <- .unique_sample_ids(rep("counts", 3L))
+  expect_identical(out, c("counts", "counts_1", "counts_2"))
+  expect_equal(length(unique(out)), 3L)         # la propriété qui compte
+  expect_identical(out[1], "counts")            # la 1re occurrence garde son nom
+
+  # Contrôle de BORNE : des identifiants déjà uniques ne bougent pas.
+  expect_identical(.unique_sample_ids(c("S1", "S2")), c("S1", "S2"))
+  expect_identical(.unique_sample_ids(character(0)), character(0))
+})
+
+test_that(".merge_per_sample_tables : colonnes homonymes ⇒ erreur CLASSÉE", {
+  a <- data.frame(feature_id = c("G1", "G2"), counts = c(1, 2), check.names = FALSE)
+  b <- data.frame(feature_id = c("G1", "G2"), counts = c(3, 4), check.names = FALSE)
+
+  res <- .bie_err(.merge_per_sample_tables(list(a, b)))
+  expect_false(is.null(res))                                # erreur levée…
+  expect_true("bulk_import_engine_error" %in% res$class)    # …avec NOTRE classe
+  expect_match(res$msg, "counts", fixed = TRUE)
+
+  # Contrôle de BORNE : des noms distincts fusionnent normalement.
+  names(b)[2] <- "S2"
+  merged <- .merge_per_sample_tables(list(a, b))
+  expect_identical(names(merged), c("feature_id", "counts", "S2"))
+  expect_equal(nrow(merged), 2L)
+})
+
+# ---------------------------------------------------------------------------
 # Verrou source : bulk_import_engine.R ne doit plus contribuer aucun C10
 # ---------------------------------------------------------------------------
 test_that("bulk_import_engine.R ne contribue aucun signalement C10", {
