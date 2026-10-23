@@ -305,61 +305,111 @@
   # =========================================================================
   # STEP 2 — Differential Expression (single pair)
   # =========================================================================
+  # ── D4(a) (2026-10-23) : la DE pilotée ne bloque plus le thread ───────────
+  # Suite de 45049a2 (ad-hoc) et prescription `docs/agent/HANDOFF.md`. Le chemin
+  # piloté — qui sert AUSSI le bouton humain via drive_trigger — tournait encore
+  # en synchrone : DESeq2 mesurée à 852,7 s gelait l'interface. Le calcul part
+  # donc dans le pool mirai par le MÊME run_de_core() (daemon et repli
+  # synchrone exécutent le MÊME code, règle 3).
+  #
+  # LE CONTRAT DU JOB DÉMÉNAGE. Un bloc qui REND LA MAIN à la soumission ne
+  # peut pas fermer le job par `on.exit()` : l'agent lirait `done` 2,1 s après
+  # le token pour un calcul de quatorze minutes — exactement le mensonge que la
+  # déclaration `long = TRUE` existait pour corriger. La clôture appartient à
+  # l'OBSERVATEUR DE RÉSULTAT :
+  #   refused   -> invalid  fermé synchrone (un garde a renoncé, rien n'a tourné)
+  #   submitted -> PAS de fermeture ici : la cellule est déposée dans
+  #                de_drive_job$cell, l'observateur de statut la consomme
+  #   ok/failed (repli synchrone) -> fermé explicitement en ligne
+  # L'`on.exit()` de secours ne ferme que ce qui est RESTÉ à "refused" — un
+  # garde AJOUTÉ PLUS TARD ne peut pas oublier de fermer le job (la propriété
+  # que l'ancien contrat garantissait, conservée pour les refus).
+  de_drive_task <- ExtendedTask$new(function(counts, meta, engine, condition_col,
+                                             group_target, group_ref, covariates,
+                                             shrink_lfc, padj_method, fixed_disp,
+                                             design_formula) {
+    mirai::mirai(
+      run_de_core(counts, meta, engine, condition_col, group_target, group_ref,
+                  shrink = shrink_lfc, p_adjust_method = padj_method,
+                  covariates = covariates, fixed_dispersion = fixed_disp,
+                  design_formula = design_formula),
+      counts = counts, meta = meta, engine = engine,
+      condition_col = condition_col, group_target = group_target,
+      group_ref = group_ref, covariates = covariates, shrink_lfc = shrink_lfc,
+      padj_method = padj_method, fixed_disp = fixed_disp,
+      design_formula = design_formula
+    )
+  })
+  # La cellule du job drive en vol — une RÉFÉRENCE, pas une copie : le trigger
+  # la DÉPOSE, l'observateur de statut la CONSOMME. NULL = rien en attente.
+  de_drive_job <- new.env(parent = emptyenv())
+  de_drive_job$cell <- NULL
+
+  # La publication du résultat (interface + traçabilité), commune au chemin
+  # asynchrone et au repli synchrone. `ctx` porte les DÉCISIONS D'INTERFACE
+  # (nom du contraste, seuils d'affichage, infos de contournement) : elles sont
+  # prises ICI, jamais dans le daemon.
+  .de_drive_commit <- function(out, ctx) {
+    res <- out$res
+    if (!is.null(out$dds)) shared_rv$dds_full <- out$dds
+    shared_rv$de_bypass <- ctx$bypass_info
+    helpers$register_contrast(ctx$cname, res, engine = ctx$engine)
+    shared_rv$active_contrast <- ctx$cname
+    if (!is.null(out$dds)) {
+      helpers$remember_padj_ctx(ctx$cname, out$dds, ctx$condition_col,
+                                ctx$group_target, ctx$group_ref,
+                                ctx$shrink_lfc, ctx$padj_method)
+    }
+    updateSelectInput(session, "active_contrast_view",
+                      choices = names(shared_rv$contrasts), selected = ctx$cname)
+    n_sig <- sum(res$padj < ctx$padj_thresh &
+                   abs(res$log2FoldChange) > ctx$lfc_thresh, na.rm = TRUE)
+    showNotification(.t_fmt(.tr("\u2713 Contraste '{c}': {n} g\u00e8nes significatifs"),
+                            c = ctx$cname, n = n_sig),
+                     type = "message", duration = 6)
+    if (!is.null(ctx$bypass_info)) {
+      showNotification(
+        .t_fmt(.tr("\u26a0\ufe0f Mode exploratoire sans r\u00e9plicat : dispersion impos\u00e9e (BCV = {b}), p-values NON inf\u00e9rentielles \u2014 \u00e0 ne pas publier comme une DE classique."),
+               b = sprintf("%.2f", sqrt(ctx$bypass_info$dispersion))),
+        type = "warning", duration = 18)
+    }
+  }
+  # Notification + message caviardé pour le champ `error` du contrat (même
+  # budget de 200 caractères que `bulk_pathways` ; le moteur est nommé pour que
+  # le message reste actionnable).
+  .de_drive_fail <- function(ctx, msg) {
+    showNotification(paste(.tr("Erreur DE:"), msg), type = "error", duration = 10)
+    ts_drive_badge_sanitize(paste0("DE failed (", ctx$engine, "): ", msg), 200L)
+  }
+
   observeEvent(drive_trigger(), {
-    # ── DECLARE THE JOB OVER (drive job contract, spec §5) ──────────────────
-    # This is the TERMINAL PRODUCER that `long = TRUE` commits the module to.
-    # It is registered BEFORE the first `req()`, so every path out of this
-    # observer reports something: the early `req()` abort and the four
-    # design-guard `return()`s all leave `job_state$outcome` at "refused", the
-    # successful path sets "ok", and the computation's own catch sets "failed".
-    # `on.exit()` is used rather than a call per exit path precisely so that a
-    # guard ADDED LATER cannot forget to close the job.
-    #
-    # `job_state$outcome` is the MEASUREMENT of what happened, never a guess, and it
-    # maps onto the FROZEN status enum instead of inventing a second one:
-    #   ok      -> done     the contrast was registered
-    #   failed  -> error    the computation raised
-    #   refused -> invalid  a guard bailed; nothing ran, which is not a failure
-    #                       (same reasoning as `invalid` elsewhere: a refusal
-    #                       must not teach the operator to ignore a red badge)
-    #
-    # REGISTERED ONLY WHEN A DRIVE JOB IS ACTUALLY IN FLIGHT for this button.
-    # `ts_drive_job_finish()` matches on the button id alone, so an
-    # unconditional `on.exit()` would let a HUMAN clicking the same button close
-    # a job the agent started. For a blocking job that is unreachable — the
-    # event loop is frozen, so no click can be processed — but the guard is
-    # written rather than relied upon, because the async conversion will make
-    # that window real.
-    # A MUTABLE CELL, NOT A LOCAL BINDING — and that distinction is the whole
-    # reason this line is an environment.
-    #
-    # `<-` inside the `error = function(e)` handler below binds to the HANDLER's
-    # frame, because a handler is a CLOSURE. A plain `job_outcome <- "failed"`
-    # there left THIS frame at "refused", so the `on.exit()` published
-    # `invalid` — "a guard bailed, nothing ran" — for a DE that had actually
-    # RAISED, with `error = NULL` and no trace on the wire. Measured 2026-09-24
-    # (STATUS.md §2do.4): the operator is invited to ignore a red badge, and a
-    # real execution error is hidden. An environment has REFERENCE semantics,
-    # so the handler's write IS the one the exit path reads.
+    # ── CONTRAT DU JOB (drive, spec §5) ─────────────────────────────────────
+    # La cellule mutable reste la MEASURE de ce qui s'est passé, et elle est
+    # crée AVANT le premier `req()` pour que chaque sortie rapporte quelque
+    # chose. `owns_job` est décidé À L'ENTRÉE (comme l'ancien on.exit
+    # conditionnel) : `ts_drive_job_finish()` matchant sur l'id du bouton seul,
+    # un clic HUMAIN sur le même bouton ne doit jamais fermer un job que
+    # l'agent a lancé.
     job_state <- new.env(parent = emptyenv())
     job_state$outcome <- "refused"
-    job_state$error   <- NULL
-    # F4 (2026-10-06, mesuré en session réelle) : la raison d'un refus voyage
-    # sur le wire au lieu de laisser un verdict `invalid` à errors[] vide.
-    job_state$reason  <- NULL
-    if (isTRUE(ts_drive_job_busy()) &&
-        identical(ts_drive_job_state()$button, "bulk-de-run_de")) {
-      on.exit(ts_drive_job_finish(
-        "bulk-de-run_de",
-        status = switch(job_state$outcome,
-                        ok     = "done",
-                        failed = "error",
-                        "invalid"),
-        error = if (identical(job_state$outcome, "failed")) {
-          job_state$error %||% "the DE computation raised"
-        } else job_state$reason
-      ), add = TRUE)
+    job_state$closed  <- FALSE
+    job_state$owns_job <- isTRUE(ts_drive_job_busy()) &&
+      identical(ts_drive_job_state()$button, "bulk-de-run_de")
+    job_state$finish <- function(status, error = NULL) {
+      if (isTRUE(job_state$closed) || !isTRUE(job_state$owns_job)) return(invisible(NULL))
+      job_state$closed <- TRUE
+      ts_drive_job_finish("bulk-de-run_de", status = status, error = error)
     }
+    # Filet de secours : à la sortie du frame, ce qui est RESTÉ à "refused" est
+    # un refus (abort de `req()`, garde `return()`) -> `invalid`. La raison d'un
+    # refus voyage sur le wire (F4, 2026-10-06). Une SOUMISSION passe `outcome`
+    # à "submitted" AVANT de rendre la main : le filet ne la touche pas. Le
+    # repli synchrone ferme explicitement — `closed` interdit la double
+    # fermeture.
+    on.exit(
+      if (identical(job_state$outcome, "refused"))
+        job_state$finish("invalid", job_state$reason),
+      add = TRUE)
 
     req(input$run_de > 0 || shiny::isolate(drive_counter()) > 0)
     req(shared_rv$filtered_counts, input$condition_col, input$group_ref, input$group_target,
@@ -437,113 +487,113 @@
     }
     fixed_disp <- if (bypass) (input$no_rep_bcv %||% 0.4)^2 else NULL
 
-    # `add = TRUE` is LOAD-BEARING, not style. A bare `on.exit()` REPLACES every
-    # expression already pending, so this line silently discarded the drive job
-    # declaration registered at the top of the observer above — the job would
-    # have stayed `running` forever, and the agent would have polled a
-    # completion that could never be written. Exactly the silent-seam failure
-    # this repo keeps finding: nothing errors, nothing warns, the wire just
-    # stops telling the truth.
-    p <- shiny::Progress$new(); on.exit(p$close(), add = TRUE)
-    p$set(message = .tr("Analyse différentielle..."), value = 0.2)
-
-    tryCatch({
-      design_str <- helpers$design_str()
-
-      # STAT-Q1 : méthode de correction choisie dans le panneau Step 2.
-      padj_method <- input$padj_method %||% TS_PADJ_METHOD_DEFAULT
-
-      res <- NULL
-      dds_full <- NULL
-      if (bypass) {
-        p$set(0.4, .tr("Ajustement edgeR (dispersion impos\u00e9e)..."))
-        res <- run_bulk_de_dispatch("edger", shared_rv$filtered_counts, meta,
-                                    input$condition_col, input$group_target, input$group_ref,
-                                    covariates = covariates_in_use,
-                                    p_adjust_method = padj_method,
-                                    fixed_dispersion = fixed_disp)
-      } else if (input$de_engine == "deseq2") {
-        p$set(0.4, .tr("Ajustement DESeq2..."))
-        dds_full <- build_dds(shared_rv$filtered_counts, meta, design_formula = design_str, run_deseq = TRUE)
-        shared_rv$dds_full <- dds_full
-        res <- run_bulk_de_dispatch("deseq2", shared_rv$filtered_counts, meta, input$condition_col,
-                                    input$group_target, input$group_ref,
-                                    dds = dds_full, shrink = input$shrink_lfc,
-                                    p_adjust_method = padj_method)
-      } else {
-        p$set(0.5, .t_fmt(.tr("Ajustement {engine} ..."), engine = input$de_engine))
-        res <- run_bulk_de_dispatch(input$de_engine, shared_rv$filtered_counts, meta,
-                                    input$condition_col, input$group_target, input$group_ref,
-                                    covariates = input$covariates %||% character(0),
-                                    p_adjust_method = padj_method)
-      }
-
-      res <- .normalize_de_cols(res, counts_for_basemean = shared_rv$filtered_counts)
-
+    # ── DÉCISIONS D'INTERFACE, prises AVANT de rendre la main ────────────────
+    # STAT-Q1 : méthode de correction choisie dans le panneau Step 2.
+    padj_method <- input$padj_method %||% TS_PADJ_METHOD_DEFAULT
+    design_str  <- helpers$design_str()
+    # M13 : le moteur qui a RÉELLEMENT produit ce contraste — "edger" quand le
+    # mode exploratoire sans réplicat impose la dispersion, quelle que soit la
+    # sélection affichée dans le panneau.
+    engine_run   <- if (bypass) "edger" else input$de_engine
+    contrast_name <- if (nchar(trimws(input$contrast_name)) > 0) {
+      trimws(input$contrast_name)
+    } else {
+      paste0(input$group_target, "_vs_", input$group_ref)
+    }
+    ctx <- list(
+      cname = contrast_name, engine = engine_run,
+      condition_col = input$condition_col, group_target = input$group_target,
+      group_ref = input$group_ref, shrink_lfc = input$shrink_lfc,
+      padj_method = padj_method, padj_thresh = input$padj_thresh,
+      lfc_thresh = input$lfc_thresh,
       # Traçabilité du contournement : l'information voyage AVEC le résultat
       # pour que le rapport, l'export et la provenance ne puissent jamais le
       # présenter comme une analyse différentielle ordinaire.
-      shared_rv$de_bypass <- if (bypass) {
+      bypass_info = if (bypass) {
         list(engine = "edger", bcv = sqrt(fixed_disp), dispersion = fixed_disp,
              condition_col = input$condition_col, n = sat$n, p = sat$p,
              attested = TRUE, timestamp = Sys.time())
       } else NULL
+    )
+    # La charge PURE du calcul — le MÊME run_de_core() pour le daemon et le
+    # repli synchrone (préchargé via APP_DAEMON_SOURCE_FILES, ordre prouvé).
+    # Les clés sont les FORMALS de run_de_core() : le repli en fait un
+    # `do.call` direct, la tâche les repasse nommés à son corps mirai.
+    core <- list(
+      counts_matrix = shared_rv$filtered_counts, metadata = meta,
+      engine = engine_run,
+      condition_col = input$condition_col, group_target = input$group_target,
+      group_ref = input$group_ref, covariates = covariates_in_use,
+      shrink = input$shrink_lfc, p_adjust_method = padj_method,
+      fixed_dispersion = fixed_disp, design_formula = design_str)
 
-      contrast_name <- if (nchar(trimws(input$contrast_name)) > 0) {
-        trimws(input$contrast_name)
+    # Pool disponible ? Même doctrine que l'ad-hoc : le repli synchrone est
+    # DÉCLARÉ (notification), jamais muet.
+    pool_ok <- requireNamespace("mirai", quietly = TRUE) &&
+      isTRUE(tryCatch(ensure_app_daemons(), error = function(e) FALSE)) &&
+      isTRUE(mirai::daemons_set())
+
+    if (!pool_ok) {
+      showNotification(
+        .tr("Pool de calcul indisponible : l'analyse diff\u00e9rentielle tourne en synchrone \u2014 l'interface restera bloqu\u00e9e pendant le calcul."),
+        type = "warning", duration = 10)
+      # `add = TRUE` is LOAD-BEARING (leçon conservée du contrat sync) : un
+      # `on.exit()` nu REMPLACERAIT le filet de refus ci-dessus.
+      p <- shiny::Progress$new(); on.exit(p$close(), add = TRUE)
+      p$set(message = .tr("Analyse diff\u00e9rentielle..."), value = 0.2)
+      out <- tryCatch(do.call(run_de_core, core), error = function(e) e)
+      if (inherits(out, "error")) {
+        job_state$outcome <- "failed"
+        job_state$finish("error", .de_drive_fail(ctx, conditionMessage(out)))
       } else {
-        paste0(input$group_target, "_vs_", input$group_ref)
+        job_state$outcome <- "ok"
+        .de_drive_commit(out, ctx)
+        job_state$finish("done", NULL)
       }
+      return()
+    }
 
-      # M13 : le moteur qui a RÉELLEMENT produit ce contraste — "edger" quand le
-      # mode exploratoire sans réplicat impose la dispersion, quelle que soit la
-      # sélection affichée dans le panneau.
-      helpers$register_contrast(contrast_name, res,
-                                engine = if (bypass) "edger" else input$de_engine)
-      shared_rv$active_contrast <- contrast_name
+    # ── SOUMISSION NON BLOQUANTE ─────────────────────────────────────────────
+    # La cellule part dans le réflecteur du module ; l'observateur de statut
+    # (ci-dessous) la consomme et ferme le job. `outcome` passe à "submitted"
+    # AVANT le return pour que le filet de refus ne touche pas à la soumission.
+    job_state$outcome <- "submitted"
+    job_state$ctx     <- ctx
+    de_drive_job$cell <- job_state
+    showNotification(.tr("Analyse diff\u00e9rentielle en cours..."),
+                     id = "de_drive_progress", type = "message", duration = NULL)
+    de_drive_task$invoke(core$counts_matrix, core$metadata, core$engine,
+                         core$condition_col, core$group_target, core$group_ref,
+                         core$covariates, core$shrink, core$p_adjust_method,
+                         core$fixed_dispersion, core$design_formula)
+  })
 
-      # STAT-Q1 : mémorise le contexte de recalcul de padj. Non-NULL uniquement
-      # quand le moteur est DESeq2 (dds_full non NULL) — c'est ce qui autorise
-      # le recalcul « live » depuis l'onglet DE, sans réajuster le modèle.
-      if (!is.null(dds_full)) {
-        helpers$remember_padj_ctx(contrast_name, dds_full, input$condition_col,
-                                  input$group_target, input$group_ref,
-                                  input$shrink_lfc, padj_method)
+  # ── Observateur de RÉSULTAT : le SEUL endroit où un job soumis peut être ──
+  # fermé `done`/`error` (contrat D4(a)). Il CONSOMME la cellule — jamais deux
+  # fermetures pour une soumission — et suit la convention du dépôt
+  # (mod_spatial_cluster.R) : `result()` n'est appelé QUE protégé, un statut
+  # `error` ne doit jamais lever à son tour.
+  observeEvent(de_drive_task$status(), {
+    st <- de_drive_task$status()
+    cell <- de_drive_job$cell
+    de_drive_job$cell <- NULL
+    if (is.null(cell)) return()   # défensif : un statut sans soumission ne ferme rien
+    if (identical(st, "success")) {
+      removeNotification("de_drive_progress")
+      out <- tryCatch(de_drive_task$result(), error = function(e) e)
+      if (inherits(out, "error")) {
+        cell$finish("error", .de_drive_fail(cell$ctx, conditionMessage(out)))
+      } else {
+        .de_drive_commit(out, cell$ctx)
+        cell$finish("done", NULL)
       }
-
-      updateSelectInput(session, "active_contrast_view",
-                        choices = names(shared_rv$contrasts), selected = contrast_name)
-
-      n_sig <- sum(res$padj < input$padj_thresh & abs(res$log2FoldChange) > input$lfc_thresh, na.rm = TRUE)
-      showNotification(.t_fmt(.tr("\u2713 Contraste '{c}': {n} g\u00e8nes significatifs"),
-                              c = contrast_name, n = n_sig),
-                       type = "message", duration = 6)
-
-      if (bypass) {
-        showNotification(
-          .t_fmt(.tr("\u26a0\ufe0f Mode exploratoire sans r\u00e9plicat : dispersion impos\u00e9e (BCV = {b}), p-values NON inf\u00e9rentielles \u2014 \u00e0 ne pas publier comme une DE classique."),
-                 b = sprintf("%.2f", sqrt(fixed_disp))),
-          type = "warning", duration = 18)
-      }
-
-      # Last statement of the body, so it is reached only when the model was
-      # fitted AND the contrast registered — the measurement the job
-      # declaration above reports as `done`.
-      job_state$outcome <- "ok"
-
-    }, error = function(e) {
-      # Written into the CELL. This handler is a closure, so a local assignment
-      # here would never reach the `on.exit()` above — which is exactly the
-      # defect this line replaces.
-      job_state$outcome <- "failed"
-      # The ONLY free field of the job contract, and the one that crosses the
-      # badge into the UI: it must be sanitized, because an R condition message
-      # can carry an absolute path or a token. Same 200-char budget as
-      # `bulk_pathways`. The engine is named so the message stays actionable.
-      job_state$error <- ts_drive_badge_sanitize(
-        paste0("DE failed (", input$de_engine, "): ", conditionMessage(e)), 200L)
-      showNotification(paste(.tr("Erreur DE:"), e$message), type = "error", duration = 10)
-    })
+    } else if (identical(st, "error")) {
+      removeNotification("de_drive_progress")
+      err <- tryCatch(de_drive_task$result(), error = function(e) e)
+      msg <- if (inherits(err, "error")) conditionMessage(err)
+             else "le calcul DE a \u00e9chou\u00e9 dans le pool"
+      cell$finish("error", .de_drive_fail(cell$ctx, msg))
+    }
   })
 
   # =========================================================================

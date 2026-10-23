@@ -10760,6 +10760,14 @@
     {
       "fr": "Erreur pendant l'analyse ad-hoc — voir le journal. Relancez, ou utilisez 'Reinitialiser les daemons'.",
       "en": "Error during the ad-hoc analysis — see the log. Retry, or use 'Reset daemons'."
+    },
+    {
+      "fr": "Pool de calcul indisponible : l'analyse différentielle tourne en synchrone — l'interface restera bloquée pendant le calcul.",
+      "en": "Compute pool unavailable: the differential analysis runs synchronously — the interface will stay frozen during the computation."
+    },
+    {
+      "fr": "Analyse différentielle en cours...",
+      "en": "Differential analysis running..."
     }
   ]
 }

@@ -147,6 +147,28 @@
   } else {
     dispatch
   }
+
+  # ── D4(a) : les coutumes du bloc piloté asynchrone ──────────────────────────
+  # `ensure_app_daemons` est volontairement ABSENT : le tryCatch du bloc rend
+  # FALSE, donc les tests ci-dessus exercent le REPLI SYNCHRONE (déclaré), qui
+  # conserve le comportement observable de l'ancien bloc (fermeture en ligne).
+  # Les définitions réelles sont importées par AST — jamais re-copiées.
+  e$de_drive_job <- new.env(parent = emptyenv())
+  e$de_drive_job$cell <- NULL
+  e$invoked <- list()
+  e$de_drive_task <- list(
+    invoke = function(...) {
+      e$invoked[[length(e$invoked) + 1L]] <- list(...)
+      invisible(NULL)
+    },
+    status = function() NULL,
+    result = function() NULL)
+  e$removeNotification <- function(...) invisible(NULL)
+  e$run_de_core <- ts_ast_assignment("R/bulk/bulk_helpers.R", "run_de_core", e)
+  e$.de_drive_commit <- tryCatch(
+    ts_ast_assignment(.MDR_FILE, ".de_drive_commit", e), error = function(e) NULL)
+  e$.de_drive_fail <- tryCatch(
+    ts_ast_assignment(.MDR_FILE, ".de_drive_fail", e), error = function(e) NULL)
   e
 }
 
@@ -636,4 +658,138 @@ test_that("D4 : le préchargement des daemons inclut les fichiers DE, dans l'ord
   expect_false(is.na(i_batch), info = "bulk_assert_raw_counts() vit dans batch_correction.R")
   expect_false(is.na(i_helpers))
   expect_lt(i_batch, i_helpers)   # la dépendance est sourcée AVANT son appelant
+})
+
+# =============================================================================
+# D4(a) — la DE PILOTÉE (drive_trigger) ne bloque plus le thread
+# =============================================================================
+# Suite de 45049a2 (ad-hoc), prescription `docs/agent/HANDOFF.md` next_action :
+# le chemin piloté — qui sert AUSSI le bouton humain — tournait encore en
+# synchrone (DESeq2 mesurée 852,7 s). Le contrat du job DÉMÉNAGE : un bloc qui
+# rend la main à la soumission ne peut pas fermer le job par `on.exit()` —
+# l'agent lirait `done` 2,1 s après le token pour un calcul de 14 minutes.
+#   - REFUS (req/gardes)         -> `invalid`, fermé synchrone (rien n'a tourné)
+#   - SOUMISSION (pool dispo)    -> la cellule est DÉPOSÉE, PAS de fermeture
+#   - l'observateur de RÉSULTAT  -> ferme `done`/`error`, consomme la cellule
+#   - REPLI synchrone (pas de pool) -> DÉCLARÉ, ferme `done`/`error` en ligne
+# Les tests ci-dessous exécutent le VRAI bloc (AST), pas une re-copie.
+
+test_that("D4(a) : le run piloté soumet via la tâche — le job n'est PAS fermé en synchrone", {
+  skip_if_not_installed("mirai")
+  on.exit(tryCatch(mirai::daemons(0), error = function(e) NULL), add = TRUE)
+  if (!mirai::daemons_set()) suppressMessages(mirai::daemons(1))
+  e <- .mdr_env()
+  e$ensure_app_daemons <- function() TRUE
+  # La tâche est une DOUBLURE qui ENREGISTRE : ce test mesure la soumission du
+  # bloc, pas le transport (le daemon réel est prouvé par le test 45049a2).
+  e$invoked <- list()
+  e$de_drive_task <- list(invoke = function(...) {
+    e$invoked[[length(e$invoked) + 1L]] <- list(...)
+    invisible(NULL)
+  })
+  e$de_drive_job <- new.env(parent = emptyenv())
+  e$de_drive_job$cell <- NULL
+  .mdr_run(e)
+
+  # Une soumission non bloquante ne ferme PAS le job : la clôture appartient à
+  # l'observateur de résultat.
+  expect_length(e$calls, 0L)
+  # Le calcul part dans la tâche, pas en synchrone.
+  expect_length(e$invoked, 1L)
+  cell <- e$de_drive_job$cell
+  expect_false(is.null(cell),
+               info = "la cellule du job doit être déposée pour l'observateur de résultat")
+  expect_identical(cell$ctx$engine, "deseq2")
+  expect_identical(cell$ctx$cname, "b_vs_a",
+                   info = "le nom du contraste est une décision d'INTERFACE, prise au trigger")
+})
+
+test_that("D4(a) : l'observateur de résultat ferme le job `done` et publie le contraste", {
+  status_block <- ts_ast_observe_block(.MDR_FILE, "de_drive_task$status")
+  e <- .mdr_env()
+  e$de_drive_job <- new.env(parent = emptyenv())
+  e$de_drive_job$cell <- NULL
+  e$removeNotification <- function(...) invisible(NULL)
+  # La cellule que la soumission aurait déposée :
+  cell <- new.env(parent = emptyenv())
+  cell$ctx <- list(cname = "b_vs_a", engine = "deseq2", condition_col = "cond",
+                   group_target = "b", group_ref = "a", shrink_lfc = FALSE,
+                   padj_method = "BH", padj_thresh = 0.05, lfc_thresh = 1,
+                   bypass_info = NULL)
+  cell$finish <- function(status, error = NULL) {
+    e$calls[[length(e$calls) + 1L]] <<- list(button = .MDR_BUTTON,
+                                             status = status, error = error)
+  }
+  e$de_drive_job$cell <- cell
+  # Un RÉSULTAT réel de run_de_core (le lift AST de .mdr_env : ses appels
+  # internes — build_dds, run_bulk_de_dispatch, .normalize_de_cols — résolvent
+  # dans e, donc les DOUBLES du bloc, jamais les vrais moteurs) :
+  out <- e$run_de_core(e$shared_rv$filtered_counts, e$global_data$bulk_obj$metadata,
+                       "deseq2", "cond", "b", "a")
+  e$de_drive_task <- list(status = function() "success", result = function() out)
+  f <- function() NULL
+  body(f) <- status_block
+  environment(f) <- e
+  shiny::withReactiveDomain(shiny::MockShinySession$new(), f())
+
+  expect_identical(.mdr_status(e), "done")
+  expect_null(.mdr_last(e)$error, info = "le champ error reste NULL hors `error`")
+  expect_identical(e$shared_rv$active_contrast, "b_vs_a")
+  expect_identical(e$registered[["b_vs_a"]], "deseq2",
+                   info = "le moteur qui a produit le contraste voyage avec lui")
+  expect_false(is.null(e$shared_rv$dds_full),
+               info = "le dds revient du daemon : le recalcul live de padj reste possible")
+  expect_null(e$de_drive_job$cell,
+              info = "la cellule est CONSOMMÉE : jamais deux fermetures pour une soumission")
+})
+
+test_that("D4(a) : un calcul qui lève dans le pool publie `error` caviardé, jamais `invalid`", {
+  status_block <- ts_ast_observe_block(.MDR_FILE, "de_drive_task$status")
+  e <- .mdr_env()
+  e$de_drive_job <- new.env(parent = emptyenv())
+  e$de_drive_job$cell <- NULL
+  e$removeNotification <- function(...) invisible(NULL)
+  cell <- new.env(parent = emptyenv())
+  cell$ctx <- list(cname = "b_vs_a", engine = "deseq2", condition_col = "cond",
+                   group_target = "b", group_ref = "a", shrink_lfc = FALSE,
+                   padj_method = "BH", padj_thresh = 0.05, lfc_thresh = 1,
+                   bypass_info = NULL)
+  cell$finish <- function(status, error = NULL) {
+    e$calls[[length(e$calls) + 1L]] <<- list(button = .MDR_BUTTON,
+                                             status = status, error = error)
+  }
+  e$de_drive_job$cell <- cell
+  e$de_drive_task <- list(status = function() "error",
+                          result = function() stop(.MDR_MSG))
+  f <- function() NULL
+  body(f) <- status_block
+  environment(f) <- e
+  shiny::withReactiveDomain(shiny::MockShinySession$new(), f())
+
+  expect_identical(.mdr_status(e), "error",
+                   info = "une DE qui a LEVÉ n'est pas un refus")
+  err <- .mdr_last(e)$error
+  expect_true(is.character(err) && length(err) == 1L && nzchar(err))
+  expect_false(grepl(.MDR_SECRET, err, fixed = TRUE),
+               info = "un jeton traverse le caviardage du champ error")
+  expect_false(grepl("secret/dir", err, fixed = TRUE),
+               info = "un chemin absolu traverse le caviardage du champ error")
+  expect_true(grepl("DE failed", err, fixed = TRUE),
+              info = "le message publie reste actionnable")
+})
+
+test_that("D4(a) : un statut sans cellule déposée ne ferme rien", {
+  status_block <- ts_ast_observe_block(.MDR_FILE, "de_drive_task$status")
+  e <- .mdr_env()
+  e$de_drive_job <- new.env(parent = emptyenv())
+  e$de_drive_job$cell <- NULL
+  e$removeNotification <- function(...) invisible(NULL)
+  e$de_drive_task <- list(status = function() "success", result = function() NULL)
+  f <- function() NULL
+  body(f) <- status_block
+  environment(f) <- e
+  shiny::withReactiveDomain(shiny::MockShinySession$new(), f())
+
+  # Aucune cellule => aucun job drive à fermer (défensif).
+  expect_length(e$calls, 0L)
 })
