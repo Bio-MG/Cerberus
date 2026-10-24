@@ -178,6 +178,48 @@ test_that("'armed' is ours, 'armed_other' is not — and the wildcard is honoure
   expect_true(st$can_disarm)
 })
 
+test_that("a leftover arm.json can be TAKEN OVER — explicitly, never silently", {
+  # MEASURED live (2026-10-24, session on :6515): `arm.json` held the token of a
+  # session that no longer existed. The projection said `armed_other`, offered no
+  # button, and the operator was locked out of their own app by a dead file.
+  # `arm.json` is ONE global slot — not one per session — so the only way forward
+  # is an EXPLICIT takeover: the human clicks, and the slot moves to this session.
+  .dac_local_root()
+  .dac_ready("tok1234")
+  .dac_arm("deadbeef")
+
+  st <- .dac_read()
+  expect_identical(st$state, "armed_other")
+  expect_true(st$can_takeover)
+  expect_false(st$can_arm)
+  expect_false(st$can_disarm)
+
+  # The takeover is the ordinary writer: it overwrites the whole slot with OUR
+  # token, and the projection then reports the session as armed by itself.
+  expect_true(ts_drive_write_arm("tok1234", TRUE)$wrote)
+  st <- .dac_read()
+  expect_identical(st$state, "armed")
+  expect_identical(st$reason, "armed_self")
+  expect_false(st$can_takeover)
+  expect_true(ts_drive_arm_state("tok1234")$armed)
+  expect_false(ts_drive_arm_state("deadbeef")$armed)   # the old owner is gone
+})
+
+test_that("takeover is offered ONLY in armed_other, and never in production", {
+  .dac_local_root()
+  .dac_ready("tok1234")
+
+  # Every other state must NOT offer it: `idle` arms, `armed` disarms, and
+  # `no_handshake`/`unavailable` have nothing this tab may honestly touch.
+  .dac_arm("tok1234", armed = FALSE)
+  expect_false(.dac_read()$can_takeover)                # idle
+  .dac_arm("tok1234")
+  expect_false(.dac_read()$can_takeover)                # armed (ours)
+  .dac_arm("someoneelse")
+  expect_true(.dac_read()$can_takeover)                 # armed_other
+  expect_false(.dac_read(interactive = FALSE)$can_takeover)   # production
+})
+
 test_that("the projection never carries a token, a path or a pid", {
   .dac_local_root()
   .dac_ready("tok1234", viewer = "visible", hb_n = 7L)

@@ -739,14 +739,17 @@ TS_DRIVE_CONTROL_STATES <- c("unavailable", "no_handshake", "idle", "armed",
 #' @param ready Parsed `ready.json` (or NULL).
 #' @param arm Parsed `arm.json` (or NULL).
 #' @param wildcard_ok `TRANSCRIPTO_DEV_DRIVE=1` (the launcher's escape hatch).
-#' @return list(state, reason, can_arm, can_disarm, viewer, heartbeat_n).
+#' @return list(state, reason, can_arm, can_disarm, can_takeover, viewer,
+#'   heartbeat_n). The three `can_*` flags are mutually exclusive by
+#'   construction: `idle` arms, `armed` disarms, `armed_other` may be taken
+#'   over, and nothing else offers a button.
 ts_drive_control_state <- function(token, interactive, ready = NULL, arm = NULL,
                                    wildcard_ok = FALSE) {
   token <- if (length(token) == 1L && !is.na(token)) as.character(token) else ""
 
   blank <- function(state, reason) {
     list(state = state, reason = reason, can_arm = FALSE, can_disarm = FALSE,
-         viewer = "", heartbeat_n = NA_integer_)
+         can_takeover = FALSE, viewer = "", heartbeat_n = NA_integer_)
   }
 
   if (!isTRUE(interactive)) return(blank("unavailable", "non_interactive"))
@@ -774,7 +777,8 @@ ts_drive_control_state <- function(token, interactive, ready = NULL, arm = NULL,
 
   # From here the handshake is ours: the question is only WHO holds the arm.
   idle <- list(state = "idle", reason = "arm_absent", can_arm = TRUE,
-               can_disarm = FALSE, viewer = viewer, heartbeat_n = hb_n)
+               can_disarm = FALSE, can_takeover = FALSE, viewer = viewer,
+               heartbeat_n = hb_n)
   if (is.null(arm) || !is.list(arm)) return(idle)
   if (!identical(as.character(arm$protocol %||% ""), TS_DRIVE_PROTOCOL)) {
     idle$reason <- "arm_invalid"          # ours to overwrite with a valid one
@@ -787,7 +791,7 @@ ts_drive_control_state <- function(token, interactive, ready = NULL, arm = NULL,
 
   armed <- function(reason) {
     list(state = "armed", reason = reason, can_arm = FALSE, can_disarm = TRUE,
-         viewer = viewer, heartbeat_n = hb_n)
+         can_takeover = FALSE, viewer = viewer, heartbeat_n = hb_n)
   }
   arm_token <- as.character(arm$token %||% "")[1]
   if (!is.na(arm_token) && nzchar(token) && identical(arm_token, token)) {
@@ -798,13 +802,20 @@ ts_drive_control_state <- function(token, interactive, ready = NULL, arm = NULL,
     # dev launcher; otherwise it is a refusal the human must be able to SEE.
     if (isTRUE(wildcard_ok)) return(armed("armed_wildcard"))
     return(list(state = "armed_other", reason = "wildcard_refused",
-                can_arm = FALSE, can_disarm = FALSE, viewer = viewer,
-                heartbeat_n = hb_n))
+                can_arm = FALSE, can_disarm = FALSE, can_takeover = TRUE,
+                viewer = viewer, heartbeat_n = hb_n))
   }
-  # Someone else's token. Never silently steal it, and never offer to disarm a
-  # session this tab does not own.
+  # Someone else's token — and `arm.json` is ONE global slot, not one per
+  # session. MEASURED live (2026-10-24, :6515): a leftover arm.json naming a
+  # session that no longer existed left the operator locked out of their own
+  # app, with no button and no way forward. So the takeover is OFFERED — but
+  # explicitly: `can_takeover` is a distinct flag, the UI labels it as a
+  # takeover, and nothing moves until the human clicks. Disarming another
+  # session's token stays impossible: only an overwrite with OUR token is
+  # offered, never a `false` written under someone else's name.
   list(state = "armed_other", reason = "armed_other", can_arm = FALSE,
-       can_disarm = FALSE, viewer = viewer, heartbeat_n = hb_n)
+       can_disarm = FALSE, can_takeover = TRUE, viewer = viewer,
+       heartbeat_n = hb_n)
 }
 
 #' Arm or disarm THIS session from inside the app.

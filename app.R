@@ -665,10 +665,11 @@ server <- function(input, output, session) {
       ),
       ""
     )
-    # ONE button, and its label states the direction. `can_arm` and `can_disarm`
-    # are mutually exclusive by construction, so there is no third case to
-    # handle — and when neither holds (another session is armed) no button is
-    # offered at all, because there is nothing this tab may honestly do.
+    # ONE button, and its label states the direction. The three flags are
+    # mutually exclusive by construction (idle arms, armed disarms, armed_other
+    # may be taken over), so there is no ambiguous case to handle — and when
+    # none holds (no handshake) no button is offered, because there is nothing
+    # this tab may honestly do.
     btn <- if (isTRUE(st$can_arm)) {
       shiny::actionButton("drive_control_toggle",
                           .tr("Donner le contr\u00f4le \u00e0 un agent"),
@@ -677,6 +678,13 @@ server <- function(input, output, session) {
       shiny::actionButton("drive_control_toggle",
                           .tr("Reprendre le contr\u00f4le"),
                           class = "btn-xs btn-outline-success w-100 mt-2")
+    } else if (isTRUE(st$can_takeover)) {
+      # A leftover arm.json from a session that no longer exists must not lock
+      # the operator out of their own app (MEASURED live, :6515). The takeover
+      # is an explicit click, and it only ever writes OUR token.
+      shiny::actionButton("drive_control_toggle",
+                          .tr("Reprendre le contr\u00f4le pour cette session"),
+                          class = "btn-xs btn-outline-warning w-100 mt-2")
     } else NULL
     ts_drive_control_ui(
       st, label = label, button = btn,
@@ -689,7 +697,7 @@ server <- function(input, output, session) {
   observeEvent(input$drive_control_toggle, {
     st <- drive_control()
     if (is.null(st)) return()
-    target <- isTRUE(st$can_arm)      # arm when we can, otherwise take it back
+    target <- isTRUE(st$can_arm) || isTRUE(st$can_takeover)  # else take it back
     res <- ts_drive_write_arm(.drive$token, target)
     if (!isTRUE(res$wrote)) {
       showNotification(paste0(.tr("\u00c9chec du contr\u00f4le agent : "), res$reason),

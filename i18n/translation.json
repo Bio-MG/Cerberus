@@ -10822,6 +10822,10 @@
       "en": "Take back control"
     },
     {
+      "fr": "Reprendre le contrôle pour cette session",
+      "en": "Take control for this session"
+    },
+    {
       "fr": "Un agent externe (MCP) peut piloter cette session pour des tests ou du débogage. L'app applique arm.json au tick suivant (~800 ms).",
       "en": "An external agent (MCP) can drive this session for testing or debugging. The app applies arm.json on the next tick (~800 ms)."
     },
