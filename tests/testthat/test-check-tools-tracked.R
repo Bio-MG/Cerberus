@@ -101,17 +101,24 @@ test_that("les listes sont triees et dedoublees", {
 # 3. Arguments
 # =============================================================================
 
-test_that("les valeurs par defaut visent tools/", {
+test_that("les valeurs par defaut couvrent tools/ ET tests/", {
+  # `tests/` n'est pas un confort : `.gitignore:34` (`Tests/`, insensible a la
+  # casse sous Windows) ignore TOUT `tests/`, donc un fichier de test neuf nait
+  # invisible a `git status`. Mesure 2026-10-24 : deux fichiers de test reels
+  # etaient dans ce piege. Un garde limite a `tools/` aurait deplace le trou.
   opt <- ts_tools_args(character(0))
-  expect_identical(opt$dir, "tools")
+  expect_identical(opt$dir, c("tools", "tests"))
   expect_false(opt$quiet)
   expect_null(opt$root)
 })
 
-test_that("--dir= et --quiet se lisent, le reste est une erreur d'usage", {
+test_that("--dir= accepte plusieurs repertoires, --quiet se lit, le reste echoue", {
   expect_identical(ts_tools_args("--dir=R")$dir, "R")
+  expect_identical(ts_tools_args("--dir=tools,tests")$dir, c("tools", "tests"))
+  expect_identical(ts_tools_args("--dir=tools, tests ")$dir, c("tools", "tests"))
   expect_true(ts_tools_args("--quiet")$quiet)
   expect_error(ts_tools_args("--dir="), "usage")
+  expect_error(ts_tools_args("--dir=,"), "usage")
   expect_error(ts_tools_args("--inconnu"), "inconnu")
 })
 

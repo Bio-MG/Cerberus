@@ -32,10 +32,22 @@
 # six outils).
 #
 # USAGE
-#   Rscript tools/check_tools_tracked.R [--dir=tools] [--quiet]
+#   Rscript tools/check_tools_tracked.R [--dir=tools,tests] [--quiet]
 #
-#   --dir=DIR : repertoire a verifier, relatif a la racine (defaut : tools).
+#   --dir=DIR : repertoires a verifier, separes par des virgules, relatifs a la
+#               racine (defaut : tools,tests).
 #   --quiet   : seulement la ligne de resume.
+#
+# ⚠️ POURQUOI `tests` EST DANS LE DEFAUT (mesure 2026-10-24). `.gitignore:34`
+# contient `Tests/`, qui correspond a `tests/` de facon INSENSIBLE A LA CASSE
+# sur Windows. Consequence mesuree : tout fichier NEUF sous `tests/` nait
+# ignore, donc invisible a `git status`. Deux fichiers de test REELS etaient
+# dans ce piege :
+#   tests/testthat/test-pkg-skeleton.R
+#   tests/testthat/test-pipe-or-null-unification.R
+# presents sur disque, comptes dans le census, absents du depot. Un garde qui
+# ne regarde que `tools/` aurait repete l'erreur du 2026-10-12 en la
+# deplagant d'un repertoire.
 #
 # SORTIE
 #   Un detail par fichier fautif, puis :
@@ -132,35 +144,44 @@ ts_tools_git <- function(root, args) {
        status = as.integer(status))
 }
 
-#' Les trois listes, lues a git
-ts_tools_scan <- function(root, dir = "tools") {
-  untracked <- ts_tools_git(root, c("ls-files", "--others", "--exclude-standard",
-                                    "--", dir))
-  deleted <- ts_tools_git(root, c("ls-files", "--deleted", "--", dir))
-  ignored <- ts_tools_git(root, c("ls-files", "--others", "--ignored",
-                                  "--exclude-standard", "--", dir))
-  # Un `git` absent ou un `--dir` inconnu sort 128 : on ne le confond pas avec
-  # « aucune erreur » — ce serait exactement le mensonge vert que ce garde
-  # combat.
-  for (r in list(untracked, deleted, ignored)) {
-    if (!r$ok && r$status != 0L) {
-      return(list(failed = TRUE, status = r$status,
-                  message = paste(r$lines, collapse = "\n")))
+#' Les trois listes, lues a git, pour un ou plusieurs repertoires
+ts_tools_scan <- function(root, dirs = c("tools", "tests")) {
+  one <- function(dir) {
+    untracked <- ts_tools_git(root, c("ls-files", "--others", "--exclude-standard",
+                                      "--", dir))
+    deleted <- ts_tools_git(root, c("ls-files", "--deleted", "--", dir))
+    ignored <- ts_tools_git(root, c("ls-files", "--others", "--ignored",
+                                    "--exclude-standard", "--", dir))
+    # Un `git` absent ou un `--dir` inconnu sort 128 : on ne le confond pas avec
+    # « aucune erreur » — ce serait exactement le mensonge vert que ce garde
+    # combat.
+    for (r in list(untracked, deleted, ignored)) {
+      if (!r$ok && r$status != 0L) {
+        return(list(failed = TRUE, status = r$status,
+                    message = paste(r$lines, collapse = "\n")))
+      }
     }
+    list(untracked = untracked$lines, deleted = deleted$lines,
+         ignored = ignored$lines)
   }
+  parts <- lapply(dirs, one)
+  bad <- Filter(function(p) isTRUE(p$failed), parts)
+  if (length(bad)) return(bad[[1L]])
   list(failed = FALSE,
-       untracked = untracked$lines, deleted = deleted$lines,
-       ignored = ignored$lines)
+       untracked = unlist(lapply(parts, `[[`, "untracked"), use.names = FALSE),
+       deleted = unlist(lapply(parts, `[[`, "deleted"), use.names = FALSE),
+       ignored = unlist(lapply(parts, `[[`, "ignored"), use.names = FALSE))
 }
 
 # ── Arguments ---------------------------------------------------------------
 ts_tools_args <- function(argv) {
-  opt <- list(dir = "tools", quiet = FALSE, root = NULL)
+  opt <- list(dir = c("tools", "tests"), quiet = FALSE, root = NULL)
   for (a in argv) {
     if (identical(a, "--quiet")) { opt$quiet <- TRUE; next }
     if (grepl("^--dir=", a)) {
-      v <- sub("^--dir=", "", a)
-      if (!nzchar(v)) stop("usage: --dir attend un chemin", call. = FALSE)
+      v <- trimws(strsplit(sub("^--dir=", "", a), ",")[[1]])
+      v <- v[nzchar(v)]
+      if (!length(v)) stop("usage: --dir attend un chemin", call. = FALSE)
       opt$dir <- v
       next
     }
@@ -185,9 +206,11 @@ ts_tools_main <- function(argv = commandArgs(trailingOnly = TRUE)) {
     message("ERREUR: racine introuvable : ", root)
     return(invisible(2L))
   }
-  if (!dir.exists(file.path(root, opt$dir))) {
-    message("ERREUR: repertoire introuvable : ", file.path(root, opt$dir))
-    return(invisible(2L))
+  for (d in opt$dir) {
+    if (!dir.exists(file.path(root, d))) {
+      message("ERREUR: repertoire introuvable : ", file.path(root, d))
+      return(invisible(2L))
+    }
   }
   scan <- ts_tools_scan(root, opt$dir)
   if (isTRUE(scan$failed)) {
@@ -205,7 +228,8 @@ ts_tools_main <- function(argv = commandArgs(trailingOnly = TRUE)) {
       cat(paste0("  ", cls$warnings, "\n"), sep = "")
     }
     if (!length(cls$errors) && !length(cls$warnings)) {
-      cat(sprintf("Aucun fichier de %s/ hors du depot.\n", opt$dir))
+      cat(sprintf("Aucun fichier de %s hors du depot.\n",
+                  paste(opt$dir, collapse = "/, ") ))
     }
   }
   cat(sprintf("\n---- Resume : %d erreur(s), %d avertissement(s) ----\n",
