@@ -10840,6 +10840,10 @@
     {
       "fr": "Contrôle repris — l'agent ne peut plus piloter cette session.",
       "en": "Control taken back — the agent can no longer drive this session."
+    },
+    {
+      "fr": "ID de session :",
+      "en": "Session ID:"
     }
   ]
 }

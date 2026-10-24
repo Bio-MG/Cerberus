@@ -341,3 +341,106 @@ test_that("arm then disarm round-trips through the projection", {
   expect_identical(st$state, "idle")
   expect_true(st$can_arm)
 })
+
+# =============================================================================
+# 4. SESSION IDENTIFICATION — the human must be able to NAME their session
+# =============================================================================
+# WHY THIS EXISTS (asked for 2026-10-24): with two tabs open, the agent drives
+# whichever session last wrote `ready.json`, and the human has no way to say
+# WHICH tab they are looking at. The sentence "I am on <url>, session <id>" is
+# only resolvable if the id shown in the app is the SAME value the MCP server
+# publishes as `session_id` in `transcripto_drive_status`.
+#
+# The id is a DERIVED hash (pid | started_at | token), so it identifies the
+# session without publishing the token: a displayed id can never arm anything,
+# because arming requires an exact token match.
+
+test_that("ts_drive_session_id() is deterministic, bounded and is not the token", {
+  sid <- ts_drive_session_id("35928", "2026-10-24T16:10:20Z", "c0cwqwst")
+  expect_identical(sid, ts_drive_session_id("35928", "2026-10-24T16:10:20Z", "c0cwqwst"))
+  expect_match(sid, "^[0-9a-f]{16}$")
+  expect_false(grepl("c0cwqwst", sid, fixed = TRUE))
+  # every component participates: same id for two different sessions would be
+  # worse than no id at all
+  expect_false(identical(sid, ts_drive_session_id("35929", "2026-10-24T16:10:20Z", "c0cwqwst")))
+  expect_false(identical(sid, ts_drive_session_id("35928", "2026-10-24T16:10:21Z", "c0cwqwst")))
+  expect_false(identical(sid, ts_drive_session_id("35928", "2026-10-24T16:10:20Z", "c0cwqwsX")))
+  # a numeric pid and its character form are the SAME session, because
+  # ready.json carries the pid as a JSON number and the MCP reads it as text
+  expect_identical(sid, ts_drive_session_id(35928L, "2026-10-24T16:10:20Z", "c0cwqwst"))
+})
+
+test_that("the app and the MCP derive the SAME id — one truth, checked twice", {
+  # The MCP cannot source `R/` (P0: its code lives in scripts/, and it runs
+  # under `--no-init-file`), so the algorithm EXISTS in two places. Two copies
+  # of one rule are two truths unless something compares them: this test is
+  # that comparison. If either side is edited, this goes red.
+  src <- file.path(app_root_dir(), "scripts", "mcp_server.R")
+  expect_true(file.exists(src))
+
+  exprs <- parse(src, keep.source = FALSE, encoding = "UTF-8")
+  mcp <- NULL
+  for (e in exprs) {
+    if (is.call(e) && identical(e[[1L]], as.name("<-")) &&
+        is.name(e[[2L]]) && identical(as.character(e[[2L]]), ".ts_session_id")) {
+      mcp <- e
+    }
+  }
+  expect_false(is.null(mcp))            # anti-vacuity: a rename must not pass
+  env <- new.env(parent = baseenv())
+  eval(mcp, envir = env)
+  expect_true(is.function(env$.ts_session_id))
+
+  cases <- list(
+    list("35928", "2026-10-24T16:10:20Z", "c0cwqwst"),
+    list("1", "1970-01-01T00:00:00Z", "aaaaaaaa"),
+    list("999999", "2026-12-31T23:59:59Z", "Zz09-_.x")
+  )
+  for (cs in cases) {
+    expect_identical(
+      ts_drive_session_id(cs[[1]], cs[[2]], cs[[3]]),
+      env$.ts_session_id(cs[[1]], cs[[2]], cs[[3]]),
+      info = paste("divergence sur", paste(unlist(cs), collapse = " | "))
+    )
+  }
+})
+
+test_that("attach() publishes the id that ready.json implies", {
+  # The panel reads `.drive$session_id`, so the value must come from the same
+  # triple that was written to ready.json — not from a second clock reading,
+  # which would drift by a second and identify nothing.
+  .dac_local_root()
+  env <- new.env()
+  sess <- list(onSessionEnded = function(f) { env$f <- f; invisible(NULL) })
+  d <- ts_drive_attach(sess, list())
+  hb <- ts_drive_read_ready()
+  expect_identical(
+    d$session_id,
+    ts_drive_session_id(hb$pid, hb$started_at, hb$session_token)
+  )
+  expect_match(d$session_id, "^[0-9a-f]{16}$")
+  expect_false(identical(d$session_id, d$token))
+})
+
+test_that("the panel shows the session id, and never the token", {
+  .dac_local_root()
+  .dac_ready("zzTOKENzz")
+  st <- .dac_read("zzTOKENzz")
+
+  html <- as.character(ts_drive_control_ui(
+    st, label = "Aucun agent",
+    session_id = "38cb416a33dccbea", session_label = "ID de session :"
+  ))
+  expect_match(html, "38cb416a33dccbea", fixed = TRUE)
+  expect_match(html, "ID de session", fixed = TRUE)
+  expect_false(grepl("zzTOKENzz", html, fixed = TRUE))
+
+  # No orphan separator: with no id, the line is ABSENT, not rendered empty
+  # (the `sprintf("… : %s", "")` trap — an empty segment still prints its label).
+  html_none <- as.character(ts_drive_control_ui(
+    st, label = "Aucun agent", session_id = "", session_label = "ID de session :"
+  ))
+  expect_false(grepl("ID de session", html_none, fixed = TRUE))
+  html_null <- as.character(ts_drive_control_ui(st, label = "Aucun agent"))
+  expect_false(grepl("ID de session", html_null, fixed = TRUE))
+})

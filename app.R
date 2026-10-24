@@ -688,6 +688,11 @@ server <- function(input, output, session) {
     } else NULL
     ts_drive_control_ui(
       st, label = label, button = btn,
+      # The human has to be able to NAME this session when an agent is attached
+      # (`transcripto_drive_status` publishes the same derived id), otherwise
+      # "drive my session" is ambiguous as soon as a second tab exists.
+      session_id    = .drive$session_id,
+      session_label = .tr("ID de session :"),
       hint = .tr("Un agent externe (MCP) peut piloter cette session pour des tests ou du d\u00e9bogage. L'app applique arm.json au tick suivant (~800 ms).")
     )
   })

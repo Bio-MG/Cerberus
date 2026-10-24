@@ -718,6 +718,37 @@ ts_drive_arm_state <- function(token) {
 # keeps production inert — so a deployed app can never invite an agent, and it
 # never writes the `"*"` wildcard (that escape hatch belongs to the launcher).
 
+#' A DERIVED correlation id for a live session.
+#'
+#' WHY IT EXISTS (asked for 2026-10-24): with two tabs open the agent drives
+#' whichever session last wrote `ready.json`, and the human had no way to say
+#' WHICH tab they were looking at — "drive my session" was ambiguous. The panel
+#' now displays this id, so the sentence "I am on <url>, session <id>" is
+#' resolvable: the agent reads `session_id` from `transcripto_drive_status` and
+#' compares.
+#'
+#' Deliberately NOT a cryptographic primitive, and deliberately not the token:
+#' it exists so two observations can be CORRELATED. A displayed id can never arm
+#' anything, because arming requires an exact token match.
+#'
+#' ⚠️ THE SAME ALGORITHM LIVES IN `scripts/mcp_server.R` (`.ts_session_id()`),
+#' because the MCP cannot source `R/` (P0) and runs under `--no-init-file`. Two
+#' copies of one rule are two truths unless something compares them, so
+#' `test-drive-agent-control.R` extracts the MCP function and asserts both
+#' produce identical output. Edit one, edit the other.
+#'
+#' Bounded 31-bit accumulators keep the arithmetic exact in doubles.
+ts_drive_session_id <- function(pid, started_at, token) {
+  b <- utf8ToInt(paste(as.character(pid), as.character(started_at),
+                       as.character(token), sep = "|"))
+  h1 <- 5381; h2 <- 52711
+  for (x in b) {
+    h1 <- (h1 * 33 + x) %% 2147483647
+    h2 <- (h2 * 65599 + x) %% 2147483647
+  }
+  sprintf("%08x%08x", as.integer(h1), as.integer(h2))
+}
+
 #' The CLOSED state set of the in-app agent-control panel.
 #'
 #' Pinned by test: a sixth member would be an unhandled case in the UI, and the
@@ -4108,6 +4139,11 @@ ts_drive_attach <- function(session, input, poll_ms = 800) {
     list(
       token = token,
       poll_ms = poll_ms,
+
+      # The id the panel DISPLAYS so a human can name this session to an agent.
+      # Derived from the SAME `started_at` that went into ready.json — a second
+      # clock reading would drift and identify nothing.
+      session_id = ts_drive_session_id(Sys.getpid(), started_at, token),
 
       #' Run exactly one protocol beat. Called from the `observe()` in app.R.
       #' @param global_data reactiveValues (or list) read by the snapshot.

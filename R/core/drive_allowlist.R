@@ -2206,7 +2206,8 @@ ts_drive_badge_ui <- function(view) {
 #' @param label Already-translated status line.
 #' @param button NULL, or a pre-built `shiny::actionButton()` tag.
 #' @param hint Already-translated one-line explanation.
-ts_drive_control_ui <- function(st, label, button = NULL, hint = NULL) {
+ts_drive_control_ui <- function(st, label, button = NULL, hint = NULL,
+                                session_id = NULL, session_label = NULL) {
   state <- as.character(st$state %||% "unavailable")[1]
   if (is.na(state) || !state %in% TS_DRIVE_CONTROL_STATES) state <- "unavailable"
   # One colour per state, declared once. `armed` is the only state that means
@@ -2214,6 +2215,9 @@ ts_drive_control_ui <- function(st, label, button = NULL, hint = NULL) {
   colours <- c(unavailable = "#adb5bd", no_handshake = "#adb5bd",
                idle = "#6c757d", armed = "#198754", armed_other = "#fd7e14")
   col <- unname(colours[[state]])
+  sid <- if (length(session_id) == 1L && !is.na(session_id)) {
+    trimws(as.character(session_id))
+  } else ""
   htmltools::tagList(
     htmltools::div(
       style = "display:flex; align-items:center; gap:6px; font-size:0.8rem;",
@@ -2225,6 +2229,21 @@ ts_drive_control_ui <- function(st, label, button = NULL, hint = NULL) {
                       style = "font-weight:600; line-height:1.2;", label)
     ),
     if (!is.null(button)) button else NULL,
+    # The session id is DERIVED (pid | started_at | token), so displaying it
+    # cannot arm anything: arming needs an exact token match. `user-select:all`
+    # makes one click select the whole id — the gesture the human performs is
+    # copying it into the chat. Absent id ⇒ NO line at all, because an empty
+    # segment still prints its label (the `sprintf("… : %s", "")` trap).
+    if (length(sid) && nzchar(sid)) {
+      htmltools::div(
+        id = "ts_drive_session_line",
+        style = "margin-top:4px; font-size:0.72rem; line-height:1.3;",
+        htmltools::span(class = "text-muted", session_label %||% "Session"),
+        " ",
+        htmltools::code(id = "ts_drive_session_id",
+                        style = "font-size:0.72rem; user-select:all;", sid)
+      )
+    } else NULL,
     if (!is.null(hint)) {
       htmltools::div(class = "small text-muted",
                      style = "font-size:0.72rem; margin-top:4px;", hint)
