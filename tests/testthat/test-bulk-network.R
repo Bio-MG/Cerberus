@@ -43,6 +43,7 @@ test_that("surface publique figée, triée, sans doublon", {
     "bulk_network_error_state", "bulk_network_map_ids",
     "bulk_network_memo_clear", "bulk_network_node_roles",
     "bulk_network_pcsf_params", "bulk_network_pcsf_params_default",
+    "bulk_network_prize_from_padj",
     "bulk_network_public_api", "bulk_network_source_available",
     "bulk_network_species_supported",
     "bulk_network_species_unavailable_reason", "bulk_network_validity_states",
@@ -518,6 +519,72 @@ test_that("assert_bulk_network_result refuse un résultat non canonique", {
   bad$nodes$role[1] <- "hub"
   e4 <- tryCatch(assert_bulk_network_result(bad), error = function(e) e)
   expect_identical(bulk_network_error_state(e4), "invalid_input")
+})
+
+# ── Prime depuis padj : `-log10(0)` est un UNDERFLOW, pas une mesure ────────
+# MESURÉ 2026-10-24, session live :6191 (GSE164073 Eye) : l'onglet Réseau
+# mourait sur `Error in plot.window: 'xlim' nécessite des valeurs finies`
+# (pile : renderPlot mod_bulk_network.R#410 -> plot_bulk_network
+# bulk_network.R#1030 -> igraph::plot.igraph).
+#
+# Matrice de falsification (9 cas testés sur la VRAIE fonction) : SEUL un prix
+# Inf reproduit ce message. 0 arête, 1 nœud, primes toutes égales, prime NA,
+# prime négative, prime 1e6, 3 nœuds, 6 nœuds : tous tracent.
+# Chaîne : padj == 0 (underflow de la loi beta) -> -log10 -> Inf -> `cex_v`
+# devient NaN -> `vertex.size` NaN -> `xlim` non fini.
+test_that("une prime -log10(padj) reste FINIE même quand padj vaut 0", {
+  p <- c(0.05, 0.001, 1e-10, 0, NA)
+  pri <- bulk_network_prize_from_padj(p)
+  expect_identical(length(pri), length(p))
+  # anti-vacuité : sans valeurs non manquantes, le test ne prouverait rien
+  expect_gt(sum(!is.na(p)), 0L)
+  expect_true(all(is.finite(pri[!is.na(p)])))
+  expect_equal(pri[4], 300)             # plancher 1e-300 -> 300, pas Inf
+  expect_true(is.na(pri[5]))             # NA reste NA (filtré en amont)
+  expect_equal(pri[1:3], -log10(p[1:3])) # inchangé hors underflow
+  # monotonie : un padj plus petit n'est JAMAIS une prime plus petite, donc la
+  # prime DÉCROÎT quand le padj croît (le plancher ne peut pas inverser l'ordre).
+  o <- order(p[1:3])
+  expect_true(all(diff(pri[1:3][o]) <= 0))
+  # sous le plancher aussi : 1e-320 rend 300 (plafond DÉCLARÉ), ni 320 ni Inf
+  expect_equal(bulk_network_prize_from_padj(1e-320), 300)
+})
+
+test_that("assert_bulk_network_result refuse une prime INFINIE (contrat)", {
+  net <- .network_synthetic()
+  r <- run_bulk_network_pcsf(c(A = 10, D = 10), network = net, convert_ids = FALSE)
+  expect_true(isTRUE(assert_bulk_network_result(r)))
+  # NA sur un relais reste TOLÉRÉ : le contrat dit qu'un relais n'a pas de
+  # prime. Refuser NA casserait un résultat valide — le refus porte sur Inf.
+  expect_true(any(is.na(r$nodes$prize)))
+  inf <- r
+  inf$nodes$prize[which(inf$nodes$role == "terminal")[1]] <- Inf
+  e <- tryCatch(assert_bulk_network_result(inf), error = function(e) e)
+  expect_s3_class(e, "bulk_network_error")
+  expect_identical(bulk_network_error_state(e), "contract_violation")
+  expect_match(conditionMessage(e), "finie", fixed = TRUE)
+})
+
+test_that("plot_bulk_network ne meurt plus sur un xlim non fini (cause MESURÉE)", {
+  skip_if_not_installed("igraph")
+  net <- .network_synthetic()
+  r <- run_bulk_network_pcsf(c(A = 10, D = 10), network = net, convert_ids = FALSE)
+  # CONTRÔLE POSITIF : le tracé sain fonctionne — sans lui, le test négatif
+  # ne prouverait rien (un plot qui échoue pour une autre raison passerait).
+  grDevices::pdf(NULL)
+  ok <- tryCatch({ plot_bulk_network(r); TRUE }, error = function(e) conditionMessage(e))
+  grDevices::dev.off()
+  expect_true(isTRUE(ok))
+  # LE CAS MESURÉ : une prime Inf doit être REFUSÉE avec un message qui nomme
+  # la cause, JAMAIS avec « xlim nécessite des valeurs finies ».
+  bad <- r
+  bad$nodes$prize[which(bad$nodes$role == "terminal")[1]] <- Inf
+  grDevices::pdf(NULL)
+  e <- tryCatch({ plot_bulk_network(bad); NULL }, error = function(e) e)
+  grDevices::dev.off()
+  expect_s3_class(e, "bulk_network_error")
+  expect_identical(bulk_network_error_state(e), "contract_violation")
+  expect_false(grepl("xlim", conditionMessage(e), fixed = TRUE))
 })
 
 test_that("le résultat respecte le contrat gelé, y compris sur le vrai réseau", {

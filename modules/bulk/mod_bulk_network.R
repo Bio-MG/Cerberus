@@ -109,7 +109,7 @@
     pri <- if (identical(inp$prize, "lfc")) {
       abs(res_de$log2FoldChange[match(genes, as.character(res_de$gene))])
     } else {
-      -log10(res_de$padj[match(genes, as.character(res_de$gene))])
+      bulk_network_prize_from_padj(res_de$padj[match(genes, as.character(res_de$gene))])
     }
     prizes <- stats::setNames(pri, genes)
     prizes <- prizes[!is.na(prizes)]
@@ -309,7 +309,7 @@ mod_bulk_network_server <- function(id, global_data, shared_rv) {
         pri <- if (identical(input$network_prize, "lfc")) {
           abs(res_de$log2FoldChange[match(genes, as.character(res_de$gene))])
         } else {
-          -log10(res_de$padj[match(genes, as.character(res_de$gene))])
+          bulk_network_prize_from_padj(res_de$padj[match(genes, as.character(res_de$gene))])
         }
         prizes <- stats::setNames(pri, genes)
         prizes <- prizes[!is.na(prizes)]

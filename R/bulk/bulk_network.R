@@ -125,6 +125,7 @@ bulk_network_public_api <- function() {
     "bulk_network_error_state", "bulk_network_map_ids",
     "bulk_network_memo_clear", "bulk_network_node_roles",
     "bulk_network_pcsf_params", "bulk_network_pcsf_params_default",
+    "bulk_network_prize_from_padj",
     "bulk_network_public_api", "bulk_network_source_available",
     "bulk_network_species_supported",
     "bulk_network_species_unavailable_reason", "bulk_network_validity_states",
@@ -593,6 +594,33 @@ bulk_network_pcsf_params <- function(overrides = list()) {
 
 #' Calcule un sous-réseau PCSF heuristique à partir de primes par gène
 #'
+#' Prime PCSF depuis un `padj` : `-log10`, avec un plancher sur l'UNDERFLOW
+#'
+#' **`padj == 0` n'est pas une mesure, c'est un underflow** de la loi bêta
+#' utilisée par DESeq2 pour les très grands comptages. `-log10(0)` vaut `Inf`,
+#' et une prime infinie ne casse pas le moteur — elle casse le TRACÉ :
+#' `plot_bulk_network()` normalise les tailles par
+#' `(pri - min(pri)) / (max(pri) - min(pri))`, donc `Inf / Inf` vaut `NaN`,
+#' `vertex.size` devient `NaN`, et `igraph::plot.igraph()` meurt sur
+#' `Error in plot.window: 'xlim' nécessite des valeurs finies`.
+#'
+#' MESURÉ 2026-10-24 (session live, GSE164073 Eye) : matrice de falsification à
+#' 9 cas sur la VRAIE fonction — 0 arête, 1 nœud, primes toutes égales, prime
+#' `NA`, prime négative, prime `1e6`, 3 et 6 nœuds tracent tous ; SEUL un prix
+#' `Inf` reproduit le message.
+#'
+#' Le plancher `1e-300` (même valeur que `bulk_report_engine.R`, même raison)
+#' rend **300**, borne INFÉRIEURE honnête : on affirme « padj ≤ 1e-300 », jamais
+#' une valeur inventée. La monotonie est préservée, donc le classement des
+#' primes ne change pas.
+#'
+#' @param padj vecteur de p-values ajustées (`NA` toléré et préservé).
+#' @return vecteur numérique FINI partout où `padj` n'est pas `NA`.
+#' @export
+bulk_network_prize_from_padj <- function(padj) {
+  -log10(pmax(as.numeric(padj), 1e-300))
+}
+
 #' **Heuristique, pas un optimum** — voir l'en-tête de section. Le résultat est
 #' un sous-graphe CANDIDAT qui collecte les primes atteignables à coût négatif.
 #'
@@ -970,6 +998,19 @@ assert_bulk_network_result <- function(result, context = "") {
     .bulk_network_stop("invalid_input", paste0(
       "assert_bulk_network_result", ctx, " : rôle(s) hors contrat : ",
       paste(bad, collapse = ", "), "."))
+  }
+  # Une prime doit être FINIE. `Inf` n'est pas une mesure : c'est le résultat de
+  # `-log10(0)`, donc d'un padj UNDERFLOWÉ. Le refus est ICI (contrat) et non
+  # dans le tracé, pour que le message NOMME la cause au lieu de laisser igraph
+  # échouer sur `xlim` (mesuré 2026-10-24 : `Error in plot.window: 'xlim'
+  # nécessite des valeurs finies`, pile : le tracé du module -> plot_bulk_network).
+  # `NA` reste TOLÉRÉ : un relais n'a pas de prime, et le contrat le dit.
+  n_inf <- sum(is.infinite(suppressWarnings(as.numeric(result$nodes$prize))))
+  if (n_inf > 0L) {
+    .bulk_network_stop("contract_violation", paste0(
+      "assert_bulk_network_result", ctx, " : ", n_inf,
+      " prime(s) non finie(s) (Inf). Une prime infinie vient d'un padj nul ",
+      "(-log10(0)) : calculer la prime avec bulk_network_prize_from_padj()."))
   }
   if (!is.data.frame(result$edges) ||
       !all(c("from", "to") %in% colnames(result$edges))) {

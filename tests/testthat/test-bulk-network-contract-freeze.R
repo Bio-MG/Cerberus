@@ -53,6 +53,7 @@ test_that("public API surface is frozen (names + signatures)", {
     "bulk_network_error_state", "bulk_network_map_ids",
     "bulk_network_memo_clear", "bulk_network_node_roles",
     "bulk_network_pcsf_params", "bulk_network_pcsf_params_default",
+    "bulk_network_prize_from_padj",
     "bulk_network_public_api", "bulk_network_source_available",
     "bulk_network_species_supported",
     "bulk_network_species_unavailable_reason", "bulk_network_validity_states",
@@ -84,6 +85,7 @@ test_that("public API surface is frozen (names + signatures)", {
     bulk_network_public_api              = NULL,
     bulk_network_pcsf_params_default     = NULL,
     bulk_network_pcsf_params             = "overrides",
+    bulk_network_prize_from_padj         = "padj",
     run_bulk_network_pcsf                = c("prizes", "network", "species",
                                              "threshold", "params",
                                              "convert_ids"),
@@ -162,6 +164,7 @@ test_that("module reuses the engine and never redefines it", {
   for (sym in c("load_bulk_network", "run_bulk_network_pcsf",
                 "assert_bulk_network_result", "plot_bulk_network",
                 "build_bulk_network_table_export", "bulk_network_pcsf_params",
+                "bulk_network_prize_from_padj",
                 "ts_datatable", ".strip_i18n_html")) {
     expect_match(.module_src, sym, fixed = TRUE,
                  info = paste("symbole réutilisé absent du module :", sym))
@@ -171,6 +174,23 @@ test_that("module reuses the engine and never redefines it", {
     expect_false(grepl(paste0(sym, "\\s*<-\\s*function"), .module_src),
                  info = paste("redéfinition interdite dans le module :", sym))
   }
+})
+
+# ── Prime : le module ne calcule JAMAIS -log10(padj) à la main ─────────────
+# DEUX chemins construisent la prime (interactif et drive). Une expression
+# dupliquée = deux vérités, et `-log10(0)` vaut Inf : c'est EXACTEMENT ce qui a
+# cassé le tracé le 2026-10-24 (`xlim` non fini, pile renderPlot ->
+# plot_bulk_network). Le plancher vit dans le helper ; s'il disparaît d'un des
+# deux chemins, ce test le dit.
+test_that("module builds prizes ONLY through the engine helper", {
+  expect_false(grepl("-log10(res_de$padj", .module_src, fixed = TRUE),
+                     info = "calcul brut de -log10(padj) dans le module")
+  # anti-vacuité : un `gregexpr` sans correspondance rend -1, dont la longueur
+  # vaut 1 — compter naïvement donnerait 1 au lieu de 0.
+  m <- gregexpr("bulk_network_prize_from_padj(", .module_src, fixed = TRUE)[[1L]]
+  n_calls <- if (identical(as.integer(m), -1L)) 0L else length(m)
+  expect_identical(n_calls, 2L,
+                   info = "les 2 chemins (interactif + drive) doivent utiliser le helper")
 })
 
 # ── Module : n'écrit QUE son propre résultat (contrat §11) ────────────────
