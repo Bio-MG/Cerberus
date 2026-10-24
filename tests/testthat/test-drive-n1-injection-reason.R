@@ -20,7 +20,12 @@ source_project_file("R/core/error_log.R")
 source_project_file("R/core/state.R")
 source_project_file("R/core/drive_allowlist.R")
 source_project_file("R/core/drive_watcher.R")
-suppressPackageStartupMessages(library(jsonlite))
+# Pas d'attach jsonlite ici : ce fichier n'appelle jamais jsonlite
+# directement (le drive qualifie `jsonlite::` en interne), et un attach au
+# niveau fichier DEVANCE shiny sur le search path pour le reste du processus
+# — l'idiome `validate(need(...))` des modules résout alors vers
+# jsonlite::validate(NULL) et fait échouer tout testServer ultérieur
+# (panne intermittente 2026-10-23/24, gardée par test-search-path-poisoning.R).
 # Le gate d'armement doit être OUVERT pour le tick (Rscript n'est jamais
 # interactif) — le même forçage que test-drive-watcher.R.
 options(ts.drive.interactive = TRUE)
