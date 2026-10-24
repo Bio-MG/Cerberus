@@ -292,6 +292,26 @@ ui <- page_navbar(
                   selected = I18N_DEFAULT_LANG, width = "100%")
     } else NULL,
     
+    # ── AGENT CONTROL (MCP / Live Control) ───────────────────────────────────
+    # The drive protocol used to be ONE-WAY: only an external agent could arm a
+    # session, so a human had no way to tell whether an agent was in control.
+    # MEASURED (2026-10-24): the operator could not see the drive at all — the
+    # handshake named a dead pid, the serving process never heartbeated, and
+    # `arm.json` held a token nobody owned. This panel is the human's side of
+    # `arm.json`: it always shows the state, and lets the operator hand control
+    # over (or take it back) without touching a file.
+    #
+    # Gated at BUILD time on the same predicate that keeps production inert
+    # (`ts_drive_interactive()`): a deployed app can never be armed, so a
+    # permanent grey line there would advertise a capability that does not
+    # exist — and the spec requires the UI to be unchanged when the protocol is
+    # off. Dev/`Run App` sessions get the panel; production gets nothing.
+    if (isTRUE(ts_drive_interactive())) tagList(
+      hr(),
+      h6(i18n$t("Contrôle agent (MCP)"), style = "font-weight: bold;"),
+      uiOutput("drive_control_ui")
+    ) else NULL,
+    
     
     
     h6(i18n$t("Mémoire Utilisée"), style = "font-weight: bold;"),
@@ -581,6 +601,110 @@ server <- function(input, output, session) {
     ts_drive_badge_ui(ts_drive_badge_view(st))
   })
 
+  # ── AGENT CONTROL PANEL — the human's side of `arm.json` ──────────────────
+  # A dedicated, CHEAP reactive state on the same discipline as the badge: the
+  # projection is recomputed on every protocol beat (two small reads the tick
+  # already performs), but the reactive value is written ONLY when it CHANGED —
+  # a `set()` per beat would repaint the sidebar 1.25 times per second and steal
+  # focus from whatever the human is typing.
+  #
+  # Why it exists at all: the drive was ONE-WAY on `arm.json`. Only an external
+  # agent wrote it, so a human had no way to tell whether an agent held the
+  # session — MEASURED 2026-10-24, where the operator could not see the drive at
+  # all and every symptom read as "the app ignores the agent".
+  drive_control <- shiny::reactiveVal(NULL)
+
+  .drive_control_now <- function() {
+    ts_drive_control_state(
+      token       = .drive$token,
+      interactive = isTRUE(ts_drive_interactive()),
+      ready       = ts_drive_read_ready(),
+      arm         = ts_drive_read_json(ts_drive_path("arm.json")),
+      # The wildcard is the launcher's privilege: `TRANSCRIPTO_DEV_DRIVE=1` is
+      # set for that process only (tools/launch_dev_drive.R), never in .Renviron.
+      wildcard_ok = identical(Sys.getenv("TRANSCRIPTO_DEV_DRIVE"), "1")
+    )
+  }
+
+  .drive_control_refresh <- function(force = FALSE) {
+    st <- .drive_control_now()
+    if (isTRUE(force) || !identical(st, drive_control())) drive_control(st)
+    invisible(st)
+  }
+
+  # First paint: the panel must be honest BEFORE the first tick (~800 ms).
+  .drive_control_refresh(force = TRUE)
+
+  output$drive_control_ui <- shiny::renderUI({
+    global_data$language                      # re-render on language switch
+    st <- drive_control()
+    if (is.null(st)) return(NULL)
+    label <- switch(
+      st$state,
+      unavailable  = .tr("Contr\u00f4le agent indisponible (session non interactive)"),
+      no_handshake = switch(
+        st$reason,
+        other_session     = .tr("Un autre onglet d\u00e9tient le handshake agent"),
+        handshake_invalid = .tr("Handshake agent invalide"),
+        .tr("Aucun handshake agent publi\u00e9 pour cette session")
+      ),
+      idle = switch(
+        st$reason,
+        arm_invalid = .tr("Aucun agent \u2014 arm.json illisible, vous gardez le contr\u00f4le"),
+        .tr("Aucun agent \u2014 vous gardez le contr\u00f4le")
+      ),
+      armed = switch(
+        st$reason,
+        armed_wildcard = .tr("AGENT EN CONTR\u00d4LE (wildcard dev)"),
+        .tr("AGENT EN CONTR\u00d4LE \u2014 cette session est pilot\u00e9e")
+      ),
+      armed_other = switch(
+        st$reason,
+        wildcard_refused = .tr("Armement wildcard refus\u00e9 (lanceur dev requis)"),
+        .tr("Une autre session est arm\u00e9e")
+      ),
+      ""
+    )
+    # ONE button, and its label states the direction. `can_arm` and `can_disarm`
+    # are mutually exclusive by construction, so there is no third case to
+    # handle — and when neither holds (another session is armed) no button is
+    # offered at all, because there is nothing this tab may honestly do.
+    btn <- if (isTRUE(st$can_arm)) {
+      shiny::actionButton("drive_control_toggle",
+                          .tr("Donner le contr\u00f4le \u00e0 un agent"),
+                          class = "btn-xs btn-outline-warning w-100 mt-2")
+    } else if (isTRUE(st$can_disarm)) {
+      shiny::actionButton("drive_control_toggle",
+                          .tr("Reprendre le contr\u00f4le"),
+                          class = "btn-xs btn-outline-success w-100 mt-2")
+    } else NULL
+    ts_drive_control_ui(
+      st, label = label, button = btn,
+      hint = .tr("Un agent externe (MCP) peut piloter cette session pour des tests ou du d\u00e9bogage. L'app applique arm.json au tick suivant (~800 ms).")
+    )
+  })
+
+  # Arm / disarm. The STATE decides the direction, never the click count: the
+  # button label and the write must not be able to disagree.
+  observeEvent(input$drive_control_toggle, {
+    st <- drive_control()
+    if (is.null(st)) return()
+    target <- isTRUE(st$can_arm)      # arm when we can, otherwise take it back
+    res <- ts_drive_write_arm(.drive$token, target)
+    if (!isTRUE(res$wrote)) {
+      showNotification(paste0(.tr("\u00c9chec du contr\u00f4le agent : "), res$reason),
+                       type = "error", duration = 8)
+      return(invisible(NULL))
+    }
+    .drive_control_refresh(force = TRUE)
+    showNotification(
+      if (target) .tr("Contr\u00f4le donn\u00e9 \u00e0 l'agent \u2014 il peut piloter cette session.")
+      else .tr("Contr\u00f4le repris \u2014 l'agent ne peut plus piloter cette session."),
+      type = "message", duration = 5
+    )
+    invisible(NULL)
+  }, ignoreInit = TRUE)
+
   # The ONE reactive beat of the protocol. `invalidateLater()` is the only
   # polling style used (spec §6) — not `reactiveFileReader`, to avoid a second
   # mechanism. `R/` carries the decision; this observer only beats the heart.
@@ -686,6 +810,12 @@ server <- function(input, output, session) {
       }
       drive_state(st)
     }
+
+    # Agent control: recompute the projection on every beat, but publish it to
+    # the sidebar only when it changed (see `.drive_control_refresh`). This is
+    # also what makes an arm/disarm written by an EXTERNAL agent visible here
+    # within one tick, without polling anything new.
+    .drive_control_refresh()
   })
   
   # ── i18n (Phase 1): language switch ───────────────────────────────────────

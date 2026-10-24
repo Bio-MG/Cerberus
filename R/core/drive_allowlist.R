@@ -2187,3 +2187,47 @@ ts_drive_badge_ui <- function(view) {
     bits
   )
 }
+
+#' Build the in-app AGENT CONTROL panel (the human's side of `arm.json`).
+#'
+#' Pure `htmltools`, no Shiny call, so it stays testable and `R/` stays
+#' reactive-free — the caller owns the translation AND the button, because a
+#' hand-written `<button>` would have to re-implement Shiny's `actionButton`
+#' input binding (the `data-val` counter), and a half-reimplemented binding is
+#' a click that silently never reaches the server.
+#'
+#' Unlike the floating badge, this panel is NEVER hidden. It is the only place a
+#' human can learn that an agent holds the session, so "nothing to say" is not a
+#' reason to remove it: the states that say nothing happened ARE the information
+#' (`idle` = you have control, `no_handshake` = this tab is not the one the
+#' agent can reach).
+#'
+#' @param st Output of `ts_drive_control_state()`.
+#' @param label Already-translated status line.
+#' @param button NULL, or a pre-built `shiny::actionButton()` tag.
+#' @param hint Already-translated one-line explanation.
+ts_drive_control_ui <- function(st, label, button = NULL, hint = NULL) {
+  state <- as.character(st$state %||% "unavailable")[1]
+  if (is.na(state) || !state %in% TS_DRIVE_CONTROL_STATES) state <- "unavailable"
+  # One colour per state, declared once. `armed` is the only state that means
+  # "an agent can act on your data right now", so it is the only green.
+  colours <- c(unavailable = "#adb5bd", no_handshake = "#adb5bd",
+               idle = "#6c757d", armed = "#198754", armed_other = "#fd7e14")
+  col <- unname(colours[[state]])
+  htmltools::tagList(
+    htmltools::div(
+      style = "display:flex; align-items:center; gap:6px; font-size:0.8rem;",
+      htmltools::span(
+        style = sprintf(paste0("width:9px; height:9px; border-radius:50%%; ",
+                               "background:%s; flex:0 0 auto;"), col)
+      ),
+      htmltools::span(id = "ts_drive_control_label",
+                      style = "font-weight:600; line-height:1.2;", label)
+    ),
+    if (!is.null(button)) button else NULL,
+    if (!is.null(hint)) {
+      htmltools::div(class = "small text-muted",
+                     style = "font-size:0.72rem; margin-top:4px;", hint)
+    } else NULL
+  )
+}

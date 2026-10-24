@@ -699,6 +699,147 @@ ts_drive_arm_state <- function(token) {
 
 
 # =============================================================================
+# In-app AGENT CONTROL — the human's side of arm.json
+# =============================================================================
+# `arm.json` was ONE-WAY: only an external agent ever wrote it. A human looking
+# at the app therefore had no way to tell whether an agent was in control, and
+# no way to invite one — the state lived in a file nobody was watching.
+#
+# MEASURED (2026-10-24, live bulk session, operator blocked): the drive was
+# invisible. `ready.json` carried the pid of a process that no longer existed,
+# the app actually serving the tab was a DIFFERENT process that never
+# heartbeated, and `arm.json` was a leftover `armed: true` for a token nobody
+# held. Every symptom read as "the app ignores the agent", and NOTHING in the
+# UI said otherwise. The MCP could only answer STALE_SESSION.
+#
+# What is added here is the smallest honest answer: a CLOSED set of states
+# derived from the two wire files, and a writer that lets the app arm ITS OWN
+# token. The writer is gated by `ts_drive_interactive()` — the same rule that
+# keeps production inert — so a deployed app can never invite an agent, and it
+# never writes the `"*"` wildcard (that escape hatch belongs to the launcher).
+
+#' The CLOSED state set of the in-app agent-control panel.
+#'
+#' Pinned by test: a sixth member would be an unhandled case in the UI, and the
+#' panel is the only place a human can learn that an agent has taken over.
+TS_DRIVE_CONTROL_STATES <- c("unavailable", "no_handshake", "idle", "armed",
+                             "armed_other")
+
+#' Project `ready.json` + `arm.json` into ONE display-safe state.
+#'
+#' A PROJECTION, not a second source of truth: it reads the two files the
+#' protocol already owns and decides nothing on its own. The returned list is
+#' what the UI may render, so it carries no token, no path and no pid — the same
+#' whitelist discipline as `ts_drive_badge_view()`.
+#'
+#' @param token This session's token.
+#' @param interactive `ts_drive_interactive()` — the gate that keeps production
+#'   inert. Stated FIRST: no arrangement of the files can make an
+#'   agent-controllable session out of a production one.
+#' @param ready Parsed `ready.json` (or NULL).
+#' @param arm Parsed `arm.json` (or NULL).
+#' @param wildcard_ok `TRANSCRIPTO_DEV_DRIVE=1` (the launcher's escape hatch).
+#' @return list(state, reason, can_arm, can_disarm, viewer, heartbeat_n).
+ts_drive_control_state <- function(token, interactive, ready = NULL, arm = NULL,
+                                   wildcard_ok = FALSE) {
+  token <- if (length(token) == 1L && !is.na(token)) as.character(token) else ""
+
+  blank <- function(state, reason) {
+    list(state = state, reason = reason, can_arm = FALSE, can_disarm = FALSE,
+         viewer = "", heartbeat_n = NA_integer_)
+  }
+
+  if (!isTRUE(interactive)) return(blank("unavailable", "non_interactive"))
+
+  # The handshake must be OURS. `ready.json` names the last session that booted,
+  # so arming a tab it does not name would arm a DIFFERENT session — the exact
+  # failure mode the launcher's header warns about ("a new tab rewrites the
+  # token").
+  if (is.null(ready) || !is.list(ready)) {
+    return(blank("no_handshake", "no_handshake_file"))
+  }
+  if (!identical(as.character(ready$protocol %||% ""), TS_DRIVE_PROTOCOL)) {
+    return(blank("no_handshake", "handshake_invalid"))
+  }
+  if (!nzchar(token) ||
+      !identical(as.character(ready$session_token %||% ""), token)) {
+    return(blank("no_handshake", "other_session"))
+  }
+
+  viewer <- as.character(ready$viewer %||% "unknown")[1]
+  if (is.na(viewer) || !viewer %in% c("headless", "visible", "unknown")) {
+    viewer <- "unknown"
+  }
+  hb_n <- suppressWarnings(as.integer(ready$hb_n %||% NA_integer_))
+
+  # From here the handshake is ours: the question is only WHO holds the arm.
+  idle <- list(state = "idle", reason = "arm_absent", can_arm = TRUE,
+               can_disarm = FALSE, viewer = viewer, heartbeat_n = hb_n)
+  if (is.null(arm) || !is.list(arm)) return(idle)
+  if (!identical(as.character(arm$protocol %||% ""), TS_DRIVE_PROTOCOL)) {
+    idle$reason <- "arm_invalid"          # ours to overwrite with a valid one
+    return(idle)
+  }
+  if (!isTRUE(arm$armed)) {
+    idle$reason <- "not_armed"            # explicit disarm keeps the token
+    return(idle)
+  }
+
+  armed <- function(reason) {
+    list(state = "armed", reason = reason, can_arm = FALSE, can_disarm = TRUE,
+         viewer = viewer, heartbeat_n = hb_n)
+  }
+  arm_token <- as.character(arm$token %||% "")[1]
+  if (!is.na(arm_token) && nzchar(token) && identical(arm_token, token)) {
+    return(armed("armed_self"))
+  }
+  if (identical(arm_token, "*")) {
+    # The wildcard arms whichever session is listening. Honoured ONLY under the
+    # dev launcher; otherwise it is a refusal the human must be able to SEE.
+    if (isTRUE(wildcard_ok)) return(armed("armed_wildcard"))
+    return(list(state = "armed_other", reason = "wildcard_refused",
+                can_arm = FALSE, can_disarm = FALSE, viewer = viewer,
+                heartbeat_n = hb_n))
+  }
+  # Someone else's token. Never silently steal it, and never offer to disarm a
+  # session this tab does not own.
+  list(state = "armed_other", reason = "armed_other", can_arm = FALSE,
+       can_disarm = FALSE, viewer = viewer, heartbeat_n = hb_n)
+}
+
+#' Arm or disarm THIS session from inside the app.
+#'
+#' Writes exactly the payload an agent would write (`protocol`, `token`,
+#' `armed`) into `arm.json`, and nothing else: `ready.json` is not touched, so
+#' arming can never move the handshake as a side effect.
+#'
+#' @param token This session's token. Never `"*"` — the wildcard is the
+#'   launcher's privilege, and an app that could write it would let any file
+#'   drop arm any session.
+#' @param armed TRUE to hand control to an agent, FALSE to take it back.
+#' @param interactive The production gate; overridable for tests only.
+#' @return list(wrote = logical, reason = character).
+ts_drive_write_arm <- function(token, armed, interactive = ts_drive_interactive()) {
+  refuse <- function(reason) list(wrote = FALSE, reason = reason)
+
+  if (!isTRUE(interactive)) return(refuse("non_interactive"))
+
+  ok_token <- length(token) == 1L && !is.na(token) &&
+    nzchar(as.character(token)) && !identical(as.character(token), "*")
+  if (!ok_token) return(refuse("bad_token"))
+  token <- as.character(token)
+
+  payload <- list(protocol = TS_DRIVE_PROTOCOL, token = token,
+                  armed = isTRUE(armed))
+  wrote <- tryCatch(ts_drive_write_json(payload, ts_drive_path("arm.json")),
+                    error = function(e) FALSE)
+  if (!isTRUE(wrote)) return(refuse("write_failed"))
+
+  list(wrote = TRUE, reason = if (isTRUE(armed)) "armed" else "disarmed")
+}
+
+
+# =============================================================================
 # scenario.json — agent -> app
 # =============================================================================
 

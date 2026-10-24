@@ -10768,6 +10768,74 @@
     {
       "fr": "Analyse différentielle en cours...",
       "en": "Differential analysis running..."
+    },
+    {
+      "fr": "Contrôle agent (MCP)",
+      "en": "Agent control (MCP)"
+    },
+    {
+      "fr": "Contrôle agent indisponible (session non interactive)",
+      "en": "Agent control unavailable (non-interactive session)"
+    },
+    {
+      "fr": "Un autre onglet détient le handshake agent",
+      "en": "Another tab holds the agent handshake"
+    },
+    {
+      "fr": "Handshake agent invalide",
+      "en": "Agent handshake invalid"
+    },
+    {
+      "fr": "Aucun handshake agent publié pour cette session",
+      "en": "No agent handshake published for this session"
+    },
+    {
+      "fr": "Aucun agent — arm.json illisible, vous gardez le contrôle",
+      "en": "No agent — arm.json unreadable, you keep control"
+    },
+    {
+      "fr": "Aucun agent — vous gardez le contrôle",
+      "en": "No agent — you keep control"
+    },
+    {
+      "fr": "AGENT EN CONTRÔLE (wildcard dev)",
+      "en": "AGENT IN CONTROL (dev wildcard)"
+    },
+    {
+      "fr": "AGENT EN CONTRÔLE — cette session est pilotée",
+      "en": "AGENT IN CONTROL — this session is being driven"
+    },
+    {
+      "fr": "Armement wildcard refusé (lanceur dev requis)",
+      "en": "Wildcard arm refused (dev launcher required)"
+    },
+    {
+      "fr": "Une autre session est armée",
+      "en": "Another session is armed"
+    },
+    {
+      "fr": "Donner le contrôle à un agent",
+      "en": "Give control to an agent"
+    },
+    {
+      "fr": "Reprendre le contrôle",
+      "en": "Take back control"
+    },
+    {
+      "fr": "Un agent externe (MCP) peut piloter cette session pour des tests ou du débogage. L'app applique arm.json au tick suivant (~800 ms).",
+      "en": "An external agent (MCP) can drive this session for testing or debugging. The app applies arm.json on the next tick (~800 ms)."
+    },
+    {
+      "fr": "Échec du contrôle agent : ",
+      "en": "Agent control failed: "
+    },
+    {
+      "fr": "Contrôle donné à l'agent — il peut piloter cette session.",
+      "en": "Control handed to the agent — it can drive this session."
+    },
+    {
+      "fr": "Contrôle repris — l'agent ne peut plus piloter cette session.",
+      "en": "Control taken back — the agent can no longer drive this session."
     }
   ]
 }
