@@ -19,7 +19,7 @@ R/plotting/theme.R
 R/plotting/export.R
 R/plotting/datatable.R
 R/plotting/complex_heatmap.R
-R/plotting/plot_dims.R
+tools/pkg_skeleton/R/plot_dims.R
 R/sc/sc_plotting.R
 R/spatial/spatial_plotting.R
 R/sc/sc_helpers.R

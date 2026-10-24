@@ -1,9 +1,11 @@
 # =============================================================================
 # helper-source.R — auto-sourced by testthat before any test-*.R file runs
 # =============================================================================
-# TranscriptoShiny has no package structure (no DESCRIPTION/NAMESPACE).
-# This walks UP from the current working directory until it finds "app.R"
-# to locate the project root.
+# TranscriptoShiny has no package structure AT THE REPO ROOT (the D2 package
+# skeleton deliberately lives under tools/pkg_skeleton/ — a root DESCRIPTION
+# would change project detection in renv/testthat/shinytest2, measured M3;
+# see load_project_pkg() at the bottom of this file). This walks UP from the
+# current working directory until it finds "app.R" to locate the project root.
 # =============================================================================
 
 .ts_find_project_root <- function(start = getwd(), marker = "app.R", max_up = 8) {
@@ -55,3 +57,25 @@ source_project_file <- function(relpath) {
 # test-bulk-network.R) perd l'accesseur et échoue pour une raison étrangère à
 # son sujet. Les deux lignes ci-dessus suivent déjà ce motif pour config/.
 .local_source_if_exists("R/core/error_state.R")
+
+# =============================================================================
+# D2 M4 pilot — package-based loading for EXTRACTED domain files
+# =============================================================================
+# Extracted files keep ONE physical home: tools/pkg_skeleton/R/. app.R still
+# source()s them into globalenv there (zero app behavior change); tests load
+# the SAME physical files through the package namespace with this helper.
+#
+# Measured 2026-10-25 (M4 pilot, BEFORE any test migration):
+#   - pkgload 1.5.3 is ALREADY in renv.lock and the project library (no new
+#     dependency, nothing new to lock);
+#   - pkgload 1.5.3 has NO `document` argument: load_all NEVER runs roxygen,
+#     so it cannot rewrite NAMESPACE/ nor create man/ in the tree;
+#   - load_all: 0.43 s; the namespace provides the symbols; attach
+#     (export_all default) exposes them on the search path; globalenv stays
+#     clean (exists(..., inherits = FALSE));
+#   - a subprocess started at the repo root (renv auto-activation via
+#     .Rprofile, same as the harness) loads the package fine.
+load_project_pkg <- function(quiet = TRUE) {
+  pkgload::load_all(file.path(ts_project_root(), "tools", "pkg_skeleton"),
+                    quiet = quiet)
+}

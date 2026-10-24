@@ -8,9 +8,15 @@
 # Placement mesuré : tools/pkg_skeleton/ (PAS à la racine — une DESCRIPTION à
 # la racine ferait traiter les 78 fichiers de R/ comme du code de package par
 # R CMD check, ce qui n'est pas « quasi vide » ; de plus elle changerait la
-# détection de type de projet partout : renv, testthat, shinytest2). M4+
-# (extraction du premier domaine) déplacera ce squelette à la racine — c'est
-# LUI qui devra re-basereler ce garde, délibérément.
+# détection de type de projet partout : renv, testthat, shinytest2).
+# ⚠ M4-PILOTE (2026-10-25) — décision MESURÉE : le squelette RESTE sous
+# tools/ (le déplacement à la racine reste différé à une décision opérateur
+# explicite, avec son propre mesurage complet). Le squelette héberge
+# désormais du CODE : le premier fichier extrait (R/plotting/plot_dims.R ->
+# R/plot_dims.R du paquet). Ce garde est re-basé du même coup : le R CMD
+# check porte désormais sur le squelette COMPLET (DESCRIPTION + NAMESPACE +
+# R/), pas sur le seul couple quasi vide de M3 — sinon il vérifierait un
+# paquet vide pendant que l'arbre en contient un vrai.
 #
 # ⚠ artefact d'environnement mesuré : Git Bash exporte LC_CTYPE=C.UTF-8
 # (inconnu de R sous Windows) ; les processus ENFANTS de R CMD check émettent
@@ -42,7 +48,7 @@ test_that("M3 : NAMESPACE est un squelette roxygen2", {
               info = "en-tête roxygen2 manquant dans NAMESPACE")
 })
 
-test_that("M3 : R CMD check passe sur le squelette quasi vide (exit 0, zéro ERROR)", {
+test_that("M3/M4 : R CMD check passe sur le squelette COMPLET (exit 0, zéro ERROR)", {
   skip_if(!file.exists(file.path(.pks_skel, "DESCRIPTION")),
           "squelette absent — couvert par le bloc précédent")
   rex <- file.path(R.home("bin"), if (.Platform$OS.type == "windows") "R.exe" else "R")
@@ -55,6 +61,13 @@ test_that("M3 : R CMD check passe sur le squelette quasi vide (exit 0, zéro ERR
   dir.create(pkg, recursive = TRUE)
   file.copy(file.path(.pks_skel, c("DESCRIPTION", "NAMESPACE")), pkg,
             overwrite = TRUE)
+  # M4-pilote : copier AUSSI le code du paquet s'il existe — depuis M4, le
+  # squelette héberge du vrai code applicatif (mesuré 2026-10-25 : exit 0,
+  # zéro ERROR, avec Imports: shiny dans DESCRIPTION le WARNING « dependencies
+  # in R code » disparaît ; reste le NOTE meta DESCRIPTION standard roxygen).
+  if (dir.exists(file.path(.pks_skel, "R"))) {
+    file.copy(file.path(.pks_skel, "R"), pkg, recursive = TRUE)
+  }
   out <- tempfile("m3-rcmdcheck-")
   old_lc <- Sys.getenv(c("LC_CTYPE", "LANG"))
   old_wd <- getwd()

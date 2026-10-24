@@ -224,7 +224,12 @@ test_that("the two 2026-09-16 P0 fixes stay pinned (via the manifest)", {
   # MANIFESTE (liste ordonnee machine-verifiee, cf. test-sources-manifest.R)
   # et contre l'extraction directe d'app.R -- les deux cotes, parce que
   # l'incident etait l'ABSENCE de sourcing, pas l'ordre.
-  p0 <- c("R/bulk/bulk_gene_sets.R", "R/plotting/plot_dims.R")
+  # D2 M4-pilote (2026-10-25) : plot_dims.R a DEMENAGE dans l'arbre du paquet
+  # (tools/pkg_skeleton/R/) — app.R le source() TOUJOURS, au meme endroit de
+  # l'ordre du manifeste. L'epingle suit le chemin : la propriete pie ne
+  # change pas (ce fichier doit rester source par app.R, P0 2026-09-16).
+  # Cf. test-plotting-pkg-pilot.R (frontiere du pilote) et le rapport M4.
+  p0 <- c("R/bulk/bulk_gene_sets.R", "tools/pkg_skeleton/R/plot_dims.R")
   manifest <- .app_manifest()
   for (f in p0) {
     expect_true(

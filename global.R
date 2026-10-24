@@ -40,7 +40,8 @@ options(shiny.maxRequestSize = 5000 * 1024^2)
 
 # --- 1bis. RENDU DES PLOTS : backend PNG EPINGLE + dimension MINIMALE -------
 # PLOT-S6. Deux defauts distincts, MESURES le 2026-09-15 ; le detail des mesures
-# et la raison d'etre des planchers sont dans R/plotting/plot_dims.R.
+# et la raison d'etre des planchers sont dans tools/pkg_skeleton/R/plot_dims.R
+# (D2 M4-pilote : le fichier vit desormais dans l'arbre du paquet).
 #
 # (1) BACKEND PNG NON DECLARE.
 #     `shiny:::startPNG()` choisit son device par `is_installed("ragg")` ->
@@ -63,8 +64,9 @@ options(shiny.useragg  = requireNamespace("ragg", quietly = TRUE))
 #     pilote par le client — passe par des dimensions BORNEES. Les 92 sites de
 #     modules/ sont couverts sans etre touches : tous appellent `renderPlot()`
 #     sans qualification, aucun n'ecrit `shiny::renderPlot()`.
-#     `ts_render_plot_args()` vit dans R/plotting/plot_dims.R, source plus loin
-#     par app.R : resolu a l'APPEL, pas au chargement de ce fichier.
+#     `ts_render_plot_args()` vit dans tools/pkg_skeleton/R/plot_dims.R
+#     (D2 M4-pilote), source plus loin par app.R : resolu a l'APPEL, pas au
+#     chargement de ce fichier.
 renderPlot <- function(expr, width = "auto", height = "auto", res = 72, ...,
                        alt = NA, env = parent.frame(), quoted = FALSE,
                        execOnResize = FALSE, outputArgs = list()) {

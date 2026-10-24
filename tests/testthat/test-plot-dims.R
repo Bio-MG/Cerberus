@@ -17,7 +17,15 @@
 #      sa signature reste celle de `shiny::renderPlot`, et un appel NON qualifie
 #      (comme les 92 sites de modules/) passe bien par elle.
 # =============================================================================
-source_project_file("R/plotting/plot_dims.R")
+# D2 M4-pilote (2026-10-25) : chargement PAQUET (pkgload::load_all via le
+# helper load_project_pkg(), namespace + attach export_all) au lieu de
+# source_project_file — le fichier vit desormais dans tools/pkg_skeleton/R/.
+# L'anti-double-definition (le paquet fournit SANS definir dans globalenv)
+# est epingle par test-plotting-pkg-pilot.R. Le 5e bloc ci-dessous evalue
+# l'override renderPlot de global.R : son appel ts_render_plot_args() passe
+# par le search path (paquet attache) — dans l'app vivante il passe par le
+# globalenv d'app.R, qui source() le fichier au meme endroit de l'ordre.
+load_project_pkg()
 
 test_that("planchers : constantes exposees et strictement positives", {
   d <- ts_plot_min_dims()

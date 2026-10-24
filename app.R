@@ -87,7 +87,11 @@ source("R/plotting/complex_heatmap.R")  # PLOT-S4 : coeur ComplexHeatmap unifie 
 # directement) mais n'etait PAS source ici => « impossible de trouver la
 # fonction "ts_render_plot_args" » des le premier plot. Garde :
 # tests/testthat/test-app-sourcing.R.
-source("R/plotting/plot_dims.R")
+# D2 M4-pilote (2026-10-25) : le fichier demenage dans l'arbre du paquet
+# (tools/pkg_skeleton/R/) — app.R continue de le source() ICI, au MEME
+# endroit de l'ordre (zero changement de comportement) ; seuls ses TESTS le
+# chargent desormais via le paquet (pkgload, cf. test-plotting-pkg-pilot.R).
+source("tools/pkg_skeleton/R/plot_dims.R")
 source("R/sc/sc_plotting.R")
 source("R/spatial/spatial_plotting.R")
 
