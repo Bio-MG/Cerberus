@@ -1,0 +1,14 @@
+Package: TranscriptoShiny
+Type: Package
+Title: TranscriptoShiny Analysis Application (Skeleton)
+Version: 0.0.0.9000
+Author: marc paul [aut, cre]
+Maintainer: marc paul <mastermarcg@gmail.com>
+Description: Staging package skeleton for the D2 source-list retirement
+    (milestone M3): R CMD check must pass on this nearly-empty package
+    before any application code moves in (M4+). No dependencies yet;
+    M4 will move this skeleton to the repository root when the first
+    domain (R/plotting/) is extracted.
+License: GPL-3
+Encoding: UTF-8
+Config/roxygen2/version: 8.1.0
