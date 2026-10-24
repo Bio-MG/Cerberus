@@ -36,14 +36,22 @@ if (!requireNamespace("shinyjs", quietly = TRUE)) {
   )
 }
 
-# 1. GLOBAL OPTIONS & PACKAGES
+# SOURCING (plan D2, jalon M2, 2026-10-24) : les 155 source() ci-dessous sont
+# organisés en 12 BLOCS DE DOMAINE INLINE. L'ordre inter-bloc ET intra-bloc est
+# FIGÉ par R/.sources_manifest.txt (généré par tools/sources_manifest.R ;
+# gardes : test-app-sourcing.R + test-sources-manifest.R). Blocs INLINE par
+# choix mesuré : des fichiers de blocs sous R/ seraient flottés « présents sur
+# disque mais jamais sourcés » par le garde d'exhaustivité, et parsés comme
+# code de package par R CMD check dès M3 (plan D2 §M2).
+
+# ── Bloc 01 : global (options & packages) ────────────────────────────────────
 source("global.R")
 
-# 2. CONFIGURATION (Defensive guards)
+# ── Bloc 02 : config (gardes défensives) ─────────────────────────────────────
 source("config/defaults.R")
 source("config/thresholds.R")
 
-# 3. CORE INFRASTRUCTURE (Domain-agnostic)
+# ── Bloc 03 : R/core (infrastructure transverse) ─────────────────────────────
 # Contrat d'etat transversal source EN PREMIER (TREE CERBERUS step 3 :
 # config/* -> R/core/state.R -> autres R/core/* -> domaines -> modules).
 source("R/core/state.R")        # contrat d'etat + fabriques d'etat partagees
@@ -67,8 +75,7 @@ source("R/core/drive_watcher.R")    # poller fichier -> session (injecte)
 # racine renv). JAMAIS getwd() au moment du tick : RStudio peut deriver.
 ts_drive_boot(getwd())
 
-# 4. DOMAIN PURE LOGIC (No Shiny reactivity)
-# 4a. Plotting & Palettes
+# ── Bloc 04 : R/plotting + plotting SC/spatial (logique pure) ────────────────
 source("R/plotting/palettes.R")
 source("R/plotting/theme.R")   # PLOT-S1 : resolveur de theme partage (ts_theme)
 source("R/plotting/export.R")  # PLOT-S2 : helper d'export unifie (ts_export_plot)
@@ -84,7 +91,7 @@ source("R/plotting/plot_dims.R")
 source("R/sc/sc_plotting.R")
 source("R/spatial/spatial_plotting.R")
 
-# 4b. Domain Specific Logic
+# ── Bloc 05 : R/sc (logique pure) ────────────────────────────────────────────
 source("R/sc/sc_helpers.R")
 source("R/sc/sc_bpcells.R")
 source("R/sc/sc_trajectory.R")
@@ -109,6 +116,7 @@ source("R/sc/sc_export.R")
 source("R/sc/sc_metadata.R")  # Design expérimental (condition/réplicat) — feature 6×10X, audit 2026-09-27 (PUR : aucun symbole Shiny)
 source("R/sc/sc_batch_metrics.R")  # Métrique de mélange des batchs (roadmap 4.3) — PUR : aucun symbole Shiny
 
+# ── Bloc 06 : R/bulk + R/sc/sc_multi (logique pure) ──────────────────────────
 source("R/bulk/bulk_helpers.R")
 source("R/bulk/bulk_provenance.R")  # Bulk V2 M1 : manifeste bulk_obj$provenance (pur, testé)
 source("R/bulk/bulk_batch_qc.R")    # Bulk V2 M1 : diagnostics batch (pur, contrat gelé)
@@ -135,6 +143,7 @@ source("R/sc/sc_multi.R")             # MD-4 : conteneur sc_datasets & double je
 source("R/bulk/bulk_report_engine.R")
 source("R/bulk/bulk_import_engine.R")
 
+# ── Bloc 07 : R/spatial (logique pure) ───────────────────────────────────────
 source("R/spatial/spatial_async.R")
 source("R/spatial/spatial_io.R")
 source("R/spatial/spatial_multi.R")
@@ -146,23 +155,23 @@ source("R/spatial/spatial_deconv_tasks.R")
 source("R/spatial/spatial_export.R")
 source("R/spatial/spatial_report.R")
 
-# 4c. Consolidated report domain (4F / Stage 17) — COMPILATEUR d'etat + de
-#     provenance ; APRES tous les domaines (reutilise les gardes assert_*,
-#     les empreintes v2, sc_r_script_text et les vues croisées pures).
+# ── Bloc 08 : R/reports (compilateur consolidé) ──────────────────────────────
+# 4F / Stage 17 — COMPILATEUR d'etat + de provenance ; APRES tous les domaines
+# (reutilise les gardes assert_*, les empreintes v2, sc_r_script_text et les
+# vues croisées pures).
 source("R/reports/report_collector.R")
 source("R/reports/report_validator.R")
 source("R/reports/report_render.R")
 source("R/reports/report_bundle.R")
 
-# 5. SHINY MODULES (UI + Reactive Glue)
-# 5a. Import
+# ── Bloc 09 : modules/import (Shiny : UI + reactive glue) ────────────────────
 source("modules/import/mod_rdata_picker.R")  # composant mutualise .rda/.RData
 source("modules/import/mod_import_sc.R")
 source("modules/import/mod_import_bulk.R")
 source("modules/import/mod_import_spatial.R")
 source("modules/import/mod_geo.R")
 
-# 5b. Single-Cell
+# ── Bloc 10 : modules/sc ─────────────────────────────────────────────────────
 source("modules/sc/mod_sc_pipeline.R")
 source("modules/sc/mod_sc_metadata.R")  # 0.5 Métadonnées — design condition/réplicat (feature 6×10X, audit 2026-09-27)
 source("modules/sc/mod_sc_annotation.R")
@@ -190,11 +199,24 @@ source("modules/sc/mod_sc_datasets.R")  # MD-4 : gestion du conteneur sc_dataset
 source("modules/sc/mod_sc_mapping.R")
 source("modules/sc/mod_sc.R")
 
-# 5c. Bulk
+# ── Bloc 11 : modules/bulk + modules/bulk_de (déplié) ────────────────────────
 source("modules/bulk/mod_bulk_mapping.R")
 source("modules/bulk/mod_bulk_filter_export.R")  # Slice 2.3 : route d'export drive (matrice VST)
 source("modules/bulk/mod_bulk_filter.R")
-for (f in list.files("modules/bulk_de", pattern = "\\.R$", full.names = TRUE)) source(f)
+# M2 (plan D2, 2026-10-24) : l'ancienne boucle de sourcing du dossier
+# modules/bulk_de est DÉPLIÉE ci-dessous en 10 source() explicites. L'ordre
+# (LC_COLLATE=C) est celui du manifeste R/.sources_manifest.txt — le tri
+# alphabétique implicite de la boucle disparaît comme variable cachée.
+source("modules/bulk_de/mod_bulk_de.R")
+source("modules/bulk_de/mod_bulk_de_engine.R")
+source("modules/bulk_de/mod_bulk_de_export.R")
+source("modules/bulk_de/mod_bulk_de_multimethod.R")
+source("modules/bulk_de/mod_bulk_de_pairwise.R")
+source("modules/bulk_de/mod_bulk_de_run.R")
+source("modules/bulk_de/mod_bulk_de_summary.R")
+source("modules/bulk_de/mod_bulk_de_ui.R")
+source("modules/bulk_de/mod_bulk_de_venn.R")
+source("modules/bulk_de/mod_bulk_de_viz.R")
 source("modules/bulk/mod_bulk_pathways_export.R")  # S2c : route d'export drive (table d'enrichissement)
 source("modules/bulk/mod_bulk_pathways.R")
 source("modules/bulk/mod_bulk_signatures_export.R")  # Slice 2.3 : route d'export drive (scores de signatures)
@@ -213,7 +235,7 @@ source("modules/bulk/mod_bulk_network.R")     # NEW-3 : réseau PCSF / interacto
 source("modules/bulk/mod_bulk_report.R")
 source("modules/bulk/mod_bulk.R")
 
-# 5d. Spatial
+# ── Bloc 12 : modules/spatial ────────────────────────────────────────────────
 source("modules/spatial/mod_spatial_qc.R")
 source("modules/spatial/mod_spatial_cluster.R")
 source("modules/spatial/mod_spatial_viz.R")
