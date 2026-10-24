@@ -140,3 +140,51 @@ test_that("export tracé + étiquette par ligne", {
   expect_true(all(ex$factor == 0.3))
   expect_true(all(ex$label == "IN SILICO PERTURBATION"))
 })
+
+# ── M3 (plan D2) : assainissement pré-package — identifiant accentué ─────────
+# Mesuré le 2026-10-24 : ce fichier est le SEUL des 154 fichiers .R de R/ +
+# modules/ qui ne parse PAS sous LC_CTYPE=C (« unexpected invalid token » à
+# l'identifiant nu `Perturbé`, ligne 436 — CONVENTIONS.md §13.5). R CMD check
+# (premier contact D2, M3) parse les sources : l'identifiant doit être quoté.
+# Le garde = le comportement : parse() du fichier dans un SOUS-PROCESSUS
+# LC_CTYPE=C (ne pas flipper la locale du processus de la suite — ça
+# empoisonnerait les fichiers suivants), + aucun token SYMBOLE non-ASCII.
+M3_TARGET <- normalizePath(
+  file.path(ts_project_root(), "R", "sc", "sc_communication_perturbation.R"),
+  winslash = "/", mustWork = TRUE
+)
+
+test_that("M3 : le fichier parse sous LC_CTYPE=C (identifiant accentué quoté)", {
+  rscript <- file.path(R.home("bin"),
+                       if (.Platform$OS.type == "windows") "Rscript.exe" else "Rscript")
+  skip_if(!file.exists(rscript), "Rscript introuvable")
+  child <- tempfile(fileext = ".R")
+  writeLines(
+    c("Sys.setlocale('LC_CTYPE', 'C')",
+      sprintf(paste0("tryCatch({ parse('%s'); cat('PARSE_OK') }, ",
+                     "error = function(e) cat('PARSE_FAIL:', conditionMessage(e)))"),
+              M3_TARGET)),
+    child, useBytes = TRUE
+  )
+  out <- tempfile("m3-cparse-")
+  st <- suppressWarnings(system2(rscript, c("--vanilla", shQuote(child)),
+                                 stdout = out, stderr = out, timeout = 60))
+  # ⚠ la sortie du enfant sous LC_CTYPE=C contient des octets UTF-8 INVALIDES
+  # (le message d'erreur de parse affiche l'identifiant mangé) : lire en octets
+  # et assainir en ASCII AVANT tout affichage — sinon gsub() du reporter échoue
+  # avec « input string 1 is invalid » (CONVENTIONS.md §13.5).
+  got_raw <- if (file.exists(out)) {
+    readChar(out, file.info(out)$size, useBytes = TRUE)
+  } else ""
+  got <- gsub("[^ -~\r\n]", "?", got_raw, useBytes = TRUE)
+  expect_identical(as.integer(st), 0L, info = got)
+  expect_match(got, "PARSE_OK", info = got)  # RED avant M3 : PARSE_FAIL unexpected invalid token
+})
+
+test_that("M3 : plus aucun token SYMBOLE non-ASCII dans le fichier", {
+  pd <- parse(M3_TARGET, keep.source = TRUE)
+  toks <- utils::getParseData(pd)
+  syms <- toks[toks$terminal & startsWith(toks$token, "SYMBOL"), , drop = FALSE]
+  non_ascii <- unique(syms$text[grepl("[^ -~]", syms$text, useBytes = TRUE)])
+  expect_length(non_ascii, 0L)  # RED avant M3 : le symbole nu `Perturbé` (l. 436)
+})

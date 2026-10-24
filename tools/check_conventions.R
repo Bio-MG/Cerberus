@@ -56,7 +56,7 @@
 #' reproductibles embarqués dans `R/bulk/bulk_report_engine.R` et
 #' `R/sc/sc_export.R` — et une regex appliquée ligne par ligne ne peut pas la
 #' voir. Conséquences mesurées sur les 16 signalements C6 : **5 étaient FAUX**,
-#' dont `R/sc/sc_export.R:47`, exactement le cas que le commentaire précédent
+#' dont `R/sc/sc_export.R:47` (devenue :46 apres D2-M3, 2026-10-24), exactement le cas que le commentaire précédent
 #' annonçait couvrir (« suffisant pour ne pas signaler un library(Seurat) qui
 #' n'existe que DANS le texte d'un script reproductible généré »). En prime, les
 #' `{`/`}` de ce texte embarqué faussaient le compteur de profondeur de

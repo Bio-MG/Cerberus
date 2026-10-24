@@ -18,7 +18,11 @@
 #     file at all, replaced with an actionable French message pointing at
 #     disk space / TMPDIR instead of the raw HDF5 error.
 
-`%||%` <- function(a, b) if (is.null(a)) b else a
+# `%||%` — re-import du socle R/core/io_helpers.R (unification D2-M3) : cette
+# définition doit rester IDENTIQUE au socle — sémantique canonical (NULL ou
+# longueur 0 -> repli ; NA et "" passent au travers). Garde :
+# test-pipe-or-null-unification.R.
+`%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
 
 # ── Helper: CellRanger v2 / single-column compat ────────────────────────────────────────────
 # Seurat::Read10X prefers genes.tsv whenever it exists (pre_ver_3 <- file.exists(genes.tsv))

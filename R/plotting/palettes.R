@@ -5,7 +5,11 @@
 # Bulk (helpers_bulk.R, mod_bulk_pathways.R) and Spatial (mod_spatial_*).
 # Sourced LAST in app.R -> always the canonical copy.
 
-`%||%` <- function(a, b) if (is.null(a)) b else a
+# `%||%` — re-import du socle R/core/io_helpers.R (unification D2-M3) : cette
+# définition doit rester IDENTIQUE au socle — sémantique canonical (NULL ou
+# longueur 0 -> repli ; NA et "" passent au travers). Garde :
+# test-pipe-or-null-unification.R.
+`%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
 
 # Okabe-Ito colorblind-safe palette
 .sc_okabe <- c("#E69F00","#56B4E9","#009E73","#F0E442",

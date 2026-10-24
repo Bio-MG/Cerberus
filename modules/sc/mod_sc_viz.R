@@ -24,8 +24,11 @@
 #       on screen AND in the exported HTML/PDF.
 # =============================================================================
 
-`%||%` <- function(a, b) if (is.null(a) || (length(a) == 1L && is.na(a)) ||
-                              identical(a, "")) b else a
+# `%||%` — re-import du socle R/core/io_helpers.R (unification D2-M3) : cette
+# définition doit rester IDENTIQUE au socle — sémantique canonical (NULL ou
+# longueur 0 -> repli ; NA et "" passent au travers). Garde :
+# test-pipe-or-null-unification.R.
+`%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
 
 # ── Colour palette helpers ────────────────────────────────────────────────────
 # REMOVED (palette generalisation) : sc_discrete_scale / sc_continuous_scale /

@@ -7,10 +7,11 @@
 
 # ── Helpers mode per-sample ───────────────────────────────────────────────────
 
-`%||%` <- function(x, y) {
-  if (is.null(x) || length(x) == 0 || identical(x, "") ||
-      (length(x) == 1 && is.na(x))) y else x
-}
+# `%||%` — re-import du socle R/core/io_helpers.R (unification D2-M3) : cette
+# définition doit rester IDENTIQUE au socle — sémantique canonical (NULL ou
+# longueur 0 -> repli ; NA et "" passent au travers). Garde :
+# test-pipe-or-null-unification.R.
+`%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
 
 #' Guess delimiter from filename (.csv → comma, others → tab).
 #' @param filename Uploaded filename.

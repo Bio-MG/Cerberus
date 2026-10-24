@@ -433,7 +433,7 @@ plot_communication_perturbation_nodes <- function(context) {
   ggplot2::ggplot(long, ggplot2::aes(x = total, y = node, colour = state)) +
     ggplot2::geom_line(ggplot2::aes(group = node), colour = "grey75") +
     ggplot2::geom_point(size = 3, alpha = 0.9) +
-    ggplot2::scale_colour_manual(values = c(Baseline = "grey55", Perturbé = "#D6604D"),
+    ggplot2::scale_colour_manual(values = c(Baseline = "grey55", "Perturbé" = "#D6604D"),
                                  name = NULL) +
     ggplot2::theme_classic() +
     ggplot2::labs(

@@ -13,7 +13,6 @@
 # .sc_r_script_text — reproducible SC analysis script (introspects Seurat obj)
 # =============================================================================
 sc_r_script_text <- function(obj, shared_rv = NULL) {
-  `%||%` <- function(a, b) if (is.null(a)) b else a
   meta         <- obj@meta.data
   n_cells      <- ncol(obj)
   n_genes      <- nrow(obj)

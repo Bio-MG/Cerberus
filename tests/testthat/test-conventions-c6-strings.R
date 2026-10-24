@@ -152,14 +152,14 @@ test_that("C6 : le cas REEL cite par le commentaire de la garde est corrige", {
   # Le commentaire de .strip_strings_and_comments() promet que sc_export.R
   # n'est pas signale. On verifie la promesse sur le fichier du depot.
   src <- readLines(.c6_repo("R/sc/sc_export.R"), warn = FALSE, encoding = "UTF-8")
-  # Pre-requis : la ligne 47 doit bien etre DANS un litteral (sinon le test
+  # Pre-requis : la ligne 46 doit bien etre DANS un litteral (sinon le test
   # ne prouve rien et il faut le reecrire, pas le laisser passer).
-  upto <- paste(src[1:47], collapse = "\n")
+  upto <- paste(src[1:46], collapse = "\n")
   n_quotes <- nchar(gsub("[^']", "", gsub("\\\\.", "", upto)))
   expect_identical(n_quotes %% 2L, 1L,
-                   info = "sc_export.R:47 n'est plus dans une chaine : test a reecrire")
+                   info = "sc_export.R:46 n'est plus dans une chaine : test a reecrire")
 
-  expect_false(47L %in% .c6_flagged_lines(.c6_repo("R/sc/sc_export.R")))
+  expect_false(46L %in% .c6_flagged_lines(.c6_repo("R/sc/sc_export.R")))
 })
 
 test_that("C6 : la profondeur d'accolades est REELLEMENT mesuree", {
