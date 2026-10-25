@@ -14,8 +14,14 @@ source("R/core/validation.R")
 source("tools/pkg_skeleton/R/provenance.R"); source("R/core/jobs.R"); source("R/core/caching.R")
 source("R/sc/sc_velocity.R"); source("R/sc/sc_abundance_design.R")
 source("R/sc/sc_abundance_sccoda.R")
-source("R/reports/report_collector.R"); source("R/reports/report_validator.R")
-source("R/reports/report_render.R"); source("R/reports/report_bundle.R")
+# D2 M5 lot 2 : le domaine R/reports ENTIER vit dans tools/pkg_skeleton/R/
+# (app.R le source() au nouveau chemin ; ce script de mesure suit le chemin).
+# error_log.R ajoute AUSSI (trou d'isolation preexistant, comble au passage —
+# meme motif que test-release-hardening.R ce lot) : les handlers tryCatch du
+# collecteur appellent ts_log_swallow(), absent de la liste ci-dessus.
+source("tools/pkg_skeleton/R/error_log.R")
+source("tools/pkg_skeleton/R/report_collector.R"); source("tools/pkg_skeleton/R/report_validator.R")
+source("tools/pkg_skeleton/R/report_render.R"); source("tools/pkg_skeleton/R/report_bundle.R")
 
 .time <- function(label, expr, reps = 5L) {
   timings <- replicate(reps, system.time(expr)[["elapsed"]], simplify = TRUE)

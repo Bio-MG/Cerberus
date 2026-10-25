@@ -11,7 +11,7 @@
 # des drapeaux `has_*` introspectes sur l'objet. Elle est appelee par DEUX sites
 # de production :
 #   - `modules/sc/mod_sc.R:726`  (downloadHandler "dl_sc_r_script")
-#   - `R/reports/report_collector.R:516`  (sous `tryCatch`)
+#   - `tools/pkg_skeleton/R/report_collector.R` (sc_r_script_text, sous `tryCatch` — ex-R/reports/, D2 M5 lot 2)
 #
 # ---------------------------------------------------------------------------
 # POURQUOI CE FICHIER EXISTE MALGRE UNE EXCLUSION DOCUMENTEE

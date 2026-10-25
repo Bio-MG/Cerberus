@@ -60,7 +60,8 @@ source("config/thresholds.R")
 # d'ordre (zero changement de comportement ; le manifeste suit les chemins).
 # Contrairement au domaine plotting (M4), les TESTS gardent ici
 # source_project_file() au NOUVEAU chemin : AUCUNE bascule de chargeur dans ce
-# lot (cartographie docs/audits/d2_reports_cartography.md §1 ; lot 2 = R/reports).
+# lot (cartographie docs/audits/d2_reports_cartography.md §1 ; lot 2 = le
+# domaine R/reports ENTIER, livré au bloc 08 ci-dessous).
 source("tools/pkg_skeleton/R/state.R")        # contrat d'etat + fabriques d'etat partagees
 source("tools/pkg_skeleton/R/io_helpers.R")
 source("R/core/rdata_io.R")     # import .rda/.RData "Inspect & Select" (contrat RDATA_IMPORT_CONTRACT)
@@ -170,14 +171,16 @@ source("R/spatial/spatial_deconv_tasks.R")
 source("R/spatial/spatial_export.R")
 source("R/spatial/spatial_report.R")
 
-# ── Bloc 08 : R/reports (compilateur consolidé) ──────────────────────────────
+# ── Bloc 08 : R/reports → paquet (compilateur consolidé) ─────────────────────
 # 4F / Stage 17 — COMPILATEUR d'etat + de provenance ; APRES tous les domaines
 # (reutilise les gardes assert_*, les empreintes v2, sc_r_script_text et les
-# vues croisées pures).
-source("R/reports/report_collector.R")
-source("R/reports/report_validator.R")
-source("R/reports/report_render.R")
-source("R/reports/report_bundle.R")
+# vues croisées pures). D2 M5 lot 2 : les 4 fichiers vivent dans l'arbre du
+# paquet (tools/pkg_skeleton/R/) — app.R le source() TOUJOURS, aux MEMES
+# positions d'ordre (manifeste 77-80 : l'entree suit le chemin).
+source("tools/pkg_skeleton/R/report_collector.R")
+source("tools/pkg_skeleton/R/report_validator.R")
+source("tools/pkg_skeleton/R/report_render.R")
+source("tools/pkg_skeleton/R/report_bundle.R")
 
 # ── Bloc 09 : modules/import (Shiny : UI + reactive glue) ────────────────────
 source("modules/import/mod_rdata_picker.R")  # composant mutualise .rda/.RData

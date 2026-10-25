@@ -99,18 +99,34 @@ test_that("C9 : l'alias de domaine ne DEBORDE pas (temoin de traversee)", {
   # et n'y est PLUS — le lot §2dd lui a ecrit `test-sc-export.R` (C9 21 -> 20).
   # ⚠️ Le retirer n'affaiblit PAS le temoin : ce qui est eprouve est que l'alias
   # `plotting` ne dispense PAS de test les fichiers d'un AUTRE domaine. Trois
-  # domaines restent representes (spatial, core, reports) — et `R/sc/` garde
+  # domaines restent representes (spatial, core, bulk) — et `R/sc/` garde
   # 2 autres fichiers signales (`sc_state.R`, `sc_multi.R`), donc le domaine
   # d'ou vient le fichier retire n'est pas orphelin de temoin.
+  # ⚠️ AMENDE le 2026-10-25 (D2 M5 LOT 2) : `R/reports/report_bundle.R` quitte
+  # la liste (le domaine ENTIER demenage dans tools/pkg_skeleton/R/ et sort de
+  # la population C9) — successeur : `R/bulk/bulk_report_engine.R`, 3e domaine
+  # represente. Reaction documentee (le patron §2df) : solde dans les DEUX
+  # sens pour le sortant + presence du fichier au nouveau domicile.
   files <- c("R/spatial/spatial_export.R",
              "R/core/rdata_io.R",
-             "R/reports/report_bundle.R")
+             "R/bulk/bulk_report_engine.R")
   expect_length(.c9_flagged(.c9_abs(files)), 3L)
   # Et le solde explicite : `sc_export.R` n'est PLUS signale, mais il l'etait —
   # on l'assere pour qu'une regression (la garde qui cesse de voir un fichier
   # sans test) ne puisse pas se cacher derriere ce retrait.
   expect_length(.c9_flagged(.c9_abs("R/sc/sc_export.R")), 0L)
   expect_length(.c9_flagged(.c9_abs("R/sc/sc_state.R")), 1L)
+  # M5 lot 2 : le temoin reports sorti est bien sorti (le dossier R/reports
+  # ne peut plus rien cacher) et les 4 fichiers vivent bien dans le paquet.
+  expect_false(dir.exists(file.path(ts_project_root(), "R", "reports")) &&
+                 length(list.files(file.path(ts_project_root(), "R", "reports"),
+                                   pattern = "[.]R$")) > 0L)
+  pkg <- file.path(ts_project_root(), "tools", "pkg_skeleton", "R")
+  for (f in c("report_collector.R", "report_validator.R",
+              "report_render.R", "report_bundle.R")) {
+    expect_true(file.exists(file.path(pkg, f)),
+                info = paste(f, "absent du paquet apres extraction M5 lot 2"))
+  }
 })
 
 test_that("C9 : dans R/plotting/, SEUL palettes.R reste signale (invariant)", {
@@ -125,15 +141,17 @@ test_that("C9 : dans R/plotting/, SEUL palettes.R reste signale (invariant)", {
                  length(list.files("R/plotting", pattern = "[.]R$")) > 0L)
 })
 
-test_that("C9 : le plafond de dette est 19 (mesure du 45e increment, §2df)", {
+test_that("C9 : le plafond de dette est 14 (mesure du lot D2 M5 lot 2)", {
   # Plafond, pas egalite : le compte doit pouvoir BAISSER quand un test est
   # ecrit, mais ne doit jamais REMONTER (une regression de l'alias le ferait).
   # ⚠️ Le plafond SUIT la derniere mesure : il valait 22 (§2cy), puis 21 (§2db),
-  # 20 (§2dd), et vaut 19 depuis §2df (test eponyme de
-  # `R/spatial/spatial_report.R`). Le laisser a sa valeur ancienne autoriserait
-  # un retour en arriere SILENCIEUX d'un fichier.
+  # 20 (§2dd), 19 (§2df). Mesure M5 lot 1 : population 18, plafond laisse a 19
+  # (composition inchangee ce lot-la). D2 M5 LOT 2 (2026-10-25) : les 4
+  # fichiers de R/reports demenagent dans tools/pkg_skeleton/R/ et quittent la
+  # population (18 - 4 = 14, mesure exacte) — le plafond suit : 19 -> 14. Le
+  # laisser a 19 autoriserait un retour en arriere SILENCIEUX de 5 fichiers.
   flagged <- .c9_flagged(.c9_population())
-  expect_true(length(flagged) <= 19L)
+  expect_true(length(flagged) <= 14L)
   # Et le contrat dans l'autre sens, pour que le plafond ne devienne pas
   # infalsifiable si la garde cesse de signaler quoi que ce soit : la population
   # C9 n'est pas vide (temoin de NON-VACUITE).

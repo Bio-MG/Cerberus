@@ -22,10 +22,26 @@ source_project_file("R/sc/sc_abundance_milo.R")
 source_project_file("R/sc/sc_abundance_sccoda.R")
 source_project_file("R/core/jobs.R")      # C7 : wrapper sync/async
 source_project_file("R/core/caching.R")   # C12 : reset du cache
-source_project_file("R/reports/report_collector.R")
-source_project_file("R/reports/report_validator.R")
-source_project_file("R/reports/report_render.R")
-source_project_file("R/reports/report_bundle.R")
+# M5 lot 2 : les 4 fichiers du domaine rapport vivent dans
+# tools/pkg_skeleton/R/ — ce fichier les source TOUJOURS à l'ancienne mode
+# (globalenv), au NOUVEAU chemin. DÉCISION MESURÉE : PAS de bascule
+# load_project_pkg() ici — C10/C13 exigent de vrais verdicts "stale"
+# (velocity_result_is_stale, milo_result_is_stale), or un namespace ne
+# résout PAS via globalenv (leçon M4) : appelé depuis le paquet, le
+# collecteur avalerait l'erreur de résolution dans ses tryCatch et
+# dériverait stale -> unknown / valid -> unknown. Les 9 fournisseurs R/sc
+# doivent rejoindre le paquet AVANT cette bascule (M5 lot 3+). Le double
+# chemin de chargement est l'état conçu (cf. test-plotting-pkg-pilot.R).
+# TROU D'ISOLATION préexistant comblé au passage (invisible en suite
+# complète par accumulation, rouge en run FILTRÉ — le même motif que le
+# lot 1) : error_log.R (ts_log_swallow, appelé par les handlers tryCatch
+# du collecteur) manquait à la liste des fournisseurs — test-sc-report-
+# contract.R le sourceait déjà depuis M-1.
+source_project_file("tools/pkg_skeleton/R/error_log.R")
+source_project_file("tools/pkg_skeleton/R/report_collector.R")
+source_project_file("tools/pkg_skeleton/R/report_validator.R")
+source_project_file("tools/pkg_skeleton/R/report_render.R")
+source_project_file("tools/pkg_skeleton/R/report_bundle.R")
 
 .hard_stub_obj <- function(n_cells = 160L) {
   matrix(0, nrow = 5, ncol = n_cells,

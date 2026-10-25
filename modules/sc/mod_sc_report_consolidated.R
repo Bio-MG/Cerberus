@@ -1,7 +1,7 @@
 # =============================================================================
 # mod_sc_report_consolidated.R — Rapport consolidé 4F (Stage 17)
 # =============================================================================
-# UI + orchestration UNIQUEMENT : la logique domaine vit dans R/reports/
+# UI + orchestration UNIQUEMENT : la logique domaine vit dans le paquet (tools/pkg_skeleton/R/, ex-R/reports/ — D2 M5 lot 2)
 # (collecteur / validateur / rendu / bundle — fonctions pures). Ce module :
 #   - expose les options de rapport (titre, sous-titre, notes, tables) ;
 #   - affiche l'APERCU des verdicts de validation par section (réactif) ;

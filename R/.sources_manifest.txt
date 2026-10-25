@@ -74,10 +74,10 @@ R/spatial/spatial_deconv_prep.R
 R/spatial/spatial_deconv_tasks.R
 R/spatial/spatial_export.R
 R/spatial/spatial_report.R
-R/reports/report_collector.R
-R/reports/report_validator.R
-R/reports/report_render.R
-R/reports/report_bundle.R
+tools/pkg_skeleton/R/report_collector.R
+tools/pkg_skeleton/R/report_validator.R
+tools/pkg_skeleton/R/report_render.R
+tools/pkg_skeleton/R/report_bundle.R
 modules/import/mod_rdata_picker.R
 modules/import/mod_import_sc.R
 modules/import/mod_import_bulk.R

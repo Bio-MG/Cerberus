@@ -1,5 +1,5 @@
 # =============================================================================
-# R/reports/report_render.R — Rapport consolide 4F : RENDU HTML (Stage 17)
+# tools/pkg_skeleton/R/report_render.R (ex-R/reports/ — D2 M5 lot 2) — Rapport consolide 4F : RENDU HTML (Stage 17)
 # =============================================================================
 # Rendu SANS moteur markdown externe (rmarkdown/knitr ecartes volontairement) :
 # le rapport est un COMPILATEUR — des chunks R re-evalues n'apporteraient rien
@@ -25,6 +25,22 @@
     state = "invalid_input",
     class = "report_error"
   ))
+}
+
+# Constantes TS_REPORT_* — modele « carry + pin » (precedent .ts_dt_const /
+# .ts_export_const / .ts_hm_const, D2 M4) : la valeur est PORTEE depuis
+# globalenv (config/defaults.R est source par app.R ET par les helpers de
+# test), et le REPLI est ÉPINGLÉ contre config/defaults.R:157-158. Sans cet
+# accessseur, les defauts paresseux des sites :82/:238 ci-dessous liraient
+# la constante NUE dans la chaine du DEFINISSEUR : sous namespace (paquet)
+# la resolution ne passe PAS par globalenv — echec sec, sans fallback
+# exists() (cartographie d2_reports_cartography.md §4, mesure M5 lot 2).
+.ts_report_const <- function(name, fallback) {
+  if (exists(name, envir = globalenv(), inherits = TRUE)) {
+    get(name, envir = globalenv(), inherits = TRUE)
+  } else {
+    fallback
+  }
 }
 
 # Libellés français figés des domaines (ordre d'affichage = ordre figé du
@@ -79,7 +95,8 @@
 , sep = "\n")
 
 #' Table HTML plafonnée (affichage) — les exports restent complets
-.report_html_table <- function(df, max_rows = TS_REPORT_MAX_TABLE_ROWS,
+.report_html_table <- function(df,
+                               max_rows = .ts_report_const("TS_REPORT_MAX_TABLE_ROWS", 200L),
                                caption = NULL) {
   tg <- htmltools::tags
   if (!is.data.frame(df)) {
@@ -235,7 +252,8 @@ build_consolidated_report_html <- function(report_input, validation) {
   repro_section <- tl(
     tg$h2("4. Reproductibilité"),
     tg$h3("Manifeste de provenance consolidé"),
-    .report_html_table(prov, max_rows = TS_REPORT_MAX_PROVENANCE_ROWS,
+    .report_html_table(prov,
+                       max_rows = .ts_report_const("TS_REPORT_MAX_PROVENANCE_ROWS", 500L),
                        caption = "Entrées PRODUITES à chaque étape d'analyse (règle 7) — consolidées ici, jamais reconstruites."),
     tg$h3("Configuration (constantes TS_*)"),
     .report_html_table(report_input$config_snapshot),

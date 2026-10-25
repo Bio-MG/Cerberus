@@ -13,7 +13,7 @@
 # `modules/` : aucune n'est `bulk_report_error`) **et** non interdit par la
 # doctrine (ce n'est pas un nom « trop large » comme `bulk_error` ou `sc_error`).
 # ⚠️ Il **cohabite** avec `report_error`, porté par les **4** fichiers de
-# `R/reports/` (`report_bundle`, `report_collector`, `report_render`,
+# `tools/pkg_skeleton/R/`, ex-`R/reports/` — D2 M5 lot 2 (`report_bundle`, `report_collector`, `report_render`,
 # `report_validator`) : ce sont **deux domaines distincts** — le *bundle* de
 # rapports générique vs le rapport **Bulk** — exactement comme
 # `bulk_pathways_error` (§2cn) cohabite avec `pathway_error` (§2bp).

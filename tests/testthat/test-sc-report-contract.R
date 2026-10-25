@@ -14,11 +14,21 @@ source_project_file("R/sc/sc_communication_engine.R")
 source_project_file("R/sc/sc_abundance_design.R")    # design DA (finalizer)
 source_project_file("R/sc/sc_abundance_milo.R")      # staleness milo
 source_project_file("R/sc/sc_abundance_sccoda.R")    # staleness scCODA
-source_project_file("R/reports/report_collector.R")
+# D2 M5 lot 2 (2026-10-25) : domaine rapport déplacé dans
+# tools/pkg_skeleton/R/ — sourcing globalenv AU NOUVEAU chemin, SANS bascule
+# load_project_pkg(). DÉCISION MESURÉE (leçon M4 : un namespace ne résout
+# pas via globalenv) : ce fichier épingle des verdicts "valid"/"stale" qui
+# exigent les staleness *_is_stale() et la machinerie LIANA (fournisseurs
+# R/sc, PAS encore dans le paquet) — appelé depuis le namespace, le
+# collecteur avalerait leurs résolutions dans les tryCatch et dériverait
+# tous les verdicts vers "unknown". Bascule différée au lot qui extrait les
+# 9 fournisseurs R/sc (M5 lot 3+). Double chemin = état conçu
+# (cf. test-plotting-pkg-pilot.R).
+source_project_file("tools/pkg_skeleton/R/report_collector.R")
 source_project_file("tools/pkg_skeleton/R/error_log.R")   # M-1 : journal des avalées
-source_project_file("R/reports/report_validator.R")
-source_project_file("R/reports/report_render.R")
-source_project_file("R/reports/report_bundle.R")
+source_project_file("tools/pkg_skeleton/R/report_validator.R")
+source_project_file("tools/pkg_skeleton/R/report_render.R")
+source_project_file("tools/pkg_skeleton/R/report_bundle.R")
 
 # ── Fixtures locaux (stub objet commun : 5 genes x 160 cellules) ────────────
 .rep_stub_obj <- function() .da_stub_obj()

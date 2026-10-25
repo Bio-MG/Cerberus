@@ -13,7 +13,16 @@ Description: Staging package skeleton for the D2 source-list retirement.
     the 4 report-provider files of R/core join the tree (state,
     error_log, io_helpers, provenance — physical move only, tests keep
     source_project_file() at the new path, no loader change this lot;
-    cf. docs/audits/d2_reports_cartography.md section 1). Measured
+    cf. docs/audits/d2_reports_cartography.md section 1). M5 lot 2
+    (2026-10-25): the WHOLE R/reports domain joins the tree
+    (report_collector, report_validator, report_render, report_bundle —
+    exact set pinned by tests/testthat/test-plotting-pkg-pilot.R); the
+    surface-freeze test switches to load_project_pkg(), the two deep-call
+    strict tests keep globalenv sourcing (the 9 R/sc suppliers are not
+    package-resident yet — a namespace does not resolve via globalenv);
+    TS_REPORT_* constants provided by the carry+pin accessor
+    .ts_report_const() (fallbacks pinned against config/defaults.R:157-158).
+    Measured
     decision: the skeleton STAYS under tools/ — a root DESCRIPTION would
     make R CMD check treat all remaining files of R/ as package code and
     change project-type detection in renv/testthat/shinytest2 (M3
@@ -29,8 +38,10 @@ Imports:
     ComplexHeatmap,
     DT,
     ggplot2,
+    htmltools,
     scales,
     Seurat,
+    SeuratObject,
     shiny
 Suggests:
     AnnotationDbi,

@@ -1,5 +1,5 @@
 # =============================================================================
-# R/reports/report_collector.R — Rapport consolide 4F : COLLECTEUR (Stage 17)
+# tools/pkg_skeleton/R/report_collector.R (ex-R/reports/ — D2 M5 lot 2) — Rapport consolide 4F : COLLECTEUR (Stage 17)
 # =============================================================================
 # PRINCIPE (roadmap Stage 17) : le rapport est un COMPILATEUR de l'etat
 # canonique + de la provenance, PAS un moteur de reconstruction. Aucune
@@ -21,8 +21,13 @@
 # Toute extraction fragile est tryCatch : un echec de resume ne fabrique
 # jamais une valeur — il est reporte tel quel dans le resume.
 #
-# Sourcing (app.R section 4c) : APRES tous les domaines R/sc (besoin des
-# resultats figes, de sc_r_script_text et des gardes assert_*).
+# Sourcing (app.R bloc 08) : APRES tous les domaines R/sc (besoin des
+# resultats figes, de sc_r_script_text et des gardes assert_*). D2 M5 lot 2 :
+# le fichier vit dans l'arbre du paquet — app.R le source() TOUJOURS (meme
+# position d'ordre) ; les socles (state_get, %||%, ts_log_swallow,
+# build_object_identity_v2, provenance_to_dataframe) vivent AUSSI dans le
+# namespace du paquet ; les 9 fournisseurs R/sc restent resolu via globalenv
+# au moment de l'APPEL (l'appel pilote reste mod_sc_report_consolidated).
 # =============================================================================
 
 # Domaines suivis par le rapport — liste FIGEE (ordre d'affichage du rapport).

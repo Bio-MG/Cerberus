@@ -1,5 +1,5 @@
 # =============================================================================
-# R/reports/report_bundle.R — Rapport consolide 4F : BUNDLE EXPORT (Stage 17)
+# tools/pkg_skeleton/R/report_bundle.R (ex-R/reports/ — D2 M5 lot 2) — Rapport consolide 4F : BUNDLE EXPORT (Stage 17)
 # =============================================================================
 # Assemble le bundle d'export projet : rapport HTML + manifeste de sections +
 # provenance consolidee + tables de resultats (copies fidèles des objets

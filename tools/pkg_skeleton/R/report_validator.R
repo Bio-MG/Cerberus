@@ -1,5 +1,5 @@
 # =============================================================================
-# R/reports/report_validator.R — Rapport consolide 4F : VALIDATEUR (Stage 17)
+# tools/pkg_skeleton/R/report_validator.R (ex-R/reports/ — D2 M5 lot 2) — Rapport consolide 4F : VALIDATEUR (Stage 17)
 # =============================================================================
 # Valide AVANT rendu chaque section de l'entree collectee :
 #   - result absent            -> "absent"   (message gracieux, PAS une erreur
