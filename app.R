@@ -48,8 +48,13 @@ if (!requireNamespace("shinyjs", quietly = TRUE)) {
 source("global.R")
 
 # ── Bloc 02 : config (gardes défensives) ─────────────────────────────────────
-source("config/defaults.R")
-source("config/thresholds.R")
+# D2 M5 lot 5 (2026-10-25, mini-cartographie docs/audits/
+# d2_core_config_cartography.md) : defaults.R + thresholds.R déménagent dans
+# l'arbre du paquet (tools/pkg_skeleton/R/) — app.R les source() TOUJOURS, aux
+# MEMES positions (zero changement de comportement ; le manifeste suit les
+# chemins). Le répertoire config/ est vide : l'endgame TS_* est atteint.
+source("tools/pkg_skeleton/R/defaults.R")
+source("tools/pkg_skeleton/R/thresholds.R")
 
 # ── Bloc 03 : R/core (infrastructure transverse) ─────────────────────────────
 # Contrat d'etat transversal source EN PREMIER (TREE CERBERUS step 3 :
@@ -62,23 +67,27 @@ source("config/thresholds.R")
 # source_project_file() au NOUVEAU chemin : AUCUNE bascule de chargeur dans ce
 # lot (cartographie docs/audits/d2_reports_cartography.md §1 ; lot 2 = le
 # domaine R/reports ENTIER, livré au bloc 08 ci-dessous).
+# D2 M5 lot 5 (2026-10-25) : les 9 fichiers R/core RESTANTS suivent (caching,
+# drive_allowlist, drive_watcher, error_state, jobs, memory, pathway_helpers,
+# rdata_io, validation) — même régime ; R/core ne garde plus que le fichier
+# étranger CERBERUS non câblé (cerberus_handoff.R, hors lot).
 source("tools/pkg_skeleton/R/state.R")        # contrat d'etat + fabriques d'etat partagees
 source("tools/pkg_skeleton/R/io_helpers.R")
-source("R/core/rdata_io.R")     # import .rda/.RData "Inspect & Select" (contrat RDATA_IMPORT_CONTRACT)
-source("R/core/validation.R")   # <-- NEW
+source("tools/pkg_skeleton/R/rdata_io.R")     # import .rda/.RData "Inspect & Select" (contrat RDATA_IMPORT_CONTRACT)
+source("tools/pkg_skeleton/R/validation.R")   # <-- NEW
 source("tools/pkg_skeleton/R/provenance.R")   # <-- CHRYSALIS 2C : manifeste de provenance
-source("R/core/jobs.R")         # <-- CHRYSALIS 2D : wrapper fin sync/async
-source("R/core/memory.R")       # <-- QW-1 : RSS résident du processus (indicateur RAM)
+source("tools/pkg_skeleton/R/jobs.R")         # <-- CHRYSALIS 2D : wrapper fin sync/async
+source("tools/pkg_skeleton/R/memory.R")       # <-- QW-1 : RSS résident du processus (indicateur RAM)
 source("tools/pkg_skeleton/R/error_log.R")
-source("R/core/caching.R")      # <-- CHRYSALIS 2D : memoisation a portee contrainte
-source("R/core/pathway_helpers.R")
-source("R/core/error_state.R")  # <-- §14.1 : ts_error_state(), l'accesseur generique d'etat d'erreur
+source("tools/pkg_skeleton/R/caching.R")      # <-- CHRYSALIS 2D : memoisation a portee contrainte
+source("tools/pkg_skeleton/R/pathway_helpers.R")
+source("tools/pkg_skeleton/R/error_state.R")  # <-- §14.1 : ts_error_state(), l'accesseur generique d'etat d'erreur
 # DRIVE LIVE CONTROL (docs/DRIVE_LIVE_CONTROL_PLAN.md) : canal de pilotage
 # fichier -> session VIVANTE. Dev-only, SANS effet quand arm.json est absent
 # (politique par defaut du poller). Source APRES error_state.R : le snapshot
 # d'objet lit ts_error_state().
-source("R/core/drive_allowlist.R")  # donnees gelees (aucun appel Shiny)
-source("R/core/drive_watcher.R")    # poller fichier -> session (injecte)
+source("tools/pkg_skeleton/R/drive_allowlist.R")  # donnees gelees (aucun appel Shiny)
+source("tools/pkg_skeleton/R/drive_watcher.R")    # poller fichier -> session (injecte)
 # Racine applicative capturee UNE fois, au chargement (app.R tourne depuis la
 # racine renv). JAMAIS getwd() au moment du tick : RStudio peut deriver.
 ts_drive_boot(getwd())
@@ -166,8 +175,9 @@ source("tools/pkg_skeleton/R/bulk_import_engine.R")
 # D2 M5 lot 4 (2026-10-25) : les 11 fichiers du domaine spatial vivent dans
 # l'arbre du paquet (tools/pkg_skeleton/R/) — app.R le source() TOUJOURS, aux
 # MEMES positions d'ordre (manifeste 67-77 : l'entree suit le chemin). Le
-# fournisseur manquant R/core/rdata_io.R (4 symboles rdata_*) reste source()
-# au Bloc 03 (app.R:74) et globalement par les tests (pattern dual-load,
+# fournisseur manquant rdata_io.R (4 symboles rdata_* ; D2 M5 lot 5 : il vit
+# lui aussi dans tools/pkg_skeleton/R/) reste source() au Bloc 03 et
+# globalement par les tests (pattern dual-load,
 # docs/audits/d2_spatial_cartography.md). spatial_plotting.R est source au
 # Bloc 04, sa position historique.
 source("tools/pkg_skeleton/R/spatial_async.R")

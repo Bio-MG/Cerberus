@@ -18,8 +18,8 @@
 
 source_project_file("tools/pkg_skeleton/R/error_log.R")
 source_project_file("tools/pkg_skeleton/R/state.R")
-source_project_file("R/core/drive_allowlist.R")
-source_project_file("R/core/drive_watcher.R")
+source_project_file("tools/pkg_skeleton/R/drive_allowlist.R")
+source_project_file("tools/pkg_skeleton/R/drive_watcher.R")
 # Pas d'attach jsonlite ici : ce fichier n'appelle jamais jsonlite
 # directement (le drive qualifie `jsonlite::` en interne), et un attach au
 # niveau fichier DEVANCE shiny sur le search path pour le reste du processus
@@ -122,8 +122,8 @@ test_that("N1: the MCP read_result publishes every refusal reason the verdict ca
   # Le bac à sable du serveur : le MÊME harness que test-mcp-sc-local.R, booté
   # sur CE root — read_result est donc exactement la surface de l'agent.
   e <- new.env(parent = globalenv())
-  sys.source(file.path(ts_project_root(), "R", "core", "drive_allowlist.R"), envir = e)
-  sys.source(file.path(ts_project_root(), "R", "core", "drive_watcher.R"), envir = e)
+  sys.source(file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "drive_allowlist.R"), envir = e)
+  sys.source(file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "drive_watcher.R"), envir = e)
   expressions <- parse(file.path(ts_project_root(), "scripts", "mcp_server.R"), keep.source = TRUE)
   labels <- vapply(expressions, function(x) paste(deparse(x, width.cutoff = 500L), collapse = "\n"), character(1))
   first <- which(grepl("^\\.ts_json <- function", labels))[1L]

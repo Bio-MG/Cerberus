@@ -9,7 +9,7 @@
 # sync code <-> contrat, clés i18n.
 # =============================================================================
 source_project_file("R/sc/sc_multi.R")
-.local_source_if_exists("config/thresholds.R")
+.local_source_if_exists("tools/pkg_skeleton/R/thresholds.R")
 
 .ts_read <- function(relpath) {
   if (grepl("^docs/contracts/", relpath) &&

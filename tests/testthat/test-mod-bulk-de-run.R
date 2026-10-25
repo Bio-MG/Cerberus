@@ -71,7 +71,7 @@
 # réellement utilisé.
 .mdr_env <- function(dispatch = NULL, engine = "deseq2", req_aborts = FALSE) {
   e <- new.env(parent = globalenv())
-  sys.source(file.path(ts_project_root(), "R/core/drive_allowlist.R"), envir = e)
+  sys.source(file.path(ts_project_root(), "tools/pkg_skeleton/R/drive_allowlist.R"), envir = e)
 
   e$`%||%` <- function(a, b) if (is.null(a)) b else a
 

@@ -27,8 +27,8 @@
 # when run alone. The module itself is NOT sourced - every assertion here runs in
 # pure R against the allowlist, and the module is read as TEXT for the wiring
 # locks, so this file needs neither Seurat nor a session.
-source_project_file("R/core/drive_allowlist.R")
-source_project_file("R/core/drive_watcher.R")
+source_project_file("tools/pkg_skeleton/R/drive_allowlist.R")
+source_project_file("tools/pkg_skeleton/R/drive_watcher.R")
 # `%||%` lives in io_helpers.R and the probe section at the end of this file needs
 # it: the closures it lifts out of the module use it (`input$multi_label %||% ""`).
 # Sourced rather than redefined, for the reason the two lines above give.

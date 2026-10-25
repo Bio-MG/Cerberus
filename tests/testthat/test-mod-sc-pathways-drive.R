@@ -21,10 +21,10 @@
 # =============================================================================
 
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")            # %||%, detect_gene_id_type
-source_project_file("R/core/error_state.R")
-source_project_file("R/core/drive_allowlist.R")
-source_project_file("R/core/drive_watcher.R")
-source_project_file("R/core/pathway_helpers.R")       # run_pathway_enrichment
+source_project_file("tools/pkg_skeleton/R/error_state.R")
+source_project_file("tools/pkg_skeleton/R/drive_allowlist.R")
+source_project_file("tools/pkg_skeleton/R/drive_watcher.R")
+source_project_file("tools/pkg_skeleton/R/pathway_helpers.R")       # run_pathway_enrichment
 source_project_file("modules/sc/mod_sc_pathways.R")   # the code under test
 
 if (!exists(".tr", envir = globalenv()))

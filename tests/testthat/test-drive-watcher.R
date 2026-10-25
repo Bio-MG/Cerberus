@@ -65,7 +65,7 @@
 
 # The three functions under test that need no Shiny at all.
 .drv_source <- function() {
-  source_project_file("R/core/drive_allowlist.R")
+  source_project_file("tools/pkg_skeleton/R/drive_allowlist.R")
   # R/core/drive_watcher.R calls ts_log_swallow() in six error handlers
   # (ts_drive_read_json, heartbeat_age, the bulk summary, ...). Since M-1
   # phase 2 those handlers LOG instead of throwing, so the logger must exist in
@@ -73,7 +73,7 @@
   # "could not find function ts_log_swallow" instead of the NULL being asserted.
   # app.R sources it (L56); a test that sources only drive_watcher.R must too.
   source_project_file("tools/pkg_skeleton/R/error_log.R")
-  source_project_file("R/core/drive_watcher.R")
+  source_project_file("tools/pkg_skeleton/R/drive_watcher.R")
 }
 
 .drv_source()
@@ -1869,7 +1869,7 @@ test_that("the tick USES the pure throttle rule — wiring, not just the rule", 
   # `cursor$hb_at <- now_num` (advance on ATTEMPT), and restoring it reddens
   # this immediately. MEASURED — the pure test alone did NOT redden when the
   # call site was reverted, which is exactly the hole this closes.
-  src <- readLines(file.path(ts_project_root(), "R", "core", "drive_watcher.R"),
+  src <- readLines(file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "drive_watcher.R"),
                    warn = FALSE, encoding = "UTF-8")
   expect_true(any(grepl("ts_drive_hb_next_at(now_num, cursor$hb_at, wrote_ok)",
                         src, fixed = TRUE)))
@@ -2005,7 +2005,7 @@ test_that("the writer derives a UNIQUE temporary name per attempt", {
   # Restoring `paste0(path, ".tmp")` reddens this, which is the only
   # falsification available for the property — so the assertion is worth its
   # brittleness rather than being an unbacked claim.
-  src <- readLines(file.path(ts_project_root(), "R", "core", "drive_watcher.R"),
+  src <- readLines(file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "drive_watcher.R"),
                    warn = FALSE, encoding = "UTF-8")
   expect_false(any(grepl('paste0(path, ".tmp")', src, fixed = TRUE)))
   expect_true(any(grepl("ts_drive_tmp_name", src, fixed = TRUE)))
@@ -2545,7 +2545,7 @@ test_that("`import_file` names the MODULE's required key, not a hard-coded count
   #
   # The source is read, not `deparse()`d, because the guard's comment records the
   # measurement and the reasoning — a `deparse()` assertion would only see code.
-  watcher <- paste(readLines(file.path(ts_project_root(), "R", "core", "drive_watcher.R"),
+  watcher <- paste(readLines(file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "drive_watcher.R"),
                              warn = FALSE), collapse = "\n")
   expect_match(watcher, "TS_DRIVE_IMPORT_SCHEMA[[module]]$required", fixed = TRUE)
   # The gate LOOPS the required keys. `is.null(req[[need]])` was correct while
@@ -3589,7 +3589,7 @@ test_that("the first terminal declaration wins and terminal publication is not r
 # calls — passing for the worst possible reason.
 .drv_files <- function() {
   file.path(ts_project_root(),
-            c("R/core/drive_watcher.R", "R/core/drive_allowlist.R"))
+            c("tools/pkg_skeleton/R/drive_watcher.R", "tools/pkg_skeleton/R/drive_allowlist.R"))
 }
 
 .drv_calls <- function(path) {

@@ -43,7 +43,7 @@ source_project_file("tools/pkg_skeleton/R/bulk_network.R")
 .contract    <- .ts_read("docs/contracts/BULK_NETWORK_CONTRACT.md")
 .app_src     <- .ts_read("app.R")
 .parent_src  <- .ts_read("modules/bulk/mod_bulk.R")
-.thresh_src  <- .ts_read("config/thresholds.R")
+.thresh_src  <- .ts_read("tools/pkg_skeleton/R/thresholds.R")
 
 # ── Surface publique gelée (contrat §10) ───────────────────────────────────
 test_that("public API surface is frozen (names + signatures)", {

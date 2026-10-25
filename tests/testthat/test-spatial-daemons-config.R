@@ -12,7 +12,7 @@
 # cohérence de valeur. Il ne lance JAMAIS `mirai::daemons()` (pas de vrais
 # workers dans les tests).
 # =============================================================================
-source_project_file("config/defaults.R")
+source_project_file("tools/pkg_skeleton/R/defaults.R")
 source_project_file("tools/pkg_skeleton/R/spatial_async.R")  # ex-R/spatial/, D2 M5 lot 4
 
 async_src <- readLines(file.path("..", "..", "tools", "pkg_skeleton", "R", "spatial_async.R"))

@@ -245,9 +245,9 @@ suppressPackageStartupMessages(library(shiny))
   })
 
   mod_env <- new.env(parent = globalenv())
-  sys.source(file.path(ts_project_root(), "config", "defaults.R"), envir = mod_env)
-  sys.source(file.path(ts_project_root(), "R", "core", "drive_allowlist.R"), envir = mod_env)
-  sys.source(file.path(ts_project_root(), "R", "core", "drive_watcher.R"), envir = mod_env)
+  sys.source(file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "defaults.R"), envir = mod_env)
+  sys.source(file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "drive_allowlist.R"), envir = mod_env)
+  sys.source(file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "drive_watcher.R"), envir = mod_env)
   sys.source(file.path(ts_project_root(), .MSP_FILE), envir = mod_env)
   mod_env$ts_drive_job_clear()
   mod_env$ExtendedTask <- task_generator

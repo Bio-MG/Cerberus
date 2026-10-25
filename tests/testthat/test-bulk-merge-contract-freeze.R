@@ -172,7 +172,7 @@ test_that("app.R and mod_bulk.R anchors are present", {
 test_that("engine introduces no new TS_ threshold (constraints come from STAT-S1)", {
   expect_false(grepl("TS_", .engine_src),
                info = "constante TS_ détectée dans le moteur — passer par config/ si réellement nécessaire")
-  expect_match(.ts_read("config/thresholds.R"),
+  expect_match(.ts_read("tools/pkg_skeleton/R/thresholds.R"),
                "TS_BULK_BATCH_MIN_SAMPLES_PER_BATCH", fixed = TRUE)
 })
 

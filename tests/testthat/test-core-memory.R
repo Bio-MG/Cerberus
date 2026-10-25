@@ -10,7 +10,7 @@
 # `ts_process_rss_mb()` ; (b) l'interdit de re-diviser la sortie de gc() ;
 # (c) la vraisemblance de la mesure quand `ps` est disponible.
 # =============================================================================
-source_project_file("R/core/memory.R")
+source_project_file("tools/pkg_skeleton/R/memory.R")
 
 test_that("ts_process_rss_mb existe et renvoie un scalaire numérique ou NA_real_", {
   expect_true(exists("ts_process_rss_mb"),

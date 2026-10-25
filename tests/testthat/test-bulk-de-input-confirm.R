@@ -34,8 +34,8 @@
 # grandfathered.
 # =============================================================================
 
-source_project_file("R/core/drive_allowlist.R")
-source_project_file("R/core/drive_watcher.R")
+source_project_file("tools/pkg_skeleton/R/drive_allowlist.R")
+source_project_file("tools/pkg_skeleton/R/drive_watcher.R")
 
 # The `required` inputs of the Bulk DE run, as a scenario carries them.
 .de_inputs <- function(shrink = TRUE) {
@@ -721,7 +721,7 @@ test_that("ts_drive_attach threads cursor$pending and CLEARS it on a verdict", {
   # unobservable in R (§2cr, "preuve = verrou source"), and it is WEAKER than
   # execution. The behavioural proof is the fresh VISIBLE session: a run must stay
   # non-terminal across beats and then reach a verdict, which the lock cannot show.
-  w <- readLines(file.path(ts_project_root(), "R/core/drive_watcher.R"), warn = FALSE)
+  w <- readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/drive_watcher.R"), warn = FALSE)
   # Comments are stripped first: the fix is DOCUMENTED in a comment that quotes the
   # buggy line verbatim, so a naive `grepl` over the raw file matches the prose and
   # the assertion would be about the comment rather than the code. Measured: a
@@ -755,7 +755,7 @@ test_that("the module publisher exposes confirm_inputs, and the seam is falsifia
                          warn = FALSE), collapse = "\n")
   expect_match(src, "confirm_inputs", fixed = TRUE)
   # And the watcher must actually consult it, or the registry field is decoration.
-  w <- paste(readLines(file.path(ts_project_root(), "R/core/drive_watcher.R"),
+  w <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/drive_watcher.R"),
                        warn = FALSE), collapse = "\n")
   expect_match(w, "confirm_inputs", fixed = TRUE)
 })

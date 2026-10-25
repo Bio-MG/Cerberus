@@ -54,8 +54,8 @@ invisible(Sys.setlocale("LC_CTYPE", ".UTF-8"))
   # file having left it on the globalenv. (M5 lot 1: state.R vit dans
   # tools/pkg_skeleton/R/.)
   sys.source(file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "state.R"), envir = e)
-  sys.source(file.path(ts_project_root(), "R", "core", "drive_allowlist.R"), envir = e)
-  sys.source(file.path(ts_project_root(), "R", "core", "drive_watcher.R"), envir = e)
+  sys.source(file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "drive_allowlist.R"), envir = e)
+  sys.source(file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "drive_watcher.R"), envir = e)
   expressions <- parse(path, keep.source = TRUE)
   labels <- vapply(expressions, function(x) paste(deparse(x, width.cutoff = 500L), collapse = "\n"), character(1))
   first <- which(grepl("^\\.ts_json <- function", labels))[1L]
@@ -74,8 +74,8 @@ invisible(Sys.setlocale("LC_CTYPE", ".UTF-8"))
   sp$.tr <- function(key, ...) key
   sp$.t_fmt <- function(template, ...) template
   sp$.tr_plain <- function(key, ...) key
-  for (f in c("config/defaults.R", "tools/pkg_skeleton/R/io_helpers.R",
-              "R/core/error_state.R",
+  for (f in c("tools/pkg_skeleton/R/defaults.R", "tools/pkg_skeleton/R/io_helpers.R",
+              "tools/pkg_skeleton/R/error_state.R",
               "tools/pkg_skeleton/R/spatial_stats.R", "modules/spatial/mod_spatial_qc.R")) {
     sys.source(file.path(ts_project_root(), f), envir = sp)
   }

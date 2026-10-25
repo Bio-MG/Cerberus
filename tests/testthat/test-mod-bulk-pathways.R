@@ -215,7 +215,7 @@ test_that("mod_bulk_pathways.R ne contribue aucun signalement C10", {
                            elapsed_s = NA_real_, job = NULL,
                            filtered = TRUE, vst = TRUE) {
   e <- new.env(parent = globalenv())
-  sys.source(file.path(ts_project_root(), "R/core/drive_allowlist.R"), envir = e)
+  sys.source(file.path(ts_project_root(), "tools/pkg_skeleton/R/drive_allowlist.R"), envir = e)
   e$shared_rv <- list(
     filtered_counts = if (isTRUE(filtered)) matrix(1:4, 2L) else NULL,
     vst_mat         = if (isTRUE(vst)) matrix(1:4, 2L) else NULL)

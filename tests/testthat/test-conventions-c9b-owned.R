@@ -139,13 +139,24 @@ test_that("C9b : la regle est CABLEE dans run_check() (etait rouge avant codage)
 # DIRECTION 2 — le ROUGE existe : les fonctions ORPHELINES sont signalees
 # =============================================================================
 test_that("C9b : le ROUGE existe — un fichier a test eponyme et fonctions orphelines", {
-  # `R/core/jobs.R` a un test eponyme (`test-core-jobs.R`) ET des fonctions
-  # possedees citees nulle part : `.err_job_message`, `.handle_error`,
-  # `.run_sync` (verifie par `grep` : 0 occurrence dans `tests/`). C'est
-  # exactement le cas que C9 ne peut PAS voir — sans lui, une garde qui ne
-  # signale jamais rien passerait le reste du fichier au vert.
-  # ⚠️ Population COMPLETE (cf. la remarque sur la POSSESSION ci-dessous).
-  expect_true("R/core/jobs.R" %in% .c9b_flagged(.c9b_population()))
+  # ⚠️ D2 M5 LOT 5 (2026-10-25) : le temoin historique `R/core/jobs.R` (test
+  # eponyme `test-core-jobs.R` + fonctions possedees citees nulle part :
+  # `.err_job_message`, `.handle_error`, `.run_sync`) DEMENAGE dans le paquet
+  # (tools/pkg_skeleton/R/jobs.R) et sort de la population C9b (collectee sur
+  # R/ uniquement). Le cas est rejoue sur un successeur MESURE du lot :
+  # `R/sc/sc_pipeline.R` — test eponyme PRESENT (`test-sc-pipeline.R`) et
+  # 2/5 fonctions possedees jamais mentionnees (`.seeded_ap`, `log_sc` ;
+  # mesure --list-all post-deplacement). Solde du sortant asseré dans les DEUX
+  # sens : jobs.R est bien au paquet, et son test eponyme suit le fichier.
+  expect_true("R/sc/sc_pipeline.R" %in% .c9b_flagged(.c9b_population()))
+  # Temoin de VALIDITE du sortant : le fichier vit toujours (au paquet) et son
+  # test eponyme l'y suit — la dette n'a pas disparu, elle a suivi le fichier.
+  pkg_jobs <- file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "jobs.R")
+  expect_true(file.exists(pkg_jobs),
+              info = "jobs.R absent du paquet apres extraction M5 lot 5")
+  expect_true(file.exists(file.path(ts_project_root(), "tests", "testthat",
+                                    "test-core-jobs.R")),
+              info = "test-core-jobs.R introuvable (couverture jobs.R perdue ?")
 })
 
 test_that("C9b : les fichiers de la mesure INITIALE sont TOUS hors population C9b", {
@@ -194,7 +205,7 @@ test_that("C9b : les fichiers de la mesure INITIALE sont TOUS hors population C9
   #     ⚠️ Si un futur lot paie C9 pour l'un des 2 restants, ce test rougira —
   #     et c'est VOULU : la reaction est de le retirer de cette liste et
   #     d'ajouter une ligne au solde (c'est exactement ce qui s'est passe ici).
-  encore_c9 <- c("R/core/rdata_io.R",
+  encore_c9 <- c("tools/pkg_skeleton/R/rdata_io.R",
                  "R/sc/sc_state.R")
   for (f in encore_c9) {
     expect_true(f %in% .c9_flagged(.c9b_abs(f)),
@@ -247,18 +258,27 @@ test_that("C9b : les fichiers de la mesure INITIALE sont TOUS hors population C9
 })
 
 test_that("C9b : sans test eponyme, C9b se TAIT — c'est C9 qui parle (non-superposition)", {
-  # Direction 4, cas concret. ⚠️ D2 M5 LOT 4 (2026-10-25) : l'exemple historique
-  # `R/spatial/spatial_export.R` (8 fonctions possedees citees nulle part) a
-  # demenage dans le paquet avec le reste du domaine et sort des deux
-  # populations. Le cas est rejoue sur un successeur MESURE du probe du 13:59 :
-  # `R/core/rdata_io.R` — trou REEL (ses fonctions possedees ne sont citees
-  # nulle part) mais aucun test eponyme : C9 le signale deja, et l'y ajouter
-  # produirait un DOUBLON — pas une information. C'est la clause que §14.2 a
-  # posee, et elle est ici verrouillee.
-  expect_false("R/core/rdata_io.R" %in% .c9b_flagged(.c9b_population()))
+  # Direction 4, cas concret. ⚠️ D2 M5 LOT 5 (2026-10-25) : le successeur du
+  # lot 4, `R/core/rdata_io.R`, DEMENAGE a son tour dans le paquet
+  # (tools/pkg_skeleton/R/rdata_io.R) et sort de la population C9b (collectee
+  # sur R/ uniquement). Le cas est rejoue sur un successeur MESURE :
+  # `R/sc/sc_communication_input.R` — trou REEL (fonctions possedees non
+  # couvertes seules) mais aucun test eponyme : C9 le signale deja, et l'y
+  # ajouter produirait un DOUBLON — pas une information (mesure lot 4,
+  # re-verifiee post-deplacement). C'est la clause que §14.2 a posee, et elle
+  # est ici verrouillee.
+  expect_false("R/sc/sc_communication_input.R" %in% .c9b_flagged(.c9b_population()))
   # Temoin de VALIDITE : C9 doit bien le signaler, LUI (sinon l'assertion
   # ci-dessus serait vraie pour une trivialite — fichier inexistant, etc.).
-  expect_true("R/core/rdata_io.R" %in% .c9_flagged(.c9b_abs("R/core/rdata_io.R")))
+  expect_true("R/sc/sc_communication_input.R" %in% .c9_flagged(.c9b_abs("R/sc/sc_communication_input.R")))
+  # Solde du sortant rdata_io, asseré dans les DEUX sens : le fichier vit au
+  # paquet et reste C9-signalable par son nom (aucun test eponyme ne l'y suit
+  # encore), mais il est hors des deux populations R/.
+  abs_rdata <- file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "rdata_io.R")
+  expect_true(file.exists(abs_rdata),
+              info = "rdata_io.R absent du paquet apres extraction M5 lot 5")
+  expect_true("tools/pkg_skeleton/R/rdata_io.R" %in% .c9_flagged(.c9b_abs("tools/pkg_skeleton/R/rdata_io.R")))
+  expect_false("tools/pkg_skeleton/R/rdata_io.R" %in% .c9b_flagged(.c9b_population()))
   # Et la BORNE inverse, qui rend l'exemple honnete : le fichier qui VIENT de
   # recevoir son test eponyme n'est plus, lui, un cas de non-superposition —
   # il est hors de la classe. Sans cette assertion, on pourrait « reparer » le
@@ -368,8 +388,22 @@ test_that("C9b : la population signalee est un PLAFOND a 18, jamais un compte ex
   # nouveau chemin). Aucun etranger en vol a la mesure (check_writers 13:51 :
   # aucun battement etranger). Le plafond suit : 22 -> 18. Le laisser a 22
   # autoriserait un retour en arriere SILENCIEUX de 4 fichiers.
+  # ⚠️ D2 M5 LOT 5 (2026-10-25) : les 9 fichiers R/core RESTANTS (caching,
+  # drive_allowlist, drive_watcher, error_state, jobs, memory, pathway_helpers,
+  # rdata_io, validation) + config/{defaults,thresholds}.R demenagent dans
+  # tools/pkg_skeleton/R/ et quittent la population C9b (R/ uniquement).
+  # Mesure post-deplacement (--list-all) : 24 warns au total = C8 1 + C9 9 +
+  # C9b 14. Les 9 sortants portaient EXACTEMENT 5 dettes : C9 rdata_io.R
+  # (aucun test eponyme) + C9b caching.R / jobs.R / memory.R / validation.R
+  # (probe check_c9b_owned_functions_mentioned sur la liste des 9, chemins
+  # paquet ; les 4 avaient un test eponyme, les 5 autres etaient portees par
+  # C9 ou non flaggees). 18 - 4 = 14 ; le plafond suit : 18 -> 14. La dette
+  # des 4 sortants N'EST PAS payee : elle SORT de la population avec les
+  # fichiers — la couverture est desormais epinglee par les tests stricts
+  # retargetes (test-core-caching/jobs/memory/validation, source_project_file
+  # au nouveau chemin).
   flagged <- .c9b_flagged(.c9b_population())
-  expect_true(length(flagged) <= 18L,
+  expect_true(length(flagged) <= 14L,
               info = paste(flagged, collapse = ", "))
   expect_gt(length(flagged), 0L)
 })

@@ -19,13 +19,13 @@
 #     the READER's side - the signature defect of 2026-09-25 lived exactly there.
 # =============================================================================
 
-source_project_file("config/defaults.R")
-source_project_file("config/thresholds.R")
+source_project_file("tools/pkg_skeleton/R/defaults.R")
+source_project_file("tools/pkg_skeleton/R/thresholds.R")
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")            # %||%
-source_project_file("R/core/error_state.R")           # ts_error_state
+source_project_file("tools/pkg_skeleton/R/error_state.R")           # ts_error_state
 source_project_file("tools/pkg_skeleton/R/provenance.R")            # new_provenance_entry
-source_project_file("R/core/drive_allowlist.R")
-source_project_file("R/core/drive_watcher.R")
+source_project_file("tools/pkg_skeleton/R/drive_allowlist.R")
+source_project_file("tools/pkg_skeleton/R/drive_watcher.R")
 source_project_file("tools/pkg_skeleton/R/bulk_pattern.R")          # the frozen domain
 source_project_file("modules/bulk/mod_bulk_pattern.R")  # the code under test
 

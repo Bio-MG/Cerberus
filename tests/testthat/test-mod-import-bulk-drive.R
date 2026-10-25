@@ -27,8 +27,8 @@
 #     a MUTATED one.
 # =============================================================================
 
-source_project_file("R/core/drive_allowlist.R")
-source_project_file("R/core/drive_watcher.R")
+source_project_file("tools/pkg_skeleton/R/drive_allowlist.R")
+source_project_file("tools/pkg_skeleton/R/drive_watcher.R")
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")
 # The module itself: `smart_read()` and `assemble_bulk_obj()` are top-level there,
 # and the importer closure calls both by name, so they must be the shipped ones.

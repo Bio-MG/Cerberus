@@ -6,7 +6,7 @@
 # 'mirai' absent ou pool inactif, et le chemin async DELEGUE quand un pool
 # mirai est actif (pattern spatial, cf. regle 9 AGENTS.md).
 
-source_project_file("R/core/jobs.R")
+source_project_file("tools/pkg_skeleton/R/jobs.R")
 
 test_that("run_job sync path returns the function result", {
   expect_equal(run_job(function(x) x * 2, 21), 42)

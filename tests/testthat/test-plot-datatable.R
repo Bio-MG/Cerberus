@@ -203,7 +203,7 @@ test_that("ts_datatable_buttons() est deterministe", {
 
 .tsd_migrated <- c(
   "tools/pkg_skeleton/R/bulk_helpers.R",
-  "R/core/pathway_helpers.R",
+  "tools/pkg_skeleton/R/pathway_helpers.R",
   "R/sc/sc_helpers.R",
   "modules/bulk_de/mod_bulk_de_multimethod.R",
   "modules/bulk_de/mod_bulk_de_venn.R",
@@ -237,7 +237,7 @@ test_that("DT-EXPORT : les sites canoniques sont normalises (page 15 + boutons)"
                                          "tools/pkg_skeleton/R/bulk_helpers.R")), collapse = "\n"),
                "ts_datatable\\(df_display, page_length = 15L, filename_base = \"bulk_degenes\"\\)")
   expect_match(paste(readLines(file.path(ts_project_root(),
-                                         "R/core/pathway_helpers.R")), collapse = "\n"),
+                                         "tools/pkg_skeleton/R/pathway_helpers.R")), collapse = "\n"),
                "page_length = 15L")
   expect_match(paste(readLines(file.path(ts_project_root(),
                                          "modules/spatial/mod_spatial_cluster.R")), collapse = "\n"),

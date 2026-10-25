@@ -7,11 +7,11 @@
 #   Rscript scripts/benchmark_stage18.R
 # =============================================================================
 
-source("config/defaults.R")
+source("tools/pkg_skeleton/R/defaults.R")
 # D2 M5 lot 1 : state/io_helpers/provenance vivent dans tools/pkg_skeleton/R/
 source("tools/pkg_skeleton/R/state.R"); source("tools/pkg_skeleton/R/io_helpers.R")
-source("R/core/validation.R")
-source("tools/pkg_skeleton/R/provenance.R"); source("R/core/jobs.R"); source("R/core/caching.R")
+source("tools/pkg_skeleton/R/validation.R")
+source("tools/pkg_skeleton/R/provenance.R"); source("tools/pkg_skeleton/R/jobs.R"); source("tools/pkg_skeleton/R/caching.R")
 source("R/sc/sc_velocity.R"); source("R/sc/sc_abundance_design.R")
 source("R/sc/sc_abundance_sccoda.R")
 # D2 M5 lot 2 : le domaine R/reports ENTIER vit dans tools/pkg_skeleton/R/

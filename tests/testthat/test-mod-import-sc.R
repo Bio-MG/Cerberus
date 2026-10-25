@@ -43,7 +43,7 @@ suppressPackageStartupMessages({
   library(shinyFiles)  # getVolumes (mod_import_sc)
   library(Seurat)      # prepare_seurat_object
 })
-source_project_file("R/core/rdata_io.R")
+source_project_file("tools/pkg_skeleton/R/rdata_io.R")
 source_project_file("modules/import/mod_rdata_picker.R")
 source_project_file("modules/import/mod_import_sc.R")
 source_project_file("tools/check_conventions.R")

@@ -8,7 +8,7 @@
 # câblage module, sync code <-> contrat, clés i18n.
 # =============================================================================
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")   # %||% (sourcé en premier par app.R)
-source_project_file("R/core/validation.R")
+source_project_file("tools/pkg_skeleton/R/validation.R")
 source_project_file("tools/pkg_skeleton/R/bulk_helpers.R") # build_contrast_gene_sets & co
 source_project_file("tools/pkg_skeleton/R/bulk_multi.R")
 source_project_file("tools/pkg_skeleton/R/bulk_multi_compare.R")

@@ -9,7 +9,7 @@
 # clés i18n.
 # =============================================================================
 source_project_file("tools/pkg_skeleton/R/bulk_multi.R")
-.local_source_if_exists("config/thresholds.R")
+.local_source_if_exists("tools/pkg_skeleton/R/thresholds.R")
 
 .ts_top_level_names <- function(relpath) {
   exprs <- parse(file.path(ts_project_root(), relpath))
@@ -171,7 +171,7 @@ test_that("mod_sc_pseudobulk.R is a thin consumer of the pure API (MD-3)", {
 test_that("capacity threshold is declared in config and consumed with fallback", {
   expect_true(exists("TS_BULK_MULTI_MAX_DATASETS", inherits = TRUE))
   expect_identical(TS_BULK_MULTI_MAX_DATASETS, 20L)
-  cfg <- .ts_read("config/thresholds.R")
+  cfg <- .ts_read("tools/pkg_skeleton/R/thresholds.R")
   expect_match(cfg, "TS_BULK_MULTI_MAX_DATASETS <- 20L", fixed = TRUE)
   src <- .ts_read("tools/pkg_skeleton/R/bulk_multi.R")
   expect_match(src, 'exists("TS_BULK_MULTI_MAX_DATASETS", inherits = TRUE)',

@@ -15,7 +15,7 @@
 # =============================================================================
 
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")     # %||%
-source_project_file("R/core/validation.R")     # guards canoniques (avant bulk_helpers)
+source_project_file("tools/pkg_skeleton/R/validation.R")     # guards canoniques (avant bulk_helpers)
 source_project_file("tools/pkg_skeleton/R/bulk_helpers.R")
 # PLOT-S6c : build_dds() / run_bulk_de_dispatch() appellent bulk_assert_raw_counts(),
 # defini dans le domaine correction de batch. Sans cette ligne le fichier ne passe
@@ -410,7 +410,7 @@ test_that("EVERY ORA call site in R/ passes a background (no fourth violator)", 
   # The point of "unified" is that there is ONE rule, so this is an exhaustive
   # sweep rather than a check of the site that happens to be broken. A test that
   # only inspects the known offender cannot notice a fifth call site.
-  files <- c("R/core/pathway_helpers.R", "tools/pkg_skeleton/R/bulk_report_engine.R")
+  files <- c("tools/pkg_skeleton/R/pathway_helpers.R", "tools/pkg_skeleton/R/bulk_report_engine.R")
   for (f in files) {
     src <- paste(readLines(file.path(ts_project_root(), f), warn = FALSE),
                  collapse = "\n")
@@ -436,7 +436,7 @@ test_that("EVERY ORA call site in R/ passes a background (no fourth violator)", 
   # fois dans le fichier (une seconde occurrence = la re-divergence qu'on
   # cherche à interdire), et son comportement est épinglé par
   # test-pathway-helpers.R ("la resolution d'univers dit QUAND elle se replie").
-  h <- paste(readLines(file.path(ts_project_root(), "R/core/pathway_helpers.R"),
+  h <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/pathway_helpers.R"),
                        warn = FALSE), collapse = "\n")
   m_union <- gregexpr("union(unique(universe_map$ENTREZID), ids)", h, fixed = TRUE)[[1]]
   expect_equal(sum(m_union > 0L), 1L)   # 0 occurrence => 0, pas 1

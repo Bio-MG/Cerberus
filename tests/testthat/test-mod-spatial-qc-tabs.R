@@ -33,7 +33,7 @@
 # rather than as an operator report.
 # =============================================================================
 
-source_project_file("config/defaults.R")
+source_project_file("tools/pkg_skeleton/R/defaults.R")
 
 # The UI render below calls NS()/tags$*/navset builders; the L2 block boots a
 # real module server. `shiny` must be ATTACHED (search path), not merely
@@ -42,9 +42,9 @@ source_project_file("config/defaults.R")
 suppressPackageStartupMessages(library(shiny))
 
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")            # %||%
-source_project_file("R/core/error_state.R")
-source_project_file("R/core/drive_allowlist.R")
-source_project_file("R/core/drive_watcher.R")
+source_project_file("tools/pkg_skeleton/R/error_state.R")
+source_project_file("tools/pkg_skeleton/R/drive_allowlist.R")
+source_project_file("tools/pkg_skeleton/R/drive_watcher.R")
 source_project_file("tools/pkg_skeleton/R/spatial_stats.R")      # the domain (not patched here)
 # D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
 # (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).

@@ -222,7 +222,7 @@ test_that("C6 : les library() imbriques du depot ne sont plus signales", {
   # regle, pas parce qu'il occupe une ligne donnee. La couverture s'elargit au
   # passage (tous les sites des fichiers temoins, plus 4 lignes choisies a la
   # main).
-  files <- c("R/core/pathway_helpers.R",   # clusterProfiler / org.*.eg.db / ReactomePA
+  files <- c("tools/pkg_skeleton/R/pathway_helpers.R",   # clusterProfiler / org.*.eg.db / ReactomePA
              "tools/pkg_skeleton/R/spatial_async.R",  # Seurat + BPCells dans un worker mirai (ex-R/spatial/, D2 M5 lot 4)
              "tools/pkg_skeleton/R/bulk_wgcna.R")        # require("WGCNA") dans une fonction
   total <- 0L
@@ -516,7 +516,7 @@ test_that("C10 : la fermeture de l'expression PRECEDENTE ne masque pas la foncti
 })
 
 test_that("C10 : un formel est reconnu dans une fonction NOMMEE et sur signature multi-lignes", {
-  # Le site réel `R/core/jobs.R:82` est dans `.handle_error <- function(e)`,
+  # Le site réel `jobs.R:82` (desormais tools/pkg_skeleton/R/jobs.R) est dans `.handle_error <- function(e)`,
   # PAS dans un gestionnaire anonyme : une règle qui ne regarderait que
   # `error = function(e)` le manquerait.
   lines <- c(
@@ -540,8 +540,8 @@ test_that("C10 : les re-leves REELS du depot ne sont plus signales", {
   # `jobs.R` et `sc_abundance_milo.R` n'avaient QU'UN signalement chacun, et
   # c'était ce re-levé : ils doivent être muets. Sur les deux gros fichiers on
   # vérifie la LIGNE, car ils gardent de la vraie dette par ailleurs.
-  expect_identical(.c10_flagged_lines(.c6_repo("R/core/jobs.R")), integer(0),
-                   info = "R/core/jobs.R devrait etre muet (son seul site etait stop(e))")
+  expect_identical(.c10_flagged_lines(.c6_repo("tools/pkg_skeleton/R/jobs.R")), integer(0),
+                   info = "jobs.R (desormais au paquet) devrait etre muet (son seul site etait stop(e))")
   expect_identical(.c10_flagged_lines(.c6_repo("R/sc/sc_abundance_milo.R")), integer(0),
                    info = "R/sc/sc_abundance_milo.R devrait etre muet")
   for (spec in list(list("tools/pkg_skeleton/R/bulk_helpers.R", 694L),

@@ -22,8 +22,8 @@
 # test-mod-bulk-de-drive-vocab.R : il boote le vrai serveur du module.
 # =============================================================================
 
-source_project_file("R/core/drive_allowlist.R")
-source_project_file("R/core/drive_watcher.R")
+source_project_file("tools/pkg_skeleton/R/drive_allowlist.R")
+source_project_file("tools/pkg_skeleton/R/drive_watcher.R")
 
 .VOC <- function() {
   list(condition_col = c("condition", "tissue"),

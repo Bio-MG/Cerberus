@@ -32,8 +32,8 @@
 # projection is applied where it enters the wire.
 # =============================================================================
 
-source_project_file("R/core/drive_allowlist.R")
-source_project_file("R/core/drive_watcher.R")
+source_project_file("tools/pkg_skeleton/R/drive_allowlist.R")
+source_project_file("tools/pkg_skeleton/R/drive_watcher.R")
 
 .SCD <- function() {
   data.frame(gene = c("Cdkn1a", "Mki67", "Top2a"),

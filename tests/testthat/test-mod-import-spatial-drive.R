@@ -43,12 +43,12 @@ Sys.setlocale("LC_CTYPE", "fr_FR.UTF-8")
 # sibling test file: `source_project_file()` puts things in `globalenv()`, and a
 # test that silently depends on whichever file testthat happened to load first is
 # a test that passes for the wrong reason when run alone.
-source_project_file("R/core/drive_allowlist.R")
-source_project_file("R/core/drive_watcher.R")
+source_project_file("tools/pkg_skeleton/R/drive_allowlist.R")
+source_project_file("tools/pkg_skeleton/R/drive_watcher.R")
 # The real Spatial loaders. The happy path below is a REAL domain execution, so
 # these must be the shipped functions and not stubs â€” a stub would turn the whole
 # point of that test into a tautology.
-source_project_file("R/core/error_state.R")
+source_project_file("tools/pkg_skeleton/R/error_state.R")
 source_project_file("tools/pkg_skeleton/R/state.R")
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")
 source_project_file("tools/pkg_skeleton/R/spatial_io.R")
@@ -431,7 +431,7 @@ test_that("the Spatial import nav plan is a DELIBERATE empty one, with the reaso
   # a COMMENT, and `deparse()` strips comments â€” so the source is read, not the
   # parse tree. Reading the wrong one of the two would have made this assertion
   # vacuously true.
-  watcher <- paste(readLines(file.path(ts_project_root(), "R/core/drive_watcher.R"),
+  watcher <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/drive_watcher.R"),
                              warn = FALSE), collapse = "\n")
   expect_match(watcher, "data-key=", fixed = TRUE)
   # â€¦and the empty plan is a real branch, not the fall-through: without it the

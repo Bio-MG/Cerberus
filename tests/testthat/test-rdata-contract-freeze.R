@@ -7,7 +7,7 @@
 # SIMULTANEMENT (regle contract-first du depot).
 # =============================================================================
 
-source_project_file("R/core/rdata_io.R")
+source_project_file("tools/pkg_skeleton/R/rdata_io.R")
 
 test_that("les codes de classification sont gelés", {
   expect_setequal(
@@ -83,7 +83,7 @@ test_that("le contrat documente est synchronise avec le code", {
 })
 
 test_that("les parametres config TS_IMPORT_RDA_* sont declares", {
-  defaults <- file.path(ts_project_root(), "config", "defaults.R")
+  defaults <- file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "defaults.R")
   expect_true(file.exists(defaults))
   txt <- paste(readLines(defaults, warn = FALSE), collapse = "\n")
   expect_match(txt, "TS_IMPORT_RDA_EXTENSIONS", fixed = TRUE)

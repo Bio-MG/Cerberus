@@ -10,7 +10,7 @@
 # même philosophie que test-pathway-helpers.R pour la V1 statique.
 # =============================================================================
 
-source_project_file("R/core/pathway_helpers.R")
+source_project_file("tools/pkg_skeleton/R/pathway_helpers.R")
 
 # --- fixture ----------------------------------------------------------------
 

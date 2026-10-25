@@ -10,7 +10,7 @@
 # Toute évolution = code + ce test + doc SIMULTANÉMENT (règle contract-first).
 # =============================================================================
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")
-source_project_file("R/core/validation.R")
+source_project_file("tools/pkg_skeleton/R/validation.R")
 # D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
 # (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
 load_project_pkg()

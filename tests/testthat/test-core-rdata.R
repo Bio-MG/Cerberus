@@ -9,7 +9,7 @@
 # Contrat : docs/contracts/RDATA_IMPORT_CONTRACT.md.
 # =============================================================================
 
-source_project_file("R/core/rdata_io.R")
+source_project_file("tools/pkg_skeleton/R/rdata_io.R")
 
 # ---------------------------------------------------------------------------
 # Fixtures : workspace mixte typique (save.image d'un biologiste)

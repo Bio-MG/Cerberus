@@ -172,7 +172,7 @@ test_that("the Stage 13 gate is NOT called and its inapplicability is documented
 
 # ── Aucun seuil de rarete par defaut ────────────────────────────────────────
 test_that("no default rarity threshold exists anywhere", {
-  cfg <- .pr_freeze_src("config/defaults.R")
+  cfg <- .pr_freeze_src("tools/pkg_skeleton/R/defaults.R")
   expect_match(cfg, "TS_POPULATION_RARITY_RULES", fixed = TRUE)
   expect_match(cfg, "TS_POPULATION_RARITY_MIN_CELLS_TOTAL", fixed = TRUE)
   # Ni seuil par defaut, ni reutilisation du plancher du design DA.

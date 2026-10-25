@@ -22,7 +22,7 @@
 # ci-dessous sont sa définition exécutable.
 # =============================================================================
 
-source_project_file("R/core/drive_allowlist.R")
+source_project_file("tools/pkg_skeleton/R/drive_allowlist.R")
 
 .g <- function(...) get0("ts_drive_verbatim_guard", envir = globalenv())
 

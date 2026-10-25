@@ -93,7 +93,9 @@
   "modules/spatial/deconv/mod_spatial_deconv.R"   # TS_RCTD_MIN_CELLS_PER_TYPE <- defaults
 )
 
-.sm_config <- c("config/defaults.R", "config/thresholds.R")
+# D2 M5 lot 5 : defaults.R + thresholds.R vivent dans l'arbre du paquet
+# (ex-config/*, app.R Bloc 02 mêmes positions) — l'épingle d'ordre suit.
+.sm_config <- c("tools/pkg_skeleton/R/defaults.R", "tools/pkg_skeleton/R/thresholds.R")
 
 # Doit rester IDENTIQUE a .app_allowlist (test-app-sourcing.R:74-85) : ce
 # sont des decisions documentees, pas des oublis. Le bloc (d) verifie la
@@ -138,7 +140,7 @@ test_that("the ordered extractor itself works (negative case)", {
 })
 
 test_that("the order detector flags an inverted list (negative case)", {
-  config <- c("config/defaults.R", "config/thresholds.R")
+  config <- c("tools/pkg_skeleton/R/defaults.R", "tools/pkg_skeleton/R/thresholds.R")
   good <- c(config, "R/a.R", "R/b.R")
   bad <- c("R/a.R", config, "R/b.R")   # consommateur R/a.R AVANT config/
   expect_true(.sm_order_ok(good, c("R/a.R", "R/b.R"), config))

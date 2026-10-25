@@ -4,7 +4,7 @@
 # Couvre : determinisme de cle, enforcement STRICT du perimetre (5 scopes),
 # hit/miss, ecrasement, eviction FIFO, no-op NULL et clear().
 
-source_project_file("R/core/caching.R")
+source_project_file("tools/pkg_skeleton/R/caching.R")
 
 test_that("cerberus_cache_key is deterministic for identical inputs", {
   k1 <- cerberus_cache_key("trajectory", matrix(1:6, 2), list(k = 5))

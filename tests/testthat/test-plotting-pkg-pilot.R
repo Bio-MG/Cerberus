@@ -131,6 +131,16 @@ test_that("frontiere : le paquet contient EXACTEMENT 6 plotting + 4 fournisseurs
   # source_project_file() au nouveau chemin ; le fournisseur manquant
   # R/core/rdata_io.R (4 symboles rdata_*, spatial_reference.R) reste sourcé
   # globalement par les tests et par app.R:74 (pattern dual-load, mesuré).
+  # M5 LOT 5 (2026-10-25, mini-cartographie docs/audits/
+  # d2_core_config_cartography.md — le fichier cartographie prévu était
+  # ABSENT, mini-cartographie refaite et écrite par le lot) : les 9 fichiers
+  # R/core/ RESTANTS (caching, drive_allowlist, drive_watcher, error_state,
+  # jobs, memory, pathway_helpers, rdata_io, validation) + config/
+  # {defaults,thresholds}.R suivent — R/core/ ne garde plus que le fichier
+  # étranger CERBERUS non câblé (cerberus_handoff.R, hors lot). Les 4 sites
+  # TS_PATHWAY_* non qualifiés de pathway_helpers.R basculent en carry+pin
+  # (précédents .ts_dt_const / .ts_report_const) ; rdata_io.R garde son repli
+  # exists(inherits=TRUE) (classe has-fallback, précédent lot 3).
   # L'egalite EXACTE reste l'anti-derive de perimetre : rien n'entre hors lot.
   rdir <- file.path(ts_project_root(), "tools", "pkg_skeleton", "R")
   expect_true(dir.exists(rdir), info = "tools/pkg_skeleton/R absent")
@@ -152,8 +162,12 @@ test_that("frontiere : le paquet contient EXACTEMENT 6 plotting + 4 fournisseurs
                           "spatial_deconv_tasks.R", "spatial_export.R",
                           "spatial_io.R", "spatial_multi.R", "spatial_niche.R",
                           "spatial_plotting.R", "spatial_reference.R",
-                          "spatial_report.R", "spatial_stats.R")),
-                   info = "le perimetre du paquet doit etre exactement 6 plotting + 4 fournisseurs R/core + 4 reports + 18 bulk + 11 spatial (M5 lot 4)")
+                          "spatial_report.R", "spatial_stats.R",
+                          "caching.R", "drive_allowlist.R", "drive_watcher.R",
+                          "error_state.R", "jobs.R", "memory.R",
+                          "pathway_helpers.R", "rdata_io.R", "validation.R",
+                          "defaults.R", "thresholds.R")),
+                   info = "le perimetre du paquet doit etre exactement 6 plotting + 4 fournisseurs R/core + 4 reports + 18 bulk + 11 spatial + 9 core restants + 2 config (M5 lot 5)")
 })
 
 # ─── M4 suite (2026-10-25) : les 4 autres fichiers du domaine ────────────────

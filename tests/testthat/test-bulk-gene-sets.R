@@ -12,7 +12,7 @@
 #   5. l'aller-retour .gmt (bulk_write_gmt -> bulk_parse_gmt) ;
 #   6. la référence au contrat gelé (garde C8).
 # =============================================================================
-source_project_file("R/core/validation.R")
+source_project_file("tools/pkg_skeleton/R/validation.R")
 source_project_file("tools/pkg_skeleton/R/provenance.R")
 # D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
 # (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).

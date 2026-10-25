@@ -15,7 +15,7 @@ suppressPackageStartupMessages({
   library(shinyFiles)  # getVolumes (mod_import_sc)
   library(Seurat)      # prepare_seurat_object (attaché par global.R en prod)
 })
-source_project_file("R/core/rdata_io.R")
+source_project_file("tools/pkg_skeleton/R/rdata_io.R")
 source_project_file("modules/import/mod_rdata_picker.R")
 
 .tmpdir <- tempfile(pattern = "rdata_picker_")

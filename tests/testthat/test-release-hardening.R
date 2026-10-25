@@ -20,8 +20,8 @@
 source_project_file("R/sc/sc_communication.R")
 source_project_file("R/sc/sc_abundance_milo.R")
 source_project_file("R/sc/sc_abundance_sccoda.R")
-source_project_file("R/core/jobs.R")      # C7 : wrapper sync/async
-source_project_file("R/core/caching.R")   # C12 : reset du cache
+source_project_file("tools/pkg_skeleton/R/jobs.R")      # C7 : wrapper sync/async
+source_project_file("tools/pkg_skeleton/R/caching.R")   # C12 : reset du cache
 # M5 lot 2 : les 4 fichiers du domaine rapport vivent dans
 # tools/pkg_skeleton/R/ — ce fichier les source TOUJOURS à l'ancienne mode
 # (globalenv), au NOUVEAU chemin. DÉCISION MESURÉE : PAS de bascule

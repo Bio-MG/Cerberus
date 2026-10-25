@@ -12,7 +12,7 @@
 #      d'autre ne l'attrape : les deux chemins renvoyaient `valid`.
 # =============================================================================
 
-source_project_file("R/core/jobs.R")
+source_project_file("tools/pkg_skeleton/R/jobs.R")
 source_project_file("tools/pkg_skeleton/R/spatial_async.R")  # ex-R/spatial/, D2 M5 lot 4
 
 test_that("APP_DAEMON_SOURCE_FILES couvre la fermeture Milo et pointe des fichiers reels", {
@@ -23,10 +23,10 @@ test_that("APP_DAEMON_SOURCE_FILES couvre la fermeture Milo et pointe des fichie
   # deconv_tasks, stats).
   expect_true(all(c(
     "tools/pkg_skeleton/R/spatial_async.R",
-    "config/defaults.R", "config/thresholds.R",
+    "tools/pkg_skeleton/R/defaults.R", "tools/pkg_skeleton/R/thresholds.R",
     "tools/pkg_skeleton/R/io_helpers.R", "tools/pkg_skeleton/R/state.R",
     "tools/pkg_skeleton/R/provenance.R",
-    "R/core/validation.R",
+    "tools/pkg_skeleton/R/validation.R",
     "R/sc/sc_velocity.R", "R/sc/sc_abundance_design.R",
     "R/sc/sc_abundance_milo.R", "R/sc/sc_abundance_milo_views.R"
   ) %in% APP_DAEMON_SOURCE_FILES))
@@ -60,7 +60,7 @@ test_that("le module Milo passe par le pool applicatif partage (4E-4)", {
 })
 
 test_that("le plafond du job DA est un parametre declare", {
-  defaults <- paste(readLines(file.path(ts_project_root(), "config/defaults.R"),
+  defaults <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/defaults.R"),
                               warn = FALSE),
                     collapse = "\n")
   expect_match(defaults, "TS_DA_MILO_TIMEOUT_MS", fixed = TRUE)

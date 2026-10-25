@@ -13,7 +13,7 @@
 # les 7 autres rendent NA. Ce fichier épingle la table mesurée (direction 7)
 # pour que la consolidation ne puisse pas la déplacer en silence.
 # =============================================================================
-source_project_file("R/core/error_state.R")
+source_project_file("tools/pkg_skeleton/R/error_state.R")
 
 # --- Le jeu des 11 accesseurs, avec la classe que CHACUN garde (NA = aucune) --
 # Mesuré le 2026-09-20 : `communication_error_state` garde

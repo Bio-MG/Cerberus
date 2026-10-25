@@ -30,12 +30,12 @@
 }
 
 .dac_source <- function() {
-  source_project_file("R/core/drive_allowlist.R")
+  source_project_file("tools/pkg_skeleton/R/drive_allowlist.R")
   # drive_watcher.R logs through ts_log_swallow() in its error handlers; a test
   # that sources only drive_watcher.R must provide the logger or a provoked
   # read error becomes "could not find function" instead of the asserted NULL.
   source_project_file("tools/pkg_skeleton/R/error_log.R")
-  source_project_file("R/core/drive_watcher.R")
+  source_project_file("tools/pkg_skeleton/R/drive_watcher.R")
 }
 
 .dac_source()

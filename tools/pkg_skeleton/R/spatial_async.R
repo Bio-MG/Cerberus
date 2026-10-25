@@ -159,12 +159,14 @@ APP_DAEMON_SOURCE_FILES <- c(
   # --- SC : abondance differentielle Milo (4E-4) — ORDRE : config, core, domaine ---
   # D2 M5 lot 1 : les 3 fournisseurs demenagent dans l'arbre du paquet — les
   # chemins du preload daemon suivent (ordre interne inchangé).
-  "config/defaults.R",
-  "config/thresholds.R",
+  # D2 M5 lot 5 : defaults.R / thresholds.R / validation.R suivent le meme
+  # regime (l'ordre config -> core -> domaine est PRESERVE).
+  "tools/pkg_skeleton/R/defaults.R",
+  "tools/pkg_skeleton/R/thresholds.R",
   "tools/pkg_skeleton/R/io_helpers.R",
   "tools/pkg_skeleton/R/state.R",
   "tools/pkg_skeleton/R/provenance.R",
-  "R/core/validation.R",
+  "tools/pkg_skeleton/R/validation.R",
   "R/sc/sc_velocity.R",
   "R/sc/sc_abundance_design.R",
   "R/sc/sc_abundance_milo.R",

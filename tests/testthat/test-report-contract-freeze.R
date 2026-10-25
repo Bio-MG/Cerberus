@@ -234,7 +234,7 @@ test_that("app.R sources the report domain AFTER all domain files", {
 
 # ── Config + contrat : synchronisation code / doc ────────────────────────────
 test_that("config declares the TS_REPORT_* constants consumed by the contract", {
-  cfg <- .rep_report_src("config/defaults.R")
+  cfg <- .rep_report_src("tools/pkg_skeleton/R/defaults.R")
   expect_match(cfg, "TS_REPORT_MAX_TABLE_ROWS", fixed = TRUE)
   expect_match(cfg, "TS_REPORT_MAX_PROVENANCE_ROWS", fixed = TRUE)
   src <- .rep_report_src(file.path(.rep_pkg_dir, "report_render.R"))

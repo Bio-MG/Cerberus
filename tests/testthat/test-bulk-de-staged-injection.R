@@ -40,8 +40,8 @@
 # test-bulk-de-input-confirm.R:37-38 and test-drive-watcher.R:68-69. Without them
 # every block in this file errors with "could not find function ts_drive_tick",
 # which reads like a product failure and is not one.
-source_project_file("R/core/drive_allowlist.R")
-source_project_file("R/core/drive_watcher.R")
+source_project_file("tools/pkg_skeleton/R/drive_allowlist.R")
+source_project_file("tools/pkg_skeleton/R/drive_watcher.R")
 
 .BSI <- function() {
   vals <- list(`bulk-de-condition_col` = "condition",

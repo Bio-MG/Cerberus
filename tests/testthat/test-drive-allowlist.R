@@ -33,7 +33,7 @@
 # boot root. It is the one drive file that needs no fixture at all, which is
 # precisely why it is worth freezing: nothing about it can drift silently.
 .drv_al_source <- function() {
-  source_project_file("R/core/drive_allowlist.R")
+  source_project_file("tools/pkg_skeleton/R/drive_allowlist.R")
 }
 
 .drv_al_source()

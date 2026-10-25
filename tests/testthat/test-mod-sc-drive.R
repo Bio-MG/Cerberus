@@ -24,13 +24,13 @@
 # `test-sc-auto-pipeline.R` exercises `run_sc_auto_pipeline()`.
 # =============================================================================
 
-source_project_file("config/defaults.R")
+source_project_file("tools/pkg_skeleton/R/defaults.R")
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")    # %||%
 source_project_file("tools/pkg_skeleton/R/error_log.R")     # M-1 : ts_log_swallow appelé par les handlers convertis
 source_project_file("tools/pkg_skeleton/R/state.R")         # create_sc_shared_state
-source_project_file("R/core/drive_allowlist.R")
-source_project_file("R/core/drive_watcher.R")
-source_project_file("R/core/memory.R")       # preflight RAM (M-4) lu par le pipeline
+source_project_file("tools/pkg_skeleton/R/drive_allowlist.R")
+source_project_file("tools/pkg_skeleton/R/drive_watcher.R")
+source_project_file("tools/pkg_skeleton/R/memory.R")       # preflight RAM (M-4) lu par le pipeline
 source_project_file("R/sc/sc_pipeline.R")    # M-2 : .sc_ap_drive_inputs delegue a sc_ap_normalize_params
 source_project_file("R/sc/sc_helpers.R")      # resolve_sketch_preset, robust_find_clusters
 source_project_file("R/sc/sc_bpcells.R")      # smart_scale_data, sc_backend_status

@@ -11,7 +11,7 @@
 # Ce fichier épingle : config est la SOURCE UNIQUE, l'UI et le drive la lisent.
 # Toute divergence future entre les canaux fait ROUGIR ce test.
 # =============================================================================
-source_project_file("config/defaults.R")
+source_project_file("tools/pkg_skeleton/R/defaults.R")
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")   # %||% requis par le normalisateur
 source_project_file("R/sc/sc_pipeline.R")    # M-2 : le canal drive delegue au coeur
 source_project_file("modules/sc/mod_sc.R")

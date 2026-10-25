@@ -10,7 +10,7 @@
 # Toute évolution = code + ce test + doc SIMULTANÉMENT (règle contract-first).
 # =============================================================================
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")
-source_project_file("R/core/validation.R")
+source_project_file("tools/pkg_skeleton/R/validation.R")
 source_project_file("tools/pkg_skeleton/R/bulk_batch_qc.R")
 source_project_file("tools/pkg_skeleton/R/batch_correction.R")
 

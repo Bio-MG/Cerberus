@@ -120,13 +120,32 @@ test_that("C9 : l'alias de domaine ne DEBORDE pas (temoin de traversee)", {
   # tools/pkg_skeleton/R/ et sort de la population C9 ; mesure du lot rejouee
   # AVANT le deplacement : C9 = 13 files, dont 3 spatial — async, deconv_prep,
   # export). Le temoin de traversee represente encore 2 domaines (core, sc) :
-  # `R/core/rdata_io.R` reste, rempli par `R/sc/sc_communication_input.R`
-  # (mesure : flagge C9, non flagge C9b, pas de test eponyme). Solde du sortant
-  # asseré dans les DEUX sens (dossier R/spatial absent + 11 fichiers presents
-  # au paquet), meme forme que les soldes M4-suite / lot 2 / lot 3.
-  files <- c("R/core/rdata_io.R",
+  # ⚠️ AMENDE le 2026-10-25 (D2 M5 LOT 5) : `R/core/rdata_io.R` (successeur du
+  # lot 4) demenage A SON TOUR dans le paquet (tools/pkg_skeleton/R/, avec les
+  # 8 autres fichiers R/core restants + config/{defaults,thresholds}.R) et
+  # sort de la population C9 — il reste au temoin de traversee comme SORTANT
+  # asseré (le garde le signale encore par son nom a son adresse du paquet :
+  # aucun test eponyme ne l'y suit encore), rempli par
+  # `R/sc/sc_communication_input.R` (mesure : flagge C9, non flagge C9b, pas
+  # de test eponyme). Solde du sortant asseré dans les DEUX sens (dossier
+  # R/core ne contient plus que le fichier etranger CERBERUS, couvert par son
+  # nom, HORS lot + les 9 fichiers presents au paquet), meme forme que les
+  # soldes M4-suite / lots 2-4.
+  files <- c("tools/pkg_skeleton/R/rdata_io.R",
              "R/sc/sc_communication_input.R")
   expect_length(.c9_flagged(.c9_abs(files)), 2L)
+  # Solde lot 5 : R/core ne contient plus que cerberus_handoff.R (etranger,
+  # hors lot) et les 9 fichiers vivent bien dans le paquet.
+  core_left <- list.files(file.path(ts_project_root(), "R", "core"), pattern = "[.]R$")
+  expect_identical(sort(core_left), "cerberus_handoff.R",
+                   info = "R/core doit etre vide hors du fichier etranger CERBERUS")
+  pkg <- file.path(ts_project_root(), "tools", "pkg_skeleton", "R")
+  for (f in c("caching.R", "drive_allowlist.R", "drive_watcher.R",
+              "error_state.R", "jobs.R", "memory.R", "pathway_helpers.R",
+              "rdata_io.R", "validation.R", "defaults.R", "thresholds.R")) {
+    expect_true(file.exists(file.path(pkg, f)),
+                info = paste(f, "absent du paquet apres extraction M5 lot 5"))
+  }
   # Et le solde explicite : `sc_export.R` n'est PLUS signale, mais il l'etait —
   # on l'assere pour qu'une regression (la garde qui cesse de voir un fichier
   # sans test) ne puisse pas se cacher derriere ce retrait.
@@ -164,21 +183,25 @@ test_that("C9 : dans R/plotting/, SEUL palettes.R reste signale (invariant)", {
                  length(list.files("R/plotting", pattern = "[.]R$")) > 0L)
 })
 
-test_that("C9 : le plafond de dette est 10 (recompose par le lot D2 M5 lot 4)", {
+test_that("C9 : le plafond de dette est 9 (recompose par le lot D2 M5 lot 5)", {
   # Plafond, pas egalite : le compte doit pouvoir BAISSER quand un test est
   # ecrit, mais ne doit jamais REMONTER (une regression de l'alias le ferait).
   # ⚠️ Le plafond SUIT la derniere mesure : il valait 22 (§2cy), puis 21 (§2db),
   # 20 (§2dd), 19 (§2df), 14 (M5 lot 2, recompose 14 pour l'etranger CERBERUS),
   # 13 (la session CERBERUS a PAYE sa dette : test-cerberus-handoff.R couvre
-  # cerberus_handoff.R par son nom, mesure du 13:59). D2 M5 LOT 4 (2026-10-25) :
-  # les 11 fichiers de R/spatial demenagent dans tools/pkg_skeleton/R/ et
-  # quittent la population — les 3 spatial flagges etaient spatial_async.R,
-  # spatial_deconv_prep.R et spatial_export.R (13 - 3 = 10, mesure exacte
-  # rejouee avant le deplacement a 13:59, liste byte-conservee dans le probe).
-  # Aucun etranger en vol au moment de la mesure (check_writers 13:51 :
-  # aucun battement etranger ; la session CERBERUS a livre ses tests).
+  # cerberus_handoff.R par son nom, mesure du 13:59), 10 (lot 4 : les 11
+  # fichiers de R/spatial quittent la population, dont 3 flagges — async,
+  # deconv_prep, export). D2 M5 LOT 5 (2026-10-25) : les 9 fichiers R/core
+  # RESTANTS (caching, drive_allowlist, drive_watcher, error_state, jobs,
+  # memory, pathway_helpers, rdata_io, validation) + config/{defaults,
+  # thresholds}.R demenagent dans tools/pkg_skeleton/R/ et quittent la
+  # population — 1 seul etait flagge (`rdata_io.R`, aucun test eponyme ;
+  # mesure --list-all post-deplacement : C9 10 -> 9, les 9 restants sont tous
+  # R/sc). R/core ne garde plus que cerberus_handoff.R (etranger CERBERUS,
+  # couvert par son nom, HORS lot). Aucun etranger en vol au moment de la
+  # mesure (check_writers 14:44 : aucun battement etranger).
   flagged <- .c9_flagged(.c9_population())
-  expect_true(length(flagged) <= 10L)
+  expect_true(length(flagged) <= 9L)
   # Et le contrat dans l'autre sens, pour que le plafond ne devienne pas
   # infalsifiable si la garde cesse de signaler quoi que ce soit : la population
   # C9 n'est pas vide (temoin de NON-VACUITE).

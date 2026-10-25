@@ -169,7 +169,11 @@ build_dds <- function(counts_matrix, metadata, design_formula = "~ condition",
 # They are re-exported here via a thin shim that sources the canonical file
 # on demand, avoiding a 15+ line duplication that would trip
 # tests/testthat/test-check_duplication.R. In production app.R already
-# sourced R/core/validation.R BEFORE this file, so the shim is a no-op.
+# sourced validation.R BEFORE this file, so the shim is a no-op.
+# D2 M5 lot 5 : validation.R vit desormais DANS l'arbre du paquet (meme
+# namespace que ce fichier) — sous load_project_pkg() les deux symboles se
+# resolvent dans le namespace et le shim reste un no-op ; les candidats
+# suivent le nouveau chemin pour les chargements globalenv tardifs.
 if (!exists("check_design_confounding", envir = .GlobalEnv) ||
     !exists("validate_bulk_design", envir = .GlobalEnv)) {
   # Resolve project root relative to this file's location (works both in app.R
@@ -177,9 +181,9 @@ if (!exists("check_design_confounding", envir = .GlobalEnv) ||
   # D2 M5 lot 3 : le fichier vit desormais dans tools/pkg_skeleton/R/ — TROIS
   # dirname() pour remonter a la racine projet (etait : deux, chemin R/bulk/).
   .bulk_helpers_validation_candidates <- c(
-    "R/core/validation.R",
-    file.path(dirname(dirname(dirname(normalizePath("tools/pkg_skeleton/R/bulk_helpers.R", mustWork = FALSE)))), "R", "core", "validation.R"),
-    file.path(getwd(), "R", "core", "validation.R")
+    "tools/pkg_skeleton/R/validation.R",
+    file.path(dirname(dirname(dirname(normalizePath("tools/pkg_skeleton/R/bulk_helpers.R", mustWork = FALSE)))), "tools", "pkg_skeleton", "R", "validation.R"),
+    file.path(getwd(), "tools", "pkg_skeleton", "R", "validation.R")
   )
   for (.p in .bulk_helpers_validation_candidates) {
     if (file.exists(.p)) { source(.p, local = FALSE); break }

@@ -16,11 +16,11 @@
 # field is simply not published.
 # =============================================================================
 
-source_project_file("config/defaults.R")
+source_project_file("tools/pkg_skeleton/R/defaults.R")
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")            # %||%
-source_project_file("R/core/error_state.R")
-source_project_file("R/core/drive_allowlist.R")
-source_project_file("R/core/drive_watcher.R")
+source_project_file("tools/pkg_skeleton/R/error_state.R")
+source_project_file("tools/pkg_skeleton/R/drive_allowlist.R")
+source_project_file("tools/pkg_skeleton/R/drive_watcher.R")
 source_project_file("modules/bulk_de/mod_bulk_de_export.R")
 
 if (!exists(".tr", envir = globalenv()))

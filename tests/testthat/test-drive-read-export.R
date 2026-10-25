@@ -22,8 +22,8 @@
 
 .read_export_env <- function() {
   e <- new.env(parent = globalenv())
-  sys.source(file.path(ts_project_root(), "R", "core", "drive_allowlist.R"), envir = e)
-  sys.source(file.path(ts_project_root(), "R", "core", "drive_watcher.R"), envir = e)
+  sys.source(file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "drive_allowlist.R"), envir = e)
+  sys.source(file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "drive_watcher.R"), envir = e)
   root <- tempfile("tsdrive-read-")
   dir.create(file.path(root, "tools", "_drive"), recursive = TRUE, showWarnings = FALSE)
   e$ts_drive_boot(root)

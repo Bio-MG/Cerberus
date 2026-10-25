@@ -43,12 +43,15 @@ source_project_file <- function(relpath) {
 }
 
 # Source config files first (if they exist — tests may run without them)
+# D2 M5 lot 5 (2026-10-25) : defaults.R + thresholds.R vivent dans l'arbre du
+# paquet (tools/pkg_skeleton/R/) — le bootstrap de test suit les chemins ;
+# app.R les source() TOUJOURS en Bloc 02 (mêmes positions).
 .local_source_if_exists <- function(relpath) {
   full <- file.path(ts_project_root(), relpath)
   if (file.exists(full)) sys.source(full, envir = globalenv())
 }
-.local_source_if_exists("config/defaults.R")
-.local_source_if_exists("config/thresholds.R")
+.local_source_if_exists("tools/pkg_skeleton/R/defaults.R")
+.local_source_if_exists("tools/pkg_skeleton/R/thresholds.R")
 
 # §14.1 : `ts_error_state()` est appelé par les 11 accesseurs `*_error_state()`
 # de tools/pkg_skeleton/R/ et R/sc/ (délégation d'une ligne). app.R le source dans le bloc
@@ -56,7 +59,8 @@ source_project_file <- function(relpath) {
 # Sans cette ligne, un test qui source UN SEUL fichier de domaine (ex.
 # test-bulk-network.R) perd l'accesseur et échoue pour une raison étrangère à
 # son sujet. Les deux lignes ci-dessus suivent déjà ce motif pour config/.
-.local_source_if_exists("R/core/error_state.R")
+# D2 M5 lot 5 : error_state.R vit désormais AUSSI dans l'arbre du paquet.
+.local_source_if_exists("tools/pkg_skeleton/R/error_state.R")
 
 # =============================================================================
 # D2 M4 pilot — package-based loading for EXTRACTED domain files

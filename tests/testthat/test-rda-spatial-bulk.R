@@ -10,7 +10,7 @@ suppressPackageStartupMessages({
   library(Seurat)
 })
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")
-source_project_file("R/core/rdata_io.R")
+source_project_file("tools/pkg_skeleton/R/rdata_io.R")
 source_project_file("tools/pkg_skeleton/R/spatial_reference.R")
 
 .tmpdir <- tempfile(pattern = "rda_spatial_")

@@ -18,7 +18,7 @@
 # D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
 # (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
 load_project_pkg()
-source_project_file("R/core/pathway_helpers.R")
+source_project_file("tools/pkg_skeleton/R/pathway_helpers.R")
 # ggplot2 is required for plot builders but not auto-loaded by helper-source.R
 if (requireNamespace("ggplot2", quietly = TRUE)) suppressPackageStartupMessages(library(ggplot2))
 
@@ -206,7 +206,7 @@ source_project_file("tools/check_conventions.R")
 # servent aussi de preuve de NON-TRONCATURE.
 
 test_that("C10 : pathway_helpers.R ne contribue plus aucun signalement", {
-  path <- file.path(ts_project_root(), "R/core/pathway_helpers.R")
+  path <- file.path(ts_project_root(), "tools/pkg_skeleton/R/pathway_helpers.R")
   .REPORT$warns <- list()
   check_c10_error_style(path)
   expect_length(.REPORT$warns, 0L)
@@ -357,7 +357,7 @@ test_that("M12: qval_cutoff est expose, documente par son defaut, et valide tot"
 })
 
 test_that("M12: les trois appels d'enrichissement passent qval_cutoff", {
-  exprs <- ts_ast_parse("R/core/pathway_helpers.R")
+  exprs <- ts_ast_parse("tools/pkg_skeleton/R/pathway_helpers.R")
   calls <- list()
   for (e in exprs) {
     ts_ast_walk(e, function(y) {

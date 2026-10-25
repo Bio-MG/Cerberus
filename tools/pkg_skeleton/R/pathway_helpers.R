@@ -12,7 +12,26 @@
 #
 # Depends on: clusterProfiler, org.Hs.eg.db / org.Mm.eg.db, ReactomePA
 # (KEGG/Reactome only), KEGGREST (optional), ggplot2, viridis, DT.
+#
+# D2 M5 lot 5 (2026-10-25) : le fichier vit desormais dans l'arbre du paquet
+# (tools/pkg_skeleton/R/). Les 4 sites de lecture des constantes config
+# TS_PATHWAY_* (thresholds.R:94-96) sont passes en modele « carry + pin »
+# (precedents .ts_dt_const / .ts_report_const) : sous globalenv (app.R Bloc 03
+# et les tests), la constante config est PORTEE ; sous namespace, le repli
+# EPINGLE — EGAL a la valeur config (thresholds.R:94-96) — prend le relais.
 # =============================================================================
+
+# Modele « carry + pin » (precedents .ts_dt_const datatable.R:33,
+# .ts_report_const report_render.R:38) : porte la constante definie par
+# config/thresholds.R quand elle est visible depuis globalenv (app.R et les
+# tests qui la sourcent), sinon retombe sur le repli EPINGLE ci-dessous.
+.ts_pathway_const <- function(name, fallback) {
+  if (exists(name, envir = globalenv(), inherits = TRUE)) {
+    get(name, envir = globalenv(), inherits = TRUE)
+  } else {
+    fallback
+  }
+}
 
 
 
@@ -792,7 +811,7 @@ build_pathway_network_data <- function(df, top_n = 30, mode = c("emap", "cnet"))
     stop(errorCondition("top_n doit être un nombre >= 2 (un réseau d'une seule voie n'a pas de sens).",
                         class = "pathway_error"))
   }
-  top_n <- min(as.integer(top_n), TS_PATHWAY_NETWORK_MAX_TERMS)
+  top_n <- min(as.integer(top_n), .ts_pathway_const("TS_PATHWAY_NETWORK_MAX_TERMS", 300L))
 
   res <- as.data.frame(enrich_obj)
   if (nrow(res) < 2) {
@@ -823,7 +842,7 @@ build_pathway_network_data <- function(df, top_n = 30, mode = c("emap", "cnet"))
   if (mode == "emap") {
     edges <- .pathway_emap_edges(term_nodes$id, gene_sets)
     nodes <- term_nodes
-    min_sim <- TS_PATHWAY_NET_MIN_SIM
+    min_sim <- .ts_pathway_const("TS_PATHWAY_NET_MIN_SIM", 0.20)
   } else {
     edges <- .pathway_cnet_edges(term_nodes$id, gene_sets)
     gene_ids <- sort(unique(edges$to))
@@ -860,7 +879,7 @@ build_pathway_network_data <- function(df, top_n = 30, mode = c("emap", "cnet"))
       inter <- length(intersect(gene_sets[[i]], gene_sets[[j]]))
       if (inter == 0L) next
       sim <- inter / length(union(gene_sets[[i]], gene_sets[[j]]))
-      if (sim >= TS_PATHWAY_NET_MIN_SIM) {
+      if (sim >= .ts_pathway_const("TS_PATHWAY_NET_MIN_SIM", 0.20)) {
         pair <- sort(c(term_ids[[i]], term_ids[[j]]))
         from <- c(from, pair[[1]]); to <- c(to, pair[[2]]); w <- c(w, sim)
       }
@@ -896,7 +915,7 @@ pathway_network_layout <- function(net) {
   g <- igraph::graph_from_data_frame(net$edges, directed = FALSE,
                                      vertices = net$nodes)
   coords <- withr::with_seed(
-    TS_PATHWAY_NETWORK_LAYOUT_SEED,
+    .ts_pathway_const("TS_PATHWAY_NETWORK_LAYOUT_SEED", 42L),
     igraph::layout_with_fr(g)
   )
   net$nodes$x <- coords[, 1]

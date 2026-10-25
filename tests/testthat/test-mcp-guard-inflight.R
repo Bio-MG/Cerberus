@@ -26,8 +26,8 @@
 .mcp_guard_env <- function() {
   path <- .mcp_guard_script()
   e <- new.env(parent = globalenv())
-  sys.source(file.path(ts_project_root(), "R", "core", "drive_allowlist.R"), envir = e)
-  sys.source(file.path(ts_project_root(), "R", "core", "drive_watcher.R"), envir = e)
+  sys.source(file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "drive_allowlist.R"), envir = e)
+  sys.source(file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "drive_watcher.R"), envir = e)
   expressions <- parse(path, keep.source = TRUE)
   labels <- vapply(expressions, function(x) paste(deparse(x, width.cutoff = 500L), collapse = "\n"), character(1))
   first <- which(grepl("^\\.ts_json <- function", labels))[1L]

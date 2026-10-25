@@ -17,7 +17,7 @@
 # =============================================================================
 
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")        # %||%
-source_project_file("R/core/rdata_io.R")          # rdata_is_supported_file / rdata_load_env
+source_project_file("tools/pkg_skeleton/R/rdata_io.R")          # rdata_is_supported_file / rdata_load_env
 source_project_file("tools/pkg_skeleton/R/spatial_reference.R")
 
 .ref_err <- function(expr) {
