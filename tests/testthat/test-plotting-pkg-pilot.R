@@ -102,7 +102,7 @@ test_that("sous-processus qui ne charge QUE le paquet (renv auto-actif)", {
                    info = "l'appel reel ne rend pas le plancher 320L hors session")
 })
 
-test_that("frontiere : le paquet contient EXACTEMENT les 6 fichiers de R/plotting", {
+test_that("frontiere : le paquet contient EXACTEMENT 6 plotting + 4 fournisseurs core (M5 lot 1)", {
   # M4-pilote : plot_dims.R seul. M4 suite (2026-10-25, un seul lot coherent) :
   # les 5 restants suivent (palettes, theme, export, datatable, complex_heatmap
   # — l'ordre de deplacement par lot est libre puisque le lot est ATOMIQUE,
@@ -110,13 +110,21 @@ test_that("frontiere : le paquet contient EXACTEMENT les 6 fichiers de R/plottin
   # mesurees : complex_heatmap.R appelle bulk_diverging_ramp()/bulk_sequential_
   # ramp() de palettes.R — dans le namespace paquet, un fichier ne resout PAS
   # via globalenv : palettes.R doit y vivre AVANT ou AVEC complex_heatmap.R).
-  # L'egalite EXACTE reste l'anti-derive de perimetre : rien n'entre hors lot.
+  # M5 lot 1 (2026-10-25, cartographie docs/audits/d2_reports_cartography.md
+  # §1) : les 4 FOURNISSEURS R/core du rapport consolide rejoignent l'arbre
+  # (state, error_log, io_helpers, provenance). Deplacement PHYSIQUE seul :
+  # contrairement au domaine plotting, les TESTS gardent source_project_file()
+  # au NOUVEAU chemin — AUCUNE bascule de chargeur dans ce lot (lot 2 =
+  # R/reports). L'egalite EXACTE reste l'anti-derive de perimetre : rien
+  # n'entre hors lot.
   rdir <- file.path(ts_project_root(), "tools", "pkg_skeleton", "R")
   expect_true(dir.exists(rdir), info = "tools/pkg_skeleton/R absent")
   expect_identical(sort(list.files(rdir, pattern = "[.]R$")),
                    sort(c("plot_dims.R", "palettes.R", "theme.R",
-                          "export.R", "datatable.R", "complex_heatmap.R")),
-                   info = "le perimetre extrait doit etre exactement R/plotting complet")
+                          "export.R", "datatable.R", "complex_heatmap.R",
+                          "state.R", "error_log.R", "io_helpers.R",
+                          "provenance.R")),
+                   info = "le perimetre du paquet doit etre exactement 6 plotting + 4 fournisseurs R/core (M5 lot 1)")
 })
 
 # ─── M4 suite (2026-10-25) : les 4 autres fichiers du domaine ────────────────
@@ -180,4 +188,60 @@ test_that("M4 lot A : le paquet fournit les symboles de export.R", {
     expect_false(exists(sym, envir = globalenv(), inherits = FALSE),
                  info = paste(sym, "defini dans globalenv : double definition"))
   }
+})
+
+# ─── M5 lot 1 (2026-10-25) : les 4 fournisseurs R/core du rapport ────────────
+# Cartographie docs/audits/d2_reports_cartography.md §1 : state.R, error_log.R,
+# io_helpers.R, provenance.R rejoignent PHYSIQUEMENT l'arbre du paquet. Ce lot
+# ne TOUCHE PAS aux chargeurs : app.R source() a la nouvelle maison (meme
+# position d'ordre, manifeste qui suit les chemins) et les TESTS gardent
+# source_project_file() au NOUVEAU chemin. En particulier : AUCUNE assertion
+# d'absence dans globalenv pour ces symboles — la suite charge ces fichiers
+# dans globalenv PAR DESIGN dans ce lot (le double chemin est l'etat attendu ;
+# la bascule load_project_pkg() est le lot 2, avec R/reports).
+
+.pm5_symbols <- c(
+  # state.R (contrat d'etat + fabriques partagees ; exempt C17 via .STATE_LAYER)
+  "state_get", "state_set", "state_has",
+  "create_analysis_state", "is_analysis_state", "assert_analysis_state",
+  "create_sc_shared_state", "create_bulk_shared_state",
+  "create_spatial_shared_state",
+  # error_log.R (journal des erreurs avalees)
+  "ts_log_swallow", "ts_swallow", "ts_swallowed_log_path", "ts_session_token",
+  # io_helpers.R (representatif : identite d'objet + socle %||% + detecteurs)
+  "build_object_identity_v2", "%||%", "detect_gene_id_type",
+  "detect_organism_from_ids", "prepare_spatial_object",
+  "remap_gene_ids_to_symbol", "infer_metadata_from_names",
+  # provenance.R (manifeste de provenance, CHRYSALIS 2C)
+  "new_provenance_entry", "provenance_append", "provenance_to_dataframe"
+)
+
+test_that("M5 lot 1 : le paquet fournit les symboles des 4 fournisseurs R/core", {
+  ns <- asNamespace("TranscriptoShiny")
+  for (sym in .pm5_symbols) {
+    expect_true(exists(sym, envir = ns, inherits = FALSE),
+                info = paste(sym, "absent du namespace TranscriptoShiny"))
+  }
+})
+
+test_that("M5 lot 1 : dependance intra-paquet provenance -> state resolu DANS le namespace", {
+  # Lecon M4 (complex_heatmap -> palettes) : un namespace ne resout PAS via
+  # globalenv. provenance_append() appelle state_get()/state_set() — au moment
+  # de l'APPEL depuis le paquet, les DEUX doivent vivre dans le namespace.
+  # Preuve comportementale : la chaine COMPLETE create_analysis_state ->
+  # new_provenance_entry -> provenance_append (state_get + state_set) ->
+  # provenance_to_dataframe s'execute depuis le namespace seul.
+  ns <- asNamespace("TranscriptoShiny")
+  st <- get("create_analysis_state", envir = ns)()
+  idx <- get("provenance_append", envir = ns)(
+    st, get("new_provenance_entry", envir = ns)(
+      analysis_id = "pkg_m5_lot1", method = "garde_dependance"))
+  expect_identical(idx, 1L)
+  got <- get("state_get", envir = ns)(st, "provenance")
+  expect_identical(length(got), 1L)
+  expect_identical(got[[1L]]$analysis_id, "pkg_m5_lot1")
+  df <- get("provenance_to_dataframe", envir = ns)(st)
+  expect_s3_class(df, "data.frame")
+  expect_identical(nrow(df), 1L)
+  expect_identical(df$analysis_id[[1L]], "pkg_m5_lot1")
 })

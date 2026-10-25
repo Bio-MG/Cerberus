@@ -11,7 +11,7 @@
 #      (bulk_multi_entry_contrasts / bulk_multi_common_contrasts /
 #      bulk_multi_run_comparison) aux côtés d'une entrée bulk classique.
 # =============================================================================
-source_project_file("R/core/io_helpers.R")
+source_project_file("tools/pkg_skeleton/R/io_helpers.R")
 source_project_file("R/core/validation.R")
 source_project_file("R/bulk/bulk_helpers.R")
 source_project_file("R/bulk/bulk_multi.R")

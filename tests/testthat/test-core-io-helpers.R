@@ -25,7 +25,7 @@
 # series_matrix GEO, détection Slide-seq, auto-sniffing de tables délimitées.
 # =============================================================================
 
-source_project_file("R/core/io_helpers.R")
+source_project_file("tools/pkg_skeleton/R/io_helpers.R")
 
 # --- 17ᵉ incrément : assertions sur le message ENTIER + la CLASSE -----------
 # ⚠️ Les 7 sites C10 sont à UN SEUL argument ⇒ aucune troncature possible et
@@ -447,7 +447,9 @@ test_that("io_helpers.R ne contribue aucun signalement C10", {
   e <- new.env(parent = globalenv())
   sys.source(file.path(ts_project_root(), "tools/check_conventions.R"), envir = e)
   before <- length(e$.REPORT$warns)
-  e$check_c10_error_style(file.path(ts_project_root(), "R/core/io_helpers.R"))
+  # M5 lot 1 : io_helpers.R vit dans tools/pkg_skeleton/R/ — l'epingle C10
+  # suit le chemin (sinon le cheque tournerait a vide sur un chemin fantome).
+  e$check_c10_error_style(file.path(ts_project_root(), "tools/pkg_skeleton/R/io_helpers.R"))
   w <- e$.REPORT$warns
   n <- length(w) - before
   if (n > 0L) {

@@ -1,5 +1,5 @@
 # =============================================================================
-# R/core/provenance.R — Manifeste de provenance des analyses (CHRYSALIS 2C)
+# provenance.R — Manifeste de provenance des analyses (CHRYSALIS 2C)
 # =============================================================================
 # PRINCIPE (AGENTS.md, regle 7) : la provenance est PRODUITE a chaque etape
 # d'analyse — new_provenance_entry() au moment ou le calcul reussit,
@@ -8,10 +8,15 @@
 # coup. Aucune logique de rendu de rapport ici : uniquement la structure de
 # donnees et les appenders.
 #
+# D2 M5 lot 1 (2026-10-25) : ce fichier demenage R/core/ -> tools/pkg_skeleton/R/
+# (deplacement physique seul, app.R le source() a la meme position d'ordre ;
+# cf. cartographie d2_reports_cartography.md §1).
+#
 # Dependances :
-#   - R/core/state.R (state_get/state_set) pour l'appending dans l'etat
+#   - state.R (state_get/state_set) pour l'appending dans l'etat
 #     partage ; chargé paresseusement ci-dessous si absent (convention des
-#     shims bulk_helpers.R / sc_state.R).
+#     shims bulk_helpers.R / sc_state.R). Le socle vit dans le meme arbre
+#     paquet depuis ce lot.
 #   - 'digest' (optionnel, requireNamespace) pour l'empreinte du jeu de
 #     donnees ; sans lui, dataset_hash reste NA.
 #   - Aucune dependance directe Seurat/DESeq2 : les versions logicielles sont
@@ -20,7 +25,9 @@
 
 if (!exists("state_get", envir = globalenv(), mode = "function") ||
     !exists("state_set", envir = globalenv(), mode = "function")) {
-  for (.p in c("R/core/state.R", file.path(getwd(), "R", "core", "state.R"))) {
+  # M5 lot 1 : state.R vit dans l'arbre du paquet — le shim suit le chemin.
+  for (.p in c("tools/pkg_skeleton/R/state.R",
+               file.path(getwd(), "tools", "pkg_skeleton", "R", "state.R"))) {
     if (file.exists(.p)) { sys.source(.p, envir = globalenv()); break }
   }
 }

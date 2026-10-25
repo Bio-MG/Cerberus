@@ -7,7 +7,7 @@
 # + % même direction, valeurs calculées à la main), run_comparison de bout en
 # bout (structure plate §10.4, états d'erreur, zéro mutation des entrées).
 # =============================================================================
-source_project_file("R/core/io_helpers.R")
+source_project_file("tools/pkg_skeleton/R/io_helpers.R")
 source_project_file("R/core/validation.R")
 source_project_file("R/bulk/bulk_helpers.R")
 source_project_file("R/bulk/bulk_multi.R")

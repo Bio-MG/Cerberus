@@ -32,7 +32,7 @@ source_project_file("R/core/drive_watcher.R")
 # `%||%` lives in io_helpers.R and the probe section at the end of this file needs
 # it: the closures it lifts out of the module use it (`input$multi_label %||% ""`).
 # Sourced rather than redefined, for the reason the two lines above give.
-source_project_file("R/core/io_helpers.R")
+source_project_file("tools/pkg_skeleton/R/io_helpers.R")
 
 .sc_src <- function() {
   readLines(file.path(ts_project_root(), "modules", "import", "mod_import_sc.R"),

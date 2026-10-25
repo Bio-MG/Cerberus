@@ -24,7 +24,7 @@
 
 source_project_file("config/defaults.R")
 source_project_file("config/thresholds.R")   # TS_BULK_GSVA_MIN_SIZE / MAX_SIZE
-source_project_file("R/core/io_helpers.R")    # %||%
+source_project_file("tools/pkg_skeleton/R/io_helpers.R")    # %||%
 source_project_file("R/core/error_state.R")   # ts_error_state
 source_project_file("R/bulk/bulk_provenance.R")  # bulk_ensure_provenance (store path)
 source_project_file("R/core/drive_allowlist.R")

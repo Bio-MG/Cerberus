@@ -8,7 +8,7 @@
 # par les remplacements de dataset — les re-commits de même lignée du
 # pipeline ne purgent pas, cf. R/core/state.R).
 # =============================================================================
-source_project_file("R/core/state.R")
+source_project_file("tools/pkg_skeleton/R/state.R")
 
 .ts_src <- function(relpath) {
   paste(readLines(file.path(ts_project_root(), relpath), warn = FALSE),

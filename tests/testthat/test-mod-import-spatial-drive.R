@@ -49,8 +49,8 @@ source_project_file("R/core/drive_watcher.R")
 # these must be the shipped functions and not stubs â€” a stub would turn the whole
 # point of that test into a tautology.
 source_project_file("R/core/error_state.R")
-source_project_file("R/core/state.R")
-source_project_file("R/core/io_helpers.R")
+source_project_file("tools/pkg_skeleton/R/state.R")
+source_project_file("tools/pkg_skeleton/R/io_helpers.R")
 source_project_file("R/spatial/spatial_io.R")
 source_project_file("modules/import/mod_import_spatial.R")
 

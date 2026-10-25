@@ -49,7 +49,7 @@
 
 suppressMessages(library(Seurat))
 
-source_project_file("R/core/io_helpers.R")   # %||% (le fichier en redefinit un local)
+source_project_file("tools/pkg_skeleton/R/io_helpers.R")   # %||% (le fichier en redefinit un local)
 source_project_file("R/sc/sc_export.R")
 
 # ---------------------------------------------------------------------------

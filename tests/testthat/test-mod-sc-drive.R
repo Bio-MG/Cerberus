@@ -25,9 +25,9 @@
 # =============================================================================
 
 source_project_file("config/defaults.R")
-source_project_file("R/core/io_helpers.R")    # %||%
-source_project_file("R/core/error_log.R")     # M-1 : ts_log_swallow appelé par les handlers convertis
-source_project_file("R/core/state.R")         # create_sc_shared_state
+source_project_file("tools/pkg_skeleton/R/io_helpers.R")    # %||%
+source_project_file("tools/pkg_skeleton/R/error_log.R")     # M-1 : ts_log_swallow appelé par les handlers convertis
+source_project_file("tools/pkg_skeleton/R/state.R")         # create_sc_shared_state
 source_project_file("R/core/drive_allowlist.R")
 source_project_file("R/core/drive_watcher.R")
 source_project_file("R/core/memory.R")       # preflight RAM (M-4) lu par le pipeline

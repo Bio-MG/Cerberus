@@ -11,7 +11,7 @@ CONTRACT_REPORT <- file.path("docs", "contracts", "CONSOLIDATED_REPORT_CONTRACT.
 # Le contrat est fige : on verifie la surface REELLEMENT chargee (pas
 # seulement le texte source).
 source_project_file("R/reports/report_collector.R")
-source_project_file("R/core/error_log.R")   # M-1 : journal des avalées
+source_project_file("tools/pkg_skeleton/R/error_log.R")   # M-1 : journal des avalées
 source_project_file("R/reports/report_validator.R")
 source_project_file("R/reports/report_render.R")
 source_project_file("R/reports/report_bundle.R")

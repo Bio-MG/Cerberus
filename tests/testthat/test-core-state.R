@@ -7,7 +7,7 @@
 # Step 3 ajoute : validateurs de forme is_analysis_state()/assert_analysis_state(),
 # schema SC integral, et etancheite entre instances (aucune fuite d'etat).
 
-source_project_file("R/core/state.R")
+source_project_file("tools/pkg_skeleton/R/state.R")
 
 # ---------------------------------------------------------------------------
 # Fabriques de schema domaine (consolidation existante)

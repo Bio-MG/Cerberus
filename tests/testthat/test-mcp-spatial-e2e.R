@@ -51,8 +51,9 @@ invisible(Sys.setlocale("LC_CTYPE", ".UTF-8"))
   e <- new.env(parent = globalenv())
   # state.R first: ts_drive_registry() reads global_data$drive_registry
   # through state_get(), and the sandbox must not depend on another test
-  # file having left it on the globalenv.
-  sys.source(file.path(ts_project_root(), "R", "core", "state.R"), envir = e)
+  # file having left it on the globalenv. (M5 lot 1: state.R vit dans
+  # tools/pkg_skeleton/R/.)
+  sys.source(file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "state.R"), envir = e)
   sys.source(file.path(ts_project_root(), "R", "core", "drive_allowlist.R"), envir = e)
   sys.source(file.path(ts_project_root(), "R", "core", "drive_watcher.R"), envir = e)
   expressions <- parse(path, keep.source = TRUE)
@@ -73,7 +74,8 @@ invisible(Sys.setlocale("LC_CTYPE", ".UTF-8"))
   sp$.tr <- function(key, ...) key
   sp$.t_fmt <- function(template, ...) template
   sp$.tr_plain <- function(key, ...) key
-  for (f in c("config/defaults.R", "R/core/io_helpers.R", "R/core/error_state.R",
+  for (f in c("config/defaults.R", "tools/pkg_skeleton/R/io_helpers.R",
+              "R/core/error_state.R",
               "R/spatial/spatial_stats.R", "modules/spatial/mod_spatial_qc.R")) {
     sys.source(file.path(ts_project_root(), f), envir = sp)
   }

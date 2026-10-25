@@ -24,7 +24,7 @@
 # for the static-analysis guard that catches this class of bug going forward.
 # =============================================================================
 
-source_project_file("R/core/io_helpers.R")   # defines %||%, sourced first in app.R
+source_project_file("tools/pkg_skeleton/R/io_helpers.R")   # defines %||%, sourced first in app.R
 source_project_file("R/core/validation.R")     # canonical guards (app.R loads before bulk_helpers)
 source_project_file("R/bulk/bulk_helpers.R")
 # PLOT-S6c (P0) : build_dds() et run_bulk_de_dispatch() appellent la garde de

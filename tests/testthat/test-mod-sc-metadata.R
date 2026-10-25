@@ -21,7 +21,7 @@
 # complet a été déclaré. Rouge attendu = ce récapitulatif vide.
 # =============================================================================
 
-source_project_file("R/core/io_helpers.R")   # %||%
+source_project_file("tools/pkg_skeleton/R/io_helpers.R")   # %||%
 source_project_file("R/sc/sc_metadata.R")    # sc_metadata_sample_table()
 source_project_file("modules/sc/mod_sc_metadata.R")
 

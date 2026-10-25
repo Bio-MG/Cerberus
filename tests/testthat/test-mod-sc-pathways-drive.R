@@ -20,7 +20,7 @@
 #     (`shared_rv$pathway_results` / `$pathway_db`).
 # =============================================================================
 
-source_project_file("R/core/io_helpers.R")            # %||%, detect_gene_id_type
+source_project_file("tools/pkg_skeleton/R/io_helpers.R")            # %||%, detect_gene_id_type
 source_project_file("R/core/error_state.R")
 source_project_file("R/core/drive_allowlist.R")
 source_project_file("R/core/drive_watcher.R")

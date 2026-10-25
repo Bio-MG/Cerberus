@@ -8,7 +8,7 @@
 # conteneur, ancres app.R + mod_bulk.R, AUCUNE constante TS_ nouvelle dans le
 # moteur, sync code <-> contrat, clés i18n.
 # =============================================================================
-source_project_file("R/core/io_helpers.R")         # %||%
+source_project_file("tools/pkg_skeleton/R/io_helpers.R")         # %||%
 source_project_file("R/bulk/bulk_multi.R")
 source_project_file("R/bulk/bulk_batch_qc.R")
 source_project_file("R/bulk/bulk_provenance.R")

@@ -21,7 +21,8 @@ test_that("APP_DAEMON_SOURCE_FILES couvre la fermeture Milo et pointe des fichie
   expect_true(all(c(
     "R/spatial/spatial_async.R",
     "config/defaults.R", "config/thresholds.R",
-    "R/core/io_helpers.R", "R/core/state.R", "R/core/provenance.R",
+    "tools/pkg_skeleton/R/io_helpers.R", "tools/pkg_skeleton/R/state.R",
+    "tools/pkg_skeleton/R/provenance.R",
     "R/core/validation.R",
     "R/sc/sc_velocity.R", "R/sc/sc_abundance_design.R",
     "R/sc/sc_abundance_milo.R", "R/sc/sc_abundance_milo_views.R"

@@ -32,7 +32,7 @@
 # =============================================================================
 
 source_project_file("tools/check_conventions.R")
-source_project_file("R/core/io_helpers.R")
+source_project_file("tools/pkg_skeleton/R/io_helpers.R")
 
 # ⚠️ PIÈGE MESURÉ : `.code_cache` est mémoïsé par CHEMIN. Deux écritures du même
 # fichier temporaire rendent la PREMIÈRE annotation — un test qui réécrit la

@@ -20,7 +20,7 @@
 
 source_project_file("R/core/drive_allowlist.R")
 source_project_file("R/core/drive_watcher.R")
-source_project_file("R/core/io_helpers.R")
+source_project_file("tools/pkg_skeleton/R/io_helpers.R")
 source_project_file("modules/bulk_de/mod_bulk_de_engine.R")
 source_project_file("modules/bulk_de/mod_bulk_de_run.R")
 suppressPackageStartupMessages(library(shiny))

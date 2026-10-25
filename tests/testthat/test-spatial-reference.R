@@ -16,7 +16,7 @@
 # de troncature (§2bn/§2bo).
 # =============================================================================
 
-source_project_file("R/core/io_helpers.R")        # %||%
+source_project_file("tools/pkg_skeleton/R/io_helpers.R")        # %||%
 source_project_file("R/core/rdata_io.R")          # rdata_is_supported_file / rdata_load_env
 source_project_file("R/spatial/spatial_reference.R")
 

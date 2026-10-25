@@ -35,7 +35,7 @@
 # **bout du message** (`"cellules -- pseudobulk impossible."`), qui disparaît.
 # =============================================================================
 
-source_project_file("R/core/io_helpers.R")        # %||%
+source_project_file("tools/pkg_skeleton/R/io_helpers.R")        # %||%
 suppressPackageStartupMessages({
   library(Seurat)      # CreateSeuratObject, LayerData
   library(Matrix)      # sparseMatrix

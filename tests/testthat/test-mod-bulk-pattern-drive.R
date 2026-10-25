@@ -21,9 +21,9 @@
 
 source_project_file("config/defaults.R")
 source_project_file("config/thresholds.R")
-source_project_file("R/core/io_helpers.R")            # %||%
+source_project_file("tools/pkg_skeleton/R/io_helpers.R")            # %||%
 source_project_file("R/core/error_state.R")           # ts_error_state
-source_project_file("R/core/provenance.R")            # new_provenance_entry
+source_project_file("tools/pkg_skeleton/R/provenance.R")            # new_provenance_entry
 source_project_file("R/core/drive_allowlist.R")
 source_project_file("R/core/drive_watcher.R")
 source_project_file("R/bulk/bulk_pattern.R")          # the frozen domain

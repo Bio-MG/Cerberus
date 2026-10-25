@@ -1,7 +1,7 @@
 Sys.setenv(OMNIPATHR_LOGFILE = "none")
 
-source_project_file("R/core/io_helpers.R")
-source_project_file("R/core/provenance.R")
+source_project_file("tools/pkg_skeleton/R/io_helpers.R")
+source_project_file("tools/pkg_skeleton/R/provenance.R")
 source_project_file("R/sc/sc_velocity.R")
 source_project_file("R/sc/sc_communication.R")
 source_project_file("R/sc/sc_communication_engine.R")

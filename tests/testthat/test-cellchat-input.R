@@ -9,8 +9,8 @@
 # (section 4) sont testees comme des PORTES DURES, pas des commentaires.
 # =============================================================================
 
-source_project_file("R/core/io_helpers.R")        # %||%
-source_project_file("R/core/provenance.R")        # new_provenance_entry()
+source_project_file("tools/pkg_skeleton/R/io_helpers.R")        # %||%
+source_project_file("tools/pkg_skeleton/R/provenance.R")        # new_provenance_entry()
 # D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
 # (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
 load_project_pkg()

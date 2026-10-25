@@ -14,7 +14,7 @@
 # recalculable SANS réajuster le modèle (exigence STAT-Q1).
 # =============================================================================
 
-source_project_file("R/core/io_helpers.R")     # %||%
+source_project_file("tools/pkg_skeleton/R/io_helpers.R")     # %||%
 source_project_file("R/core/validation.R")     # guards canoniques (avant bulk_helpers)
 source_project_file("R/bulk/bulk_helpers.R")
 # PLOT-S6c : build_dds() / run_bulk_de_dispatch() appellent bulk_assert_raw_counts(),

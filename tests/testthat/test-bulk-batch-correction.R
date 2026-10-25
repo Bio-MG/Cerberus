@@ -18,7 +18,7 @@
 #    fixture Poisson sans sur-dispersion dégénère le modèle NB de sva et ne
 #    mesure rien — les deux pièges ont été rencontrés puis corrigés.
 # =============================================================================
-source_project_file("R/core/io_helpers.R")
+source_project_file("tools/pkg_skeleton/R/io_helpers.R")
 source_project_file("R/core/validation.R")
 source_project_file("R/bulk/bulk_batch_qc.R")
 source_project_file("R/bulk/batch_correction.R")

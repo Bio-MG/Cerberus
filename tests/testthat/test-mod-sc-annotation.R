@@ -31,7 +31,7 @@
 #     **sans** construire un gros jeu de données.
 # =============================================================================
 
-source_project_file("R/core/io_helpers.R")        # %||%, detect_*_from_ids
+source_project_file("tools/pkg_skeleton/R/io_helpers.R")        # %||%, detect_*_from_ids
 source_project_file("R/sc/sc_bpcells.R")          # sc_backend_status
 suppressPackageStartupMessages({
   library(Seurat)      # CreateSeuratObject

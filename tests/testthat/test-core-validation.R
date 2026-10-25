@@ -7,7 +7,7 @@
 # tests/testthat/test-bulk-helpers.R (qui source ce fichier canonique) —
 # non dupliquees ici volontairement.
 
-source_project_file("R/core/io_helpers.R")
+source_project_file("tools/pkg_skeleton/R/io_helpers.R")
 source_project_file("R/core/validation.R")
 
 .load_seurat_pkgs <- function() {

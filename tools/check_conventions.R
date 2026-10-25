@@ -239,10 +239,13 @@
   "reactive\\(", "(?<![A-Za-z0-9_.])output\\$"
 )
 
-#' Exception ASSUMÉE et documentée (docs/CONVENTIONS.md §3.2) : `R/core/state.R`
+#' Exception ASSUMÉE et documentée (docs/CONVENTIONS.md §3.2) : `state.R`
 #' est la couche d'état transversale — son rôle EST de fabriquer les schémas
 #' `reactiveValues` partagés. Partout ailleurs dans R/, c'est une erreur.
-.STATE_LAYER <- c("R/core/state.R", "R/sc/sc_state.R")
+#' D2 M5 lot 1 (2026-10-25) : state.R vit dans tools/pkg_skeleton/R/ (hors
+#' périmètre scanné R/ + modules/) — le chemin de l'exception SUIT le fichier
+#' pour rester exact si le périmètre s'étend un jour à l'arbre du paquet.
+.STATE_LAYER <- c("tools/pkg_skeleton/R/state.R", "R/sc/sc_state.R")
 .SHINY_STATE_FACTORIES <- c("reactiveValues\\(", "reactiveVal\\(")
 
 #' Injection explicite : `input` / `session` passés en PARAMÈTRE sont assumés

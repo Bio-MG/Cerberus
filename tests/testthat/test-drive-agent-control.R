@@ -34,7 +34,7 @@
   # drive_watcher.R logs through ts_log_swallow() in its error handlers; a test
   # that sources only drive_watcher.R must provide the logger or a provoked
   # read error becomes "could not find function" instead of the asserted NULL.
-  source_project_file("R/core/error_log.R")
+  source_project_file("tools/pkg_skeleton/R/error_log.R")
   source_project_file("R/core/drive_watcher.R")
 }
 

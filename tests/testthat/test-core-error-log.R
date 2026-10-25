@@ -10,7 +10,7 @@
 # Contrat : ne lève JAMAIS (un logger qui échoue ne doit pas casser le handler
 # qui l'appelle) ; format de ligne daté `context | classe | message` ; append.
 # =============================================================================
-source_project_file("R/core/error_log.R")
+source_project_file("tools/pkg_skeleton/R/error_log.R")
 
 test_that("ts_log_swallow écrit une ligne datée au format contrat", {
   lp <- file.path(tempdir(), paste0("ts_swallow_test_", Sys.getpid(), ".log"))

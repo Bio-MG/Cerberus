@@ -8,7 +8,7 @@
 # par les remplacements de dataset — les re-commits de même lignée du pipeline
 # ne purgent pas, cf. R/core/state.R).
 # =============================================================================
-source_project_file("R/core/state.R")
+source_project_file("tools/pkg_skeleton/R/state.R")
 
 test_that("sc_shared_result_fields couvre tout slot résultat écrit par un module", {
   expect_setequal(

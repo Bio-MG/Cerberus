@@ -83,11 +83,16 @@ Sys.setlocale("LC_CTYPE", "fr_FR.UTF-8")
   list(files = files, defs = defs)
 })
 .pu_files_with_defs <- .pu_scan$files[lengths(.pu_scan$defs) > 0L]
-.pu_socle_path <- file.path(.pu_root, "R", "core", "io_helpers.R")
+# D2 M5 lot 1 (2026-10-25) : le SOCLE io_helpers.R demenage dans l'arbre du
+# paquet — l'epingle suit le chemin (meme mecanique que palettes.R en M4).
+# Le compte arbre-entier ne bouge PAS : la definition suit le fichier entre
+# deux racines deja balayees (R/ et tools/pkg_skeleton/R/), plancher 20/19
+# inchangé.
+.pu_socle_path <- file.path(.pu_root, "tools", "pkg_skeleton", "R", "io_helpers.R")
 .pu_socle_defs <- .pu_scan$defs[[.pu_socle_path]]
 .pu_socle_norm <- .pu_norm(.pu_socle_defs[[1L]])
 
-test_that("socle : %||% de R/core/io_helpers.R porte la sémantique unifiée (canonical)", {
+test_that("socle : %||% de tools/pkg_skeleton/R/io_helpers.R porte la sémantique unifiée (canonical)", {
   expect_length(.pu_socle_defs, 1L)
   f <- .pu_eval(.pu_socle_defs[[1L]])
   expect_identical(f(NULL, "FB"), "FB")               # NULL -> repli
@@ -114,7 +119,7 @@ test_that("M3 : toute définition de %||% de l'arbre est identique au socle (con
     for (j in seq_along(.pu_scan$defs[[p]])) {
       expect_identical(
         .pu_norm(.pu_scan$defs[[p]][[j]]), .pu_socle_norm,
-        info = sprintf("%s (définition n°%d) diverge du socle R/core/io_helpers.R",
+        info = sprintf("%s (définition n°%d) diverge du socle tools/pkg_skeleton/R/io_helpers.R (M5 lot 1)",
                        p, j)
       )
     }

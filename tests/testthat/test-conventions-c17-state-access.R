@@ -65,7 +65,10 @@ test_that("C17 signale les accès directs aux DEUX conteneurs dans R/", {
 })
 
 test_that("C17 ignore la couche d'état (.STATE_LAYER) et les commentaires", {
-  expect_length(.c17_flagged(file.path(ts_project_root(), "R", "core", "state.R")), 0L)
+  # M5 lot 1 : state.R vit dans tools/pkg_skeleton/R/ — le témoin suit le
+  # chemin (l'exception .STATE_LAYER a suivi, cf. check_conventions.R).
+  expect_length(.c17_flagged(file.path(ts_project_root(),
+                                        "tools", "pkg_skeleton", "R", "state.R")), 0L)
   probe <- .c17_probe_write(c(
     "# dans un commentaire : global_data$sc_obj et shared_rv$markers_data",
     "probe_c17_ok <- function(global_data) state_get(global_data, \"sc_obj\")"

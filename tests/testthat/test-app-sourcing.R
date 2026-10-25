@@ -109,10 +109,10 @@
 
 # --- 4. Exceptions DECLAREES (chacune justifiee) ----------------------------
 .app_allowlist <- c(
-  # Re-export LEGACY : la definition canonique est R/core/state.R, source
-  # avant lui. Son propre en-tete dit "app.R no longer sources this file as
-  # canonical" -- il ne sert qu'aux tests/appels externes qui le sourcent
-  # directement.
+  # Re-export LEGACY : la definition canonique est state.R (M5 lot 1 : vit
+  # dans tools/pkg_skeleton/R/), source avant lui. Son propre en-tete dit
+  # "app.R no longer sources this file as canonical" -- il ne sert qu'aux
+  # tests/appels externes qui le sourcent directement.
   "R/sc/sc_state.R",
   # Module PARQUE (vague 8 / backlog, session separee) : definit
   # mod_spatial_lr_ui/_server mais AUCUN appelant dans le depot (verifie :

@@ -6,9 +6,9 @@
 # (provenance_to_dataframe) — jamais reconstruite. Au moins 2 entrees
 # chainees dans chaque scenario de flattening.
 
-source_project_file("R/core/io_helpers.R")   # %||%
-source_project_file("R/core/state.R")
-source_project_file("R/core/provenance.R")
+source_project_file("tools/pkg_skeleton/R/io_helpers.R")   # %||%
+source_project_file("tools/pkg_skeleton/R/state.R")
+source_project_file("tools/pkg_skeleton/R/provenance.R")
 
 skip_if_not_installed("digest")   # empreintes de dataset (renv.lock l'engage)
 

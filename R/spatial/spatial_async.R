@@ -157,11 +157,13 @@ APP_DAEMON_SOURCE_FILES <- c(
   "R/spatial/spatial_deconv_tasks.R",
   "R/spatial/spatial_stats.R",
   # --- SC : abondance differentielle Milo (4E-4) — ORDRE : config, core, domaine ---
+  # D2 M5 lot 1 : les 3 fournisseurs demenagent dans l'arbre du paquet — les
+  # chemins du preload daemon suivent (ordre interne inchangé).
   "config/defaults.R",
   "config/thresholds.R",
-  "R/core/io_helpers.R",
-  "R/core/state.R",
-  "R/core/provenance.R",
+  "tools/pkg_skeleton/R/io_helpers.R",
+  "tools/pkg_skeleton/R/state.R",
+  "tools/pkg_skeleton/R/provenance.R",
   "R/core/validation.R",
   "R/sc/sc_velocity.R",
   "R/sc/sc_abundance_design.R",

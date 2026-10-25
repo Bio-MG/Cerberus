@@ -53,15 +53,22 @@ source("config/thresholds.R")
 
 # ── Bloc 03 : R/core (infrastructure transverse) ─────────────────────────────
 # Contrat d'etat transversal source EN PREMIER (TREE CERBERUS step 3 :
-# config/* -> R/core/state.R -> autres R/core/* -> domaines -> modules).
-source("R/core/state.R")        # contrat d'etat + fabriques d'etat partagees
-source("R/core/io_helpers.R")
+# config/* -> state.R -> autres R/core/* -> domaines -> modules).
+# D2 M5 lot 1 (2026-10-25) : les 4 FOURNISSEURS du rapport consolide
+# (state, io_helpers, provenance, error_log) demenagent dans l'arbre du paquet
+# (tools/pkg_skeleton/R/) — app.R le source() TOUJOURS, aux MEMES positions
+# d'ordre (zero changement de comportement ; le manifeste suit les chemins).
+# Contrairement au domaine plotting (M4), les TESTS gardent ici
+# source_project_file() au NOUVEAU chemin : AUCUNE bascule de chargeur dans ce
+# lot (cartographie docs/audits/d2_reports_cartography.md §1 ; lot 2 = R/reports).
+source("tools/pkg_skeleton/R/state.R")        # contrat d'etat + fabriques d'etat partagees
+source("tools/pkg_skeleton/R/io_helpers.R")
 source("R/core/rdata_io.R")     # import .rda/.RData "Inspect & Select" (contrat RDATA_IMPORT_CONTRACT)
 source("R/core/validation.R")   # <-- NEW
-source("R/core/provenance.R")   # <-- CHRYSALIS 2C : manifeste de provenance
+source("tools/pkg_skeleton/R/provenance.R")   # <-- CHRYSALIS 2C : manifeste de provenance
 source("R/core/jobs.R")         # <-- CHRYSALIS 2D : wrapper fin sync/async
 source("R/core/memory.R")       # <-- QW-1 : RSS résident du processus (indicateur RAM)
-source("R/core/error_log.R")
+source("tools/pkg_skeleton/R/error_log.R")
 source("R/core/caching.R")      # <-- CHRYSALIS 2D : memoisation a portee contrainte
 source("R/core/pathway_helpers.R")
 source("R/core/error_state.R")  # <-- §14.1 : ts_error_state(), l'accesseur generique d'etat d'erreur

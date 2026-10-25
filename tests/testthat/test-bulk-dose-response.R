@@ -7,7 +7,7 @@
 # échecs d'ajustement comptabilisés, structure des courbes, plot pur, export,
 # assert canonique. Hors-ligne : drc est un calcul local.
 # =============================================================================
-source_project_file("R/core/provenance.R")
+source_project_file("tools/pkg_skeleton/R/provenance.R")
 source_project_file("R/bulk/dose_response.R")
 
 # ── Fixture : courbes de Hill synthétiques, EC50 = 1 connu ────────────────────

@@ -18,7 +18,7 @@
 # demandee a l'utilisateur.
 # =============================================================================
 
-source_project_file("R/core/io_helpers.R")
+source_project_file("tools/pkg_skeleton/R/io_helpers.R")
 source_project_file("R/core/validation.R")
 source_project_file("R/bulk/bulk_helpers.R")
 source_project_file("R/bulk/batch_correction.R")

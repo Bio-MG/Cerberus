@@ -11,10 +11,16 @@
 # Ensure canonical definitions are loaded if this file is sourced standalone (e.g. tests)
 if (!exists("create_sc_shared_state", envir = .GlobalEnv) ||
     !exists("create_spatial_shared_state", envir = .GlobalEnv)) {
-  core_state_path <- file.path(dirname(dirname(normalizePath("R/sc/sc_state.R", mustWork = FALSE))), "R", "core", "state.R")
+  # D2 M5 lot 1 (2026-10-25) : state.R vit dans l'arbre du paquet. Au passage,
+  # le chemin primaire gagne le 3e dirname qui manquait (l'ancienne forme
+  # resolait <root>/R/R/core/state.R, branche morte absorbee par le fallback).
+  core_state_path <- file.path(
+    dirname(dirname(dirname(normalizePath("R/sc/sc_state.R", mustWork = FALSE)))),
+    "tools", "pkg_skeleton", "R", "state.R")
   # Fallback: try relative path from project root when normalizePath above fails in some envs
   if (!file.exists(core_state_path)) {
-    for (cand in c("R/core/state.R", file.path(getwd(), "R/core/state.R"))) {
+    for (cand in c("tools/pkg_skeleton/R/state.R",
+                   file.path(getwd(), "tools", "pkg_skeleton", "R", "state.R"))) {
       if (file.exists(cand)) { core_state_path <- cand; break }
     }
   }

@@ -14,7 +14,7 @@
 #   - isolation : les jeux d'entrée ne sont JAMAIS mutés ;
 #   - bulk_merge_to_bulk_obj : façonnage bulk_obj + provenance.
 # =============================================================================
-source_project_file("R/core/io_helpers.R")         # %||%
+source_project_file("tools/pkg_skeleton/R/io_helpers.R")         # %||%
 source_project_file("R/bulk/bulk_multi.R")         # MD-1 (validateur réutilisé)
 source_project_file("R/bulk/bulk_batch_qc.R")      # bulk_batch_design_check (STAT-S1)
 source_project_file("R/bulk/bulk_provenance.R")    # manifeste de provenance

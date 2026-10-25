@@ -8,9 +8,10 @@
 # =============================================================================
 
 source("config/defaults.R")
-source("R/core/state.R"); source("R/core/io_helpers.R")
+# D2 M5 lot 1 : state/io_helpers/provenance vivent dans tools/pkg_skeleton/R/
+source("tools/pkg_skeleton/R/state.R"); source("tools/pkg_skeleton/R/io_helpers.R")
 source("R/core/validation.R")
-source("R/core/provenance.R"); source("R/core/jobs.R"); source("R/core/caching.R")
+source("tools/pkg_skeleton/R/provenance.R"); source("R/core/jobs.R"); source("R/core/caching.R")
 source("R/sc/sc_velocity.R"); source("R/sc/sc_abundance_design.R")
 source("R/sc/sc_abundance_sccoda.R")
 source("R/reports/report_collector.R"); source("R/reports/report_validator.R")

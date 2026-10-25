@@ -5,7 +5,8 @@
 # Bulk (helpers_bulk.R, mod_bulk_pathways.R) and Spatial (mod_spatial_*).
 # Sourced LAST in app.R -> always the canonical copy.
 
-# `%||%` — re-import du socle R/core/io_helpers.R (unification D2-M3) : cette
+# `%||%` — re-import du socle io_helpers.R (unification D2-M3 ; M5 lot 1 :
+# le socle vit dans le même arbre tools/pkg_skeleton/R/) : cette
 # définition doit rester IDENTIQUE au socle — sémantique canonical (NULL ou
 # longueur 0 -> repli ; NA et "" passent au travers). Garde :
 # test-pipe-or-null-unification.R.

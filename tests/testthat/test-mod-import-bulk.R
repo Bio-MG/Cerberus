@@ -27,7 +27,7 @@
 #      dans `smart_read` ; 476 dans `counts_reactive`).
 # =============================================================================
 
-source_project_file("R/core/io_helpers.R")
+source_project_file("tools/pkg_skeleton/R/io_helpers.R")
 source_project_file("R/core/rdata_io.R")
 # G3: `mod_import_bulk_server()` now also calls `ts_drive_publish_importer()`,
 # on top of the G2 `ts_drive_bind_button()`. BOTH live in `R/core/`, and

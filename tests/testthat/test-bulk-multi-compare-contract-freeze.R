@@ -7,7 +7,7 @@
 # ré-implémentation — garde §10.2.4), ancres app.R (snapshot/restore/reset),
 # câblage module, sync code <-> contrat, clés i18n.
 # =============================================================================
-source_project_file("R/core/io_helpers.R")   # %||% (sourcé en premier par app.R)
+source_project_file("tools/pkg_skeleton/R/io_helpers.R")   # %||% (sourcé en premier par app.R)
 source_project_file("R/core/validation.R")
 source_project_file("R/bulk/bulk_helpers.R") # build_contrast_gene_sets & co
 source_project_file("R/bulk/bulk_multi.R")

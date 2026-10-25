@@ -41,7 +41,7 @@ source_project_file("R/core/drive_allowlist.R")
 # R/core/drive_watcher.R appelle ts_log_swallow() dans ses gestionnaires
 # d'erreur (ts_drive_read_json, ...) : le journaliseur doit exister ici, comme
 # dans test-drive-watcher.R (app.R le source au L56).
-source_project_file("R/core/error_log.R")
+source_project_file("tools/pkg_skeleton/R/error_log.R")
 source_project_file("R/core/drive_watcher.R")
 
 # La porte d'armement est forcée OUVERTE pour tout le fichier : Rscript n'est

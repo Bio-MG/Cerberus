@@ -23,9 +23,9 @@ if (!exists("source_project_file", envir = globalenv(), mode = "function")) {
              envir = globalenv())
 }
 
-source_project_file("R/core/io_helpers.R")   # %||%
-source_project_file("R/core/state.R")
-source_project_file("R/core/provenance.R")
+source_project_file("tools/pkg_skeleton/R/io_helpers.R")   # %||%
+source_project_file("tools/pkg_skeleton/R/state.R")
+source_project_file("tools/pkg_skeleton/R/provenance.R")
 source_project_file("R/core/validation.R")
 source_project_file("R/sc/sc_velocity.R")    # velocity_object_fingerprint
 source_project_file("R/sc/sc_abundance_design.R")

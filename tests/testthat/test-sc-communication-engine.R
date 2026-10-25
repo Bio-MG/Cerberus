@@ -27,8 +27,8 @@
 # en echec — la dependance est GitHub et PARESSeUSE par decision (§2al).
 # =============================================================================
 
-source_project_file("R/core/io_helpers.R")
-source_project_file("R/core/provenance.R")
+source_project_file("tools/pkg_skeleton/R/io_helpers.R")
+source_project_file("tools/pkg_skeleton/R/provenance.R")
 # D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
 # (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
 load_project_pkg()

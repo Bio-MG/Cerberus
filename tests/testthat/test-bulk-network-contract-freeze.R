@@ -9,7 +9,7 @@
 # honnêteté de l'heuristique, contrat MD-1 INCHANGÉ (network_result hors
 # snapshot), sync code <-> contrat, clés i18n.
 # =============================================================================
-source_project_file("R/core/io_helpers.R")      # %||%
+source_project_file("tools/pkg_skeleton/R/io_helpers.R")      # %||%
 source_project_file("R/bulk/bulk_network.R")
 
 .ts_top_level_names <- function(relpath) {
