@@ -60,6 +60,17 @@
 
 source_project_file("modules/bulk/mod_bulk.R")
 
+# BULK-06 (gate round 3) : le helper `bulk_de_stamp_engine` (M13, commit
+# ba521d7) vit dans l'arbre du paquet (tools/pkg_skeleton/R/bulk_helpers.R:841)
+# et est appelé par la branche pairwise RÉUSSIE du bloc ap_confirm. Chargé au
+# NIVEAU FICHIER (motif des voisins, ex. test-bulk-gene-sets.R:19) : sans lui,
+# les tests de la voie pairwise réussie échouent à l'EXÉCUTION ISOLÉE du
+# fichier pour une raison étrangère à leur sujet (« could not find function
+# "bulk_de_stamp_engine" » — artefact masqué en suite complète, où d'autres
+# fichiers chargent le paquet avant). Rend le fichier vert sous un gate
+# `test_file`/`test_dir` à stop_on_failure par défaut.
+load_project_pkg(quiet = TRUE)
+
 .MBK_FILE <- "modules/bulk/mod_bulk.R"
 
 # Fragment ASCII du message du garde (le littéral source porte des echappements
@@ -77,7 +88,7 @@ source_project_file("modules/bulk/mod_bulk.R")
 
 # --- Environnement enfant ----------------------------------------------------
 # `rec` enregistre les etapes (temoins) ; `dispatch_ok` sert au controle de BORNE.
-.mbk_env <- function(rec, dispatch_ok = FALSE) {
+.mbk_env <- function(rec, dispatch_ok = FALSE, input_extra = list()) {
   e <- new.env(parent = globalenv())
   e$.tr    <- function(s, ...) s
   e$.t_fmt <- function(fmt, ...) fmt
@@ -122,6 +133,9 @@ source_project_file("modules/bulk/mod_bulk.R")
                   ap_min_count = 10, ap_min_samples = 2,
                   ap_pairwise = TRUE, ap_engine = "edger",
                   ap_lfc = 1, ap_padj = 0.05)
+  # BULK-06 : extension PUR — les options supplementaires (ex. ap_run_pathway)
+  # se fusionnent ici ; les appels existants (sans input_extra) sont inchanges.
+  e$input <- utils::modifyList(e$input, input_extra)
   e
 }
 
@@ -189,6 +203,54 @@ test_that("le garde 427 est conditionnel : une paire reussit => il ne tire pas",
   expect_true(sum(steps == "dispatch") >= 3L)
   # ...et le garde n'a PAS tire, puisque `ok > 0`.
   expect_false(any(grepl(.MBK_MSG_ASCII, steps, fixed = TRUE)))
+})
+
+# ---------------------------------------------------------------------------
+# BULK-06 (§2.10 V1X_BULK_QA_AUDIT_FIXES_PROPOSAL.md ; registre round 2,
+# collector_BULK_claims.md claim BULK-06) — ROUGE d'abord.
+# ---------------------------------------------------------------------------
+# En mode pairwise, `res` n'est assigne QUE dans la branche non-pairwise
+# (modules/bulk/mod_bulk.R ~L438-450, fermeture de branche ~L461) ; en pairwise
+# les resultats vivent dans `res_i` -> shared_rv$contrasts (~L420-430). Les
+# blocs pathway du tronc commun lisent pourtant `res` : GSEA ~L492
+# (run_gsea_enrichment(res,...)) et ORA ~L503-504 (res$gene[...]). Avec
+# `ap_run_pathway` coche en pairwise, le bloc ORA (defaut `ap_pathway_mode =
+# "ora"`) leve « object 'res' not found » (EN) / « objet 'res' introuvable »
+# (FR), attrape par le tryCatch EXTERNE (~L528-530) : le pipeline auto se
+# termine en ERREUR — notification « Erreur pipeline: ... » — au lieu du
+# « ✓ Pipeline termine » (~L521-526). (En mode GSEA le defaut est avale par le
+# tryCatch interne ~L491-494 : GSEA sautee, pipeline termine — d'ou le choix
+# du mode ORA ici : c'est la voie ou l'echec est OBSERVABLE.)
+#
+# Harnais : le bloc observeEvent(input$ap_confirm) est evalue comme pour les
+# tests ci-dessus (helper-ast.R + MockShinySession, cf. .mbk_run). La branche
+# pairwise REUSSIE appelle le vrai `bulk_de_stamp_engine` (M13,
+# tools/pkg_skeleton/R/bulk_helpers.R:841) : charge au niveau fichier
+# (load_project_pkg en tete de fichier, meme motif que les voisins, ex.
+# test-bulk-gene-sets.R:19).
+test_that("BULK-06 : pairwise + Pathway ORA => l'auto-pipeline termine SANS « Erreur pipeline: 'res' »", {
+  skip_if_not(exists("MockShinySession", envir = asNamespace("shiny")),
+              "shiny::MockShinySession indisponible")
+
+  steps <- character(0)
+  err <- .mbk_run(.mbk_env(function(s) steps <<- c(steps, s),
+                           dispatch_ok = TRUE,
+                           input_extra = list(ap_run_pathway = TRUE,
+                                              ap_pathway_mode = "ora")))
+
+  # Temoin d'ancrage : on est bien en pairwise REUSSI — 3 paires (A/B/C) tentees.
+  expect_true(sum(steps == "dispatch") >= 3L)
+  # Temoin anti-faux-rouge : PAS le garde 427, PAS de paire echouee — l'echec
+  # observe doit etre celui du bloc pathway, pas un accident d'amont.
+  expect_false(any(grepl(.MBK_MSG_ASCII, steps, fixed = TRUE)))
+  # 🔴 RED (BULK-06) : le bloc ORA lit `res` jamais assigne en pairwise =>
+  # AUCUNE notification « Erreur pipeline: » ne doit s'emettre. En l'etat elle
+  # porte « object 'res' not found » (EN) / « objet 'res' introuvable » (FR) —
+  # la sortie d'echec ci-dessous le montre mot pour mot.
+  erreurs <- grep("Erreur pipeline:", steps, fixed = TRUE, value = TRUE)
+  expect_length(erreurs, 0L)
+  # ...et le « ✓ Pipeline termine » doit etre emis (pipeline auto complet).
+  expect_true(any(grepl("Pipeline termin", steps, fixed = TRUE)))
 })
 
 # ---------------------------------------------------------------------------

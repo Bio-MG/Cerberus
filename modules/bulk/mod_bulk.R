@@ -460,6 +460,16 @@ mod_bulk_server <- function(id, global_data) {
                      a = grp_target, b = grp_ref))
         }
 
+        # BULK-06 (§2.10 V1X_BULK_QA_AUDIT_FIXES_PROPOSAL.md) : `res` n'est
+        # assigné QUE dans la branche non-pairwise ci-dessus ; en pairwise les
+        # résultats vivent dans `res_i` -> shared_rv$contrasts. Les blocs
+        # pathway du tronc commun ci-dessous lisent un résultat DE unique :
+        # contrat — l'auto-run pathway suit le CONTRASTE ACTIF, aligné sur le
+        # dispatch d'affichage des onglets DE (shared_rv$active_contrast,
+        # fixé dans les deux branches). Extension future B1-F (§2.4) : itérer
+        # sur l'ensemble des contrastes pairwise.
+        res_ap <- if (pairwise_mode) shared_rv$contrasts[[shared_rv$active_contrast]] else res
+
         # Traçabilité du contournement — voyage avec le résultat (rapport,
         # export, provenance) pour qu'il ne puisse pas être lu comme une DE
         # ordinaire.
@@ -489,7 +499,7 @@ mod_bulk_server <- function(id, global_data) {
         if (isTRUE(input$ap_run_pathway) && identical(input$ap_pathway_mode, "gsea")) {
           p$set(0.85, .tr("GSEA...")); log(.tr("GSEA (tous les g\u00e8nes class\u00e9s)..."))
           pw <- tryCatch(
-            run_gsea_enrichment(res, organism=input$ap_pathway_org,
+            run_gsea_enrichment(res_ap, organism=input$ap_pathway_org,
                                 database=input$ap_pathway_db, pval_cutoff=0.05),
             error=function(e) { log(paste("\u26a0\ufe0f GSEA:", e$message)); NULL }
           )
@@ -500,8 +510,8 @@ mod_bulk_server <- function(id, global_data) {
           } else log(.tr("\u26a0\ufe0f GSEA : aucun pathway enrichi."))
         } else if (isTRUE(input$ap_run_pathway)) {
           p$set(0.85, .tr("Pathway ORA...")); log(.tr("Pathway ORA..."))
-          sig_g <- res$gene[!is.na(res$padj) & res$padj < input$ap_padj &
-                              abs(res$log2FoldChange) > input$ap_lfc]
+          sig_g <- res_ap$gene[!is.na(res_ap$padj) & res_ap$padj < input$ap_padj &
+                              abs(res_ap$log2FoldChange) > input$ap_lfc]
           if (length(sig_g) >= 10) {
             pw <- tryCatch(
               run_pathway_enrichment(sig_g, organism=input$ap_pathway_org,
