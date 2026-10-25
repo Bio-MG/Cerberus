@@ -27,13 +27,13 @@ source_project_file("tools/pkg_skeleton/R/io_helpers.R")   # %||%
 source_project_file("tools/pkg_skeleton/R/rdata_io.R")     # read_velocity_rds() accepte .rda
 source_project_file("tools/pkg_skeleton/R/state.R")
 source_project_file("tools/pkg_skeleton/R/provenance.R")
-source_project_file("R/sc/sc_velocity.R")
-source_project_file("R/sc/sc_communication.R")
-source_project_file("R/sc/sc_communication_views.R")
-source_project_file("R/sc/sc_communication_spatial.R")      # V1.x-A
-source_project_file("R/sc/sc_communication_trajectory.R")   # V1.x-B
-source_project_file("R/sc/sc_communication_velocity.R")     # V1.x-C
-source_project_file("R/sc/sc_communication_perturbation.R") # V1.x-D
+source_project_file("tools/pkg_skeleton/R/sc_velocity.R")
+source_project_file("tools/pkg_skeleton/R/sc_communication.R")
+source_project_file("tools/pkg_skeleton/R/sc_communication_views.R")
+source_project_file("tools/pkg_skeleton/R/sc_communication_spatial.R")      # V1.x-A
+source_project_file("tools/pkg_skeleton/R/sc_communication_trajectory.R")   # V1.x-B
+source_project_file("tools/pkg_skeleton/R/sc_communication_velocity.R")     # V1.x-C
+source_project_file("tools/pkg_skeleton/R/sc_communication_perturbation.R") # V1.x-D
 
 # Extracteur de fonctions top-level (implémentation propre aux contextes,
 # volontairement distincte de .comm_top_level_assignments du test de freeze

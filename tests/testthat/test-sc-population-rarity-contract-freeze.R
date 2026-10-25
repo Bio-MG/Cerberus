@@ -124,7 +124,7 @@ test_that("validity states, labels and rule types are frozen", {
 
 # ── Surfaces publiques figees ───────────────────────────────────────────────
 test_that("public API surface of sc_population_rarity.R is frozen", {
-  defined <- .pr_freeze_top_level_assignments("R/sc/sc_population_rarity.R")
+  defined <- .pr_freeze_top_level_assignments("tools/pkg_skeleton/R/sc_population_rarity.R")
   public <- defined[!grepl("^\\.", defined)]
   expect_setequal(public, population_rarity_public_api())
   expect_true(all(c(".POPULATION_RARITY_STATUS_STATES",
@@ -140,7 +140,7 @@ test_that("public API surface of sc_population_rarity.R is frozen", {
 
 # ── Regle 3 : aucun moteur duplique, aucun graphe kNN ───────────────────────
 test_that("the rarity domain reuses no engine and builds no kNN graph", {
-  src <- .pr_freeze_src("R/sc/sc_population_rarity.R")
+  src <- .pr_freeze_src("tools/pkg_skeleton/R/sc_population_rarity.R")
   # Aucune primitive miloR / graphe : la question ne requiert aucun voisinage.
   expect_false(grepl("miloR::|buildGraph\\(|makeNhoods\\(|testNhoods\\(|calcNhoodDistance\\(",
                      src))
@@ -153,7 +153,7 @@ test_that("the rarity domain reuses no engine and builds no kNN graph", {
 
 # ── Porte Stage 13 : INAPPLICABLE (motif ecrit dans le contrat) ─────────────
 test_that("the Stage 13 gate is NOT called and its inapplicability is documented", {
-  src <- .pr_freeze_src("R/sc/sc_population_rarity.R")
+  src <- .pr_freeze_src("tools/pkg_skeleton/R/sc_population_rarity.R")
   # La porte n'est JAMAIS appelee : aucune affirmation differentielle.
   expect_false(grepl("assert_da_design_result\\(", src))
   # Le motif est ECRIT dans l'en-tete du domaine...
@@ -181,7 +181,7 @@ test_that("no default rarity threshold exists anywhere", {
   # CODE uniquement : l'en-tete INTERDIT explicitement ce symbole (c'est un
   # rappel pedagogique), ce n'est pas une utilisation.
   expect_false(any(grepl("TS_DA_MIN_IDENTITY_CELLS_PER_SAMPLE",
-                         .pr_freeze_code_lines("R/sc/sc_population_rarity.R"),
+                         .pr_freeze_code_lines("tools/pkg_skeleton/R/sc_population_rarity.R"),
                          fixed = TRUE)))
   # Le domaine REFUSE un appel sans seuil declare (aucun repli implicite).
   expect_error(.pr_run(rule_type = NULL), class = "population_rarity_error")
@@ -191,11 +191,11 @@ test_that("no default rarity threshold exists anywhere", {
 # ── Cablage : app.R + mod_sc.R ──────────────────────────────────────────────
 test_that("the rarity domain and module are sourced exactly once in app.R", {
   app <- .pr_freeze_src("app.R")
-  expect_match(app, 'source("R/sc/sc_population_rarity.R")', fixed = TRUE)
+  expect_match(app, 'source("tools/pkg_skeleton/R/sc_population_rarity.R")', fixed = TRUE)
   expect_match(app, 'source("modules/sc/mod_sc_rarity.R")', fixed = TRUE)
   # Le domaine est source APRES sc_velocity.R (empreinte v2 reutilisee).
-  expect_true(regexpr('source\\("R/sc/sc_velocity.R"\\)', app)[1L] <
-                regexpr('source\\("R/sc/sc_population_rarity.R"\\)', app)[1L])
+  expect_true(regexpr('source\\("tools/pkg_skeleton/R/sc_velocity.R"\\)', app)[1L] <
+                regexpr('source\\("tools/pkg_skeleton/R/sc_population_rarity.R"\\)', app)[1L])
 })
 
 test_that("the rarity module defines exactly its three orchestration functions", {

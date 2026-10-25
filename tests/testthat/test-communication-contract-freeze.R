@@ -126,7 +126,7 @@ test_that("object identity is pinned to the v2 fingerprint reused from velocity"
 
 # ── Surface publique figee ──────────────────────────────────────────────────
 test_that("public API surface of sc_communication.R is frozen", {
-  defined <- .comm_top_level_assignments("R/sc/sc_communication.R")
+  defined <- .comm_top_level_assignments("tools/pkg_skeleton/R/sc_communication.R")
   public <- defined[!grepl("^\\.", defined)]
   expect_setequal(public, communication_public_api())
   # Helpers internes prefixes d'un point, jamais publics.
@@ -191,7 +191,7 @@ test_that("report/export consumers do not reimplement communication import", {
   # Le script reproducible et les templates n appellent aucune fonction de calcul encore la
   # communication (branche rapport reservee au Stage 17).
   export_src <- paste(readLines(file.path(ts_project_root(),
-                                          "R/sc/sc_export.R")),
+                                          "tools/pkg_skeleton/R/sc_export.R")),
                       collapse = "\n")
   expect_false(grepl("communication", export_src, ignore.case = TRUE))
   # Post-V1.0 : le rapport Rmd AFFICHE le resultat canonique (tables
@@ -209,7 +209,7 @@ test_that("report/export consumers do not reimplement communication import", {
 
 # ── Stage 12 : fichier de vues fige (consommateurs purs) ────────────────────
 test_that("views file surface is frozen (Stage 12)", {
-  defined <- .comm_top_level_assignments("R/sc/sc_communication_views.R")
+  defined <- .comm_top_level_assignments("tools/pkg_skeleton/R/sc_communication_views.R")
   public <- defined[!grepl("^\\.", defined)]
   expect_setequal(public, communication_views_public_api())
   expect_true(all(c(".views_stop", ".communication_node_keys",
@@ -220,7 +220,7 @@ test_that("views file surface is frozen (Stage 12)", {
 
 test_that("views are pure consumers of the canonical result (no fabrication)", {
   src <- paste(readLines(file.path(ts_project_root(),
-                                   "R/sc/sc_communication_views.R")),
+                                   "tools/pkg_skeleton/R/sc_communication_views.R")),
                collapse = "\n")
   expect_match(src, "assert_communication_result(", fixed = TRUE)
   # Les vues ne produisent jamais un contrat : pas de finalize ici.
@@ -247,7 +247,7 @@ test_that("module consumes the frozen views accessors (Stage 12)", {
 
 test_that("CellChat object import DELEGATES extraction (no second net$prob parser)", {
   src <- paste(readLines(file.path(ts_project_root(),
-                                   "R/sc/sc_communication.R")),
+                                   "tools/pkg_skeleton/R/sc_communication.R")),
                collapse = "\n")
   # UNE SEULE lecture de net$prob dans toute l'application : l'import d'un
   # objet .rds DELEGUE au moteur (regle 3 : etendre, ne pas dupliquer).

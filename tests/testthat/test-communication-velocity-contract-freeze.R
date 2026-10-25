@@ -9,7 +9,7 @@
 # docs/contracts/COMMUNICATION_VELOCITY_CONTRACT.md.
 # =============================================================================
 
-source_project_file("R/sc/sc_communication_velocity.R")
+source_project_file("tools/pkg_skeleton/R/sc_communication_velocity.R")
 
 # Résultat velocity canonique avec vecteurs validés (fixtures Stage 8-9).
 .ccx_velocity_result <- function(with_vectors = TRUE) {
@@ -35,7 +35,7 @@ test_that("surface publique vélocité figée", {
       "plot_communication_velocity_context",
       "build_communication_velocity_export")
   )
-  nms <- .ccx_top_level_assignments("R/sc/sc_communication_velocity.R")
+  nms <- .ccx_top_level_assignments("tools/pkg_skeleton/R/sc_communication_velocity.R")
   nms_public <- nms[!grepl("^\\.", nms)]
   expect_true(all(nms_public %in% communication_velocity_public_api()))
 })
@@ -136,7 +136,7 @@ test_that("schéma du module vélocité figé (2 fonctions top-level)", {
 })
 
 test_that("aucun appel de calcul d'inférence dans le moteur vélocité", {
-  src <- paste(readLines(file.path(ts_project_root(), "R/sc/sc_communication_velocity.R")),
+  src <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/sc_communication_velocity.R")),
                collapse = "\n")
   expect_false(grepl("computeCommunProb|CellChatDB|nichenetr|dynamo|scVelo|velocyto\\.rl", src))
 })

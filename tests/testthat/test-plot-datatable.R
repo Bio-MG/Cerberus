@@ -204,7 +204,7 @@ test_that("ts_datatable_buttons() est deterministe", {
 .tsd_migrated <- c(
   "tools/pkg_skeleton/R/bulk_helpers.R",
   "tools/pkg_skeleton/R/pathway_helpers.R",
-  "R/sc/sc_helpers.R",
+  "tools/pkg_skeleton/R/sc_helpers.R",
   "modules/bulk_de/mod_bulk_de_multimethod.R",
   "modules/bulk_de/mod_bulk_de_venn.R",
   "modules/spatial/mod_spatial_cluster.R"

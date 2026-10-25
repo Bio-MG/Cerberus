@@ -30,8 +30,8 @@ if (!exists("source_project_file", envir = globalenv(), mode = "function")) {
 
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")   # %||%
 source_project_file("tools/pkg_skeleton/R/provenance.R")
-source_project_file("R/sc/sc_velocity.R")    # velocity_object_fingerprint
-source_project_file("R/sc/sc_population_rarity.R")
+source_project_file("tools/pkg_skeleton/R/sc_velocity.R")    # velocity_object_fingerprint
+source_project_file("tools/pkg_skeleton/R/sc_population_rarity.R")
 
 # ── Metadonnees synthetiques deterministes ──────────────────────────────────
 # counts        : nom de population -> nb de cellules (tailles CONNUES)

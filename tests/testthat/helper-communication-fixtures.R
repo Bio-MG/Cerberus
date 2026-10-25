@@ -27,12 +27,12 @@ source_project_file("tools/pkg_skeleton/R/io_helpers.R")   # %||%
 source_project_file("tools/pkg_skeleton/R/rdata_io.R")     # parse_cellchat_object() accepte .rda
 source_project_file("tools/pkg_skeleton/R/state.R")
 source_project_file("tools/pkg_skeleton/R/provenance.R")
-source_project_file("R/sc/sc_velocity.R")
-source_project_file("R/sc/sc_communication.R")
+source_project_file("tools/pkg_skeleton/R/sc_velocity.R")
+source_project_file("tools/pkg_skeleton/R/sc_communication.R")
 # parse_cellchat_object() DELEGUE l'extraction a .cellchat_engine_extract() :
 # une SEULE fonction connait la structure interne de CellChat (regle 3).
-source_project_file("R/sc/sc_communication_engine.R")
-source_project_file("R/sc/sc_communication_views.R")
+source_project_file("tools/pkg_skeleton/R/sc_communication_engine.R")
+source_project_file("tools/pkg_skeleton/R/sc_communication_views.R")
 
 # ── Fixture CellChat : table exportee (subsetCommunication-like) ────────────
 .comm_cellchat_tab <- function() {

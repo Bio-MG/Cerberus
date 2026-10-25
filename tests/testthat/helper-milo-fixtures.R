@@ -27,10 +27,10 @@ source_project_file("tools/pkg_skeleton/R/io_helpers.R")   # %||%
 source_project_file("tools/pkg_skeleton/R/state.R")
 source_project_file("tools/pkg_skeleton/R/provenance.R")
 source_project_file("tools/pkg_skeleton/R/validation.R")
-source_project_file("R/sc/sc_velocity.R")    # velocity_object_fingerprint
-source_project_file("R/sc/sc_abundance_design.R")
-source_project_file("R/sc/sc_abundance_milo.R")
-source_project_file("R/sc/sc_abundance_milo_views.R")
+source_project_file("tools/pkg_skeleton/R/sc_velocity.R")    # velocity_object_fingerprint
+source_project_file("tools/pkg_skeleton/R/sc_abundance_design.R")
+source_project_file("tools/pkg_skeleton/R/sc_abundance_milo.R")
+source_project_file("tools/pkg_skeleton/R/sc_abundance_milo_views.R")
 
 # ── Objet Seurat synthetique deterministe ───────────────────────────────────
 # meta    : .da_meta() (schema identique au Stage 13 ; 4 echantillons, 2

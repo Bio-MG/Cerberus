@@ -113,38 +113,46 @@ source("tools/pkg_skeleton/R/complex_heatmap.R")  # PLOT-S4 : coeur ComplexHeatm
 # endroit de l'ordre (zero changement de comportement) ; seuls ses TESTS le
 # chargent desormais via le paquet (pkgload, cf. test-plotting-pkg-pilot.R).
 source("tools/pkg_skeleton/R/plot_dims.R")
-source("R/sc/sc_plotting.R")
+# D2 M5 lot 6 (2026-10-25) : sc_plotting.R demenage dans l'arbre du paquet
+# (tools/pkg_skeleton/R/) — app.R le source() TOUJOURS, a la MEME position
+# d'ordre (zero changement de comportement).
+source("tools/pkg_skeleton/R/sc_plotting.R")
 # D2 M5 lot 4 (2026-10-25) : spatial_plotting.R demenage dans l'arbre du
 # paquet (tools/pkg_skeleton/R/) — app.R le source() TOUJOURS, a la MEME
 # position d'ordre (zero changement de comportement).
 source("tools/pkg_skeleton/R/spatial_plotting.R")
 
-# ── Bloc 05 : R/sc (logique pure) ────────────────────────────────────────────
-source("R/sc/sc_helpers.R")
-source("R/sc/sc_bpcells.R")
-source("R/sc/sc_trajectory.R")
-source("R/sc/sc_velocity.R")
-source("R/sc/sc_communication.R")  # Stage 11 (4D-1) : APRES sc_velocity.R (reutilise velocity_object_fingerprint)
-source("R/sc/sc_communication_input.R")  # 4D-3 : entree CellChat depuis 10X/Seurat (APRES sc_communication.R)
-source("R/sc/sc_communication_views.R")  # Stage 12 (4D-2) : vues exploratoires, APRES sc_communication.R
-source("R/sc/sc_communication_spatial.R")  # V1.x-A (CCC avancée Phase 1) : contexte spatial, APRES sc_communication_views.R
-source("R/sc/sc_communication_trajectory.R")  # V1.x-B (CCC avancée Phase 3) : contexte trajectoire/pseudo-temps, APRES sc_communication_spatial.R
-source("R/sc/sc_communication_velocity.R")  # V1.x-C (CCC avancée Phase 2) : contexte vélocité, APRES sc_communication_trajectory.R
-source("R/sc/sc_communication_perturbation.R")  # V1.x-D (CCC avancée Phase 4) : perturbation IN SILICO du réseau importé, APRES sc_communication_velocity.R
-source("R/sc/sc_communication_engine.R")  # Moteur CellChat natif (Path B) : APRES sc_communication_input.R (consomme build_cellchat_input). CellChat est une dependance PARESSeUSE : l'app demarre sans.
-source("R/sc/sc_abundance_design.R")  # Stage 13 (4E-0) : validation du design DA (reutilise check_design_confounding)
-source("R/sc/sc_abundance_milo.R")  # Stage 14 (4E-1) : Milo, GATED sur le design Stage 13
-source("R/sc/sc_abundance_milo_views.R")  # Stage 14 : vues pures du resultat Milo
-source("R/sc/sc_abundance_sccoda.R")  # Stage 15 (4E-2) : scCODA, GATED sur le design Stage 13 (reticulate, jamais de repli silencieux)
-source("R/sc/sc_abundance_sccoda_views.R")  # Stage 15 : vues pures du resultat scCODA
-source("R/sc/sc_abundance_cross_views.R")  # Stage 16 (4E-3) : vues croisées Milo x scCODA, consommatrices pures des deux contrats
-source("R/sc/sc_population_rarity.R")  # CCC 9 (question 1) : rareté par population annotée — DESCRIPTIF, aucun graphe (APRES sc_velocity.R : empreinte v2)
-source("R/sc/sc_pipeline.R")
-source("R/sc/sc_export.R")
-source("R/sc/sc_metadata.R")  # Design expérimental (condition/réplicat) — feature 6×10X, audit 2026-09-27 (PUR : aucun symbole Shiny)
-source("R/sc/sc_batch_metrics.R")  # Métrique de mélange des batchs (roadmap 4.3) — PUR : aucun symbole Shiny
+# ── Bloc 05 : R/sc → paquet (logique pure) ──────────────────────────────────
+# D2 M5 lot 6 (2026-10-25) : les 23 fichiers de logique pure du domaine sc
+# demenagent dans l'arbre du paquet (tools/pkg_skeleton/R/) — app.R les
+# source() TOUJOURS ICI, MEMES positions d'ordre (zero changement de
+# comportement). Les deps externes (io_helpers %||%, pathway_helpers,
+# plotting, state) et config TS_* sont deja residentes du paquet.
+source("tools/pkg_skeleton/R/sc_helpers.R")
+source("tools/pkg_skeleton/R/sc_bpcells.R")
+source("tools/pkg_skeleton/R/sc_trajectory.R")
+source("tools/pkg_skeleton/R/sc_velocity.R")
+source("tools/pkg_skeleton/R/sc_communication.R")  # Stage 11 (4D-1) : APRES sc_velocity.R (reutilise velocity_object_fingerprint)
+source("tools/pkg_skeleton/R/sc_communication_input.R")  # 4D-3 : entree CellChat depuis 10X/Seurat (APRES sc_communication.R)
+source("tools/pkg_skeleton/R/sc_communication_views.R")  # Stage 12 (4D-2) : vues exploratoires, APRES sc_communication.R
+source("tools/pkg_skeleton/R/sc_communication_spatial.R")  # V1.x-A (CCC avancée Phase 1) : contexte spatial, APRES sc_communication_views.R
+source("tools/pkg_skeleton/R/sc_communication_trajectory.R")  # V1.x-B (CCC avancée Phase 3) : contexte trajectoire/pseudo-temps, APRES sc_communication_spatial.R
+source("tools/pkg_skeleton/R/sc_communication_velocity.R")  # V1.x-C (CCC avancée Phase 2) : contexte vélocité, APRES sc_communication_trajectory.R
+source("tools/pkg_skeleton/R/sc_communication_perturbation.R")  # V1.x-D (CCC avancée Phase 4) : perturbation IN SILICO du réseau importé, APRES sc_communication_velocity.R
+source("tools/pkg_skeleton/R/sc_communication_engine.R")  # Moteur CellChat natif (Path B) : APRES sc_communication_input.R (consomme build_cellchat_input). CellChat est une dependance PARESSeUSE : l'app demarre sans.
+source("tools/pkg_skeleton/R/sc_abundance_design.R")  # Stage 13 (4E-0) : validation du design DA (reutilise check_design_confounding)
+source("tools/pkg_skeleton/R/sc_abundance_milo.R")  # Stage 14 (4E-1) : Milo, GATED sur le design Stage 13
+source("tools/pkg_skeleton/R/sc_abundance_milo_views.R")  # Stage 14 : vues pures du resultat Milo
+source("tools/pkg_skeleton/R/sc_abundance_sccoda.R")  # Stage 15 (4E-2) : scCODA, GATED sur le design Stage 13 (reticulate, jamais de repli silencieux)
+source("tools/pkg_skeleton/R/sc_abundance_sccoda_views.R")  # Stage 15 : vues pures du resultat scCODA
+source("tools/pkg_skeleton/R/sc_abundance_cross_views.R")  # Stage 16 (4E-3) : vues croisées Milo x scCODA, consommatrices pures des deux contrats
+source("tools/pkg_skeleton/R/sc_population_rarity.R")  # CCC 9 (question 1) : rareté par population annotée — DESCRIPTIF, aucun graphe (APRES sc_velocity.R : empreinte v2)
+source("tools/pkg_skeleton/R/sc_pipeline.R")
+source("tools/pkg_skeleton/R/sc_export.R")
+source("tools/pkg_skeleton/R/sc_metadata.R")  # Design expérimental (condition/réplicat) — feature 6×10X, audit 2026-09-27 (PUR : aucun symbole Shiny)
+source("tools/pkg_skeleton/R/sc_batch_metrics.R")  # Métrique de mélange des batchs (roadmap 4.3) — PUR : aucun symbole Shiny
 
-# ── Bloc 06 : paquet (ex-R/bulk) + R/sc/sc_multi (logique pure) ──────────────────────────
+# ── Bloc 06 : paquet (ex-R/bulk, incl. ex-R/sc/sc_multi) (logique pure) ─────
 source("tools/pkg_skeleton/R/bulk_helpers.R")
 source("tools/pkg_skeleton/R/bulk_provenance.R")  # Bulk V2 M1 : manifeste bulk_obj$provenance (pur, testé)
 source("tools/pkg_skeleton/R/bulk_batch_qc.R")    # Bulk V2 M1 : diagnostics batch (pur, contrat gelé)
@@ -167,7 +175,7 @@ source("tools/pkg_skeleton/R/bulk_multi.R")         # MD-1 : conteneur bulk_data
 source("tools/pkg_skeleton/R/bulk_multi_compare.R") # MD-2 : comparaison multi-jeux (pur, contrat gelé §10)
 source("tools/pkg_skeleton/R/bulk_merge.R")         # NEW-2 : fusion de jeux bulk (pur, contrat gelé)
 source("tools/pkg_skeleton/R/bulk_network.R")       # NEW-3 : interactome local Reactome + PCSF (pur, contrat gelé)
-source("R/sc/sc_multi.R")             # MD-4 : conteneur sc_datasets & double jeu SC (pur, contrat gelé)
+source("tools/pkg_skeleton/R/sc_multi.R")             # MD-4 : conteneur sc_datasets & double jeu SC (pur, contrat gelé)
 source("tools/pkg_skeleton/R/bulk_report_engine.R")
 source("tools/pkg_skeleton/R/bulk_import_engine.R")
 

@@ -9,7 +9,7 @@
 # docs/contracts/COMMUNICATION_PERTURBATION_CONTRACT.md.
 # =============================================================================
 
-source_project_file("R/sc/sc_communication_perturbation.R")
+source_project_file("tools/pkg_skeleton/R/sc_communication_perturbation.R")
 
 test_that("surface publique perturbation figée", {
   expect_setequal(
@@ -26,7 +26,7 @@ test_that("surface publique perturbation figée", {
     communication_perturbation_targets(),
     c("ligand", "receptor", "interaction", "sender", "receiver")
   )
-  nms <- .ccx_top_level_assignments("R/sc/sc_communication_perturbation.R")
+  nms <- .ccx_top_level_assignments("tools/pkg_skeleton/R/sc_communication_perturbation.R")
   nms_public <- nms[!grepl("^\\.", nms)]
   expect_true(all(nms_public %in% communication_perturbation_public_api()))
 })
@@ -110,7 +110,7 @@ test_that("schéma du module perturbation figé (2 fonctions top-level)", {
 })
 
 test_that("aucun calcul d'inférence ni propagation modélisée", {
-  src <- paste(readLines(file.path(ts_project_root(), "R/sc/sc_communication_perturbation.R")),
+  src <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/sc_communication_perturbation.R")),
                collapse = "\n")
   expect_false(grepl("computeCommunProb|CellChatDB|nichenetr|propagate|randomWalk|diffusion", src))
 })

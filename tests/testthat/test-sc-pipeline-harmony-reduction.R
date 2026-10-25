@@ -25,7 +25,7 @@
 # =============================================================================
 
 test_that("FindNeighbors du chemin principal suit clust_red / clust_dims", {
-  p <- ts_ast_parse("R/sc/sc_pipeline.R")
+  p <- ts_ast_parse("tools/pkg_skeleton/R/sc_pipeline.R")
 
   calls <- ts_ast_find_all(p, function(x) ts_ast_is_call_to(x, "FindNeighbors"))
   # Sonde DISCRIMINANTE : deux sites (sketch + chemin principal). Si le compte

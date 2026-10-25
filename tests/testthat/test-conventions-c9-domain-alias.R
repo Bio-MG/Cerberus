@@ -69,8 +69,13 @@ test_that("C9 : un fichier sans AUCUN test est bien SIGNALE (le rouge existe)", 
   # `R/plotting/palettes.R` a DEMENAGE dans le paquet (tools/pkg_skeleton/R/)
   # et quitte la population C9 — le temoin du rouge devient `R/sc/sc_state.R`
   # (deja utilise comme temoin vivant par la direction 3 ci-dessous).
-  expect_true("R/sc/sc_state.R" %in%
-                .c9_flagged(.c9_abs("R/sc/sc_state.R")))
+  # ⚠️ D2 M5 LOT 6 (2026-10-25) : le domaine R/sc ENTIER (26 fichiers) demenage
+  # dans le paquet et quitte la population C9 (R/ ne garde plus que le fichier
+  # etranger CERBERUS, couvert par son nom). Le temoin SUIT le fichier : le
+  # garde le signale encore par son nom a son adresse du paquet (aucun test
+  # eponyme test-sc_state.R ne l'y suit — mesure du lot).
+  expect_true("tools/pkg_skeleton/R/sc_state.R" %in%
+                .c9_flagged(.c9_abs("tools/pkg_skeleton/R/sc_state.R")))
 })
 
 test_that("C9 : les faux positifs de R/plotting/ ont disparu, puis le dossier a suivi", {
@@ -131,9 +136,28 @@ test_that("C9 : l'alias de domaine ne DEBORDE pas (temoin de traversee)", {
   # R/core ne contient plus que le fichier etranger CERBERUS, couvert par son
   # nom, HORS lot + les 9 fichiers presents au paquet), meme forme que les
   # soldes M4-suite / lots 2-4.
+  # ⚠️ AMENDE le 2026-10-25 (D2 M5 LOT 6) : `R/sc/sc_communication_input.R`
+  # (successeur du lot 5) demenage A SON TOUR dans le paquet (avec les 25
+  # autres fichiers R/sc) et sort de la population C9 — il reste au temoin de
+  # traversee comme SORTANT asseré a l'adresse du paquet (mesure du lot :
+  # le garde le signale encore par son nom la-bas, aucun test eponyme ne l'y
+  # suit). R/ ne contient PLUS que le fichier etranger CERBERUS : le temoin de
+  # traversee vit desormais ENTIEREMENT a l'adresse du paquet (rdata_io + le
+  # sortant sc_communication_input), meme forme que les soldes M4-suite /
+  # lots 2-5.
   files <- c("tools/pkg_skeleton/R/rdata_io.R",
-             "R/sc/sc_communication_input.R")
+             "tools/pkg_skeleton/R/sc_communication_input.R")
   expect_length(.c9_flagged(.c9_abs(files)), 2L)
+  # Solde lot 6 : R/sc ne contient plus RIEN (le dossier a disparu du disque,
+  # .gitkeep supprime) et les 26 fichiers vivent bien dans le paquet.
+  expect_false(dir.exists(file.path(ts_project_root(), "R", "sc")))
+  pkg <- file.path(ts_project_root(), "tools", "pkg_skeleton", "R")
+  for (f in c("sc_plotting.R", "sc_helpers.R", "sc_pipeline.R",
+              "sc_multi.R", "sc_state.R", "sc_velocity.R",
+              "sc_communication.R", "sc_abundance_milo.R")) {
+    expect_true(file.exists(file.path(pkg, f)),
+                info = paste(f, "absent du paquet apres extraction M5 lot 6"))
+  }
   # Solde lot 5 : R/core ne contient plus que cerberus_handoff.R (etranger,
   # hors lot) et les 9 fichiers vivent bien dans le paquet.
   core_left <- list.files(file.path(ts_project_root(), "R", "core"), pattern = "[.]R$")
@@ -149,8 +173,8 @@ test_that("C9 : l'alias de domaine ne DEBORDE pas (temoin de traversee)", {
   # Et le solde explicite : `sc_export.R` n'est PLUS signale, mais il l'etait —
   # on l'assere pour qu'une regression (la garde qui cesse de voir un fichier
   # sans test) ne puisse pas se cacher derriere ce retrait.
-  expect_length(.c9_flagged(.c9_abs("R/sc/sc_export.R")), 0L)
-  expect_length(.c9_flagged(.c9_abs("R/sc/sc_state.R")), 1L)
+  expect_length(.c9_flagged(.c9_abs("tools/pkg_skeleton/R/sc_export.R")), 0L)
+  expect_length(.c9_flagged(.c9_abs("tools/pkg_skeleton/R/sc_state.R")), 1L)
   # M5 lot 3 : le temoin bulk sorti est bien sorti (le dossier R/bulk ne peut
   # plus rien cacher) et les 18 fichiers vivent bien dans le paquet.
   expect_false(dir.exists(file.path(ts_project_root(), "R", "bulk")) &&
@@ -183,7 +207,7 @@ test_that("C9 : dans R/plotting/, SEUL palettes.R reste signale (invariant)", {
                  length(list.files("R/plotting", pattern = "[.]R$")) > 0L)
 })
 
-test_that("C9 : le plafond de dette est 9 (recompose par le lot D2 M5 lot 5)", {
+test_that("C9 : le plafond de dette est 0 (recompose par le lot D2 M5 lot 6)", {
   # Plafond, pas egalite : le compte doit pouvoir BAISSER quand un test est
   # ecrit, mais ne doit jamais REMONTER (une regression de l'alias le ferait).
   # ⚠️ Le plafond SUIT la derniere mesure : il valait 22 (§2cy), puis 21 (§2db),
@@ -191,19 +215,24 @@ test_that("C9 : le plafond de dette est 9 (recompose par le lot D2 M5 lot 5)", {
   # 13 (la session CERBERUS a PAYE sa dette : test-cerberus-handoff.R couvre
   # cerberus_handoff.R par son nom, mesure du 13:59), 10 (lot 4 : les 11
   # fichiers de R/spatial quittent la population, dont 3 flagges — async,
-  # deconv_prep, export). D2 M5 LOT 5 (2026-10-25) : les 9 fichiers R/core
-  # RESTANTS (caching, drive_allowlist, drive_watcher, error_state, jobs,
-  # memory, pathway_helpers, rdata_io, validation) + config/{defaults,
-  # thresholds}.R demenagent dans tools/pkg_skeleton/R/ et quittent la
-  # population — 1 seul etait flagge (`rdata_io.R`, aucun test eponyme ;
-  # mesure --list-all post-deplacement : C9 10 -> 9, les 9 restants sont tous
-  # R/sc). R/core ne garde plus que cerberus_handoff.R (etranger CERBERUS,
-  # couvert par son nom, HORS lot). Aucun etranger en vol au moment de la
-  # mesure (check_writers 14:44 : aucun battement etranger).
+  # deconv_prep, export), 9 (lot 5 : les 9 fichiers R/core restants + config
+  # quittent la population, dont 1 flagge — rdata_io). D2 M5 LOT 6 (2026-10-25) :
+  # le domaine R/sc ENTIER (26 fichiers) demenage dans tools/pkg_skeleton/R/
+  # et quitte la population — 9 etaient flagges (les fichiers sans test
+  # eponyme ; mesure --list-all du lot). R/ ne contient PLUS que
+  # cerberus_handoff.R (etranger CERBERUS, couvert par son nom, HORS lot) :
+  # la population C9 est RESORTEE. Aucun etranger en vol au moment de la
+  # mesure (check_writers 16:06 : aucun battement etranger).
   flagged <- .c9_flagged(.c9_population())
-  expect_true(length(flagged) <= 9L)
+  expect_true(length(flagged) <= 0L,
+              info = paste(flagged, collapse = ", "))
   # Et le contrat dans l'autre sens, pour que le plafond ne devienne pas
-  # infalsifiable si la garde cesse de signaler quoi que ce soit : la population
-  # C9 n'est pas vide (temoin de NON-VACUITE).
-  expect_true(length(flagged) > 0L)
+  # infalsifiable si la garde cesse de signaler quoi que ce soit : le rouge
+  # existe ENCORE, a l'adresse du paquet (les dettes sortantes ne sont PAS
+  # payees — elles vivent a present hors population, couvertes par les tests
+  # stricts retargetes ; temoin de NON-VACUITE deplace, meme forme que les
+  # soldes M4-suite / lots 2-5).
+  expect_true(length(.c9_flagged(.c9_abs(c(
+    "tools/pkg_skeleton/R/sc_state.R",
+    "tools/pkg_skeleton/R/rdata_io.R")))) == 2L)
 })

@@ -61,7 +61,7 @@ test_that("validity states and labels are frozen", {
 
 # ── Surfaces publiques figees ───────────────────────────────────────────────
 test_that("public API surface of sc_abundance_sccoda.R is frozen", {
-  defined <- .sccoda_top_level_assignments("R/sc/sc_abundance_sccoda.R")
+  defined <- .sccoda_top_level_assignments("tools/pkg_skeleton/R/sc_abundance_sccoda.R")
   public <- defined[!grepl("^\\.", defined)]
   expect_setequal(public, sccoda_public_api())
   expect_true(all(c(".SCCODA_STATUS_STATES", ".sccoda_stop",
@@ -74,7 +74,7 @@ test_that("public API surface of sc_abundance_sccoda.R is frozen", {
 })
 
 test_that("public API surface of sc_abundance_sccoda_views.R is frozen", {
-  defined <- .sccoda_top_level_assignments("R/sc/sc_abundance_sccoda_views.R")
+  defined <- .sccoda_top_level_assignments("tools/pkg_skeleton/R/sc_abundance_sccoda_views.R")
   public <- defined[!grepl("^\\.", defined)]
   expect_setequal(public, sccoda_views_public_api())
   expect_true(all(c(".sccoda_views_stop", ".sccoda_empty_view_plot") %in%
@@ -118,7 +118,7 @@ test_that("scCODA is mounted once in mod_sc.R (panel 8e + output tab)", {
 # ── Isolation des consommateurs rapport/export ──────────────────────────────
 test_that("report/export consumers do not reimplement scCODA yet (Stage 17 scope)", {
   export_src <- paste(readLines(file.path(ts_project_root(),
-                                          "R/sc/sc_export.R")),
+                                          "tools/pkg_skeleton/R/sc_export.R")),
                       collapse = "\n")
   expect_false(grepl("sccoda", export_src, ignore.case = TRUE))
   # Post-V1.0 : le rapport Rmd AFFICHE le resultat canonique (tables

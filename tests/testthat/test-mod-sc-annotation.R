@@ -32,7 +32,7 @@
 # =============================================================================
 
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")        # %||%, detect_*_from_ids
-source_project_file("R/sc/sc_bpcells.R")          # sc_backend_status
+source_project_file("tools/pkg_skeleton/R/sc_bpcells.R")          # sc_backend_status
 suppressPackageStartupMessages({
   library(Seurat)      # CreateSeuratObject
   library(Matrix)      # sparseMatrix

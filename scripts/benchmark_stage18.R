@@ -12,8 +12,9 @@ source("tools/pkg_skeleton/R/defaults.R")
 source("tools/pkg_skeleton/R/state.R"); source("tools/pkg_skeleton/R/io_helpers.R")
 source("tools/pkg_skeleton/R/validation.R")
 source("tools/pkg_skeleton/R/provenance.R"); source("tools/pkg_skeleton/R/jobs.R"); source("tools/pkg_skeleton/R/caching.R")
-source("R/sc/sc_velocity.R"); source("R/sc/sc_abundance_design.R")
-source("R/sc/sc_abundance_sccoda.R")
+# D2 M5 lot 6 : le domaine R/sc ENTIER vit dans tools/pkg_skeleton/R/
+source("tools/pkg_skeleton/R/sc_velocity.R"); source("tools/pkg_skeleton/R/sc_abundance_design.R")
+source("tools/pkg_skeleton/R/sc_abundance_sccoda.R")
 # D2 M5 lot 2 : le domaine R/reports ENTIER vit dans tools/pkg_skeleton/R/
 # (app.R le source() au nouveau chemin ; ce script de mesure suit le chemin).
 # error_log.R ajoute AUSSI (trou d'isolation preexistant, comble au passage —

@@ -29,7 +29,7 @@ test_that("concordance categories are frozen (explicit rules, no composite score
 })
 
 test_that("public API surface of sc_abundance_cross_views.R is frozen", {
-  defined <- .dacross_top_level_assignments("R/sc/sc_abundance_cross_views.R")
+  defined <- .dacross_top_level_assignments("tools/pkg_skeleton/R/sc_abundance_cross_views.R")
   public <- defined[!grepl("^\\.", defined)]
   expect_setequal(public, da_cross_views_public_api())
   expect_true(all(c(".dacross_stop", ".dacross_comparability") %in%
@@ -72,7 +72,7 @@ test_that("cross views are mounted once in mod_sc.R (panel 8f + output tab)", {
 # ── Isolation des consommateurs rapport/export ──────────────────────────────
 test_that("report/export consumers do not reimplement cross views yet (Stage 17 scope)", {
   export_src <- paste(readLines(file.path(ts_project_root(),
-                                          "R/sc/sc_export.R")),
+                                          "tools/pkg_skeleton/R/sc_export.R")),
                       collapse = "\n")
   expect_false(grepl("da_cross|cross_views", export_src, ignore.case = TRUE))
   for (tpl in list.files(file.path(ts_project_root(), "reports"),

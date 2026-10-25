@@ -19,7 +19,7 @@
 # =============================================================================
 source_project_file("tools/pkg_skeleton/R/defaults.R")
 source_project_file("tools/pkg_skeleton/R/memory.R")
-source_project_file("R/sc/sc_pipeline.R")
+source_project_file("tools/pkg_skeleton/R/sc_pipeline.R")
 
 test_that("ts_system_ram_mb rend total/available numériques et plausibles", {
   ram <- ts_system_ram_mb()

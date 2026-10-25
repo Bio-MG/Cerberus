@@ -218,7 +218,7 @@ test_that("engine errors are shown with their structured state", {
 })
 
 test_that("app.R sources the engine", {
-  expect_true(grepl('source("R/sc/sc_communication_engine.R")',
+  expect_true(grepl('source("tools/pkg_skeleton/R/sc_communication_engine.R")',
                     .cc_app_src, fixed = TRUE))
 })
 

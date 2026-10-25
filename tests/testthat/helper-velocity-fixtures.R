@@ -12,7 +12,7 @@ source_project_file("tools/pkg_skeleton/R/io_helpers.R")   # %||%
 source_project_file("tools/pkg_skeleton/R/rdata_io.R")     # read_velocity_rds() accepte .rda
 source_project_file("tools/pkg_skeleton/R/state.R")
 source_project_file("tools/pkg_skeleton/R/provenance.R")
-source_project_file("R/sc/sc_velocity.R")
+source_project_file("tools/pkg_skeleton/R/sc_velocity.R")
 
 .vel_genes <- paste0("gene", 1:10)
 .vel_cells <- paste0("cell", 1:5)

@@ -245,7 +245,7 @@
 #' D2 M5 lot 1 (2026-10-25) : state.R vit dans tools/pkg_skeleton/R/ (hors
 #' périmètre scanné R/ + modules/) — le chemin de l'exception SUIT le fichier
 #' pour rester exact si le périmètre s'étend un jour à l'arbre du paquet.
-.STATE_LAYER <- c("tools/pkg_skeleton/R/state.R", "R/sc/sc_state.R")
+.STATE_LAYER <- c("tools/pkg_skeleton/R/state.R", "tools/pkg_skeleton/R/sc_state.R")  # sc_state : ex-R/sc/, lot 6
 .SHINY_STATE_FACTORIES <- c("reactiveValues\\(", "reactiveVal\\(")
 
 #' Injection explicite : `input` / `session` passés en PARAMÈTRE sont assumés

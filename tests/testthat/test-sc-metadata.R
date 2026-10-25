@@ -1,7 +1,7 @@
 # =============================================================================
 # test-sc-metadata.R — unitaires de la logique pure du design condition/réplicat
 # =============================================================================
-source_project_file("R/sc/sc_metadata.R")
+source_project_file("tools/pkg_skeleton/R/sc_metadata.R")
 
 meta6 <- data.frame(
   orig.ident    = rep(c("1a", "2a", "3a", "1b", "2b", "3b"), each = 3),

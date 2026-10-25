@@ -14,9 +14,9 @@ source_project_file("tools/pkg_skeleton/R/provenance.R")        # new_provenance
 # D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
 # (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
 load_project_pkg()
-source_project_file("R/sc/sc_velocity.R")         # velocity_object_fingerprint()
-source_project_file("R/sc/sc_communication.R")    # .communication_object_fingerprint()
-source_project_file("R/sc/sc_communication_input.R")
+source_project_file("tools/pkg_skeleton/R/sc_velocity.R")         # velocity_object_fingerprint()
+source_project_file("tools/pkg_skeleton/R/sc_communication.R")    # .communication_object_fingerprint()
+source_project_file("tools/pkg_skeleton/R/sc_communication_input.R")
 
 .mk_counts <- function(n_genes = 4L, n_cells = 6L, seed = 1L) {
   set.seed(seed)

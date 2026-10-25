@@ -23,14 +23,14 @@ source_project_file("tools/pkg_skeleton/R/error_state.R")
     list(fn = "bulk_network_error_state",        file = "tools/pkg_skeleton/R/bulk_network.R",           classe = NA_character_),
     list(fn = "bulk_pattern_error_state",        file = "tools/pkg_skeleton/R/bulk_pattern.R",           classe = NA_character_),
     list(fn = "bulk_dose_error_state",           file = "tools/pkg_skeleton/R/dose_response.R",          classe = NA_character_),
-    list(fn = "da_design_error_state",           file = "R/sc/sc_abundance_design.R",      classe = "da_design_error"),
-    list(fn = "milo_error_state",                file = "R/sc/sc_abundance_milo.R",        classe = "milo_error"),
-    list(fn = "sccoda_error_state",              file = "R/sc/sc_abundance_sccoda.R",      classe = "sccoda_error"),
-    list(fn = "communication_error_state",       file = "R/sc/sc_communication.R",         classe = "communication_import_error"),
-    list(fn = "cellchat_engine_error_state",     file = "R/sc/sc_communication_engine.R",  classe = NA_character_),
-    list(fn = "cellchat_input_error_state",      file = "R/sc/sc_communication_input.R",   classe = "cellchat_input_error"),
-    list(fn = "population_rarity_error_state",   file = "R/sc/sc_population_rarity.R",     classe = "population_rarity_error"),
-    list(fn = "velocity_error_state",            file = "R/sc/sc_velocity.R",              classe = "velocity_validation_error")
+    list(fn = "da_design_error_state",           file = "tools/pkg_skeleton/R/sc_abundance_design.R",      classe = "da_design_error"),
+    list(fn = "milo_error_state",                file = "tools/pkg_skeleton/R/sc_abundance_milo.R",        classe = "milo_error"),
+    list(fn = "sccoda_error_state",              file = "tools/pkg_skeleton/R/sc_abundance_sccoda.R",      classe = "sccoda_error"),
+    list(fn = "communication_error_state",       file = "tools/pkg_skeleton/R/sc_communication.R",         classe = "communication_import_error"),
+    list(fn = "cellchat_engine_error_state",     file = "tools/pkg_skeleton/R/sc_communication_engine.R",  classe = NA_character_),
+    list(fn = "cellchat_input_error_state",      file = "tools/pkg_skeleton/R/sc_communication_input.R",   classe = "cellchat_input_error"),
+    list(fn = "population_rarity_error_state",   file = "tools/pkg_skeleton/R/sc_population_rarity.R",     classe = "population_rarity_error"),
+    list(fn = "velocity_error_state",            file = "tools/pkg_skeleton/R/sc_velocity.R",              classe = "velocity_validation_error")
   )
 }
 

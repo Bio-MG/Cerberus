@@ -6,7 +6,7 @@
 # plafond, producteurs), suppression, résumé, isolation (remplacer sc_obj ne
 # change jamais une entrée), relations déclarées de la décision 5.
 # =============================================================================
-source_project_file("R/sc/sc_multi.R")
+source_project_file("tools/pkg_skeleton/R/sc_multi.R")
 
 .make_sc_obj <- function(n_genes = 50, n_cells = 20, seed = 1,
                          project = "Test_SC") {
@@ -164,7 +164,7 @@ test_that("isolation : remplacer l'objet actif ne change jamais l'entrée", {
 })
 
 test_that("pureté Shiny : aucun symbole réactif dans R/sc/sc_multi.R", {
-  src <- paste(readLines(file.path(ts_project_root(), "R/sc/sc_multi.R"),
+  src <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/sc_multi.R"),
                          warn = FALSE), collapse = "\n")
   for (sym in c("reactiveVal", "reactiveValues", "observeEvent", "output\\$",
                 "input\\$", "moduleServer", "showNotification")) {

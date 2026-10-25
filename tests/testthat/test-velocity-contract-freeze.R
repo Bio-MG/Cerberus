@@ -128,7 +128,7 @@ test_that("object fingerprint format is pinned to v2", {
 
 # ── Surface publique figee ──────────────────────────────────────────────────
 test_that("public API surface of sc_velocity.R is frozen", {
-  defined <- .top_level_names("R/sc/sc_velocity.R")
+  defined <- .top_level_names("tools/pkg_skeleton/R/sc_velocity.R")
   internal <- grep("^\\.", defined, value = TRUE)
   public <- setdiff(defined, internal)
   expect_setequal(public, velocity_public_api())
@@ -166,7 +166,7 @@ test_that("report/export consumers do not reimplement velocity validation", {
 
   # Le script reproducible ignore le domaine ; les templates n appellent aucune fonction de calcul (post-V1.0 : ils affichent le canonique).
   export_src <- paste(readLines(file.path(ts_project_root(),
-                                          "R/sc/sc_export.R")),
+                                          "tools/pkg_skeleton/R/sc_export.R")),
                       collapse = "\n")
   expect_false(grepl("velocity", export_src, ignore.case = TRUE))
   # Post-V1.0 : le rapport Rmd AFFICHE le resultat canonique (tables

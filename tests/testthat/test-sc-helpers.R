@@ -19,8 +19,8 @@ source_project_file("tools/pkg_skeleton/R/io_helpers.R")   # defines %||%, sourc
 # D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
 # (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
 load_project_pkg()
-source_project_file("R/sc/sc_helpers.R")
-source_project_file("R/sc/sc_trajectory.R")   # calculate_pseudotime moved here (Block 7 refactor)
+source_project_file("tools/pkg_skeleton/R/sc_helpers.R")
+source_project_file("tools/pkg_skeleton/R/sc_trajectory.R")   # calculate_pseudotime moved here (Block 7 refactor)
 
 # ---------------------------------------------------------------------------
 # resolve_sketch_preset()
@@ -175,7 +175,7 @@ source_project_file("tools/check_conventions.R")
 }
 
 test_that("C10 : sc_helpers.R ne contribue plus aucun signalement", {
-  path <- file.path(ts_project_root(), "R/sc/sc_helpers.R")
+  path <- file.path(ts_project_root(), "tools/pkg_skeleton/R/sc_helpers.R")
   .REPORT$warns <- list()
   check_c10_error_style(path)
   expect_length(.REPORT$warns, 0L)

@@ -112,8 +112,12 @@
   # Re-export LEGACY : la definition canonique est state.R (M5 lot 1 : vit
   # dans tools/pkg_skeleton/R/), source avant lui. Son propre en-tete dit
   # "app.R no longer sources this file as canonical" -- il ne sert qu'aux
-  # tests/appels externes qui le sourcent directement.
-  "R/sc/sc_state.R",
+  # tests/appels externes qui le sourcent directement. D2 M5 lot 6 : le
+  # fichier a suivi state.R dans l'arbre du paquet (ex-R/sc/) ; l'entree est
+  # desormais INERTE face au scan disque R/ + modules/ (le fichier n'y vit
+  # plus) mais reste la pour la COHERENCE avec .sm_allowlist et pour
+  # documenter la decision.
+  "tools/pkg_skeleton/R/sc_state.R",
   # Module PARQUE (vague 8 / backlog, session separee) : definit
   # mod_spatial_lr_ui/_server mais AUCUN appelant dans le depot (verifie :
   # grep "mod_spatial_lr" hors de ce fichier => 0). L'app demarre sans.
@@ -135,9 +139,9 @@ test_that("the detector itself works (negative case)", {
   # Sans ce test, un detecteur casse renverrait "0 manquant" et le garde
   # serait vert POUR TOUJOURS -- exactement le faux temoin qu'on veut eviter
   # (meme classe que le filtre de run_tests.R, corrige le meme jour).
-  fake_disk <- c("R/a.R", "R/b.R", "R/sc/sc_state.R")
+  fake_disk <- c("R/a.R", "R/b.R", "tools/pkg_skeleton/R/sc_state.R")
   expect_identical(
-    .app_missing(fake_disk, declared = c("R/a.R"), allow = c("R/sc/sc_state.R")),
+    .app_missing(fake_disk, declared = c("R/a.R"), allow = c("tools/pkg_skeleton/R/sc_state.R")),
     "R/b.R"
   )
   # et il ne doit RIEN signaler quand tout est declare

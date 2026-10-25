@@ -2,9 +2,9 @@ Sys.setenv(OMNIPATHR_LOGFILE = "none")
 
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")
 source_project_file("tools/pkg_skeleton/R/provenance.R")
-source_project_file("R/sc/sc_velocity.R")
-source_project_file("R/sc/sc_communication.R")
-source_project_file("R/sc/sc_communication_engine.R")
+source_project_file("tools/pkg_skeleton/R/sc_velocity.R")
+source_project_file("tools/pkg_skeleton/R/sc_communication.R")
+source_project_file("tools/pkg_skeleton/R/sc_communication_engine.R")
 
 .liana_test_object <- function() {
   samples <- c("C01", "C02", "T01", "T02", "T03")

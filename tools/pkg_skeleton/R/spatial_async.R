@@ -139,7 +139,8 @@ LABEL_TRANSFER_TIMEOUT_MS <- if (exists("TS_LABEL_TRANSFER_TIMEOUT")) TS_LABEL_T
 #
 # Le domaine SC contribue ici la fermeture de Milo (4E-1), mesuree le
 # 2026-09-16 : config + R/core/{io_helpers,state,provenance,validation} +
-# R/sc/{sc_velocity,sc_abundance_design,sc_abundance_milo,sc_abundance_milo_views}.
+# tools/pkg_skeleton/R/{sc_velocity,sc_abundance_design,sc_abundance_milo,
+# sc_abundance_milo_views} (ex-R/sc/, D2 M5 lot 6).
 # Cout mesure : +0,6 s sur l'init du pool (7,4 s -> 8,0 s pour 2 daemons).
 # scCODA (4E-2) reste EXCLU : reticulate/TensorFlow initialise Python par
 # processus, donc un daemon de plus = un interpreteur Python de plus.
@@ -167,10 +168,12 @@ APP_DAEMON_SOURCE_FILES <- c(
   "tools/pkg_skeleton/R/state.R",
   "tools/pkg_skeleton/R/provenance.R",
   "tools/pkg_skeleton/R/validation.R",
-  "R/sc/sc_velocity.R",
-  "R/sc/sc_abundance_design.R",
-  "R/sc/sc_abundance_milo.R",
-  "R/sc/sc_abundance_milo_views.R",
+  # D2 M5 lot 6 : le domaine R/sc ENTIER vit desormais dans l'arbre du
+  # paquet — les 4 chemins du preload suivent (ordre interne PRESERVE).
+  "tools/pkg_skeleton/R/sc_velocity.R",
+  "tools/pkg_skeleton/R/sc_abundance_design.R",
+  "tools/pkg_skeleton/R/sc_abundance_milo.R",
+  "tools/pkg_skeleton/R/sc_abundance_milo_views.R",
   # --- Bulk : analyse differentielle (D4, 2026-10-20) ----------------------
   # bulk_helpers.R est PUR (aucune reactivite) : le meme run_de_core() sert le
   # chemin daemon ET le repli synchrone. Sans ce preload le job echoue avec

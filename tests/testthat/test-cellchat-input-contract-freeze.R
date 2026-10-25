@@ -19,9 +19,9 @@ source_project_file("tools/pkg_skeleton/R/provenance.R")
 # D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
 # (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
 load_project_pkg()
-source_project_file("R/sc/sc_velocity.R")
-source_project_file("R/sc/sc_communication.R")
-source_project_file("R/sc/sc_communication_input.R")
+source_project_file("tools/pkg_skeleton/R/sc_velocity.R")
+source_project_file("tools/pkg_skeleton/R/sc_communication.R")
+source_project_file("tools/pkg_skeleton/R/sc_communication_input.R")
 
 .cellchat_input_top_level <- function(relpath) {
   exprs <- parse(file.path(ts_project_root(), relpath), keep.source = FALSE)
@@ -35,7 +35,7 @@ source_project_file("R/sc/sc_communication_input.R")
 }
 
 test_that("the public API surface is EXACTLY the frozen list", {
-  top <- .cellchat_input_top_level("R/sc/sc_communication_input.R")
+  top <- .cellchat_input_top_level("tools/pkg_skeleton/R/sc_communication_input.R")
   public <- setdiff(top, grep("^\\.", top, value = TRUE))
   expect_setequal(public, cellchat_input_public_api())
   # the frozen list is sorted and duplicate-free
@@ -44,7 +44,7 @@ test_that("the public API surface is EXACTLY the frozen list", {
 })
 
 test_that("every internal helper stays dot-prefixed", {
-  top <- .cellchat_input_top_level("R/sc/sc_communication_input.R")
+  top <- .cellchat_input_top_level("tools/pkg_skeleton/R/sc_communication_input.R")
   internal <- grep("^\\.", top, value = TRUE)
   expect_true(length(internal) > 0L)
   expect_true(".cellchat_input_stop" %in% internal)
@@ -75,7 +75,7 @@ test_that("the contract doc is in sync with the code (states + public API)", {
 })
 
 test_that("the file adds NO new dependency and never calls CellChat", {
-  code <- readLines(file.path(ts_project_root(), "R/sc/sc_communication_input.R"),
+  code <- readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/sc_communication_input.R"),
                     warn = FALSE)
   code <- grep("^\\s*#", code, value = TRUE, invert = TRUE)  # strip comments
   expect_false(any(grepl("CellChat::", code, fixed = TRUE)))

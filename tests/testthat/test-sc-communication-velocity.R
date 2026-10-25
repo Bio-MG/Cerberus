@@ -3,7 +3,7 @@
 # vélocité (magnitudes exactes, états, erreurs, vues, export)
 # =============================================================================
 
-source_project_file("R/sc/sc_communication_velocity.R")
+source_project_file("tools/pkg_skeleton/R/sc_communication_velocity.R")
 
 .ccx_velocity_result <- function(with_vectors = TRUE) {
   input <- list(spliced = .vel_mat(), unspliced = .vel_mat() * 2L,

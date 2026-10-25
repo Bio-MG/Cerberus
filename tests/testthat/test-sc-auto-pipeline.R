@@ -13,11 +13,11 @@
 
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")   # %||%
 source_project_file("tools/pkg_skeleton/R/state.R")        # create_sc_shared_state
-source_project_file("R/sc/sc_helpers.R")     # resolve_sketch_preset, robust_find_clusters, subsample_*
-source_project_file("R/sc/sc_bpcells.R")     # smart_scale_data, sc_backend_status
-source_project_file("R/sc/sc_trajectory.R")  # calculate_pseudotime
+source_project_file("tools/pkg_skeleton/R/sc_helpers.R")     # resolve_sketch_preset, robust_find_clusters, subsample_*
+source_project_file("tools/pkg_skeleton/R/sc_bpcells.R")     # smart_scale_data, sc_backend_status
+source_project_file("tools/pkg_skeleton/R/sc_trajectory.R")  # calculate_pseudotime
 source_project_file("tools/pkg_skeleton/R/memory.R")       # preflight RAM (M-4) lu par le pipeline
-source_project_file("R/sc/sc_pipeline.R")    # run_sc_auto_pipeline
+source_project_file("tools/pkg_skeleton/R/sc_pipeline.R")    # run_sc_auto_pipeline
 source_project_file("modules/sc/mod_sc_pipeline.R")     # .AUTO_TSNE_MAX_CELLS, .BPCELLS_AUTO_THRESHOLD
 source_project_file("modules/sc/mod_sc_trajectory.R")   # .MAX_TRAJECTORY_CELLS
 

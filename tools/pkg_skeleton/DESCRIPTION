@@ -35,14 +35,27 @@ License: GPL-3
 Encoding: UTF-8
 Config/roxygen2/version: 8.1.0
 Imports:
+    CellChat,
     ComplexHeatmap,
     DT,
     ggplot2,
     htmltools,
+    igraph,
+    liana,
+    Matrix,
+    plotly,
+    RANN,
+    reticulate,
     scales,
     Seurat,
     SeuratObject,
-    shiny
+    shiny,
+    SingleCellExperiment,
+    SingleR,
+    SummarizedExperiment,
+    celldex,
+    dplyr,
+    tidyr
 Suggests:
     AnnotationDbi,
     arrow,

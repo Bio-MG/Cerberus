@@ -1,6 +1,6 @@
 # Tests for R/sc/sc_pipeline.R
-source_project_file("R/sc/sc_helpers.R")
-source_project_file("R/sc/sc_pipeline.R")
+source_project_file("tools/pkg_skeleton/R/sc_helpers.R")
+source_project_file("tools/pkg_skeleton/R/sc_pipeline.R")
 
 test_that("resolve_sketch_preset returns valid structure", {
   for (preset in c("fast","light","medium","standard","high","max")) {
@@ -32,7 +32,7 @@ test_that("sc_pipeline.R ne contribue aucun signalement C10", {
   e <- new.env(parent = globalenv())
   sys.source(file.path(ts_project_root(), "tools/check_conventions.R"), envir = e)
   before <- length(e$.REPORT$warns)
-  e$check_c10_error_style(file.path(ts_project_root(), "R/sc/sc_pipeline.R"))
+  e$check_c10_error_style(file.path(ts_project_root(), "tools/pkg_skeleton/R/sc_pipeline.R"))
   w <- e$.REPORT$warns
   n <- length(w) - before
   if (n > 0L) {
@@ -44,7 +44,7 @@ test_that("sc_pipeline.R ne contribue aucun signalement C10", {
 })
 
 test_that("run_sc_auto_pipeline journalise, notifie PUIS relance (erreur observable)", {
-  src <- readLines(file.path(ts_project_root(), "R/sc/sc_pipeline.R"), warn = FALSE)
+  src <- readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/sc_pipeline.R"), warn = FALSE)
   h <- grep("error *= *function", src)
   expect_true(length(h) > 0L)
   # Le DERNIER gestionnaire du fichier est celui du tryCatch englobant (30->408).
@@ -197,7 +197,7 @@ test_that("the SC pipeline declares NO seed, and that gap is recorded, not silen
   # belongs in `config/` as a named constant and must be passed explicitly, never
   # appear as a bare literal in the pipeline. So when someone closes the gap, the
   # test still passes and the constant is findable.
-  src <- paste(readLines(file.path(ts_project_root(), "R/sc/sc_pipeline.R"),
+  src <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/sc_pipeline.R"),
                          warn = FALSE), collapse = "\n")
   bare <- regmatches(src, gregexpr("(?<![_[:alnum:]])(random\\.seed|seed)\\s*=\\s*[0-9]+", src, perl = TRUE))[[1]]
   expect_length(bare, 0L)
@@ -208,7 +208,7 @@ test_that("the SC pipeline declares NO seed, and that gap is recorded, not silen
   # And `robust_find_clusters` passes no `random.seed` — the exact line that makes
   # the current behaviour data-derived. If a seed is ever threaded in, this is the
   # assertion that should be revisited with it.
-  helpers <- paste(readLines(file.path(ts_project_root(), "R/sc/sc_helpers.R"),
+  helpers <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/sc_helpers.R"),
                               warn = FALSE), collapse = "\n")
   body <- sub("(?s).*robust_find_clusters <- function.*?\\n\\}", "", helpers, perl = TRUE)
   expect_false(grepl("random\\.seed", body))

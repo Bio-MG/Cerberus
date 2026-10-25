@@ -19,7 +19,7 @@ source_project_file("tools/pkg_skeleton/R/defaults.R")
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")      # %||%
 source_project_file("tools/pkg_skeleton/R/state.R")
 source_project_file("tools/pkg_skeleton/R/drive_allowlist.R")
-source_project_file("R/sc/sc_pipeline.R")
+source_project_file("tools/pkg_skeleton/R/sc_pipeline.R")
 source_project_file("modules/sc/mod_sc.R")      # canal drive (délégation)
 assign(".tr", function(key) key, envir = globalenv())
 

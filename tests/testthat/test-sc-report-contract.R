@@ -8,12 +8,12 @@
 # exporte des copies fidèles — jamais une re-exécution.
 # =============================================================================
 
-source_project_file("R/sc/sc_velocity.R")            # empreinte v2 + staleness velocity
-source_project_file("R/sc/sc_communication.R")       # staleness communication
-source_project_file("R/sc/sc_communication_engine.R")
-source_project_file("R/sc/sc_abundance_design.R")    # design DA (finalizer)
-source_project_file("R/sc/sc_abundance_milo.R")      # staleness milo
-source_project_file("R/sc/sc_abundance_sccoda.R")    # staleness scCODA
+source_project_file("tools/pkg_skeleton/R/sc_velocity.R")            # empreinte v2 + staleness velocity
+source_project_file("tools/pkg_skeleton/R/sc_communication.R")       # staleness communication
+source_project_file("tools/pkg_skeleton/R/sc_communication_engine.R")
+source_project_file("tools/pkg_skeleton/R/sc_abundance_design.R")    # design DA (finalizer)
+source_project_file("tools/pkg_skeleton/R/sc_abundance_milo.R")      # staleness milo
+source_project_file("tools/pkg_skeleton/R/sc_abundance_sccoda.R")    # staleness scCODA
 # D2 M5 lot 2 (2026-10-25) : domaine rapport déplacé dans
 # tools/pkg_skeleton/R/ — sourcing globalenv AU NOUVEAU chemin, SANS bascule
 # load_project_pkg(). DÉCISION MESURÉE (leçon M4 : un namespace ne résout

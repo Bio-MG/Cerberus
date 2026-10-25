@@ -88,7 +88,7 @@ test_that("object identity is pinned to the v2 fingerprint reused from velocity"
 
 # ── Surface publique figee ──────────────────────────────────────────────────
 test_that("public API surface of sc_abundance_design.R is frozen", {
-  defined <- .da_top_level_assignments("R/sc/sc_abundance_design.R")
+  defined <- .da_top_level_assignments("tools/pkg_skeleton/R/sc_abundance_design.R")
   public <- defined[!grepl("^\\.", defined)]
   expect_setequal(public, da_design_public_api())
   expect_true(all(c(".DA_DESIGN_STATUS_STATES", ".da_design_stop",
@@ -129,7 +129,7 @@ test_that("report/export consumers do not reimplement DA design validation", {
                      mod_sc_src))
 
   export_src <- paste(readLines(file.path(ts_project_root(),
-                                          "R/sc/sc_export.R")),
+                                          "tools/pkg_skeleton/R/sc_export.R")),
                       collapse = "\n")
   expect_false(grepl("da_design|abundance_design", export_src, ignore.case = TRUE))
   # Post-V1.0 : le rapport Rmd AFFICHE le resultat canonique (tables

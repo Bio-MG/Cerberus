@@ -31,11 +31,11 @@ source_project_file("tools/pkg_skeleton/R/state.R")         # create_sc_shared_s
 source_project_file("tools/pkg_skeleton/R/drive_allowlist.R")
 source_project_file("tools/pkg_skeleton/R/drive_watcher.R")
 source_project_file("tools/pkg_skeleton/R/memory.R")       # preflight RAM (M-4) lu par le pipeline
-source_project_file("R/sc/sc_pipeline.R")    # M-2 : .sc_ap_drive_inputs delegue a sc_ap_normalize_params
-source_project_file("R/sc/sc_helpers.R")      # resolve_sketch_preset, robust_find_clusters
-source_project_file("R/sc/sc_bpcells.R")      # smart_scale_data, sc_backend_status
-source_project_file("R/sc/sc_trajectory.R")   # calculate_pseudotime
-source_project_file("R/sc/sc_pipeline.R")     # run_sc_auto_pipeline (READ-ONLY, decision B1)
+source_project_file("tools/pkg_skeleton/R/sc_pipeline.R")    # M-2 : .sc_ap_drive_inputs delegue a sc_ap_normalize_params
+source_project_file("tools/pkg_skeleton/R/sc_helpers.R")      # resolve_sketch_preset, robust_find_clusters
+source_project_file("tools/pkg_skeleton/R/sc_bpcells.R")      # smart_scale_data, sc_backend_status
+source_project_file("tools/pkg_skeleton/R/sc_trajectory.R")   # calculate_pseudotime
+source_project_file("tools/pkg_skeleton/R/sc_pipeline.R")     # run_sc_auto_pipeline (READ-ONLY, decision B1)
 source_project_file("modules/sc/mod_sc_pipeline.R")
 source_project_file("modules/sc/mod_sc_trajectory.R")
 source_project_file("modules/sc/mod_sc_annotation.R")

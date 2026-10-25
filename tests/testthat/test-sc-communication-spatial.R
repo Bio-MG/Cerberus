@@ -6,7 +6,7 @@
 # vues consommatrices pures, export tracé.
 # =============================================================================
 
-source_project_file("R/sc/sc_communication_spatial.R")
+source_project_file("tools/pkg_skeleton/R/sc_communication_spatial.R")
 
 test_that("distances de centroïdes exactes sur la géométrie de fixture", {
   ctx <- build_communication_spatial_context(

@@ -3,7 +3,7 @@
 # perturbation IN SILICO (deltas exacts, cibles, erreurs, vues, export)
 # =============================================================================
 
-source_project_file("R/sc/sc_communication_perturbation.R")
+source_project_file("tools/pkg_skeleton/R/sc_communication_perturbation.R")
 
 test_that("suppression d'un ligand : deltas exacts par paire", {
   r <- .ccx_result()
@@ -150,7 +150,8 @@ test_that("export tracé + étiquette par ligne", {
 # LC_CTYPE=C (ne pas flipper la locale du processus de la suite — ça
 # empoisonnerait les fichiers suivants), + aucun token SYMBOLE non-ASCII.
 M3_TARGET <- normalizePath(
-  file.path(ts_project_root(), "R", "sc", "sc_communication_perturbation.R"),
+  file.path(ts_project_root(), "tools", "pkg_skeleton", "R",
+            "sc_communication_perturbation.R"),  # ex-R/sc/, D2 M5 lot 6
   winslash = "/", mustWork = TRUE
 )
 

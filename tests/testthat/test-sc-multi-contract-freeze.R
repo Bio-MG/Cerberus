@@ -8,7 +8,7 @@
 # ZÉRO référence à sc_datasets dans les fichiers SC préexistants (garde §2.2),
 # sync code <-> contrat, clés i18n.
 # =============================================================================
-source_project_file("R/sc/sc_multi.R")
+source_project_file("tools/pkg_skeleton/R/sc_multi.R")
 .local_source_if_exists("tools/pkg_skeleton/R/thresholds.R")
 
 .ts_read <- function(relpath) {
@@ -81,8 +81,8 @@ test_that("error states and declared relations are frozen", {
 })
 
 # ── Pureté Shiny (contrat §2.5) ────────────────────────────────────────────
-test_that("R/sc/sc_multi.R is pure (no Shiny symbols)", {
-  src <- .ts_read("R/sc/sc_multi.R")
+test_that("tools/pkg_skeleton/R/sc_multi.R is pure (no Shiny symbols)", {
+  src <- .ts_read("tools/pkg_skeleton/R/sc_multi.R")
   for (sym in c("reactiveVal", "reactiveValues", "observeEvent", "output\\$",
                 "input\\$", "moduleServer", "showNotification",
                 "isolate\\(", "reactive\\(")) {
@@ -99,7 +99,7 @@ test_that("capacity threshold is declared in config and consumed with fallback",
   expect_identical(TS_SC_MULTI_MAX_DATASETS, 20L)
   # repli si la config n'est pas sourcée : la valeur de repli est dans le
   # source de la logique pure (20L, même pattern que TS_BULK_MULTI_MAX_DATASETS).
-  src <- .ts_read("R/sc/sc_multi.R")
+  src <- .ts_read("tools/pkg_skeleton/R/sc_multi.R")
   expect_match(src, "TS_SC_MULTI_MAX_DATASETS", fixed = TRUE)
   expect_match(src, "      20L", fixed = TRUE)
 })
@@ -167,7 +167,7 @@ test_that("mod_sc.R wires the datasets panel (UI + server, additive)", {
 # ── Ancres app.R (contrat §6/§7) ───────────────────────────────────────────
 test_that("app.R anchors: source, init, snapshot, restore, reset", {
   app <- .ts_read("app.R")
-  expect_match(app, 'source("R/sc/sc_multi.R")', fixed = TRUE)
+  expect_match(app, 'source("tools/pkg_skeleton/R/sc_multi.R")', fixed = TRUE)
   expect_match(app, 'source("modules/sc/mod_sc_datasets.R")', fixed = TRUE)
   expect_match(app, "sc_datasets = list(),", fixed = TRUE)
   expect_match(app, "sc_datasets = global_data$sc_datasets,", fixed = TRUE)
@@ -179,16 +179,16 @@ test_that("app.R anchors: source, init, snapshot, restore, reset", {
 # ── Garde de non-régression (contrat §2.2) ─────────────────────────────────
 test_that("NO pre-existing SC file references sc_datasets (zero behavior change)", {
   existing <- c(
-    "R/sc/sc_helpers.R", "R/sc/sc_pipeline.R", "R/sc/sc_state.R",
-    "R/sc/sc_plotting.R", "R/sc/sc_export.R", "R/sc/sc_trajectory.R",
-    "R/sc/sc_velocity.R", "R/sc/sc_bpcells.R",
-    "R/sc/sc_abundance_design.R", "R/sc/sc_abundance_milo.R",
-    "R/sc/sc_abundance_sccoda.R", "R/sc/sc_abundance_cross_views.R",
-    "R/sc/sc_abundance_milo_views.R", "R/sc/sc_abundance_sccoda_views.R",
-    "R/sc/sc_communication.R", "R/sc/sc_communication_input.R",
-    "R/sc/sc_communication_perturbation.R", "R/sc/sc_communication_spatial.R",
-    "R/sc/sc_communication_trajectory.R", "R/sc/sc_communication_velocity.R",
-    "R/sc/sc_communication_views.R",
+    "tools/pkg_skeleton/R/sc_helpers.R", "tools/pkg_skeleton/R/sc_pipeline.R", "tools/pkg_skeleton/R/sc_state.R",
+    "tools/pkg_skeleton/R/sc_plotting.R", "tools/pkg_skeleton/R/sc_export.R", "tools/pkg_skeleton/R/sc_trajectory.R",
+    "tools/pkg_skeleton/R/sc_velocity.R", "tools/pkg_skeleton/R/sc_bpcells.R",
+    "tools/pkg_skeleton/R/sc_abundance_design.R", "tools/pkg_skeleton/R/sc_abundance_milo.R",
+    "tools/pkg_skeleton/R/sc_abundance_sccoda.R", "tools/pkg_skeleton/R/sc_abundance_cross_views.R",
+    "tools/pkg_skeleton/R/sc_abundance_milo_views.R", "tools/pkg_skeleton/R/sc_abundance_sccoda_views.R",
+    "tools/pkg_skeleton/R/sc_communication.R", "tools/pkg_skeleton/R/sc_communication_input.R",
+    "tools/pkg_skeleton/R/sc_communication_perturbation.R", "tools/pkg_skeleton/R/sc_communication_spatial.R",
+    "tools/pkg_skeleton/R/sc_communication_trajectory.R", "tools/pkg_skeleton/R/sc_communication_velocity.R",
+    "tools/pkg_skeleton/R/sc_communication_views.R",
     "modules/sc/mod_sc_pipeline.R", "modules/sc/mod_sc_markers.R",
     "modules/sc/mod_sc_annotation.R", "modules/sc/mod_sc_viz.R",
     "modules/sc/mod_sc_pathways.R", "modules/sc/mod_sc_trajectory.R",
@@ -202,7 +202,7 @@ test_that("NO pre-existing SC file references sc_datasets (zero behavior change)
                               "hors fichiers câblage MD-4 déclarés au contrat"))
   }
   # Les fichiers de câblage MD-4, eux, le référencent.
-  expect_true(grepl("sc_datasets", .ts_read("R/sc/sc_multi.R"), fixed = TRUE))
+  expect_true(grepl("sc_datasets", .ts_read("tools/pkg_skeleton/R/sc_multi.R"), fixed = TRUE))
   expect_true(grepl("sc_datasets", .ts_read("modules/sc/mod_sc_datasets.R"),
                     fixed = TRUE))
 })

@@ -6,7 +6,7 @@
 # échantillon manque — aucun repli silencieux), PURETÉ Shiny de la logique,
 # câblage module (additif), sync code <-> contrat.
 # =============================================================================
-source_project_file("R/sc/sc_metadata.R")
+source_project_file("tools/pkg_skeleton/R/sc_metadata.R")
 
 .ts_read <- function(relpath) {
   if (grepl("^docs/contracts/", relpath) &&
@@ -69,8 +69,8 @@ test_that("error class and map modes are frozen", {
 })
 
 # ── Pureté Shiny (contrat §4) ──────────────────────────────────────────────
-test_that("R/sc/sc_metadata.R is pure (no Shiny symbols)", {
-  src <- .ts_read("R/sc/sc_metadata.R")
+test_that("tools/pkg_skeleton/R/sc_metadata.R is pure (no Shiny symbols)", {
+  src <- .ts_read("tools/pkg_skeleton/R/sc_metadata.R")
   for (sym in c("reactiveVal", "reactiveValues", "observeEvent", "output\\$",
                 "input\\$", "moduleServer", "showNotification",
                 "isolate\\(", "reactive\\(")) {
@@ -107,7 +107,7 @@ test_that("mod_sc.R wires the metadata panel (UI + server, additive)", {
 
 test_that("app.R anchors: pure logic sourced before modules, module sourced", {
   app <- .ts_read("app.R")
-  expect_match(app, 'source("R/sc/sc_metadata.R")', fixed = TRUE)
+  expect_match(app, 'source("tools/pkg_skeleton/R/sc_metadata.R")', fixed = TRUE)
   expect_match(app, 'source("modules/sc/mod_sc_metadata.R")', fixed = TRUE)
 })
 

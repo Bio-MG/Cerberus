@@ -182,8 +182,8 @@ test_that("state_get PRESERVES reactive dependency tracking inside the app", {
 # ---------------------------------------------------------------------------
 # sc_state.R reste un re-export fin de la definition canonique
 # ---------------------------------------------------------------------------
-test_that("sourcing R/sc/sc_state.R standalone keeps the canonical factory", {
-  source_project_file("R/sc/sc_state.R")   # no-op si deja charge (guard)
+test_that("sourcing sc_state.R (ex-R/sc/, paquet depuis M5 lot 6) standalone keeps the canonical factory", {
+  source_project_file("tools/pkg_skeleton/R/sc_state.R")   # no-op si deja charge (guard)
   s <- create_sc_shared_state()
   expect_s3_class(s, "reactivevalues")
   expect_identical(state_get(s, "sc_palette"), "default")

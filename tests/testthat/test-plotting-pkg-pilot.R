@@ -102,7 +102,7 @@ test_that("sous-processus qui ne charge QUE le paquet (renv auto-actif)", {
                    info = "l'appel reel ne rend pas le plancher 320L hors session")
 })
 
-test_that("frontiere : le paquet contient EXACTEMENT 6 plotting + 4 fournisseurs core + 4 reports + 18 bulk + 11 spatial (M5 lot 4)", {
+test_that("frontiere : le paquet contient EXACTEMENT 6 plotting + 4 fournisseurs core + 4 reports + 18 bulk + 11 spatial + 9 core + 2 config + 26 sc (M5 lot 6)", {
   # M4-pilote : plot_dims.R seul. M4 suite (2026-10-25, un seul lot coherent) :
   # les 5 restants suivent (palettes, theme, export, datatable, complex_heatmap
   # — l'ordre de deplacement par lot est libre puisque le lot est ATOMIQUE,
@@ -166,8 +166,32 @@ test_that("frontiere : le paquet contient EXACTEMENT 6 plotting + 4 fournisseurs
                           "caching.R", "drive_allowlist.R", "drive_watcher.R",
                           "error_state.R", "jobs.R", "memory.R",
                           "pathway_helpers.R", "rdata_io.R", "validation.R",
-                          "defaults.R", "thresholds.R")),
-                   info = "le perimetre du paquet doit etre exactement 6 plotting + 4 fournisseurs R/core + 4 reports + 18 bulk + 11 spatial + 9 core restants + 2 config (M5 lot 5)")
+                          "defaults.R", "thresholds.R",
+                          # M5 LOT 6 (2026-10-25) : le domaine R/sc ENTIER
+                          # (26 fichiers, dernier domaine R/) suit —
+                          # sc_plotting (position d'ordre historique Bloc 04),
+                          # 23 fichiers Bloc 05, sc_multi (Bloc 06) et
+                          # sc_state (allowlist legacy, NON source par app.R).
+                          # Deps externes deja residentes : io_helpers (%||%),
+                          # pathway_helpers, plotting, state. TS_* resolves
+                          # via namespace (config resident depuis lot 5).
+                          "sc_plotting.R",
+                          "sc_helpers.R", "sc_bpcells.R", "sc_trajectory.R",
+                          "sc_velocity.R", "sc_communication.R",
+                          "sc_communication_input.R", "sc_communication_views.R",
+                          "sc_communication_spatial.R",
+                          "sc_communication_trajectory.R",
+                          "sc_communication_velocity.R",
+                          "sc_communication_perturbation.R",
+                          "sc_communication_engine.R",
+                          "sc_abundance_design.R", "sc_abundance_milo.R",
+                          "sc_abundance_milo_views.R", "sc_abundance_sccoda.R",
+                          "sc_abundance_sccoda_views.R",
+                          "sc_abundance_cross_views.R",
+                          "sc_population_rarity.R", "sc_pipeline.R",
+                          "sc_export.R", "sc_metadata.R", "sc_batch_metrics.R",
+                          "sc_multi.R", "sc_state.R")),
+                   info = "le perimetre du paquet doit etre exactement 6 plotting + 4 fournisseurs R/core + 4 reports + 18 bulk + 11 spatial + 9 core restants + 2 config + 26 sc (M5 lot 6)")
 })
 
 # ─── M4 suite (2026-10-25) : les 4 autres fichiers du domaine ────────────────

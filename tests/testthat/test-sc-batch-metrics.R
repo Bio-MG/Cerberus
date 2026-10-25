@@ -1,7 +1,7 @@
 # =============================================================================
 # test-sc-batch-metrics.R — métrique de mélange des batchs (roadmap 4.3)
 # =============================================================================
-source_project_file("R/sc/sc_batch_metrics.R")
+source_project_file("tools/pkg_skeleton/R/sc_batch_metrics.R")
 
 .make_batch_obj <- function(separated = TRUE, n = 60) {
   # 2 batchs x n cellules, embedding 2D contrôlé

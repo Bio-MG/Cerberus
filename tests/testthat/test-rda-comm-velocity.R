@@ -11,10 +11,10 @@
 
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")
 source_project_file("tools/pkg_skeleton/R/rdata_io.R")
-source_project_file("R/sc/sc_velocity.R")
-source_project_file("R/sc/sc_communication.R")
+source_project_file("tools/pkg_skeleton/R/sc_velocity.R")
+source_project_file("tools/pkg_skeleton/R/sc_communication.R")
 # parse_cellchat_object() delegue l'extraction au moteur (regle 3).
-source_project_file("R/sc/sc_communication_engine.R")
+source_project_file("tools/pkg_skeleton/R/sc_communication_engine.R")
 
 .tmpdir <- tempfile(pattern = "rda_comm_vel_")
 dir.create(.tmpdir, showWarnings = FALSE)

@@ -8,7 +8,7 @@
 # test et docs/contracts/COMMUNICATION_TRAJECTORY_CONTRACT.md.
 # =============================================================================
 
-source_project_file("R/sc/sc_communication_trajectory.R")
+source_project_file("tools/pkg_skeleton/R/sc_communication_trajectory.R")
 
 test_that("surface publique trajectoire figée", {
   expect_setequal(
@@ -21,7 +21,7 @@ test_that("surface publique trajectoire figée", {
       "plot_communication_trajectory_heatmap",
       "build_communication_trajectory_export")
   )
-  nms <- .ccx_top_level_assignments("R/sc/sc_communication_trajectory.R")
+  nms <- .ccx_top_level_assignments("tools/pkg_skeleton/R/sc_communication_trajectory.R")
   nms_public <- nms[!grepl("^\\.", nms)]
   expect_true(all(nms_public %in% communication_trajectory_public_api()))
 })
@@ -121,7 +121,7 @@ test_that("schéma du module trajectoire figé (2 fonctions top-level)", {
 })
 
 test_that("aucun appel de calcul d'inférence dans le moteur trajectoire", {
-  src <- paste(readLines(file.path(ts_project_root(), "R/sc/sc_communication_trajectory.R")),
+  src <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/sc_communication_trajectory.R")),
                collapse = "\n")
   expect_false(grepl("computeCommunProb|CellChatDB|nichenetr|monocle|slingshot\\(", src))
 })

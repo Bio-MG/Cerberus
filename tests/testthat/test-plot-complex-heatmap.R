@@ -287,7 +287,7 @@ test_that("build_sc_hierarchical_heatmap : proprietes historiques preservees", {
     library(SeuratObject)
   }))
   load_project_pkg()   # D2 M4 : theme.R vit dans le paquet
-  source_project_file("R/sc/sc_helpers.R")
+  source_project_file("tools/pkg_skeleton/R/sc_helpers.R")
 
   set.seed(7)
   cnt <- matrix(stats::rpois(60 * 20, lambda = 3), nrow = 20,

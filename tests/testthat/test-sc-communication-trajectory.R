@@ -3,7 +3,7 @@
 # trajectoire (bins exacts, expression, lignées, erreurs, vues, export)
 # =============================================================================
 
-source_project_file("R/sc/sc_communication_trajectory.R")
+source_project_file("tools/pkg_skeleton/R/sc_communication_trajectory.R")
 
 test_that("bins de pseudo-temps : effectifs et expression exacts", {
   ctx <- build_communication_trajectory_context(

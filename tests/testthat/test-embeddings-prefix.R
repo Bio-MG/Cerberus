@@ -95,8 +95,8 @@ test_that("aucun appel NU a Embeddings() dans R/ ni modules/ (code execute)", {
 test_that("les 4 sites mesures sont prefixes en Seurat::", {
   root <- ts_project_root()
   sites <- c(
-    "R/sc/sc_export.R"                  = "min(ncol(Seurat::Embeddings(obj,\"pca\")), 50)",
-    "R/sc/sc_helpers.R"                 = "nrow(Seurat::Embeddings(obj[[cand]]))",
+    "tools/pkg_skeleton/R/sc_export.R"                  = "min(ncol(Seurat::Embeddings(obj,\"pca\")), 50)",
+    "tools/pkg_skeleton/R/sc_helpers.R"                 = "nrow(Seurat::Embeddings(obj[[cand]]))",
     "modules/sc/mod_sc_pipeline.R"      = "t(Seurat::Embeddings(obj,\"pca\")",
     "modules/sc/mod_sc_viz.R"           = "ncol(Seurat::Embeddings(obj, r))"
   )
@@ -114,7 +114,7 @@ test_that("les 4 sites mesures sont prefixes en Seurat::", {
 # 58-88 de sc_export.R serait FAUX (ce serait du texte, pas du code) et ferait
 # echouer les tests de contenu du script genere.
 test_that("sc_export.R : le script GENERE garde ses appels NUS (library(Seurat) ligne 47)", {
-  src <- readLines(file.path(ts_project_root(), "R/sc/sc_export.R"),
+  src <- readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/sc_export.R"),
                    warn = FALSE, encoding = "UTF-8")
   # le script genere attache Seurat...
   expect_true(any(grepl("^library\\(Seurat\\)", src)))

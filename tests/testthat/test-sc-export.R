@@ -50,7 +50,7 @@
 suppressMessages(library(Seurat))
 
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")   # %||% (le fichier en redefinit un local)
-source_project_file("R/sc/sc_export.R")
+source_project_file("tools/pkg_skeleton/R/sc_export.R")
 
 # ---------------------------------------------------------------------------
 # Fixture : un VRAI objet Seurat construit en R pur, parametrable par branche.
@@ -307,7 +307,7 @@ test_that("PCA_DIMS est PLAFONNE a 50 par min(ncol(...), 50)", {
   # ⚠️ Le prefixe `Seurat::` fait partie du CONTRAT depuis le §2dg : cet appel
   # est du CODE EXECUTE, et aucun `library(Seurat)` inconditionnel n'existe au
   # boot (le nu echouait sur `could not find function`). Cf. test-embeddings-prefix.R.
-  src <- readLines(file.path(ts_project_root(), "R/sc/sc_export.R"),
+  src <- readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/sc_export.R"),
                    warn = FALSE, encoding = "UTF-8")
   def <- grep("^\\s*pca_dims\\s*<-", src, value = TRUE)
   expect_length(def, 1L)
@@ -366,7 +366,7 @@ test_that("ce fichier source bien R/sc/sc_export.R (et pas un homonyme)", {
   # C9 est satisfaite par le NOM du fichier de test ; on prouve ici que la
   # fonction testee vient bien du fichier vise, et qu'aucun autre fichier ne
   # la definit (donc que le `source_project_file` ci-dessus est le bon).
-  src <- readLines(file.path(ts_project_root(), "R/sc/sc_export.R"),
+  src <- readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/sc_export.R"),
                    warn = FALSE, encoding = "UTF-8")
   expect_true(any(grepl("^sc_r_script_text <- function", src)))
   expect_true(exists("sc_r_script_text", mode = "function"))

@@ -88,7 +88,7 @@ test_that("object identity is pinned to the v2 fingerprint reused from velocity"
 
 # ── Surfaces publiques figees ───────────────────────────────────────────────
 test_that("public API surface of sc_abundance_milo.R is frozen", {
-  defined <- .milo_top_level_assignments("R/sc/sc_abundance_milo.R")
+  defined <- .milo_top_level_assignments("tools/pkg_skeleton/R/sc_abundance_milo.R")
   public <- defined[!grepl("^\\.", defined)]
   expect_setequal(public, milo_public_api())
   expect_true(all(c(".MILO_STATUS_STATES", ".milo_stop", ".milo_is_blank",
@@ -98,7 +98,7 @@ test_that("public API surface of sc_abundance_milo.R is frozen", {
 })
 
 test_that("public API surface of sc_abundance_milo_views.R is frozen", {
-  defined <- .milo_top_level_assignments("R/sc/sc_abundance_milo_views.R")
+  defined <- .milo_top_level_assignments("tools/pkg_skeleton/R/sc_abundance_milo_views.R")
   public <- defined[!grepl("^\\.", defined)]
   expect_setequal(public, milo_views_public_api())
   expect_true(all(c(".milo_views_stop", ".milo_empty_view_plot",
@@ -148,7 +148,7 @@ test_that("milo is mounted once in mod_sc.R (panel 8d + output tab)", {
 # ── Isolation des consommateurs rapport/export ──────────────────────────────
 test_that("report/export consumers do not reimplement Milo yet (Stage 17 scope)", {
   export_src <- paste(readLines(file.path(ts_project_root(),
-                                          "R/sc/sc_export.R")),
+                                          "tools/pkg_skeleton/R/sc_export.R")),
                       collapse = "\n")
   expect_false(grepl("milo", export_src, ignore.case = TRUE))
   # Post-V1.0 : le rapport Rmd AFFICHE le resultat canonique (tables

@@ -1,5 +1,5 @@
 # Tests for R/sc/sc_velocity.R
-source_project_file("R/sc/sc_velocity.R")
+source_project_file("tools/pkg_skeleton/R/sc_velocity.R")
 
 test_that("detect_velocity_orientation detects genes_x_cells", {
   skip_if_not_installed("Matrix")
@@ -70,6 +70,6 @@ test_that("build_velocity_provenance_export : la garde est CONDITIONNELLE", {
   expect_error(build_velocity_provenance_export(res, "absent_xyz"))
 })
 
-test_that("R/sc/sc_velocity.R ne porte plus de stop() non classe (C10)", {
-  expect_identical(ts_c10_sites("R/sc/sc_velocity.R"), integer(0))
+test_that("tools/pkg_skeleton/R/sc_velocity.R ne porte plus de stop() non classe (C10)", {
+  expect_identical(ts_c10_sites("tools/pkg_skeleton/R/sc_velocity.R"), integer(0))
 })

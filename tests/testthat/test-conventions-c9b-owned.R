@@ -148,7 +148,17 @@ test_that("C9b : le ROUGE existe — un fichier a test eponyme et fonctions orph
   # 2/5 fonctions possedees jamais mentionnees (`.seeded_ap`, `log_sc` ;
   # mesure --list-all post-deplacement). Solde du sortant asseré dans les DEUX
   # sens : jobs.R est bien au paquet, et son test eponyme suit le fichier.
-  expect_true("R/sc/sc_pipeline.R" %in% .c9b_flagged(.c9b_population()))
+  # ⚠️ D2 M5 LOT 6 (2026-10-25) : le domaine R/sc ENTIER (26 fichiers) demenage
+  # dans le paquet et quitte la population C9b (R/ ne garde plus que le fichier
+  # etranger CERBERUS). Le temoin SUIT le fichier : chemin du paquet passe
+  # DIRECTEMENT au garde (meme mecanique que le temoin bulk_gsva du lot 3 ;
+  # mesure du lot : check_c9b_owned_functions_mentioned signale bien
+  # tools/pkg_skeleton/R/sc_pipeline.R). La dette des sortants N'EST PAS
+  # payee : elle SORT de la population avec le domaine — 14 fichiers sc
+  # restent C9b-signalables a l'adresse du paquet (mesure --list-all du lot),
+  # couverts par les tests stricts retargetes.
+  expect_true("tools/pkg_skeleton/R/sc_pipeline.R" %in%
+                .c9b_flagged("tools/pkg_skeleton/R/sc_pipeline.R"))
   # Temoin de VALIDITE du sortant : le fichier vit toujours (au paquet) et son
   # test eponyme l'y suit — la dette n'a pas disparu, elle a suivi le fichier.
   pkg_jobs <- file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "jobs.R")
@@ -184,7 +194,7 @@ test_that("C9b : les fichiers de la mesure INITIALE sont TOUS hors population C9
   # lot C9. On ne verrouille donc en (2) que les fichiers encore SANS test
   # eponyme, et on assere que le solde est passe a la population C9b.
   flagged <- .c9b_flagged(.c9b_population())
-  files <- c("R/sc/sc_export.R")
+  files <- c("tools/pkg_skeleton/R/sc_export.R")
   # (1) INVARIANTE : aucun des fichiers nommes n'est signale par C9b, a aucun
   #     moment. Un fichier sans test eponyme est HORS population ; un fichier
   #     qui en a un et dont le code est cite n'est PAS signale non plus ⇒ vrai
@@ -206,7 +216,7 @@ test_that("C9b : les fichiers de la mesure INITIALE sont TOUS hors population C9
   #     et c'est VOULU : la reaction est de le retirer de cette liste et
   #     d'ajouter une ligne au solde (c'est exactement ce qui s'est passe ici).
   encore_c9 <- c("tools/pkg_skeleton/R/rdata_io.R",
-                 "R/sc/sc_state.R")
+                 "tools/pkg_skeleton/R/sc_state.R")
   for (f in encore_c9) {
     expect_true(f %in% .c9_flagged(.c9b_abs(f)),
                 info = f)
@@ -216,10 +226,15 @@ test_that("C9b : les fichiers de la mesure INITIALE sont TOUS hors population C9
   #      aussi bien signaler que le fichier a disparu du depot.
   #      ⚠️ `.c9b_population()` rend des chemins ABSOLUS (via `.collect_files()`)
   #      ⇒ il faut `.c9b_abs()` pour comparer, jamais la chaine relative.
-  abs_export <- .c9b_abs("R/sc/sc_export.R")
-  expect_false("R/sc/sc_export.R" %in% .c9_flagged(abs_export))
-  expect_true(abs_export %in% .c9b_population())
-  expect_false("R/sc/sc_export.R" %in% flagged)
+  abs_export <- .c9b_abs("tools/pkg_skeleton/R/sc_export.R")
+  expect_false("tools/pkg_skeleton/R/sc_export.R" %in% .c9_flagged(abs_export))
+  # ⚠️ D2 M5 LOT 6 : sc_export.R a QUITTE la population C9b (R/ vide hors
+  # etranger CERBERUS) — le « fichier vivant encore » s'assere a son adresse
+  # du paquet (file.exists), plus dans la population.
+  expect_false(abs_export %in% .c9b_population())
+  expect_true(file.exists(abs_export),
+              info = "sc_export.R absent du paquet apres extraction M5 lot 6")
+  expect_false("tools/pkg_skeleton/R/sc_export.R" %in% flagged)
   # (2b-bis) 2ᵉ changement de camp, meme forme : §2df a ecrit
   #      `test-spatial-report.R` ⇒ `spatial_report.R` quitte C9 a son tour.
   #      ⚠️ D2 M5 LOT 4 (2026-10-25) : le fichier a DEMENAGE dans le paquet
@@ -267,10 +282,17 @@ test_that("C9b : sans test eponyme, C9b se TAIT — c'est C9 qui parle (non-supe
   # ajouter produirait un DOUBLON — pas une information (mesure lot 4,
   # re-verifiee post-deplacement). C'est la clause que §14.2 a posee, et elle
   # est ici verrouillee.
-  expect_false("R/sc/sc_communication_input.R" %in% .c9b_flagged(.c9b_population()))
+  # ⚠️ D2 M5 LOT 6 (2026-10-25) : le successeur du lot 5 demenage A SON TOUR
+  # dans le paquet (avec les 25 autres fichiers R/sc) et sort de la population
+  # C9b. Le cas est rejoue a l'ADRESSE DU PAQUET (chemin passe directement au
+  # garde, meme mecanique que bulk_gsva lot 3) : aucun test eponyme
+  # test-sc-communication-input.R ne l'y suit ⇒ C9b se tait, C9 parle
+  # (mesure du lot).
+  expect_false("tools/pkg_skeleton/R/sc_communication_input.R" %in%
+                 .c9b_flagged("tools/pkg_skeleton/R/sc_communication_input.R"))
   # Temoin de VALIDITE : C9 doit bien le signaler, LUI (sinon l'assertion
   # ci-dessus serait vraie pour une trivialite — fichier inexistant, etc.).
-  expect_true("R/sc/sc_communication_input.R" %in% .c9_flagged(.c9b_abs("R/sc/sc_communication_input.R")))
+  expect_true("tools/pkg_skeleton/R/sc_communication_input.R" %in% .c9_flagged(.c9b_abs("tools/pkg_skeleton/R/sc_communication_input.R")))
   # Solde du sortant rdata_io, asseré dans les DEUX sens : le fichier vit au
   # paquet et reste C9-signalable par son nom (aucun test eponyme ne l'y suit
   # encore), mais il est hors des deux populations R/.
@@ -278,13 +300,18 @@ test_that("C9b : sans test eponyme, C9b se TAIT — c'est C9 qui parle (non-supe
   expect_true(file.exists(abs_rdata),
               info = "rdata_io.R absent du paquet apres extraction M5 lot 5")
   expect_true("tools/pkg_skeleton/R/rdata_io.R" %in% .c9_flagged(.c9b_abs("tools/pkg_skeleton/R/rdata_io.R")))
-  expect_false("tools/pkg_skeleton/R/rdata_io.R" %in% .c9b_flagged(.c9b_population()))
+  # ⚠️ D2 M5 LOT 6 : l'assertion « hors population C9b » est rejouee a
+  # l'adresse du paquet (rdata_io.R n'a toujours pas de test eponyme ⇒ C9b
+  # se tait ; la version population est triviale depuis que R/ est vide hors
+  # etranger).
+  expect_false("tools/pkg_skeleton/R/rdata_io.R" %in%
+                 .c9b_flagged("tools/pkg_skeleton/R/rdata_io.R"))
   # Et la BORNE inverse, qui rend l'exemple honnete : le fichier qui VIENT de
   # recevoir son test eponyme n'est plus, lui, un cas de non-superposition —
   # il est hors de la classe. Sans cette assertion, on pourrait « reparer » le
   # test en gardant un exemple perime. (spatial_report.R, l'ancienne borne
   # inverse, vit desormais dans le paquet — voir le bloc (2b-bis) ci-dessus.)
-  expect_length(.c9_flagged(.c9b_abs("R/sc/sc_export.R")), 0L)
+  expect_length(.c9_flagged(.c9b_abs("tools/pkg_skeleton/R/sc_export.R")), 0L)
 })
 
 # =============================================================================
@@ -295,7 +322,13 @@ test_that("C9b : `R/sc/sc_state.R` est EXEMPTE (aucune fonction possedee)", {
   # tous definis ailleurs aussi. Tout nom qu'il « possede » l'est par
   # convention et non par definition : la regle est INAPPLICABLE, et la
   # signaler produirait un faux positif permanent et non corrigeable.
-  expect_false("R/sc/sc_state.R" %in% .c9b_flagged(.c9b_population()))
+  # ⚠️ D2 M5 LOT 6 (2026-10-25) : le fichier demenage dans le paquet (avec le
+  # domaine R/sc ENTIER) et quitte la population C9b. L'exemption est rejouee
+  # a l'ADRESSE DU PAQUET (chemin passe directement au garde, meme mecanique
+  # que bulk_gsva lot 3 ; mesure du lot : sc_state.R absent des 14 sc
+  # C9b-signalables a l'adresse du paquet).
+  expect_false("tools/pkg_skeleton/R/sc_state.R" %in%
+                 .c9b_flagged("tools/pkg_skeleton/R/sc_state.R"))
 })
 
 test_that("C9b : l'exemption est MESUREE sur la possession, pas sur un nom en dur", {
@@ -324,10 +357,15 @@ test_that("C9b : `R/sc/sc_pipeline.R` est SIGNALE — c'est le cas que C9 ne voi
   # jamais `run_sc_auto_pipeline`, la seule fonction du fichier (§2ck.1).
   # C'est precisement le defaut que C9 ne peut pas voir, et la raison d'etre de
   # la clause de non-superposition.
-  expect_true("R/sc/sc_pipeline.R" %in% .c9b_flagged(.c9b_population()))
+  # ⚠️ D2 M5 LOT 6 (2026-10-25) : le fichier demenage dans le paquet (avec le
+  # domaine R/sc ENTIER) et quitte la population C9b. Le temoin est rejoue a
+  # l'ADRESSE DU PAQUET (chemin passe directement au garde, meme mecanique que
+  # bulk_gsva lot 3 ; mesure du lot).
+  expect_true("tools/pkg_skeleton/R/sc_pipeline.R" %in%
+                .c9b_flagged("tools/pkg_skeleton/R/sc_pipeline.R"))
   # Temoin de CONTRASTE : C9, elle, est VERTE sur ce fichier (le nom du test
   # suffit). C'est la mesure qui fonde la regle.
-  expect_length(.c9_flagged(.c9b_abs("R/sc/sc_pipeline.R")), 0L)
+  expect_length(.c9_flagged(.c9b_abs("tools/pkg_skeleton/R/sc_pipeline.R")), 0L)
 })
 
 test_that("C9b : NE superpose PAS a C9 (un fichier sans test eponyme est HORS population)", {
@@ -338,8 +376,12 @@ test_that("C9b : NE superpose PAS a C9 (un fichier sans test eponyme est HORS po
   # mesure de la direction 3 du garde alias). Le signaler AUSSI en C9b
   # ajouterait un DOUBLON, pas une information — c'est le defaut que §14.2
   # a mesure et refuse.
-  expect_false("R/sc/sc_state.R" %in% .c9b_flagged(.c9b_population()))
-  expect_true("R/sc/sc_state.R" %in% .c9_flagged(.c9b_abs("R/sc/sc_state.R")))
+  # ⚠️ D2 M5 LOT 6 (2026-10-25) : le temoin demenage dans le paquet (avec le
+  # domaine R/sc ENTIER) et quitte la population C9b — rejoue a l'ADRESSE DU
+  # PAQUET (meme mecanique que bulk_gsva lot 3 ; mesure du lot).
+  expect_false("tools/pkg_skeleton/R/sc_state.R" %in%
+                 .c9b_flagged("tools/pkg_skeleton/R/sc_state.R"))
+  expect_true("tools/pkg_skeleton/R/sc_state.R" %in% .c9_flagged(.c9b_abs("tools/pkg_skeleton/R/sc_state.R")))
 })
 
 test_that("C9b : un fichier ENTIEREMENT exerce n'est pas signale (temoin de traversee)", {
@@ -359,7 +401,7 @@ test_that("C9b : un fichier ENTIEREMENT exerce n'est pas signale (temoin de trav
 # =============================================================================
 # DIRECTION 5 — le plafond de la population (invariant prospectif)
 # =============================================================================
-test_that("C9b : la population signalee est un PLAFOND a 18, jamais un compte exact", {
+test_that("C9b : la population signalee est un PLAFOND a 0, jamais un compte exact", {
   # Plafond, pas egalite : le compte doit pouvoir BAISSER quand un test est
   # ecrit, mais JAMAIS remonter. Un plafond ecrit en `==` deviendrait rouge au
   # premier trou bouge — piege paye au §2cx sur `test-conventions-c10-scope.R`.
@@ -402,10 +444,25 @@ test_that("C9b : la population signalee est un PLAFOND a 18, jamais un compte ex
   # fichiers — la couverture est desormais epinglee par les tests stricts
   # retargetes (test-core-caching/jobs/memory/validation, source_project_file
   # au nouveau chemin).
+  # ⚠️ D2 M5 LOT 6 (2026-10-25) : le domaine R/sc ENTIER (26 fichiers) demenage
+  # dans tools/pkg_skeleton/R/ et quitte la population C9b (R/ ne garde plus
+  # que le fichier etranger CERBERUS, couvert par son nom). Mesure du lot
+  # (--list-all) : 14 fichiers sc restaient C9b-flagges — la dette des sortants
+  # N'EST PAS payee : elle SORT de la population avec le domaine — la
+  # couverture est desormais epinglee par les tests stricts retargetes
+  # (test-sc-*, source_project_file au nouveau chemin). Aucun etranger en vol
+  # a la mesure (check_writers 16:06 : aucun battement etranger). 14 - 14 = 0 ;
+  # le plafond suit : 14 -> 0. Le laisser a 14 autoriserait un retour en
+  # arriere SILENCIEUX de 14 fichiers.
   flagged <- .c9b_flagged(.c9b_population())
-  expect_true(length(flagged) <= 14L,
+  expect_true(length(flagged) <= 0L,
               info = paste(flagged, collapse = ", "))
-  expect_gt(length(flagged), 0L)
+  # Le contrat dans l'autre sens : le rouge existe ENCORE a l'adresse du
+  # paquet (temoin de NON-VACUITE deplace — le plafond 0 doit rester
+  # falsifiable ; sc_pipeline.R, temoin mesure de la direction 2, est
+  # C9b-signalable a son adresse du paquet).
+  expect_true("tools/pkg_skeleton/R/sc_pipeline.R" %in%
+                .c9b_flagged("tools/pkg_skeleton/R/sc_pipeline.R"))
 })
 
 # =============================================================================
@@ -459,7 +516,13 @@ test_that("C9b : le signalement atterrit dans les AVERTISSEMENTS, pas dans les E
   on.exit(setwd(old), add = TRUE)
   .REPORT$errors <- list()
   .REPORT$warns  <- list()
-  check_c9b_owned_functions_mentioned(.collect_files("R"))
+  # D2 M5 LOT 6 (2026-10-25) : la population R/ est RESORTEE (R/ ne contient
+  # plus que le fichier etranger CERBERUS, couvert par son nom). Le temoin du
+  # canal est rejoue sur la dette a l'adresse du paquet (sc_pipeline.R,
+  # temoin mesure de la direction 2) : le signalement C9b atterrit toujours
+  # dans `warns`, jamais dans `errors`.
+  check_c9b_owned_functions_mentioned(c(.collect_files("R"),
+                                        "tools/pkg_skeleton/R/sc_pipeline.R"))
   expect_gt(length(.REPORT$warns), 0L)
   expect_length(.REPORT$errors, 0L)
 })

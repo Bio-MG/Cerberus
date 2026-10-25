@@ -261,7 +261,7 @@ test_that("milo exports are traced by analysis_id and stable", {
 # `<<-` écrit dans la frame appelante — c'est le seul remède, et c'est
 # exactement ce que la garde ci-dessous exige.
 test_that("milo : le gestionnaire de warning écrit avec `<<-`, jamais `<-`", {
-  p <- ts_ast_parse("R/sc/sc_abundance_milo.R")
+  p <- ts_ast_parse("tools/pkg_skeleton/R/sc_abundance_milo.R")
 
   handlers <- ts_ast_find_all(p, function(x) {
     if (!ts_ast_is_call_to(x, "withCallingHandlers")) return(FALSE)

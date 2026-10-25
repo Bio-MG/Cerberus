@@ -151,7 +151,7 @@ test_that("C6 : l'etat de chaine n'est pas corrompu par les pieges", {
 test_that("C6 : le cas REEL cite par le commentaire de la garde est corrige", {
   # Le commentaire de .strip_strings_and_comments() promet que sc_export.R
   # n'est pas signale. On verifie la promesse sur le fichier du depot.
-  src <- readLines(.c6_repo("R/sc/sc_export.R"), warn = FALSE, encoding = "UTF-8")
+  src <- readLines(.c6_repo("tools/pkg_skeleton/R/sc_export.R"), warn = FALSE, encoding = "UTF-8")
   # Pre-requis : la ligne 46 doit bien etre DANS un litteral (sinon le test
   # ne prouve rien et il faut le reecrire, pas le laisser passer).
   upto <- paste(src[1:46], collapse = "\n")
@@ -159,7 +159,7 @@ test_that("C6 : le cas REEL cite par le commentaire de la garde est corrige", {
   expect_identical(n_quotes %% 2L, 1L,
                    info = "sc_export.R:46 n'est plus dans une chaine : test a reecrire")
 
-  expect_false(46L %in% .c6_flagged_lines(.c6_repo("R/sc/sc_export.R")))
+  expect_false(46L %in% .c6_flagged_lines(.c6_repo("tools/pkg_skeleton/R/sc_export.R")))
 })
 
 test_that("C6 : la profondeur d'accolades est REELLEMENT mesuree", {
@@ -401,7 +401,7 @@ test_that("C10 : les fichiers du depot routes par un constructeur classe sont mu
   # d'etre classe, c'est le TEST qu'il faut reecrire — pas laisser passer en
   # silence (c'est exactement ainsi que C6 avait derive, cf. §12.1).
   for (f in c("tools/pkg_skeleton/R/bulk_multi.R",
-              "R/sc/sc_multi.R",
+              "tools/pkg_skeleton/R/sc_multi.R",
               "tools/pkg_skeleton/R/bulk_multi_compare.R")) {
     path <- .c6_repo(f)
     expect_true(length(.collect_classed_error_ctors(path)) >= 1L,
@@ -542,10 +542,10 @@ test_that("C10 : les re-leves REELS du depot ne sont plus signales", {
   # vérifie la LIGNE, car ils gardent de la vraie dette par ailleurs.
   expect_identical(.c10_flagged_lines(.c6_repo("tools/pkg_skeleton/R/jobs.R")), integer(0),
                    info = "jobs.R (desormais au paquet) devrait etre muet (son seul site etait stop(e))")
-  expect_identical(.c10_flagged_lines(.c6_repo("R/sc/sc_abundance_milo.R")), integer(0),
-                   info = "R/sc/sc_abundance_milo.R devrait etre muet")
+  expect_identical(.c10_flagged_lines(.c6_repo("tools/pkg_skeleton/R/sc_abundance_milo.R")), integer(0),
+                   info = "tools/pkg_skeleton/R/sc_abundance_milo.R devrait etre muet")
   for (spec in list(list("tools/pkg_skeleton/R/bulk_helpers.R", 694L),
-                    list("R/sc/sc_helpers.R", 1205L))) {
+                    list("tools/pkg_skeleton/R/sc_helpers.R", 1205L))) {
     flagged <- .c10_flagged_lines(.c6_repo(spec[[1]]))
     expect_false(spec[[2]] %in% flagged,
                  info = sprintf("%s:%d est un re-leve et ne doit plus etre signale",

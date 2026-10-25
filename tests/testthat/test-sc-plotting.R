@@ -29,7 +29,7 @@ source_project_file("tools/pkg_skeleton/R/io_helpers.R")     # %||%
 # D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
 # (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
 load_project_pkg()
-source_project_file("R/sc/sc_plotting.R")
+source_project_file("tools/pkg_skeleton/R/sc_plotting.R")
 
 skip_if_not_installed("Seurat")
 # ⚠️ suppressWarnings() aussi : sinon « package … was built under R version
@@ -69,7 +69,7 @@ test_that("sc_plotting.R ne contribue aucun signalement C10 (verrou source)", {
   e <- new.env(parent = globalenv())
   sys.source(file.path(ts_project_root(), "tools/check_conventions.R"), envir = e)
   before <- length(e$.REPORT$warns)
-  e$check_c10_error_style(file.path(ts_project_root(), "R/sc/sc_plotting.R"))
+  e$check_c10_error_style(file.path(ts_project_root(), "tools/pkg_skeleton/R/sc_plotting.R"))
   w <- e$.REPORT$warns
   n <- length(w) - before
   if (n > 0L) {

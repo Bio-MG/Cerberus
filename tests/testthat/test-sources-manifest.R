@@ -100,7 +100,10 @@
 # Doit rester IDENTIQUE a .app_allowlist (test-app-sourcing.R:74-85) : ce
 # sont des decisions documentees, pas des oublis. Le bloc (d) verifie la
 # coherence des DEUX cotes.
-.sm_allowlist <- c("R/sc/sc_state.R", "modules/spatial/mod_spatial_lr.R")
+# D2 M5 lot 6 : sc_state.R suit son domaine dans l'arbre du paquet
+# (ex-R/sc/) — entree INERTE face au scan disque, conservee pour la coherence
+# (cf. test-app-sourcing.R).
+.sm_allowlist <- c("tools/pkg_skeleton/R/sc_state.R", "modules/spatial/mod_spatial_lr.R")
 
 .sm_disk <- function(root) {
   sort(unlist(lapply(c("R", "modules"), function(d) {
@@ -219,8 +222,10 @@ test_that("(d) l'allowlist du manifeste == celle du garde d'exhaustivite", {
     info = "bloc .app_allowlist non ferme dans test-app-sourcing.R")
   if (is.na(i1)) return(invisible(NULL))
   block <- paste(guard[i0:i1], collapse = "\n")
+  # D2 M5 lot 6 : les exceptions peuvent vivre dans l'arbre du paquet
+  # (sc_state.R, ex-R/sc/, INERTE face au scan disque) — le motif suit.
   quoted <- unlist(regmatches(
-    block, gregexpr('"(R|modules)/[^"]+\\.R"', block, perl = TRUE)))
+    block, gregexpr('"((R|modules)/|tools/pkg_skeleton/R/)[^"]+\\.R"', block, perl = TRUE)))
   guard_listed <- sort(unique(gsub('"', "", quoted)))
   expect_setequal(sort(.sm_allowlist), guard_listed)
 })

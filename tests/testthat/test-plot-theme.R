@@ -28,7 +28,7 @@ library(ggplot2)
 #   - tools/pkg_skeleton/R/bulk_batch_qc.R      (WIP non suivi)
 #   - tools/pkg_skeleton/R/bulk_report_engine.R (theme a l'interieur d'un script R genere)
 .plot_s1_migrated_files <- c(
-  "R/sc/sc_plotting.R",
+  "tools/pkg_skeleton/R/sc_plotting.R",
   "tools/pkg_skeleton/R/bulk_helpers.R",
   "tools/pkg_skeleton/R/spatial_export.R",  # ex-R/spatial/, D2 M5 lot 4
   "modules/spatial/mod_spatial_lr.R",

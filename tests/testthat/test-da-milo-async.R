@@ -27,8 +27,8 @@ test_that("APP_DAEMON_SOURCE_FILES couvre la fermeture Milo et pointe des fichie
     "tools/pkg_skeleton/R/io_helpers.R", "tools/pkg_skeleton/R/state.R",
     "tools/pkg_skeleton/R/provenance.R",
     "tools/pkg_skeleton/R/validation.R",
-    "R/sc/sc_velocity.R", "R/sc/sc_abundance_design.R",
-    "R/sc/sc_abundance_milo.R", "R/sc/sc_abundance_milo_views.R"
+    "tools/pkg_skeleton/R/sc_velocity.R", "tools/pkg_skeleton/R/sc_abundance_design.R",
+    "tools/pkg_skeleton/R/sc_abundance_milo.R", "tools/pkg_skeleton/R/sc_abundance_milo_views.R"
   ) %in% APP_DAEMON_SOURCE_FILES))
 
   # Aucun chemin fantome : un fichier absent est silencieusement ignore par le

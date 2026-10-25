@@ -17,9 +17,9 @@
 #   +  stress "rapport avec beaucoup de résultats" (plafonds inline vs export)
 # =============================================================================
 
-source_project_file("R/sc/sc_communication.R")
-source_project_file("R/sc/sc_abundance_milo.R")
-source_project_file("R/sc/sc_abundance_sccoda.R")
+source_project_file("tools/pkg_skeleton/R/sc_communication.R")
+source_project_file("tools/pkg_skeleton/R/sc_abundance_milo.R")
+source_project_file("tools/pkg_skeleton/R/sc_abundance_sccoda.R")
 source_project_file("tools/pkg_skeleton/R/jobs.R")      # C7 : wrapper sync/async
 source_project_file("tools/pkg_skeleton/R/caching.R")   # C12 : reset du cache
 # M5 lot 2 : les 4 fichiers du domaine rapport vivent dans
@@ -167,7 +167,8 @@ test_that("C8 large data paths: declared caps are coherent (synthetic-only tier)
   # Backend disque (BPCells) : le chemin existe (R/sc/sc_bpcells.R, mod_sc
   # .BPCELLS_AUTO_THRESHOLD) — le test sur données réelles est hors CI,
   # documenté SYNTHETIC-ONLY dans la matrice de durcissement.
-  expect_true(file.exists(file.path(ts_project_root(), "R", "sc", "sc_bpcells.R")))
+  # ex-R/sc/, D2 M5 lot 6
+  expect_true(file.exists(file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "sc_bpcells.R")))
 })
 
 # ── C9 : export interrompu — garde-fous d'entrée + zip intègre ──────────────

@@ -8,7 +8,7 @@
 # docs/contracts/COMMUNICATION_SPATIAL_CONTRACT.md.
 # =============================================================================
 
-source_project_file("R/sc/sc_communication_spatial.R")
+source_project_file("tools/pkg_skeleton/R/sc_communication_spatial.R")
 
 test_that("surface publique spatial figée", {
   expect_setequal(
@@ -26,7 +26,7 @@ test_that("surface publique spatial figée", {
     c("spatial_object", "reduction")
   )
   # Aucune fonction top-level hors de la surface (helpers internes points OK).
-  nms <- .ccx_top_level_assignments("R/sc/sc_communication_spatial.R")
+  nms <- .ccx_top_level_assignments("tools/pkg_skeleton/R/sc_communication_spatial.R")
   nms_public <- nms[!grepl("^\\.", nms)]
   expect_true(all(nms_public %in% communication_spatial_public_api()))
 })
@@ -122,7 +122,7 @@ test_that("schéma du module spatial figé (2 fonctions top-level)", {
 })
 
 test_that("aucun appel de calcul d'inférence dans le moteur spatial", {
-  src <- paste(readLines(file.path(ts_project_root(), "R/sc/sc_communication_spatial.R")),
+  src <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/sc_communication_spatial.R")),
                collapse = "\n")
   expect_false(grepl("computeCommunProb|CellChatDB|nichenetr|cellphonedb\\(", src))
 })

@@ -161,7 +161,8 @@ test_that("mod_import_bulk.R : la définition locale est le socle (étendue NA/\
 })
 
 test_that("sc_export.R : plus AUCUNE définition locale de %||% (définition morte supprimée en M3)", {
-  defs <- .pu_scan$defs[[file.path(.pu_root, "R", "sc", "sc_export.R")]]
+  defs <- .pu_scan$defs[[file.path(.pu_root, "tools", "pkg_skeleton", "R",
+                        "sc_export.R")]]  # ex-R/sc/, D2 M5 lot 6
   expect_length(defs, 0L)  # RED avant M3 : 1 définition locale, jamais appelée
 })
 
