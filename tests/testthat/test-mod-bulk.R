@@ -60,17 +60,6 @@
 
 source_project_file("modules/bulk/mod_bulk.R")
 
-# BULK-06 (gate round 3) : le helper `bulk_de_stamp_engine` (M13, commit
-# ba521d7) vit dans l'arbre du paquet (tools/pkg_skeleton/R/bulk_helpers.R:841)
-# et est appelé par la branche pairwise RÉUSSIE du bloc ap_confirm. Chargé au
-# NIVEAU FICHIER (motif des voisins, ex. test-bulk-gene-sets.R:19) : sans lui,
-# les tests de la voie pairwise réussie échouent à l'EXÉCUTION ISOLÉE du
-# fichier pour une raison étrangère à leur sujet (« could not find function
-# "bulk_de_stamp_engine" » — artefact masqué en suite complète, où d'autres
-# fichiers chargent le paquet avant). Rend le fichier vert sous un gate
-# `test_file`/`test_dir` à stop_on_failure par défaut.
-load_project_pkg(quiet = TRUE)
-
 .MBK_FILE <- "modules/bulk/mod_bulk.R"
 
 # Fragment ASCII du message du garde (le littéral source porte des echappements
@@ -124,6 +113,14 @@ load_project_pkg(quiet = TRUE)
     }
   }
   e$.normalize_de_cols <- function(x, ...) x
+  # M13 : chaque résultat pairwise réussi est estampillé du moteur
+  # (mod_bulk.R ~L424, bulk_de_stamp_engine). BOUCHON au harnais, comme
+  # build_dds/run_bulk_de_dispatch : la version réelle vit dans l'arbre du
+  # paquet (tools/pkg_skeleton/R/bulk_helpers.R:841) et un load_all ici
+  # rendrait le fichier OTAGE de l'état transitoire de cet arbre étranger en
+  # vol (ex. drive_allowlist.R en cours de réécriture par un autre agent) ;
+  # le contrat du harnais n'exige que l'identité du résultat.
+  e$bulk_de_stamp_engine <- function(res, engine) res
   meta <- data.frame(condition = c("A", "A", "B", "B", "C", "C"))
   e$global_data <- list(bulk_obj = list(counts = matrix(1, 10, 6), metadata = meta))
   e$shared_rv   <- list()
@@ -224,10 +221,9 @@ test_that("le garde 427 est conditionnel : une paire reussit => il ne tire pas",
 #
 # Harnais : le bloc observeEvent(input$ap_confirm) est evalue comme pour les
 # tests ci-dessus (helper-ast.R + MockShinySession, cf. .mbk_run). La branche
-# pairwise REUSSIE appelle le vrai `bulk_de_stamp_engine` (M13,
-# tools/pkg_skeleton/R/bulk_helpers.R:841) : charge au niveau fichier
-# (load_project_pkg en tete de fichier, meme motif que les voisins, ex.
-# test-bulk-gene-sets.R:19).
+# pairwise REUSSIE appelle `bulk_de_stamp_engine` (M13) : BOUCHONNE dans
+# .mbk_engine comme les autres helpers — PAS de load_all ici, pour garder le
+# fichier HERMETIQUE a l'etat transitoire de l'arbre du paquet (etranger).
 test_that("BULK-06 : pairwise + Pathway ORA => l'auto-pipeline termine SANS « Erreur pipeline: 'res' »", {
   skip_if_not(exists("MockShinySession", envir = asNamespace("shiny")),
               "shiny::MockShinySession indisponible")
