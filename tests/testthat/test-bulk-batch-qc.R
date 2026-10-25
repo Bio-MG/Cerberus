@@ -7,7 +7,9 @@
 # plafond mémoire de gènes déterministe, plots consommateurs purs.
 # =============================================================================
 source_project_file("R/core/validation.R")
-source_project_file("R/plotting/theme.R")      # ts_theme() — resolveur de theme partage
+# D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
+# (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
+load_project_pkg()
 source_project_file("R/bulk/bulk_helpers.R")
 source_project_file("R/bulk/bulk_batch_qc.R")
 

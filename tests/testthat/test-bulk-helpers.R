@@ -31,8 +31,9 @@ source_project_file("R/bulk/bulk_helpers.R")
 # counts de bulk_assert_raw_counts() (domaine correction de batch) — le
 # fichier doit donc être chargé ici aussi.
 source_project_file("R/bulk/batch_correction.R")
-source_project_file("R/plotting/palettes.R")   # sourced last in app.R — wins on name clashes
-source_project_file("R/plotting/datatable.R")   # PLOT-S3 : build_de_results_dt() -> ts_datatable()
+# D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
+# (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
+load_project_pkg()
 
 # ---------------------------------------------------------------------------
 # filter_bulk_counts()

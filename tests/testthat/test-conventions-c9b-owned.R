@@ -302,11 +302,15 @@ test_that("C9b : `R/sc/sc_pipeline.R` est SIGNALE — c'est le cas que C9 ne voi
 })
 
 test_that("C9b : NE superpose PAS a C9 (un fichier sans test eponyme est HORS population)", {
-  # Direction 4 litterale. `R/plotting/palettes.R` est signale par C9 (aucun
-  # test eponyme) : le signaler AUSSI ici ajouterait un DOUBLON, pas une
-  # information — c'est le defaut que §14.2 a mesure et refuse.
-  expect_false("R/plotting/palettes.R" %in% .c9b_flagged(.c9b_population()))
-  expect_true("R/plotting/palettes.R" %in% .c9_flagged(.c9b_abs("R/plotting/palettes.R")))
+  # Direction 4 litterale. Temoin historique : `R/plotting/palettes.R`, signale
+  # par C9 (aucun test eponyme). ⚠️ D2 M4-suite (2026-10-25) : palettes.R a
+  # DEMENAGE dans le paquet (tools/pkg_skeleton/R/) et quitte les deux
+  # populations — le temoin devient `R/sc/sc_state.R` (signale par C9,
+  # mesure de la direction 3 du garde alias). Le signaler AUSSI en C9b
+  # ajouterait un DOUBLON, pas une information — c'est le defaut que §14.2
+  # a mesure et refuse.
+  expect_false("R/sc/sc_state.R" %in% .c9b_flagged(.c9b_population()))
+  expect_true("R/sc/sc_state.R" %in% .c9_flagged(.c9b_abs("R/sc/sc_state.R")))
 })
 
 test_that("C9b : un fichier ENTIEREMENT exerce n'est pas signale (temoin de traversee)", {

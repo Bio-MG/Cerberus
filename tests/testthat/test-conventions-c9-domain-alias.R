@@ -65,18 +65,30 @@ source_project_file("tools/check_conventions.R")
 
 test_that("C9 : un fichier sans AUCUN test est bien SIGNALE (le rouge existe)", {
   # Temoin indispensable : sans lui, une garde qui ne signale PLUS RIEN passerait
-  # tous les autres tests. `palettes.R` n'a aucun test dedie (mesure §2cy) alors
-  # que son frere `plot_dims.R` a le sien.
-  expect_true("R/plotting/palettes.R" %in%
-                .c9_flagged(.c9_abs("R/plotting/palettes.R")))
+  # tous les autres tests. ⚠️ D2 M4-suite (2026-10-25) : le temoin historique
+  # `R/plotting/palettes.R` a DEMENAGE dans le paquet (tools/pkg_skeleton/R/)
+  # et quitte la population C9 — le temoin du rouge devient `R/sc/sc_state.R`
+  # (deja utilise comme temoin vivant par la direction 3 ci-dessous).
+  expect_true("R/sc/sc_state.R" %in%
+                .c9_flagged(.c9_abs("R/sc/sc_state.R")))
 })
 
-test_that("C9 : les 4 faux positifs de R/plotting/ ont disparu", {
-  files <- c("R/plotting/theme.R",
-             "R/plotting/datatable.R",
-             "R/plotting/export.R",
-             "R/plotting/complex_heatmap.R")
-  expect_length(.c9_flagged(.c9_abs(files)), 0L)
+test_that("C9 : les faux positifs de R/plotting/ ont disparu, puis le dossier a suivi", {
+  # ⚠️ D2 M4 (2026-10-25) : les 4 fichiers cites a l'origine (theme, datatable,
+  # export, complex_heatmap) ONT DEMENAGE dans tools/pkg_skeleton/R/ avec le
+  # reste du domaine — ils ne sont PLUS dans la population C9 (R/ uniquement).
+  # Successeur honnete du temoin : (a) le dossier R/plotting est VIDE (tout le
+  # domaine est extrait, rien ne peut y reaparaitre en silence), (b) les 4
+  # fichiers existent bien dans le paquet (la couverture n'a pas ete perdue,
+  # elle est epinglee par test-plotting-pkg-pilot.R).
+  expect_identical(
+    list.files(file.path(ts_project_root(), "R", "plotting"),
+               pattern = "[.]R$"), character(0))
+  pkg <- file.path(ts_project_root(), "tools", "pkg_skeleton", "R")
+  for (f in c("theme.R", "datatable.R", "export.R", "complex_heatmap.R")) {
+    expect_true(file.exists(file.path(pkg, f)),
+                info = paste(f, "absent du paquet apres extraction M4"))
+  }
 })
 
 test_that("C9 : l'alias de domaine ne DEBORDE pas (temoin de traversee)", {
@@ -102,11 +114,15 @@ test_that("C9 : l'alias de domaine ne DEBORDE pas (temoin de traversee)", {
 })
 
 test_that("C9 : dans R/plotting/, SEUL palettes.R reste signale (invariant)", {
+  # ⚠️ D2 M4-suite (2026-10-25) : l'invariant HISTORIQUE (seul palettes.R
+  # signale dans R/plotting/) est RESORBE : tout le domaine a demenage dans
+  # le paquet, le dossier est vide. Successeur : aucun fichier R/plotting/
+  # dans la population C9 — un fichier qui reapparaitrait la serait signale
+  # par la garde (il n'aurait pas de test eponyme par construction).
   old <- setwd(ts_project_root())
   on.exit(setwd(old), add = TRUE)
-
-  plotting <- list.files("R/plotting", pattern = "[.]R$", full.names = TRUE)
-  expect_identical(.c9_flagged(plotting), "R/plotting/palettes.R")
+  expect_false(dir.exists("R/plotting") &&
+                 length(list.files("R/plotting", pattern = "[.]R$")) > 0L)
 })
 
 test_that("C9 : le plafond de dette est 19 (mesure du 45e increment, §2df)", {

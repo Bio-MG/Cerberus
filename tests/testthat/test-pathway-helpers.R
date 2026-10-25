@@ -15,8 +15,9 @@
 # manuellement contre un vrai jeu de données.
 # =============================================================================
 
-source_project_file("R/plotting/palettes.R")
-source_project_file("R/plotting/datatable.R")   # PLOT-S3 : build_pathway_dt() -> ts_datatable()
+# D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
+# (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
+load_project_pkg()
 source_project_file("R/core/pathway_helpers.R")
 # ggplot2 is required for plot builders but not auto-loaded by helper-source.R
 if (requireNamespace("ggplot2", quietly = TRUE)) suppressPackageStartupMessages(library(ggplot2))

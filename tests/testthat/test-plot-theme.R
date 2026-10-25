@@ -14,8 +14,9 @@
 # =============================================================================
 
 source_project_file("R/core/io_helpers.R")     # %||% (sourced first in app.R)
-source_project_file("R/plotting/palettes.R")
-source_project_file("R/plotting/theme.R")
+# D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
+# (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
+load_project_pkg()
 source_project_file("R/bulk/bulk_helpers.R")
 
 # bulk_helpers.R builds plots with BARE ggplot()/aes()/geom_*() calls (global.R

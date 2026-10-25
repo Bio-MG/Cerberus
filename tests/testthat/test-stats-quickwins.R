@@ -27,7 +27,9 @@ source_project_file("R/bulk/bulk_report_engine.R")
 # Meme classe de bug que ci-dessus : build_de_results_dt() appelle ts_datatable(),
 # defini dans R/plotting/datatable.R. Manquait aussi -> 3 erreurs en cible
 # (mesure 2026-09-17).
-source_project_file("R/plotting/datatable.R")
+# D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
+# (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
+load_project_pkg()
 # STAT-Q2 : .de_volcano_hover() vit dans le module de visualisation (c'est du
 # formatage de texte de survol plotly, donc de la présentation — pas de la
 # logique de domaine). On source le fichier uniquement pour définir la fonction

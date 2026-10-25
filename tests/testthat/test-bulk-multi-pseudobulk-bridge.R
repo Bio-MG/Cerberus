@@ -16,8 +16,9 @@ source_project_file("R/core/validation.R")
 source_project_file("R/bulk/bulk_helpers.R")
 source_project_file("R/bulk/bulk_multi.R")
 source_project_file("R/bulk/bulk_multi_compare.R")
-source_project_file("R/plotting/palettes.R")
-source_project_file("R/plotting/theme.R")
+# D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
+# (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
+load_project_pkg()
 
 suppressPackageStartupMessages(library(ggplot2))
 

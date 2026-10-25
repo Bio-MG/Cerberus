@@ -26,7 +26,9 @@
 # =============================================================================
 
 source_project_file("R/core/io_helpers.R")     # %||%
-source_project_file("R/plotting/palettes.R")   # sc_discrete_scale / expression_continuous_scale
+# D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
+# (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
+load_project_pkg()
 source_project_file("R/sc/sc_trajectory.R")
 
 .traj_catch <- function(expr) {

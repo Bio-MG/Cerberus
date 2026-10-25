@@ -18,8 +18,9 @@ suppressWarnings(suppressPackageStartupMessages({
   library(ComplexHeatmap)
 }))
 
-source_project_file("R/plotting/palettes.R")
-source_project_file("R/plotting/complex_heatmap.R")
+# D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
+# (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
+load_project_pkg()
 source_project_file("R/bulk/bulk_helpers.R")
 
 # --- Fixtures / utilitaires -------------------------------------------------
@@ -285,7 +286,7 @@ test_that("build_sc_hierarchical_heatmap : proprietes historiques preservees", {
     library(Seurat)
     library(SeuratObject)
   }))
-  source_project_file("R/plotting/theme.R")
+  load_project_pkg()   # D2 M4 : theme.R vit dans le paquet
   source_project_file("R/sc/sc_helpers.R")
 
   set.seed(7)

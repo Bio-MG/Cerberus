@@ -76,11 +76,15 @@ source("R/core/drive_watcher.R")    # poller fichier -> session (injecte)
 ts_drive_boot(getwd())
 
 # ── Bloc 04 : R/plotting + plotting SC/spatial (logique pure) ────────────────
-source("R/plotting/palettes.R")
-source("R/plotting/theme.R")   # PLOT-S1 : resolveur de theme partage (ts_theme)
-source("R/plotting/export.R")  # PLOT-S2 : helper d'export unifie (ts_export_plot)
-source("R/plotting/datatable.R")  # PLOT-S3 : wrapper DT harmonise (ts_datatable)
-source("R/plotting/complex_heatmap.R")  # PLOT-S4 : coeur ComplexHeatmap unifie (ts_complex_heatmap)
+# D2 M4-suite (2026-10-25) : le domaine R/plotting ENTIER vit desormais dans
+# l'arbre du paquet (tools/pkg_skeleton/R/) — app.R le source() TOUJOURS, aux
+# MEMES positions d'ordre (zero changement de comportement) ; seuls les TESTS
+# le chargent via load_project_pkg() (cf. test-plotting-pkg-pilot.R).
+source("tools/pkg_skeleton/R/palettes.R")
+source("tools/pkg_skeleton/R/theme.R")   # PLOT-S1 : resolveur de theme partage (ts_theme)
+source("tools/pkg_skeleton/R/export.R")  # PLOT-S2 : helper d'export unifie (ts_export_plot)
+source("tools/pkg_skeleton/R/datatable.R")  # PLOT-S3 : wrapper DT harmonise (ts_datatable)
+source("tools/pkg_skeleton/R/complex_heatmap.R")  # PLOT-S4 : coeur ComplexHeatmap unifie (ts_complex_heatmap)
 # PLOT-S6 : dimension MINIMALE de device (ts_render_plot_args). OBLIGATOIRE :
 # global.R enveloppe renderPlot() et appelle ts_render_plot_args() a CHAQUE
 # renderPlot(). Le fichier existait et etait teste (test-plot-dims.R le source

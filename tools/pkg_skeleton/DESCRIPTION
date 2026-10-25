@@ -6,8 +6,10 @@ Author: marc paul [aut, cre]
 Maintainer: marc paul <mastermarcg@gmail.com>
 Description: Staging package skeleton for the D2 source-list retirement.
     M3 (2026-10-24): R CMD check must pass on this nearly-empty package
-    before any application code moves in. M4 pilot (2026-10-25): the first
-    extracted domain file (plot_dims.R) lives here, under R/. Measured
+    before any application code moves in. M4 (2026-10-25): the WHOLE
+    R/plotting domain lives here (plot_dims, palettes, theme, export,
+    datatable, complex_heatmap — exact set pinned by
+    tests/testthat/test-plotting-pkg-pilot.R). Measured
     decision: the skeleton STAYS under tools/ — a root DESCRIPTION would
     make R CMD check treat all 78 files of R/ as package code and change
     project-type detection in renv/testthat/shinytest2 (M3 measurement,
@@ -18,4 +20,9 @@ Description: Staging package skeleton for the D2 source-list retirement.
 License: GPL-3
 Encoding: UTF-8
 Config/roxygen2/version: 8.1.0
-Imports: shiny
+Imports:
+    ComplexHeatmap,
+    DT,
+    ggplot2,
+    scales,
+    shiny

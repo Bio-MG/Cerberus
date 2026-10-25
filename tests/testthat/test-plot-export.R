@@ -12,7 +12,11 @@
 library(testthat)
 suppressWarnings(suppressPackageStartupMessages(library(ggplot2)))
 
-source_project_file("R/plotting/export.R")
+# D2 M4 (2026-10-25, lot A) : export.R demenage dans l'arbre du paquet
+# (tools/pkg_skeleton/R/). Ce test strict le charge desormais via le paquet
+# (load_project_pkg(), cf. helper-source.R) — app.R, lui, le source() TOUJOURS
+# a son nouveau domicile (zero changement de comportement de l'app vivante).
+load_project_pkg()
 
 # --- Fixtures ----------------------------------------------------------------
 

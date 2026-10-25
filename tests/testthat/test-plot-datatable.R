@@ -13,7 +13,9 @@
 # =============================================================================
 suppressWarnings(suppressPackageStartupMessages(library(DT)))
 
-source_project_file("R/plotting/datatable.R")
+# D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
+# (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
+load_project_pkg()
 
 .tsd_df <- function() {
   data.frame(gene = c("A", "B", "C"), padj = c(0.0001, 0.02, 0.4),

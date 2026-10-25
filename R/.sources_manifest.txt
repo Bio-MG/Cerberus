@@ -14,11 +14,11 @@ R/core/pathway_helpers.R
 R/core/error_state.R
 R/core/drive_allowlist.R
 R/core/drive_watcher.R
-R/plotting/palettes.R
-R/plotting/theme.R
-R/plotting/export.R
-R/plotting/datatable.R
-R/plotting/complex_heatmap.R
+tools/pkg_skeleton/R/palettes.R
+tools/pkg_skeleton/R/theme.R
+tools/pkg_skeleton/R/export.R
+tools/pkg_skeleton/R/datatable.R
+tools/pkg_skeleton/R/complex_heatmap.R
 tools/pkg_skeleton/R/plot_dims.R
 R/sc/sc_plotting.R
 R/spatial/spatial_plotting.R

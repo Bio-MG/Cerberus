@@ -46,8 +46,9 @@ source_project_file("R/core/error_state.R")
 source_project_file("R/core/drive_allowlist.R")
 source_project_file("R/core/drive_watcher.R")
 source_project_file("R/spatial/spatial_stats.R")      # the domain (not patched here)
-source_project_file("R/plotting/datatable.R")         # ts_datatable()
-source_project_file("R/plotting/theme.R")             # ts_theme()
+# D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
+# (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
+load_project_pkg()
 source_project_file("R/spatial/spatial_async.R")      # spatial_log_path(), tracker
 source_project_file("modules/spatial/mod_spatial_qc.R")
 
@@ -224,8 +225,8 @@ test_that("L1b: the parent Spatial module mounts the QC module at results_qc / p
 
   # The child modules mod_spatial_ui() composes. Sourced with the same
   # sys.source(globalenv) seam as every other suite in this directory.
-  for (f in c("R/plotting/palettes.R",
-              "R/spatial/spatial_deconv_prep.R",
+  load_project_pkg()   # D2 M4 : palettes.R vit dans le paquet (tools/pkg_skeleton/R/)
+  for (f in c("R/spatial/spatial_deconv_prep.R",
               "modules/spatial/mod_spatial_pipeline.R",
               "modules/spatial/mod_spatial_cluster.R",
               "modules/spatial/deconv/mod_spatial_deconv_ui.R",

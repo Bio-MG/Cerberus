@@ -102,9 +102,82 @@ test_that("sous-processus qui ne charge QUE le paquet (renv auto-actif)", {
                    info = "l'appel reel ne rend pas le plancher 320L hors session")
 })
 
-test_that("frontiere : le paquet contient EXACTEMENT plot_dims.R (pilote)", {
+test_that("frontiere : le paquet contient EXACTEMENT les 6 fichiers de R/plotting", {
+  # M4-pilote : plot_dims.R seul. M4 suite (2026-10-25, un seul lot coherent) :
+  # les 5 restants suivent (palettes, theme, export, datatable, complex_heatmap
+  # — l'ordre de deplacement par lot est libre puisque le lot est ATOMIQUE,
+  # mais toute extraction ULTERIEURE devra respecter l'ordre des dependances
+  # mesurees : complex_heatmap.R appelle bulk_diverging_ramp()/bulk_sequential_
+  # ramp() de palettes.R — dans le namespace paquet, un fichier ne resout PAS
+  # via globalenv : palettes.R doit y vivre AVANT ou AVEC complex_heatmap.R).
+  # L'egalite EXACTE reste l'anti-derive de perimetre : rien n'entre hors lot.
   rdir <- file.path(ts_project_root(), "tools", "pkg_skeleton", "R")
   expect_true(dir.exists(rdir), info = "tools/pkg_skeleton/R absent")
-  expect_identical(sort(list.files(rdir, pattern = "[.]R$")), "plot_dims.R",
-                   info = "le perimetre extrait doit rester LE pilote (rapport M4)")
+  expect_identical(sort(list.files(rdir, pattern = "[.]R$")),
+                   sort(c("plot_dims.R", "palettes.R", "theme.R",
+                          "export.R", "datatable.R", "complex_heatmap.R")),
+                   info = "le perimetre extrait doit etre exactement R/plotting complet")
+})
+
+# ─── M4 suite (2026-10-25) : les 4 autres fichiers du domaine ────────────────
+
+test_that("M4 suite : le paquet fournit les symboles de datatable.R / theme.R / palettes.R / complex_heatmap.R", {
+  ns <- asNamespace("TranscriptoShiny")
+  sym <- c(
+    # datatable.R (PLOT-S3)
+    "ts_datatable", "ts_datatable_buttons", "ts_datatable_page_lengths",
+    "ts_datatable_public_api", ".ts_dt_const", ".ts_dt_stop",
+    # theme.R (PLOT-S1)
+    "ts_theme",
+    # palettes.R (representatif : les 3 familles + les 2 UI + le socle %||%)
+    "diverging_ramp_colors", "sequential_ramp_colors", "sc_discrete_scale",
+    "sc_continuous_scale", "sc_diverging_scale", "bulk_color_scale",
+    "bulk_annotation_colors", "bulk_role_colors", "spatial_color_ramp_hex",
+    "manual_color_picker_ui", "dynamic_manual_color_picker_ui",
+    # complex_heatmap.R (PLOT-S4)
+    "ts_complex_heatmap", "ts_heatmap_ramps", ".ts_hm_ramp", ".ts_hm_stop"
+  )
+  for (s in sym) {
+    expect_true(exists(s, envir = ns, inherits = FALSE),
+                info = paste(s, "absent du namespace TranscriptoShiny"))
+  }
+  # %||% du paquet = la definition de palettes.R (semantique pincee par
+  # test-pipe-or-null-unification.R ; ici : presence dans le namespace).
+  expect_true(exists("%||%", envir = ns, inherits = FALSE),
+              info = "%||% absent du namespace (palettes.R doit l'y definir)")
+})
+
+test_that("M4 suite : dependance intra-domaine resolue DANS le paquet", {
+  # complex_heatmap.R appelle bulk_diverging_ramp()/bulk_sequential_ramp() :
+  # dans le namespace, la resolution NE PASSE PAS par globalenv — palettes.R
+  # doit fournir ces symboles AU paquet. Preuve comportementale : la rampe
+  # divergente par defaut rend une fonction de couleur SANS globalenv.
+  ns <- asNamespace("TranscriptoShiny")
+  for (s in c("bulk_diverging_ramp", "bulk_sequential_ramp")) {
+    expect_true(exists(s, envir = ns, inherits = FALSE),
+                info = paste(s, "absent du paquet (dependance de complex_heatmap.R)"))
+    expect_false(exists(s, envir = globalenv(), inherits = FALSE),
+                 info = paste(s, "defini dans globalenv : la source unique doit etre le paquet"))
+  }
+  f <- get("ts_heatmap_ramps", envir = ns)
+  expect_identical(sort(f()), sort(c("diverging", "sequential")))
+})
+
+# ─── Lot A (2026-10-25) : export.R ───────────────────────────────────────────
+
+.ppa_symbols <- c("ts_export_dpi_choices", "ts_export_format_choices",
+                  "ts_export_format_choices_ui", "ts_export_public_api",
+                  "ts_export_resolve_format", "ts_export_plot",
+                  ".ts_export_const", ".ts_export_stop")
+
+test_that("M4 lot A : le paquet fournit les symboles de export.R", {
+  ns <- asNamespace("TranscriptoShiny")
+  for (sym in .ppa_symbols) {
+    expect_true(exists(sym, envir = ns, inherits = FALSE),
+                info = paste(sym, "absent du namespace TranscriptoShiny"))
+  }
+  for (sym in c("ts_export_plot", ".ts_export_stop")) {
+    expect_false(exists(sym, envir = globalenv(), inherits = FALSE),
+                 info = paste(sym, "defini dans globalenv : double definition"))
+  }
 })

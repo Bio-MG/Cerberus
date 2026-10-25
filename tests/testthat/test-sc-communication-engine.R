@@ -29,7 +29,9 @@
 
 source_project_file("R/core/io_helpers.R")
 source_project_file("R/core/provenance.R")
-source_project_file("R/plotting/palettes.R")
+# D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
+# (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
+load_project_pkg()
 source_project_file("R/sc/sc_velocity.R")
 source_project_file("R/sc/sc_communication.R")
 source_project_file("R/sc/sc_communication_input.R")

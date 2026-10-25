@@ -61,13 +61,19 @@ Sys.setlocale("LC_CTYPE", "fr_FR.UTF-8")
 # retourner la FONCTION — comportement observable, pas texte source.
 .pu_eval <- function(expr) eval(expr, envir = new.env(parent = baseenv()))
 
-# Balayage unique (niveau fichier) : R/**, modules/**, global.R, config/*.
+# Balayage unique (niveau fichier) : R/**, modules/**, global.R, config/* —
+# et, DEPUIS M4-suite (2026-10-25), tools/pkg_skeleton/R/** : les définitions
+# de `%||%` SUIVENT leur fichier (palettes.R a déménagé dans le paquet) ;
+# le périmètre du balayage suit le périmètre du code applicatif, sinon la
+# convergence serait vérifiée sur un arbre qui n'est plus celui de l'app.
 .pu_scan <- local({
   files <- sort(c(
     list.files(file.path(.pu_root, "R"), pattern = "[.]R$",
                full.names = TRUE, recursive = TRUE),
     list.files(file.path(.pu_root, "modules"), pattern = "[.]R$",
                full.names = TRUE, recursive = TRUE),
+    list.files(file.path(.pu_root, "tools", "pkg_skeleton", "R"),
+               pattern = "[.]R$", full.names = TRUE, recursive = TRUE),
     file.path(.pu_root, "global.R"),
     list.files(file.path(.pu_root, "config"), pattern = "[.]R$", full.names = TRUE)
   ))
@@ -96,8 +102,12 @@ test_that("socle : %||% de R/core/io_helpers.R porte la sémantique unifiée (ca
 
 test_that("M3 : toute définition de %||% de l'arbre est identique au socle (convergence)", {
   # Anti-vacuité : le balayage DOIT trouver les copies (21 avant M3, 20 après
-  # suppression de la définition morte de sc_export.R). M4+ (extraction en
-  # package) devront re-baseler ce plancher délibérément, pas en silence.
+  # suppression de la définition morte de sc_export.R). M4-suite (2026-10-25) :
+  # le plancher 20/19 est RE-BASELE DÉLIBÉRÉMENT en étendant le balayage à
+  # tools/pkg_skeleton/R/ — palettes.R (et sa définition) y a déménagé, le
+  # compte arbre-entier (R/ + modules/ + paquet) reste 20 définitions / 19
+  # fichiers. Ne pas confondre : le fichier palettes.R quitte R/ mais la
+  # définition ne disparaît PAS de l'arbre applicatif.
   expect_gte(sum(lengths(.pu_scan$defs)), 20L)
   expect_gte(length(.pu_files_with_defs), 19L)
   for (p in .pu_scan$files) {
@@ -112,7 +122,9 @@ test_that("M3 : toute définition de %||% de l'arbre est identique au socle (con
 })
 
 test_that("palettes.R : la définition locale est le socle (null-only avant M3)", {
-  f <- .pu_eval(.pu_scan$defs[[file.path(.pu_root, "R", "plotting", "palettes.R")]][[1L]])
+  # M4-suite (2026-10-25) : le bloc SUIT le fichier — palettes.R vit
+  # désormais dans l'arbre du paquet (tools/pkg_skeleton/R/).
+  f <- .pu_eval(.pu_scan$defs[[file.path(.pu_root, "tools", "pkg_skeleton", "R", "palettes.R")]][[1L]])
   expect_identical(f(NULL, "FB"), "FB")
   expect_identical(f(character(0), "FB"), "FB")  # RED avant M3 : null-only rendait character(0)
   expect_identical(f(NA, "FB"), NA)
