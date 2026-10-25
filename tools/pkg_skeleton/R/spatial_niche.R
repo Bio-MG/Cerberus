@@ -1,5 +1,5 @@
 # =============================================================================
-# R/utils_spatial_niche.R — Spatial niche detection ("BuildNicheAssay-lite")
+# tools/pkg_skeleton/R/spatial_niche.R — Spatial niche detection ("BuildNicheAssay-lite")
 # =============================================================================
 # NEW (Phase 5 — "niche" analysis, seurat5_spatial_vignette_2.Rmd parity —
 # section "Niche analysis", BuildNicheAssay()). Not previously covered
@@ -16,7 +16,7 @@
 # (which expects an actual FOV/segmentation-aware object), this computes the
 # same statistic straight from (coords, group_labels) already available in
 # this app's lightweight spatial_obj contract (BPCells + coords, never a
-# live Seurat/FOV object -- see R/utils_spatial_io.R header):
+# live Seurat/FOV object -- see tools/pkg_skeleton/R/spatial_io.R header):
 #   1. k-NN in PHYSICAL (x,y) space (RANN::nn2 -- identical approach to
 #      BANKSY-lite's own physical neighbor graph).
 #   2. For each spot/cell, the COMPOSITION of its k neighbors' group labels

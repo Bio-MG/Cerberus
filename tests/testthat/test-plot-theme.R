@@ -30,7 +30,7 @@ library(ggplot2)
 .plot_s1_migrated_files <- c(
   "R/sc/sc_plotting.R",
   "tools/pkg_skeleton/R/bulk_helpers.R",
-  "R/spatial/spatial_export.R",
+  "tools/pkg_skeleton/R/spatial_export.R",  # ex-R/spatial/, D2 M5 lot 4
   "modules/spatial/mod_spatial_lr.R",
   "modules/spatial/mod_spatial_multi.R",
   "modules/spatial/mod_spatial_niche.R",

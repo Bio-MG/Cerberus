@@ -13,9 +13,9 @@
 # workers dans les tests).
 # =============================================================================
 source_project_file("config/defaults.R")
-source_project_file("R/spatial/spatial_async.R")
+source_project_file("tools/pkg_skeleton/R/spatial_async.R")  # ex-R/spatial/, D2 M5 lot 4
 
-async_src <- readLines(file.path("..", "..", "R", "spatial", "spatial_async.R"))
+async_src <- readLines(file.path("..", "..", "tools", "pkg_skeleton", "R", "spatial_async.R"))
 
 test_that("le défaut de init_spatial_daemons() passe par le résolveur unique", {
   # ⚠️ Chantier #5 (2026-10-19) : ces deux assertions épinglaient l'EXPRESSION

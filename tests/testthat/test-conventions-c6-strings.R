@@ -223,7 +223,7 @@ test_that("C6 : les library() imbriques du depot ne sont plus signales", {
   # passage (tous les sites des fichiers temoins, plus 4 lignes choisies a la
   # main).
   files <- c("R/core/pathway_helpers.R",   # clusterProfiler / org.*.eg.db / ReactomePA
-             "R/spatial/spatial_async.R",  # Seurat + BPCells dans un worker mirai
+             "tools/pkg_skeleton/R/spatial_async.R",  # Seurat + BPCells dans un worker mirai (ex-R/spatial/, D2 M5 lot 4)
              "tools/pkg_skeleton/R/bulk_wgcna.R")        # require("WGCNA") dans une fonction
   total <- 0L
   for (rel in files) {

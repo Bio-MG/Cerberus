@@ -3,7 +3,7 @@
 # =============================================================================
 # Single source of truth for the app's ggplot themes + configurable base_size.
 # Consumers: Bulk (tools/pkg_skeleton/R/bulk_helpers.R), SC (R/sc/sc_plotting.R) and Spatial
-# (R/spatial/spatial_export.R, modules/spatial/*). It replaces:
+# (tools/pkg_skeleton/R/spatial_export.R, modules/spatial/*). It replaces:
 #   * the local `switch()` that lived in R/sc/sc_plotting.R:37, and
 #   * the ~20 hardcoded theme_*() calls scattered across the repo.
 #

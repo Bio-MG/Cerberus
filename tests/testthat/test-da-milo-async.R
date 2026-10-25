@@ -13,13 +13,16 @@
 # =============================================================================
 
 source_project_file("R/core/jobs.R")
-source_project_file("R/spatial/spatial_async.R")
+source_project_file("tools/pkg_skeleton/R/spatial_async.R")  # ex-R/spatial/, D2 M5 lot 4
 
 test_that("APP_DAEMON_SOURCE_FILES couvre la fermeture Milo et pointe des fichiers reels", {
   # La fermeture mesuree de run_milo_da() doit etre presente, sinon le daemon
   # echoue a l'execution avec « could not find function ».
+  # ⚠️ D2 M5 lot 4 : les 7 chemins spatial du preload suivent le fichier dans
+  # l'arbre du paquet (meme ordre v5 : async, io, multi, niche, deconv_prep,
+  # deconv_tasks, stats).
   expect_true(all(c(
-    "R/spatial/spatial_async.R",
+    "tools/pkg_skeleton/R/spatial_async.R",
     "config/defaults.R", "config/thresholds.R",
     "tools/pkg_skeleton/R/io_helpers.R", "tools/pkg_skeleton/R/state.R",
     "tools/pkg_skeleton/R/provenance.R",

@@ -1,5 +1,5 @@
 # =============================================================================
-# test-spatial-multi.R — tests for R/spatial/spatial_multi.R
+# test-spatial-multi.R — tests for tools/pkg_skeleton/R/spatial_multi.R
 # =============================================================================
 # 21ᵉ incrément de la dette de conventions (2026-09-18).
 # Créé AVANT la conversion (règle 5 : test d'abord, rouge d'abord) ⇒ ce
@@ -21,15 +21,15 @@
 # le couvre seul** ⇒ pas de `git mv` gratuit (§2cc.1, §2cd.4 : le critère est
 # « existe-t-il un test qui ne couvre QUE lui ? », pas « est-il mentionné ? »).
 #
-# ⚠️ `R/spatial/spatial_multi.R` n'est PAS auto-suffisant (§2ce.6) : son
+# ⚠️ `tools/pkg_skeleton/R/spatial_multi.R` n'est PAS auto-suffisant (§2ce.6) : son
 # prologue définit `.log()` qui appelle `write_mirai_log()` (défini dans
 # `spatial_async.R`) ⇒ ce fichier doit être sourcé AVANT, sinon l'échec rouge
 # ressemble à une erreur de conversion. Vérifié : `app.R:125` le source bien
 # (pas de P0 de sourçage).
 # =============================================================================
 
-source_project_file("R/spatial/spatial_async.R")
-source_project_file("R/spatial/spatial_multi.R")
+source_project_file("tools/pkg_skeleton/R/spatial_async.R")
+source_project_file("tools/pkg_skeleton/R/spatial_multi.R")
 
 .sm_err <- function(expr) {
   tryCatch({ expr; NULL },
@@ -81,7 +81,7 @@ test_that("spatial_multi.R ne contribue aucun signalement C10", {
   e <- new.env(parent = globalenv())
   sys.source(file.path(ts_project_root(), "tools/check_conventions.R"), envir = e)
   before <- length(e$.REPORT$warns)
-  e$check_c10_error_style(file.path(ts_project_root(), "R/spatial/spatial_multi.R"))
+  e$check_c10_error_style(file.path(ts_project_root(), "tools/pkg_skeleton/R/spatial_multi.R"))
   w <- e$.REPORT$warns
   n <- length(w) - before
   if (n > 0L) {

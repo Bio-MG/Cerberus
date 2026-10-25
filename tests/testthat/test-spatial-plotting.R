@@ -1,12 +1,12 @@
 # =============================================================================
-# test-spatial-plotting.R — les helpers PURS de R/spatial/spatial_plotting.R
+# test-spatial-plotting.R — les helpers PURS de tools/pkg_skeleton/R/spatial_plotting.R
 # =============================================================================
 # 42ᵉ incrément (§2db). Premier lot C9 choisi sur la MESURE de COUVERTURE, et
 # non sur la liste des fichiers signalés.
 #
 # 🔴 MESURE DU 2026-09-20 : les **10** fonctions de ce fichier n'étaient citées
 # dans **AUCUN** fichier de `tests/` (vérifié fonction par fonction). C'est le
-# plus gros trou de couverture du dépôt : `R/spatial/spatial_plotting.R` est le
+# plus gros trou de couverture du dépôt : `tools/pkg_skeleton/R/spatial_plotting.R` est le
 # seul fichier de `R/` signalé par C9 dont **aucune** fonction n'est exercée —
 # les 15 autres fichiers signalés sont, eux, **sourcés** par au moins un test
 # (§2da.5). ⇒ Écrire un test éponyme pour ceux-là serait bureaucratique ;
@@ -20,7 +20,7 @@
 # Les attentes ci-dessous sont MESURÉES avant d'être écrites (sonde hors dépôt),
 # jamais déduites du code.
 # =============================================================================
-source_project_file("R/spatial/spatial_plotting.R")
+source_project_file("tools/pkg_skeleton/R/spatial_plotting.R")
 
 # Overlay histologique VALIDE, réutilisé par plusieurs directions.
 .hist_ok <- function() {

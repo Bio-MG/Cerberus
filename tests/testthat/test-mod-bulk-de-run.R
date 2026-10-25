@@ -583,7 +583,7 @@ test_that("la sonde ne publie JAMAIS le cadre de resultats ni une valeur de lign
 # repli synchrone exécutent donc le MÊME code.
 source_project_file("tools/pkg_skeleton/R/batch_correction.R")
 source_project_file("tools/pkg_skeleton/R/bulk_helpers.R")
-source_project_file("R/spatial/spatial_async.R")
+source_project_file("tools/pkg_skeleton/R/spatial_async.R")
 
 .d4_counts <- function() {
   set.seed(42)

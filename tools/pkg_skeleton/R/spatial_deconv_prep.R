@@ -1,5 +1,5 @@
 # =============================================================================
-# R/utils_spatial_deconv_prep.R — RAM-safety gene capping before deconvolution
+# tools/pkg_skeleton/R/spatial_deconv_prep.R — RAM-safety gene capping before deconvolution
 # =============================================================================
 # Backlog #6 (HANDOFF_TranscriptoShiny.txt): STdeconvolve's restrictCorpus()
 # received the FULL filtered gene panel via as.matrix(methods::as(mat,
@@ -12,10 +12,10 @@
 # mod_spatial_qc.R to pick HVGs on-disk).
 #
 # Pure functions, no Shiny reactivity -- called from inside a mirai daemon
-# (via run_spatial_deconv_body(), R/utils_spatial_deconv_tasks.R, itself
+# (via run_spatial_deconv_body(), tools/pkg_skeleton/R/spatial_deconv_tasks.R, itself
 # called by mod_spatial_deconv.R and mod_spatial_pipeline.R), so this file
 # MUST be added to init_spatial_daemons()'s source_files
-# (R/utils_spatial_async.R).
+# (tools/pkg_skeleton/R/spatial_async.R).
 #
 # No-op for small gene panels (Xenium/CosMx, typically < n_hvg genes):
 # select_hvg_for_deconv() returns every gene unchanged in that case.

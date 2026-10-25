@@ -1,5 +1,5 @@
 # =============================================================================
-# test-spatial-report.R — tests for R/spatial/spatial_report.R
+# test-spatial-report.R — tests for tools/pkg_skeleton/R/spatial_report.R
 # =============================================================================
 # 45ᵉ incrément de la dette de conventions (2026-09-20, §2df).
 # Créé AVANT le correctif (règle 5 : test d'abord, rouge d'abord).
@@ -23,7 +23,7 @@
 # `list(...)` ne soit construit. Conséquence : la fonction rend **`NULL`** au
 # lieu du snapshot documenté, dès que l'objet n'a **pas** d'histologie — le
 # cas ORDINAIRE (`extract_histology_image()` rend `NULL` sans image, et
-# `spatial_obj$histology` vaut alors `NULL`, cf. `R/spatial/spatial_io.R:840`).
+# `spatial_obj$histology` vaut alors `NULL`, cf. `tools/pkg_skeleton/R/spatial_io.R:840`).
 # ⇒ Le rapport Spatial perd **silencieusement** le snapshot du dataset
 # (`mod_spatial_report.R:149/157` mettent ce `NULL` dans la liste passée au
 # Rmd). C'est la famille §2dd : un défaut trouvé **par l'écriture du test**.
@@ -33,7 +33,7 @@
 # entière) — le test ne dépend donc pas de la lecture de `spatial_report.R`.
 # =============================================================================
 
-source_project_file("R/spatial/spatial_report.R")
+source_project_file("tools/pkg_skeleton/R/spatial_report.R")
 
 # ---------------------------------------------------------------------------
 # 0. TÉMOIN DU MÉCANISME R — `return()` dans un `tryCatch` sort de la FONCTION
@@ -92,7 +92,7 @@ test_that("build_spatial_report_dataset : DEFAUTS pour un objet vide (?, NA, vid
 
 test_that("build_spatial_report_dataset : SANS histologie — cas ORDINAIRE", {
   # C'est LE cas de production : extract_histology_image() rend NULL quand le
-  # dataset n'a pas d'image (R/spatial/spatial_io.R:840 => histology = NULL).
+  # dataset n'a pas d'image (tools/pkg_skeleton/R/spatial_io.R:840 => histology = NULL).
   obj <- list(project = "P1", technology = "Visium", n_total = 1234L)
   r <- build_spatial_report_dataset(obj)
   expect_true(is.list(r))                     # 🔴 ROUGE avant correctif
@@ -203,7 +203,7 @@ test_that("find_spatial_report_template : la 4e candidate est getwd()/modules/sp
   # Verrou de SOURCE sur l'ORDRE des candidates (le 1er trouvé gagne) : la
   # version relative doit passer AVANT la version getwd() du meme chemin,
   # sinon le chemin rendu devient absolu et le message d'erreur change de forme.
-  src <- readLines(file.path(ts_project_root(), "R", "spatial", "spatial_report.R"))
+  src <- readLines(file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "spatial_report.R"))
   body_txt <- paste(src, collapse = "\n")
   i_rel <- regexpr('file.path("reports", "spatial_report_template.Rmd")', body_txt, fixed = TRUE)
   i_abs <- regexpr('file.path(getwd(), "reports", "spatial_report_template.Rmd")', body_txt, fixed = TRUE)
@@ -224,7 +224,7 @@ test_that("spatial_report.R : aucun `return(NULL)` dans la construction du list(
   # piège dans un commentaire qui contient litteralement « return(NULL) » et
   # « return() » — compter les lignes brutes ferait echouer le verrou sur sa
   # propre documentation (piege mesure en ecrivant ce fichier).
-  src <- readLines(file.path(ts_project_root(), "R", "spatial", "spatial_report.R"))
+  src <- readLines(file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "spatial_report.R"))
   code <- sub("#.*$", "", src)          # commentaires retires
   start <- grep("^build_spatial_report_dataset <- function", src)
   expect_length(start, 1L)
@@ -238,7 +238,7 @@ test_that("spatial_report.R : aucun `return(NULL)` dans la construction du list(
 test_that("spatial_report.R : le tryCatch d'histologie ne CONTIENT plus de return", {
   # Assertion plus fine : à l'interieur du bloc histology_overlay, aucun
   # `return(` ne doit subsister (c'est precisement le defaut).
-  src <- readLines(file.path(ts_project_root(), "R", "spatial", "spatial_report.R"))
+  src <- readLines(file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "spatial_report.R"))
   txt <- paste(sub("#.*$", "", src), collapse = "\n")   # commentaires retires
   m <- regexpr("histology_overlay = tryCatch\\(", txt)
   expect_true(m > 0L)

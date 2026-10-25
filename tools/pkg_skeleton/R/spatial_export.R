@@ -1,5 +1,5 @@
 # =============================================================================
-# R/utils_spatial_export.R — Spatial "paquet complet" (zip) + script R reproductible
+# tools/pkg_skeleton/R/spatial_export.R — Spatial "paquet complet" (zip) + script R reproductible
 # =============================================================================
 # v2 (vague 5 — Phase 6 stats + "exporter tout ce qui est en memoire") :
 #    build_spatial_export_bundle() gagne 3 nouvelles sections, memes
@@ -22,11 +22,11 @@
 # Companion to modules/spatial/mod_spatial_export.R (moyen terme, voir
 # handoff_spatial_bio-mg.md, points a/b). Pure functions only (no Shiny
 # reactivity) so they stay testable/callable outside the app -- same
-# convention as R/utils_spatial_multi.R / R/utils_spatial_niche.R. Unlike
+# convention as tools/pkg_skeleton/R/spatial_multi.R / tools/pkg_skeleton/R/spatial_niche.R. Unlike
 # those two, these are NEVER called from inside a mirai daemon (export only
 # reads results ALREADY computed and sitting in shared_rv -- no new heavy
 # computation happens here), so they do NOT need to be added to
-# R/utils_spatial_async.R's daemon preload list.
+# tools/pkg_skeleton/R/spatial_async.R's daemon preload list.
 #
 # Mirrors the existing Bulk report/script pattern
 # (modules/bulk/mod_bulk_report.R's .bulk_r_script_text()): a reproducible
@@ -483,7 +483,7 @@ cluster_labels <- NULL
 
   deconv_block <- if (!is.null(deconv) && identical(deconv$mode, "rctd") && !is.null(deconv$ref_path)) sprintf('
 # -- 3. Deconvolution (RCTD) ------------------------------------------------------
-# Necessite l\'artefact de reference prepare par l\'app (R/utils_spatial_reference.R
+# Necessite l\'artefact de reference prepare par l\'app (tools/pkg_skeleton/R/spatial_reference.R
 # ::prepare_reference_artifact()) -- le chemin ci-dessous n\'est valide que sur
 # la machine/session d\'origine (%s) ; re-preparez la reference si besoin.
 ref_manifest_path <- "%s"
@@ -544,9 +544,9 @@ niche_res <- NULL
 #   - Le fichier "context.rds" fourni A COTE de ce script dans l\'archive
 #     (coordonnees spatiales completes).
 #
-# Sourcez R/utils_spatial_io.R et R/utils_spatial_niche.R du projet AVANT ce
+# Sourcez tools/pkg_skeleton/R/spatial_io.R et tools/pkg_skeleton/R/spatial_niche.R du projet AVANT ce
 # script pour disposer de compute_qc_metrics_fast() / compute_spatial_niches().
-# Sourcez aussi R/utils_spatial_stats.R si vous voulez reproduire manuellement
+# Sourcez aussi tools/pkg_skeleton/R/spatial_stats.R si vous voulez reproduire manuellement
 # l\'enrichissement de voisinage / les hotspots / Ripley\'s K (non inclus dans
 # ce script auto-genere -- voir enrichment_zscore.csv / hotspots_gi.csv /
 # ripley_k_curve.csv dans le paquet .zip pour les resultats DEJA calcules).

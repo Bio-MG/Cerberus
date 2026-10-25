@@ -1,5 +1,5 @@
 # =============================================================================
-# R/utils_spatial_reference.R — scRNA-seq reference I/O for spatial deconvolution
+# tools/pkg_skeleton/R/spatial_reference.R — scRNA-seq reference I/O for spatial deconvolution
 # =============================================================================
 # v2 (round-2 fixes from real-data testing):
 #   1. sanitize_celltype_labels() -- spacexr::check_cell_types() rejects any

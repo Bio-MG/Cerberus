@@ -14,8 +14,9 @@
 # de l'application (Visium / Visium HD / Xenium / CosMx / Slide-seq) ⇒ le mapping
 # mécanique de `modules/` (retirer `mod_`, garder le domaine) donne
 # **`spatial_import_error`**. ⚠️ Ce nom ne collisionne pas avec les classes de
-# `R/spatial/` (`spatial_io_error`, `spatial_stats_error`, …) : celles-ci sont
-# déclarées dans `R/`, celle-ci dans `modules/import/`.
+# `tools/pkg_skeleton/R/spatial_*.R` (`spatial_io_error`, `spatial_stats_error`,
+# … ; ex-`R/spatial/`, D2 M5 lot 4) : celles-ci sont déclarées dans l'arbre du
+# paquet, celle-ci dans `modules/import/`.
 #
 # 🔴 **LE LOT QUI BOUCLE — ET CORRIGE — LE DOMAINE `modules/import/`.**
 # §2bu conclut : « Le domaine `modules/import/` est bouclé ». C'est une

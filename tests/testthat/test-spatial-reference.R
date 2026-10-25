@@ -1,5 +1,5 @@
 # =============================================================================
-# test-spatial-reference.R — tests for R/spatial/spatial_reference.R
+# test-spatial-reference.R — tests for tools/pkg_skeleton/R/spatial_reference.R
 # =============================================================================
 # 16ᵉ incrément de la dette de conventions (2026-09-17).
 # Créé AVANT la conversion (règle 5 : test d'abord, rouge d'abord) ⇒ ce
@@ -18,7 +18,7 @@
 
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")        # %||%
 source_project_file("R/core/rdata_io.R")          # rdata_is_supported_file / rdata_load_env
-source_project_file("R/spatial/spatial_reference.R")
+source_project_file("tools/pkg_skeleton/R/spatial_reference.R")
 
 .ref_err <- function(expr) {
   tryCatch({ expr; NULL },
@@ -157,7 +157,7 @@ test_that("spatial_reference.R ne contribue aucun signalement C10", {
   e <- new.env(parent = globalenv())
   sys.source(file.path(ts_project_root(), "tools/check_conventions.R"), envir = e)
   before <- length(e$.REPORT$warns)
-  e$check_c10_error_style(file.path(ts_project_root(), "R/spatial/spatial_reference.R"))
+  e$check_c10_error_style(file.path(ts_project_root(), "tools/pkg_skeleton/R/spatial_reference.R"))
   w <- e$.REPORT$warns
   n <- length(w) - before
   if (n > 0L) {

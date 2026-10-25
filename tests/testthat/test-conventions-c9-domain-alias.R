@@ -115,8 +115,17 @@ test_that("C9 : l'alias de domaine ne DEBORDE pas (temoin de traversee)", {
   # domaines (spatial, core), et le solde du sortant est asseré dans les DEUX
   # sens (dossier R/bulk vide + fichier present au paquet), meme forme que les
   # soldes M4-suite et M5 lot 2.
-  files <- c("R/spatial/spatial_export.R",
-             "R/core/rdata_io.R")
+  # ⚠️ AMENDE le 2026-10-25 (D2 M5 LOT 4) : `R/spatial/spatial_export.R` quitte
+  # la liste (le domaine R/spatial ENTIER — 11 fichiers — demenage dans
+  # tools/pkg_skeleton/R/ et sort de la population C9 ; mesure du lot rejouee
+  # AVANT le deplacement : C9 = 13 files, dont 3 spatial — async, deconv_prep,
+  # export). Le temoin de traversee represente encore 2 domaines (core, sc) :
+  # `R/core/rdata_io.R` reste, rempli par `R/sc/sc_communication_input.R`
+  # (mesure : flagge C9, non flagge C9b, pas de test eponyme). Solde du sortant
+  # asseré dans les DEUX sens (dossier R/spatial absent + 11 fichiers presents
+  # au paquet), meme forme que les soldes M4-suite / lot 2 / lot 3.
+  files <- c("R/core/rdata_io.R",
+             "R/sc/sc_communication_input.R")
   expect_length(.c9_flagged(.c9_abs(files)), 2L)
   # Et le solde explicite : `sc_export.R` n'est PLUS signale, mais il l'etait —
   # on l'assere pour qu'une regression (la garde qui cesse de voir un fichier
@@ -133,6 +142,14 @@ test_that("C9 : l'alias de domaine ne DEBORDE pas (temoin de traversee)", {
     expect_true(file.exists(file.path(pkg, f)),
                 info = paste(f, "absent du paquet apres extraction M5 lot 3"))
   }
+  # M5 lot 4 : le temoin spatial sorti est bien sorti (le dossier R/spatial ne
+  # peut plus rien cacher) et les 11 fichiers vivent bien dans le paquet.
+  expect_false(dir.exists(file.path(ts_project_root(), "R", "spatial")))
+  for (f in c("spatial_async.R", "spatial_io.R", "spatial_export.R",
+              "spatial_report.R", "spatial_stats.R")) {
+    expect_true(file.exists(file.path(pkg, f)),
+                info = paste(f, "absent du paquet apres extraction M5 lot 4"))
+  }
 })
 
 test_that("C9 : dans R/plotting/, SEUL palettes.R reste signale (invariant)", {
@@ -147,25 +164,21 @@ test_that("C9 : dans R/plotting/, SEUL palettes.R reste signale (invariant)", {
                  length(list.files("R/plotting", pattern = "[.]R$")) > 0L)
 })
 
-test_that("C9 : le plafond de dette est 14 (recompose par le lot D2 M5 lot 3)", {
+test_that("C9 : le plafond de dette est 10 (recompose par le lot D2 M5 lot 4)", {
   # Plafond, pas egalite : le compte doit pouvoir BAISSER quand un test est
   # ecrit, mais ne doit jamais REMONTER (une regression de l'alias le ferait).
   # ⚠️ Le plafond SUIT la derniere mesure : il valait 22 (§2cy), puis 21 (§2db),
-  # 20 (§2dd), 19 (§2df), 14 (M5 lot 2). D2 M5 LOT 3 (2026-10-25) : les 18
-  # fichiers de R/bulk demenagent dans tools/pkg_skeleton/R/ et quittent la
-  # population — le SEUL bulk flagge etait `bulk_report_engine.R` (14 - 1 = 13,
-  # mesure exacte re-jouee avant le deplacement a 12:47). ⚠️ DECOMPOSITION EN
-  # DEUX SENS, au 13:04 : un fichier ETRANGER au lot est apparu EN VOL
-  # (`R/core/cerberus_handoff.R`, non suivi, ecrit 13:01 par la session
-  # CERBERUS — check_writers re-verifie avant commit) et entre dans la
-  # population C9 (+1, toujours sans test eponyme). Solde net du lot :
-  # 14 - 1 (bulk) + 1 (etranger) = 14 — la COMPOSITION change, le COMPTE non.
-  # Le plafond reste donc 14 (il ne remonte pas : l'etranger compense la sortie
-  # bulk) ; sa recomposition est asserée par le solde bulk ci-dessus et par le
-  # pin C9b (meme decomposition). Si la session CERBERUS paie sa dette C9, le
-  # compte redescend a 13 et le plafond reste correct.
+  # 20 (§2dd), 19 (§2df), 14 (M5 lot 2, recompose 14 pour l'etranger CERBERUS),
+  # 13 (la session CERBERUS a PAYE sa dette : test-cerberus-handoff.R couvre
+  # cerberus_handoff.R par son nom, mesure du 13:59). D2 M5 LOT 4 (2026-10-25) :
+  # les 11 fichiers de R/spatial demenagent dans tools/pkg_skeleton/R/ et
+  # quittent la population — les 3 spatial flagges etaient spatial_async.R,
+  # spatial_deconv_prep.R et spatial_export.R (13 - 3 = 10, mesure exacte
+  # rejouee avant le deplacement a 13:59, liste byte-conservee dans le probe).
+  # Aucun etranger en vol au moment de la mesure (check_writers 13:51 :
+  # aucun battement etranger ; la session CERBERUS a livre ses tests).
   flagged <- .c9_flagged(.c9_population())
-  expect_true(length(flagged) <= 14L)
+  expect_true(length(flagged) <= 10L)
   # Et le contrat dans l'autre sens, pour que le plafond ne devienne pas
   # infalsifiable si la garde cesse de signaler quoi que ce soit : la population
   # C9 n'est pas vide (temoin de NON-VACUITE).

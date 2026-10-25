@@ -1,5 +1,5 @@
 # =============================================================================
-# R/utils_spatial_io.R — BPCells conversion + FOV standardization
+# tools/pkg_skeleton/R/spatial_io.R — BPCells conversion + FOV standardization
 # =============================================================================
 # Pure functions (no Shiny reactivity). Called once by
 # modules/import/mod_import_spatial.R right after a raw object is loaded

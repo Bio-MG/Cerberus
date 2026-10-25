@@ -21,7 +21,7 @@
 # Rouge attendu = `cellids` présent ⇒ deux assertions en échec, sans erreur.
 # =============================================================================
 
-source_project_file("R/spatial/spatial_io.R")   # materialize_seurat_subset()
+source_project_file("tools/pkg_skeleton/R/spatial_io.R")   # materialize_seurat_subset()
 
 test_that("materialize_seurat_subset est appelé avec ses vrais noms d'arguments", {
   relpath <- "modules/spatial/mod_spatial_viz.R"

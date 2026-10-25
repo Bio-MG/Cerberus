@@ -1,5 +1,5 @@
 # =============================================================================
-# R/utils_spatial_multi.R — Phase 4: "Working with multiple slices" (vignette
+# tools/pkg_skeleton/R/spatial_multi.R — Phase 4: "Working with multiple slices" (vignette
 # parity) — multi-sample sketch integration
 # =============================================================================
 # Pure function (no Shiny reactivity) — called from inside a mirai daemon by
@@ -15,7 +15,7 @@
 # Top-SVG grid, "Vue combinee") — merging N FULL-resolution spatial
 # matrices would instantly be the single most RAM-hungry operation in the
 # whole app. A biologist who needs a full-resolution joint analysis should
-# export each dataset's ROI (materialize_seurat_subset(), R/utils_spatial_io.R)
+# export each dataset's ROI (materialize_seurat_subset(), tools/pkg_skeleton/R/spatial_io.R)
 # and continue in a dedicated command-line pipeline instead.
 #
 # Deviates from the Seurat Spatial Vignette's own 2-slice example in two

@@ -86,8 +86,8 @@
 # code en dur : sourcer un consommateur AVANT config/ remplace la valeur
 # configuree par le repli SANS aucune erreur.
 .sm_ts_consumers <- c(
-  "R/spatial/spatial_async.R",                    # TS_MIRAI_TIMEOUT_MS, TS_RCTD_TIMEOUT_MS, TS_LABEL_TRANSFER_TIMEOUT <- defaults
-  "R/spatial/spatial_deconv_prep.R",              # TS_DECONV_DEFAULT_N_HVG <- defaults
+  "tools/pkg_skeleton/R/spatial_async.R",         # TS_MIRAI_TIMEOUT_MS, TS_RCTD_TIMEOUT_MS, TS_LABEL_TRANSFER_TIMEOUT <- defaults (ex-R/spatial/, D2 M5 lot 4)
+  "tools/pkg_skeleton/R/spatial_deconv_prep.R",   # TS_DECONV_DEFAULT_N_HVG <- defaults (ex-R/spatial/, D2 M5 lot 4)
   "modules/sc/mod_sc_pipeline.R",                 # TS_AUTO_TSNE_MAX_CELLS, TS_BPCELLS_AUTO_THRESHOLD <- thresholds
   "modules/sc/mod_sc_trajectory.R",               # TS_MAX_TRAJECTORY_CELLS <- thresholds
   "modules/spatial/deconv/mod_spatial_deconv.R"   # TS_RCTD_MIN_CELLS_PER_TYPE <- defaults

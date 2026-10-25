@@ -1,5 +1,5 @@
 # =============================================================================
-# R/spatial/spatial_plotting.R — Spatial visualization rendering helpers
+# tools/pkg_skeleton/R/spatial_plotting.R — Spatial visualization rendering helpers
 # =============================================================================
 # Extracted from modules/spatial/mod_spatial_viz.R (Block 6 refactor).
 # Pure rendering functions: no Shiny reactivity, no module namespace.
@@ -8,7 +8,7 @@
 # Depends on: R/palettes.R (spatial_discrete_colors, spatial_continuous_scale,
 #             spatial_diverging_scale, spatial_color_ramp_hex),
 #             ggplot2, plotly, scattermore (optional).
-# Sourced in app.R AFTER R/palettes.R and R/utils_spatial_io.R,
+# Sourced in app.R AFTER R/palettes.R and tools/pkg_skeleton/R/spatial_io.R,
 # BEFORE modules/spatial/*.R.
 # =============================================================================
 

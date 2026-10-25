@@ -76,7 +76,7 @@ invisible(Sys.setlocale("LC_CTYPE", ".UTF-8"))
   sp$.tr_plain <- function(key, ...) key
   for (f in c("config/defaults.R", "tools/pkg_skeleton/R/io_helpers.R",
               "R/core/error_state.R",
-              "R/spatial/spatial_stats.R", "modules/spatial/mod_spatial_qc.R")) {
+              "tools/pkg_skeleton/R/spatial_stats.R", "modules/spatial/mod_spatial_qc.R")) {
     sys.source(file.path(ts_project_root(), f), envir = sp)
   }
   e$sp <- sp

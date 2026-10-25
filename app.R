@@ -105,7 +105,10 @@ source("tools/pkg_skeleton/R/complex_heatmap.R")  # PLOT-S4 : coeur ComplexHeatm
 # chargent desormais via le paquet (pkgload, cf. test-plotting-pkg-pilot.R).
 source("tools/pkg_skeleton/R/plot_dims.R")
 source("R/sc/sc_plotting.R")
-source("R/spatial/spatial_plotting.R")
+# D2 M5 lot 4 (2026-10-25) : spatial_plotting.R demenage dans l'arbre du
+# paquet (tools/pkg_skeleton/R/) — app.R le source() TOUJOURS, a la MEME
+# position d'ordre (zero changement de comportement).
+source("tools/pkg_skeleton/R/spatial_plotting.R")
 
 # ── Bloc 05 : R/sc (logique pure) ────────────────────────────────────────────
 source("R/sc/sc_helpers.R")
@@ -159,17 +162,24 @@ source("R/sc/sc_multi.R")             # MD-4 : conteneur sc_datasets & double je
 source("tools/pkg_skeleton/R/bulk_report_engine.R")
 source("tools/pkg_skeleton/R/bulk_import_engine.R")
 
-# ── Bloc 07 : R/spatial (logique pure) ───────────────────────────────────────
-source("R/spatial/spatial_async.R")
-source("R/spatial/spatial_io.R")
-source("R/spatial/spatial_multi.R")
-source("R/spatial/spatial_reference.R")
-source("R/spatial/spatial_niche.R")
-source("R/spatial/spatial_stats.R")
-source("R/spatial/spatial_deconv_prep.R")
-source("R/spatial/spatial_deconv_tasks.R")
-source("R/spatial/spatial_export.R")
-source("R/spatial/spatial_report.R")
+# ── Bloc 07 : R/spatial → paquet (logique pure) ─────────────────────────────
+# D2 M5 lot 4 (2026-10-25) : les 11 fichiers du domaine spatial vivent dans
+# l'arbre du paquet (tools/pkg_skeleton/R/) — app.R le source() TOUJOURS, aux
+# MEMES positions d'ordre (manifeste 67-77 : l'entree suit le chemin). Le
+# fournisseur manquant R/core/rdata_io.R (4 symboles rdata_*) reste source()
+# au Bloc 03 (app.R:74) et globalement par les tests (pattern dual-load,
+# docs/audits/d2_spatial_cartography.md). spatial_plotting.R est source au
+# Bloc 04, sa position historique.
+source("tools/pkg_skeleton/R/spatial_async.R")
+source("tools/pkg_skeleton/R/spatial_io.R")
+source("tools/pkg_skeleton/R/spatial_multi.R")
+source("tools/pkg_skeleton/R/spatial_reference.R")
+source("tools/pkg_skeleton/R/spatial_niche.R")
+source("tools/pkg_skeleton/R/spatial_stats.R")
+source("tools/pkg_skeleton/R/spatial_deconv_prep.R")
+source("tools/pkg_skeleton/R/spatial_deconv_tasks.R")
+source("tools/pkg_skeleton/R/spatial_export.R")
+source("tools/pkg_skeleton/R/spatial_report.R")
 
 # ── Bloc 08 : R/reports → paquet (compilateur consolidé) ─────────────────────
 # 4F / Stage 17 — COMPILATEUR d'etat + de provenance ; APRES tous les domaines
@@ -548,7 +558,7 @@ server <- function(input, output, session) {
     bulk_datasets = list(),  # MD-1 : jeux bulk nommés (comparaison multi-jeux)
     # — docs/contracts/BULK_MULTI_CONTRACT.md ; bulk_obj reste le jeu "actif"
 
-    spatial_obj = NULL,  # Spatial : liste (sketch, bpcells_dir, coords, ...) — voir R/utils_spatial_io.R
+    spatial_obj = NULL,  # Spatial : liste (sketch, bpcells_dir, coords, ...) — voir tools/pkg_skeleton/R/spatial_io.R (ex-R/utils_spatial_io.R)
     # — POINTE TOUJOURS vers l'echantillon "actif" (voir spatial_datasets ci-dessous)
     
     spatial_datasets = list(),

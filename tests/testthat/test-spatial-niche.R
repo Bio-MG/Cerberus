@@ -1,5 +1,5 @@
 # =============================================================================
-# test-spatial-niche.R — tests for R/spatial/spatial_niche.R
+# test-spatial-niche.R — tests for tools/pkg_skeleton/R/spatial_niche.R
 # =============================================================================
 # 19ᵉ incrément de la dette de conventions (2026-09-17).
 # Créé AVANT la conversion (règle 5 : test d'abord, rouge d'abord) ⇒ ce
@@ -18,7 +18,7 @@
 # sites sont profondément enfouis. **Les 5 sites sont prouvés à l'exécution.**
 # =============================================================================
 
-source_project_file("R/spatial/spatial_niche.R")
+source_project_file("tools/pkg_skeleton/R/spatial_niche.R")
 
 .nch_err <- function(expr) {
   tryCatch({ expr; NULL },
@@ -120,7 +120,7 @@ test_that("spatial_niche.R ne contribue aucun signalement C10", {
   e <- new.env(parent = globalenv())
   sys.source(file.path(ts_project_root(), "tools/check_conventions.R"), envir = e)
   before <- length(e$.REPORT$warns)
-  e$check_c10_error_style(file.path(ts_project_root(), "R/spatial/spatial_niche.R"))
+  e$check_c10_error_style(file.path(ts_project_root(), "tools/pkg_skeleton/R/spatial_niche.R"))
   w <- e$.REPORT$warns
   n <- length(w) - before
   if (n > 0L) {

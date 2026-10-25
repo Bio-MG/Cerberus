@@ -1,5 +1,5 @@
 # =============================================================================
-# test-spatial-stats.R — tests for R/spatial/spatial_stats.R
+# test-spatial-stats.R — tests for tools/pkg_skeleton/R/spatial_stats.R
 # =============================================================================
 # ⚠️ RENOMMÉ le 2026-09-17 (15ᵉ incrément de la dette de conventions).
 # L'ancien nom `test-utils_spatial_stats.R` était un **POINTEUR PÉRIMÉ** : le
@@ -25,7 +25,7 @@
 # formula or a shape/sign regression.
 # =============================================================================
 
-source_project_file("R/spatial/spatial_stats.R")
+source_project_file("tools/pkg_skeleton/R/spatial_stats.R")
 
 # --- 15ᵉ incrément : assertions sur le message ENTIER + la CLASSE -----------
 # ⚠️ Tous les `stop()` de ce fichier sont à UN SEUL argument ⇒ aucune troncature
@@ -242,7 +242,7 @@ test_that("spatial_stats.R ne contribue aucun signalement C10 (verrou source)", 
   e <- new.env(parent = globalenv())
   sys.source(file.path(ts_project_root(), "tools/check_conventions.R"), envir = e)
   before <- length(e$.REPORT$warns)
-  e$check_c10_error_style(file.path(ts_project_root(), "R/spatial/spatial_stats.R"))
+  e$check_c10_error_style(file.path(ts_project_root(), "tools/pkg_skeleton/R/spatial_stats.R"))
   w <- e$.REPORT$warns
   n <- length(w) - before
   if (n > 0L) {

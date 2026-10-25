@@ -278,7 +278,7 @@ test_that("dpi invalide => invalid_dpi", {
 # --- 4. Anti-regression : plus aucun ggsave() nu dans les fichiers migres -----
 
 .tsx_migrated <- c(
-  "R/spatial/spatial_export.R",
+  "tools/pkg_skeleton/R/spatial_export.R",  # ex-R/spatial/, D2 M5 lot 4
   "modules/bulk/mod_bulk_filter.R",
   "modules/bulk_de/mod_bulk_de_summary.R",
   "modules/bulk_de/mod_bulk_de_viz.R",

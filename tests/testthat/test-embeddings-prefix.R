@@ -5,10 +5,10 @@
 # -----------------------------------------------------------------------------
 # `Embeddings()` est re-exporte par Seurat ET par SeuratObject. Dans CE depot,
 # **aucun `library(Seurat)` inconditionnel** n'existe au boot de l'app :
-#   - `R/spatial/spatial_async.R:222` ne l'attache que dans une garde PARESSEUSE
+#   - `tools/pkg_skeleton/R/spatial_async.R:262` ne l'attache que dans une garde PARESSEUSE
 #     (`if (requireNamespace(...)) library(Seurat)`), donc APRES coup et selon
 #     le chemin ;
-#   - `R/sc/sc_export.R:47` et `R/spatial/spatial_export.R:555` sont DANS des
+#   - `R/sc/sc_export.R:47` et `tools/pkg_skeleton/R/spatial_export.R:555` sont DANS des
 #     chaines de caractères (scripts R generes) — ils n'attachent rien dans le
 #     processus de l'app.
 # => Un appel NU `Embeddings(...)` dans du CODE EXECUTE echoue a l'execution
@@ -34,12 +34,17 @@
 #     dans la chaine generee (elles DOIVENT rester nues : le script ecrit
 #     `library(Seurat)` ligne 47). On traite ce fichier a part, ligne par ligne.
 #   - tout commentaire (`#'`, `#`).
+# D2 M5 lot 4 (2026-10-25) : le balayage suit l'arbre applicatif —
+# tools/pkg_skeleton/R/ est inclus (le domaine spatial y vit desormais, meme
+# mecanique que le balayage %||% de test-pipe-or-null-unification.R).
 .ts_ep_files <- function() {
   root <- ts_project_root()
   f <- c(list.files(file.path(root, "R"), pattern = "\\.R$",
                     recursive = TRUE, full.names = TRUE),
          list.files(file.path(root, "modules"), pattern = "\\.R$",
-                    recursive = TRUE, full.names = TRUE))
+                    recursive = TRUE, full.names = TRUE),
+         list.files(file.path(root, "tools", "pkg_skeleton", "R"),
+                    pattern = "\\.R$", recursive = TRUE, full.names = TRUE))
   sort(normalizePath(f, winslash = "/", mustWork = FALSE))
 }
 

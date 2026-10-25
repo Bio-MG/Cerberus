@@ -4,7 +4,7 @@
 # =============================================================================
 # Phase E. `run_spatial_hotspots()` makes the same domain call as the human
 # `eventReactive`, on the frozen `k` and the RULE-resolved metric.
-# `R/spatial/spatial_stats.R` is untouched.
+# `tools/pkg_skeleton/R/spatial_stats.R` is untouched.
 #
 # THE CHOICE THIS FILE PINS, and it is the one that could most easily have been got
 # wrong: `n_results` COUNTS SIGNIFICANT SPOTS, not rows of the result table. The
@@ -29,7 +29,7 @@ source_project_file("tools/pkg_skeleton/R/io_helpers.R")            # %||%
 source_project_file("R/core/error_state.R")           # ts_error_state
 source_project_file("R/core/drive_allowlist.R")
 source_project_file("R/core/drive_watcher.R")
-source_project_file("R/spatial/spatial_stats.R")      # the domain
+source_project_file("tools/pkg_skeleton/R/spatial_stats.R")      # the domain
 source_project_file("modules/spatial/mod_spatial_qc.R")  # the code under test
 
 if (!exists(".tr", envir = globalenv()))
@@ -432,11 +432,11 @@ test_that("the human observer and the drive action move the SAME two slots", {
   saved[["nav_select"]] <- .spqc_patch("nav_select", function(...) invisible(TRUE))
   # The module's observers log through `spatial_log_path()` and build a progress
   # tracker through `create_reactive_tracker()`, both from
-  # R/spatial/spatial_async.R. This file does not source that file: the MIRROR
+  # tools/pkg_skeleton/R/spatial_async.R. This file does not source that file: the MIRROR
   # ENGINE is not what these tests are about, so both are stubbed to a throwaway
   # path and a no-op tracker rather than pulled in.
   # The module's Moran's I observer builds a progress tracker at init through
-  # `create_reactive_tracker()` (R/spatial/spatial_async.R), which this file does
+  # `create_reactive_tracker()` (tools/pkg_skeleton/R/spatial_async.R), which this file does
   # not source: it belongs to the MIRROR ENGINE and has no bearing on the action.
   # It is stubbed with the only shape the module uses - a zero-argument function
   # returning the log lines - rather than pulling the whole async file in.
@@ -538,7 +538,7 @@ test_that("the shared writer refuses anything that is not a table, and validates
 .spqc_reader_patches <- function() {
   saved <- .spqc_mock_domain(record = .spqc_record(n_sig = 6L))
   saved[["nav_select"]] <- .spqc_patch("nav_select", function(...) invisible(TRUE))
-  # The Moran's I observer builds a tracker from R/spatial/spatial_async.R, which
+  # The Moran's I observer builds a tracker from tools/pkg_skeleton/R/spatial_async.R, which
   # this file does not source (see the identical comment in the block above).
   saved[["create_reactive_tracker"]] <- .spqc_patch("create_reactive_tracker",
     function(session, log_file, interval_ms = 1000) function() character(0))

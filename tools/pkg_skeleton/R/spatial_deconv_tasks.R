@@ -1,12 +1,12 @@
 # =============================================================================
-# R/utils_spatial_deconv_tasks.R — Shared deconvolution mirai task body
+# tools/pkg_skeleton/R/spatial_deconv_tasks.R — Shared deconvolution mirai task body
 # =============================================================================
 # v1 (Phase 2 refactor): extracted from mod_spatial_deconv.R AND
 # mod_spatial_pipeline.R, which each carried a ~200-line verbatim copy of
 # the same 3-branch mirai body (rctd / labeltransfer / stdeconvolve).
 #
 # This file is PRELOADED into every mirai daemon (add to source_files in
-# init_spatial_daemons(), R/utils_spatial_async.R) so the function is
+# init_spatial_daemons(), tools/pkg_skeleton/R/spatial_async.R) so the function is
 # available inside the daemon without re-serialization.
 #
 # Contains ONLY the computation body — no Shiny reactivity, no ExtendedTask,
@@ -21,7 +21,7 @@
 #' Load a prepared reference artifact (manifest.rds → counts + cell_types)
 #'
 #' Called inside the daemon. Reads the small self-contained manifest written
-#' by prepare_reference_artifact() (R/utils_spatial_reference.R, main process).
+#' by prepare_reference_artifact() (tools/pkg_skeleton/R/spatial_reference.R, main process).
 #'
 #' @param manifest_path Character path to manifest.rds.
 #' @return list(counts = <dgCMatrix or BPCells IterableMatrix>, cell_types = <factor>).

@@ -51,7 +51,7 @@ source_project_file("R/core/drive_watcher.R")
 source_project_file("R/core/error_state.R")
 source_project_file("tools/pkg_skeleton/R/state.R")
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")
-source_project_file("R/spatial/spatial_io.R")
+source_project_file("tools/pkg_skeleton/R/spatial_io.R")
 source_project_file("modules/import/mod_import_spatial.R")
 
 .MISD_FILE <- "modules/import/mod_import_spatial.R"

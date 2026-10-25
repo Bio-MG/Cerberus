@@ -1,7 +1,7 @@
 # =============================================================================
-# R/utils_spatial_async.R — mirai daemon pool + reactivePoll progress tracking
+# tools/pkg_skeleton/R/spatial_async.R — mirai daemon pool + reactivePoll progress tracking
 # =============================================================================
-# v5 (vague 5 — Phase 6 stats preload): R/utils_spatial_stats.R (B1 neighborhood
+# v5 (vague 5 — Phase 6 stats preload): tools/pkg_skeleton/R/spatial_stats.R (B1 neighborhood
 # enrichment, B3 composition diff, B4 Getis-Ord hotspots, B6 Ripley's K) is now
 # part of the default `source_files` preloaded into every daemon, and
 # .verify_spatial_daemons() checks the 4 new functions are actually visible
@@ -17,7 +17,7 @@
 #
 # v4 (Chantier 3 refonte — daemon preload hardening). Two problems found on
 # top of the reference-pipeline architecture fix (see
-# R/utils_spatial_reference.R and mod_spatial_deconv.R):
+# tools/pkg_skeleton/R/spatial_reference.R and mod_spatial_deconv.R):
 #
 #   1. source_files used RELATIVE paths, resolved fresh inside each daemon
 #      by that daemon's OWN getwd() at the time source() runs -- if a daemon
@@ -50,7 +50,7 @@
 #      dependency is the point of this fix, not an incidental cleanup.
 #
 # v3 (Chantier 2 refonte — deconvolution daemon fix, superseded by v4 above):
-# `source_files` used to list ONLY R/utils_spatial_*.R (io/multi/niche).
+# `source_files` used to list ONLY tools/pkg_skeleton/R/spatial_*.R (io/multi/niche).
 # helpers_io.R and helpers_sc.R were added at that time to fix RCTD/Label
 # Transfer's daemon-side reference reload — v4 above removes that need
 # entirely instead, which is the more robust fix requested for Chantier 3.
@@ -149,13 +149,13 @@ LABEL_TRANSFER_TIMEOUT_MS <- if (exists("TS_LABEL_TRANSFER_TIMEOUT")) TS_LABEL_T
 # (reset_spatial_daemons()), exactement comme pour le preload v5.
 APP_DAEMON_SOURCE_FILES <- c(
   # --- Spatial (v5) ---
-  "R/spatial/spatial_async.R",
-  "R/spatial/spatial_io.R",
-  "R/spatial/spatial_multi.R",
-  "R/spatial/spatial_niche.R",
-  "R/spatial/spatial_deconv_prep.R",
-  "R/spatial/spatial_deconv_tasks.R",
-  "R/spatial/spatial_stats.R",
+  "tools/pkg_skeleton/R/spatial_async.R",
+  "tools/pkg_skeleton/R/spatial_io.R",
+  "tools/pkg_skeleton/R/spatial_multi.R",
+  "tools/pkg_skeleton/R/spatial_niche.R",
+  "tools/pkg_skeleton/R/spatial_deconv_prep.R",
+  "tools/pkg_skeleton/R/spatial_deconv_tasks.R",
+  "tools/pkg_skeleton/R/spatial_stats.R",
   # --- SC : abondance differentielle Milo (4E-4) — ORDRE : config, core, domaine ---
   # D2 M5 lot 1 : les 3 fournisseurs demenagent dans l'arbre du paquet — les
   # chemins du preload daemon suivent (ordre interne inchangé).
@@ -385,9 +385,9 @@ spatial_daemon_diagnostics_text <- function() {
           has_write_log = exists("write_mirai_log", mode = "function"),
           has_integrate = exists("integrate_spatial_sketches", mode = "function"),
           has_niches    = exists("compute_spatial_niches", mode = "function"),
-          # v5 (vague 5 — Phase 6 stats): confirms R/utils_spatial_stats.R
+          # v5 (vague 5 — Phase 6 stats): confirms tools/pkg_skeleton/R/spatial_stats.R
           # actually preloaded without error -- see that file's header.
-          # NAMES MUST MATCH EXACTLY what R/utils_spatial_stats.R defines —
+          # NAMES MUST MATCH EXACTLY what tools/pkg_skeleton/R/spatial_stats.R defines —
           # a previous draft of that file used different names
           # (spatial_composition_diff/spatial_hotspots_gi/spatial_ripley_k),
           # which is what produced a "has_enrichment; has_ripley missing"
@@ -461,7 +461,7 @@ stop_spatial_daemons <- function() {
 #' processes, re-running the same post-init verification as a normal
 #' startup. Call this from the UI ("Reinitialiser les daemons") whenever a
 #' task fails unexpectedly, times out, or the badge shows "degrade" — this
-#' is ALSO the fix for a pool started before R/utils_spatial_stats.R
+#' is ALSO the fix for a pool started before tools/pkg_skeleton/R/spatial_stats.R
 #' existed in source_files (see v5 changelog): init_spatial_daemons() alone
 #' will not reload an already-`daemons_ready` pool, but reset always does.
 #'

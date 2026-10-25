@@ -215,12 +215,15 @@ test_that("mod_sc.R mounts panel 9b + tab without touching the legacy panel 9", 
 test_that("app.R sources the report domain AFTER all domain files", {
   # M5 lot 2 : les 4 fichiers vivent dans tools/pkg_skeleton/R/ — app.R le
   # source() TOUJOURS, au MEME ordre de position (bloc 08, manifeste 77-80).
+  # M5 lot 4 : spatial_report.R suit le domaine spatial dans le paquet — la
+  # position de reference suit le chemin (meme bloc 07, meme ordre).
   app_src <- .rep_report_src("app.R")
-  pos_spatial <- regexpr('source("R/spatial/spatial_report.R")', app_src, fixed = TRUE)
+  pos_spatial <- regexpr('source("tools/pkg_skeleton/R/spatial_report.R")', app_src, fixed = TRUE)
   pos_collector <- regexpr('source("tools/pkg_skeleton/R/report_collector.R")',
                            app_src, fixed = TRUE)
   pos_module <- regexpr('source("modules/sc/mod_sc_report_consolidated.R")',
                         app_src, fixed = TRUE)
+  expect_gt(pos_spatial, 0)
   expect_gt(pos_collector, pos_spatial)
   expect_gt(pos_module, pos_collector)
   for (f in c("report_validator.R", "report_render.R", "report_bundle.R")) {

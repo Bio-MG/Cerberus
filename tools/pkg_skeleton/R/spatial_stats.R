@@ -1,8 +1,8 @@
 # =============================================================================
-# R/utils_spatial_stats.R — Spatial statistics (Phase 6 / vague 4-5)
+# tools/pkg_skeleton/R/spatial_stats.R — Spatial statistics (Phase 6 / vague 4-5)
 # =============================================================================
 # CONFIRMED CANONICAL (vague 5): this is the file actually preloaded by
-# init_spatial_daemons() (R/utils_spatial_async.R's source_files) and the
+# init_spatial_daemons() (tools/pkg_skeleton/R/spatial_async.R's source_files) and the
 # one .verify_spatial_daemons() checks against (has_enrichment/has_hotspots/
 # has_diffcomp/has_ripley). If your running app still reports "has_enrichment;
 # has_ripley" missing, the daemon pool was started with an EARLIER/partial

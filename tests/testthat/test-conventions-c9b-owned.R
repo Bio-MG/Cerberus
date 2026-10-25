@@ -173,25 +173,29 @@ test_that("C9b : les fichiers de la mesure INITIALE sont TOUS hors population C9
   # lot C9. On ne verrouille donc en (2) que les fichiers encore SANS test
   # eponyme, et on assere que le solde est passe a la population C9b.
   flagged <- .c9b_flagged(.c9b_population())
-  files <- c("R/sc/sc_export.R",
-             "R/spatial/spatial_deconv_prep.R",
-             "R/spatial/spatial_export.R",
-             "R/spatial/spatial_report.R")
-  # (1) INVARIANTE : aucun des 4 n'est signale par C9b, a aucun moment. Un
-  #     fichier sans test eponyme est HORS population ; un fichier qui en a un
-  #     et dont le code est cite n'est PAS signale non plus ⇒ vrai dans les 2 cas.
+  files <- c("R/sc/sc_export.R")
+  # (1) INVARIANTE : aucun des fichiers nommes n'est signale par C9b, a aucun
+  #     moment. Un fichier sans test eponyme est HORS population ; un fichier
+  #     qui en a un et dont le code est cite n'est PAS signale non plus ⇒ vrai
+  #     dans les 2 cas. ⚠️ D2 M5 LOT 4 (2026-10-25) : les 3 fichiers spatial de
+  #     la liste historique (deconv_prep, export, report) demenagent dans le
+  #     paquet avec le reste du domaine — ils sortent de la population C9b et
+  #     leur solde est asseré au bloc (2b-ter) ci-dessous (meme forme que le
+  #     temoin bulk_gsva du lot 3).
   expect_false(any(files %in% flagged),
                info = paste(intersect(files, flagged), collapse = ", "))
   # (2) ETAT : ceux qui n'ont TOUJOURS pas de test eponyme restent portes par C9.
   #     `sc_export.R` est exclu nommement : §2dd lui a ecrit `test-sc-export.R`.
-  #     `spatial_report.R` est exclu nommement : §2df lui a ecrit
-  #     `test-spatial-report.R` (la prediction de ce commentaire s'est realisee
-  #     une 2ᵉ fois — la reaction a bien ete de le retirer de la liste).
+  #     ⚠️ D2 M5 LOT 4 : `spatial_deconv_prep.R` et `spatial_export.R` quittent
+  #     cette liste A LEUR TOUR (le domaine R/spatial ENTIER — 11 fichiers —
+  #     demenage dans tools/pkg_skeleton/R/). Successeurs mesurés (probe du
+  #     13:59, liste C9 = 13) : `R/core/rdata_io.R` et `R/sc/sc_state.R` —
+  #     toujours sans test eponyme, donc portes par C9.
   #     ⚠️ Si un futur lot paie C9 pour l'un des 2 restants, ce test rougira —
   #     et c'est VOULU : la reaction est de le retirer de cette liste et
   #     d'ajouter une ligne au solde (c'est exactement ce qui s'est passe ici).
-  encore_c9 <- c("R/spatial/spatial_deconv_prep.R",
-                 "R/spatial/spatial_export.R")
+  encore_c9 <- c("R/core/rdata_io.R",
+                 "R/sc/sc_state.R")
   for (f in encore_c9) {
     expect_true(f %in% .c9_flagged(.c9b_abs(f)),
                 info = f)
@@ -207,12 +211,16 @@ test_that("C9b : les fichiers de la mesure INITIALE sont TOUS hors population C9
   expect_false("R/sc/sc_export.R" %in% flagged)
   # (2b-bis) 2ᵉ changement de camp, meme forme : §2df a ecrit
   #      `test-spatial-report.R` ⇒ `spatial_report.R` quitte C9 a son tour.
-  #      ⚠️ La clause (1) ci-dessus reste VRAIE pour lui : maintenant qu'il a un
-  #      test eponyme ET que son code est cite, C9b ne le signale pas non plus.
+  #      ⚠️ D2 M5 LOT 4 (2026-10-25) : le fichier a DEMENAGE dans le paquet
+  #      (tools/pkg_skeleton/R/spatial_report.R, ex-R/spatial/) et sort de la
+  #      population C9b (collectee sur R/ uniquement). La couverture REELLE
+  #      reste epinglee ci-dessous : le garde suit le fichier au paquet (meme
+  #      mecanique que le temoin bulk_gsva du lot 3).
   #      C'est le sens de l'INVARIANTE — elle tient aux DEUX etats.
-  abs_report <- .c9b_abs("R/spatial/spatial_report.R")
-  expect_false("R/spatial/spatial_report.R" %in% .c9_flagged(abs_report))
-  expect_true(abs_report %in% .c9b_population())
+  abs_report <- file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "spatial_report.R")
+  expect_true(file.exists(abs_report),
+              info = "spatial_report.R absent du paquet apres extraction M5 lot 4")
+  expect_length(.c9_flagged(abs_report), 0L)
   expect_false("R/spatial/spatial_report.R" %in% flagged)
   # (2c-bis) COUVERTURE REELLE, ici aussi : `spatial_report.R` est CITE, pas
   #      seulement « sorti de C9 » par un `touch`.
@@ -239,23 +247,24 @@ test_that("C9b : les fichiers de la mesure INITIALE sont TOUS hors population C9
 })
 
 test_that("C9b : sans test eponyme, C9b se TAIT — c'est C9 qui parle (non-superposition)", {
-  # Direction 4, cas concret. `R/spatial/spatial_export.R` est un trou REEL
-  # (ses 8 fonctions possedees ne sont citees nulle part) mais il n'a aucun test
-  # eponyme : C9 le signale deja, et l'y ajouter produirait un DOUBLON — pas une
-  # information. C'est la clause que §14.2 a posee, et elle est ici verrouillee.
-  # ⚠️ Ce bloc illustrait `spatial_report.R` jusqu'au §2df : ce lot lui a ecrit
-  # `test-spatial-report.R`, donc il n'est PLUS un exemple du cas « sans test
-  # eponyme ». Le prendre a nouveau rougirait — remplacer l'EXEMPLE est la
-  # reaction attendue, exactement comme pour la clause (2).
-  expect_false("R/spatial/spatial_export.R" %in% .c9b_flagged(.c9b_population()))
+  # Direction 4, cas concret. ⚠️ D2 M5 LOT 4 (2026-10-25) : l'exemple historique
+  # `R/spatial/spatial_export.R` (8 fonctions possedees citees nulle part) a
+  # demenage dans le paquet avec le reste du domaine et sort des deux
+  # populations. Le cas est rejoue sur un successeur MESURE du probe du 13:59 :
+  # `R/core/rdata_io.R` — trou REEL (ses fonctions possedees ne sont citees
+  # nulle part) mais aucun test eponyme : C9 le signale deja, et l'y ajouter
+  # produirait un DOUBLON — pas une information. C'est la clause que §14.2 a
+  # posee, et elle est ici verrouillee.
+  expect_false("R/core/rdata_io.R" %in% .c9b_flagged(.c9b_population()))
   # Temoin de VALIDITE : C9 doit bien le signaler, LUI (sinon l'assertion
   # ci-dessus serait vraie pour une trivialite — fichier inexistant, etc.).
-  expect_true("R/spatial/spatial_export.R" %in% .c9_flagged(.c9b_abs("R/spatial/spatial_export.R")))
+  expect_true("R/core/rdata_io.R" %in% .c9_flagged(.c9b_abs("R/core/rdata_io.R")))
   # Et la BORNE inverse, qui rend l'exemple honnete : le fichier qui VIENT de
   # recevoir son test eponyme n'est plus, lui, un cas de non-superposition —
   # il est hors de la classe. Sans cette assertion, on pourrait « reparer » le
-  # test en gardant un exemple perime.
-  expect_false("R/spatial/spatial_report.R" %in% .c9_flagged(.c9b_abs("R/spatial/spatial_report.R")))
+  # test en gardant un exemple perime. (spatial_report.R, l'ancienne borne
+  # inverse, vit desormais dans le paquet — voir le bloc (2b-bis) ci-dessus.)
+  expect_length(.c9_flagged(.c9b_abs("R/sc/sc_export.R")), 0L)
 })
 
 # =============================================================================
@@ -330,7 +339,7 @@ test_that("C9b : un fichier ENTIEREMENT exerce n'est pas signale (temoin de trav
 # =============================================================================
 # DIRECTION 5 — le plafond de la population (invariant prospectif)
 # =============================================================================
-test_that("C9b : la population signalee est un PLAFOND a 22, jamais un compte exact", {
+test_that("C9b : la population signalee est un PLAFOND a 18, jamais un compte exact", {
   # Plafond, pas egalite : le compte doit pouvoir BAISSER quand un test est
   # ecrit, mais JAMAIS remonter. Un plafond ecrit en `==` deviendrait rouge au
   # premier trou bouge — piege paye au §2cx sur `test-conventions-c10-scope.R`.
@@ -339,24 +348,28 @@ test_that("C9b : la population signalee est un PLAFOND a 22, jamais un compte ex
   # 🔴 La valeur precedente (37, 43e increment) etait FAUSSE DES SA POSE : la
   # mesure rejouee SUR LE COMMIT MEME qui l'a ecrite (`a53dc82`) rend 39, et la
   # liste des 39 fichiers y est byte-identique a celle d'aujourd'hui. Le pin et
-  # son commentaire ont ete ecrits « 37 » alors que la sonde disait 39 : le test
-  # est rouge depuis le jour de sa naissance, sans rapport avec un changement de
-  # `R/` (mesure `git archive` + `diff` de listes, pas deduction). Lecon : un
-  # plafond se MESURE sur une ligne de base EXTRAITE, jamais ne se recopie.
-  # ⚠️ D2 M5 LOT 3 (2026-10-25) : les 18 fichiers de R/bulk demenagent dans
+  # son commentaire ont ete ecrits « 37 » alors que la sonde disait 39 : le
+  # test est rouge depuis le jour de sa naissance, sans rapport avec un
+  # changement de `R/` (mesure `git archive` + `diff` de listes, pas
+  # deduction). Lecon : un plafond se MESURE sur une ligne de base EXTRAITE,
+  # jamais ne se recopie.
+  # ⚠️ D2 M5 LOT 3 (2026-10-25) : 33 - 12 (bulk) + 1 (etranger CERBERUS) = 22 ;
+  # plafond 39 -> 22.
+  # ⚠️ D2 M5 LOT 4 (2026-10-25) : les 11 fichiers de R/spatial demenagent dans
   # tools/pkg_skeleton/R/ et quittent la population C9b (R/ uniquement). Mesure
-  # exacte rejouee AVANT le deplacement : 33 files flagges dont 12 bulk —
-  # bulk_batch_qc, bulk_gene_sets, bulk_helpers, bulk_import_engine, bulk_merge,
-  # bulk_multi, bulk_multi_compare, bulk_network, bulk_pattern, bulk_provenance,
-  # bulk_wgcna, dose_response (bulk_report_engine EXCLU : porte par C9, clause de
-  # non-superposition ; bulk_batch_metrics et bulk_gsva non flagges). ⚠️
-  # DECOMPOSITION EN DEUX SENS, au 13:04 : un fichier ETRANGER au lot est apparu
-  # EN VOL (`R/core/cerberus_handoff.R`, non suivi, ecrit 13:01 par la session
-  # CERBERUS) et entre dans la population C9b (+1). Solde net du lot :
-  # 33 - 12 (bulk) + 1 (etranger) = 22. Le plafond suit : 39 -> 22. Le laisser
-  # a 39 autoriserait un retour en arriere SILENCIEUX de 17 fichiers.
+  # exacte rejouee AVANT le deplacement (probe du 13:59) : 22 files flagges
+  # dont 4 spatial — spatial_io, spatial_reference, spatial_stats,
+  # spatial_deconv_tasks (spatial_plotting, spatial_multi, spatial_niche,
+  # spatial_report non flagges ; spatial_async, spatial_deconv_prep,
+  # spatial_export portes par C9, clause de non-superposition). La dette des 4
+  # sortants N'EST PAS payee : elle SORT de la population avec le domaine — la
+  # couverture est desormais epinglee par les tests stricts retargetes
+  # (test-spatial-io/reference/stats/deconv-tasks, source_project_file au
+  # nouveau chemin). Aucun etranger en vol a la mesure (check_writers 13:51 :
+  # aucun battement etranger). Le plafond suit : 22 -> 18. Le laisser a 22
+  # autoriserait un retour en arriere SILENCIEUX de 4 fichiers.
   flagged <- .c9b_flagged(.c9b_population())
-  expect_true(length(flagged) <= 22L,
+  expect_true(length(flagged) <= 18L,
               info = paste(flagged, collapse = ", "))
   expect_gt(length(flagged), 0L)
 })

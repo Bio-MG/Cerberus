@@ -102,7 +102,7 @@ test_that("sous-processus qui ne charge QUE le paquet (renv auto-actif)", {
                    info = "l'appel reel ne rend pas le plancher 320L hors session")
 })
 
-test_that("frontiere : le paquet contient EXACTEMENT 6 plotting + 4 fournisseurs core + 4 reports + 18 bulk (M5 lot 3)", {
+test_that("frontiere : le paquet contient EXACTEMENT 6 plotting + 4 fournisseurs core + 4 reports + 18 bulk + 11 spatial (M5 lot 4)", {
   # M4-pilote : plot_dims.R seul. M4 suite (2026-10-25, un seul lot coherent) :
   # les 5 restants suivent (palettes, theme, export, datatable, complex_heatmap
   # — l'ordre de deplacement par lot est libre puisque le lot est ATOMIQUE,
@@ -126,6 +126,11 @@ test_that("frontiere : le paquet contient EXACTEMENT 6 plotting + 4 fournisseurs
   # gardent leurs replis exists(inherits=TRUE) : sous globalenv (app.R et les
   # tests), config/thresholds.R reste visible ; sous namespace, les replis
   # prennent le relais et sont EGAUX aux valeurs config (verifie lot 3).
+  # M5 LOT 4 (2026-10-25, cartographie docs/audits/d2_spatial_cartography.md) :
+  # le domaine R/spatial ENTIER (11 fichiers) suit — meme regime : tests sur
+  # source_project_file() au nouveau chemin ; le fournisseur manquant
+  # R/core/rdata_io.R (4 symboles rdata_*, spatial_reference.R) reste sourcé
+  # globalement par les tests et par app.R:74 (pattern dual-load, mesuré).
   # L'egalite EXACTE reste l'anti-derive de perimetre : rien n'entre hors lot.
   rdir <- file.path(ts_project_root(), "tools", "pkg_skeleton", "R")
   expect_true(dir.exists(rdir), info = "tools/pkg_skeleton/R absent")
@@ -142,8 +147,13 @@ test_that("frontiere : le paquet contient EXACTEMENT 6 plotting + 4 fournisseurs
                           "bulk_multi.R", "bulk_multi_compare.R", "bulk_network.R",
                           "bulk_pattern.R", "bulk_provenance.R", "bulk_report_engine.R",
                           "bulk_signatures.R", "bulk_survival.R", "bulk_wgcna.R",
-                          "dose_response.R")),
-                   info = "le perimetre du paquet doit etre exactement 6 plotting + 4 fournisseurs R/core + 4 reports + 18 bulk (M5 lot 3)")
+                          "dose_response.R",
+                          "spatial_async.R", "spatial_deconv_prep.R",
+                          "spatial_deconv_tasks.R", "spatial_export.R",
+                          "spatial_io.R", "spatial_multi.R", "spatial_niche.R",
+                          "spatial_plotting.R", "spatial_reference.R",
+                          "spatial_report.R", "spatial_stats.R")),
+                   info = "le perimetre du paquet doit etre exactement 6 plotting + 4 fournisseurs R/core + 4 reports + 18 bulk + 11 spatial (M5 lot 4)")
 })
 
 # ─── M4 suite (2026-10-25) : les 4 autres fichiers du domaine ────────────────
