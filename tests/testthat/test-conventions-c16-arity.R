@@ -5,7 +5,7 @@
 # garde qui affiche « 0 erreur » ne prouve rien si on ne l'a jamais vu au rouge.
 #
 # Défaut RÉEL (commit `c40121f`, corrigé par `ce6691a`) : en convertissant les 19
-# `stop()` de R/bulk/bulk_helpers.R vers la forme classée, TROIS sites dont le
+# `stop()` de tools/pkg_skeleton/R/bulk_helpers.R vers la forme classée, TROIS sites dont le
 # message tenait en PLUSIEURS arguments ont vu leur message **TRONQUÉ à
 # l'exécution**. `stop()` **CONCATÈNE** ses arguments ; `errorCondition(message,
 # ...)` **NON** — les suivants deviennent des CHAMPS de la condition, pas du

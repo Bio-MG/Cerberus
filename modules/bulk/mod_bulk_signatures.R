@@ -2,7 +2,7 @@
 # mod_bulk_signatures.R — Bulk V2 M3 : scores de SIGNATURES CELLULAIRES
 # (MSigDB Hallmark / PROGENy / DoRothEA / RDS local) — UI + orchestration.
 # =============================================================================
-# Logique pure : R/bulk/bulk_signatures.R (contrat gelé). Le moteur de scoring
+# Logique pure : tools/pkg_skeleton/R/bulk_signatures.R (contrat gelé). Le moteur de scoring
 # est réutilisé du M2 (compute_pathway_scores) ou decoupleR (ulm).
 # GARDE MISSION §M3 : l'avertissement « scores relatifs » est AFFICHÉ en
 # PERMANENCE dans l'UI et porté par le résultat + chaque export.
@@ -11,7 +11,7 @@
 # =============================================================================
 # MCP drive action `bulk-signatures-run_signatures` (Phase C).
 #
-# WHY HERE AND NOT IN R/bulk/bulk_signatures.R: that file's exported surface is
+# WHY HERE AND NOT IN tools/pkg_skeleton/R/bulk_signatures.R: that file's exported surface is
 # FROZEN by tests/testthat/test-bulk-signatures-contract-freeze.R, which asserts
 # that every non-dot top-level name equals `bulk_signatures_public_api()` plus the
 # disclaimer. A wrapper added there would be a contract change; the private,

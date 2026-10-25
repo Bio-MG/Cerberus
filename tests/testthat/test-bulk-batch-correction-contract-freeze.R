@@ -11,11 +11,11 @@
 # =============================================================================
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")
 source_project_file("R/core/validation.R")
-source_project_file("R/bulk/bulk_batch_qc.R")
-source_project_file("R/bulk/batch_correction.R")
+source_project_file("tools/pkg_skeleton/R/bulk_batch_qc.R")
+source_project_file("tools/pkg_skeleton/R/batch_correction.R")
 
 .bc_src <- function() {
-  paste(readLines(file.path(ts_project_root(), "R/bulk/batch_correction.R")),
+  paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/batch_correction.R")),
         collapse = "\n")
 }
 
@@ -63,7 +63,7 @@ test_that("public API surface is frozen (names + signatures)", {
   # Piège de signature hérité (PLOT-S1/S2) : tr reste EN DERNIER.
   expect_identical(tail(names(formals(plot_batch_correction_pca)), 1L), "tr")
   # Helpers internes préfixés d'un point, jamais publics.
-  defined <- .bc_top_level_names("R/bulk/batch_correction.R")
+  defined <- .bc_top_level_names("tools/pkg_skeleton/R/batch_correction.R")
   public <- setdiff(defined, grep("^\\.", defined, value = TRUE))
   expect_setequal(public, bulk_batch_correction_public_api())
 })
@@ -110,7 +110,7 @@ test_that("the raw-counts guard is the exact mirror of the transformed guard", {
   expect_error(bulk_assert_transformed_matrix(raw), class = "bulk_batch_qc_error")
   # Même seuil de 95 % appliqué dans les deux sens.
   expect_match(.bc_src(), "0.95", fixed = TRUE)
-  qc_src <- paste(readLines(file.path(ts_project_root(), "R/bulk/bulk_batch_qc.R")),
+  qc_src <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/bulk_batch_qc.R")),
                   collapse = "\n")
   expect_match(qc_src, "0.95", fixed = TRUE)
 })
@@ -135,8 +135,8 @@ test_that("R file stays pure and reuses existing APIs", {
 })
 
 # ── Autonomie ggplot2 / patchwork : appels toujours préfixés ───────────────
-test_that("R/bulk/batch_correction.R prefixes every ggplot2 and patchwork call", {
-  code <- readLines(file.path(ts_project_root(), "R/bulk/batch_correction.R"),
+test_that("tools/pkg_skeleton/R/batch_correction.R prefixes every ggplot2 and patchwork call", {
+  code <- readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/batch_correction.R"),
                     warn = FALSE, encoding = "UTF-8")
   code <- grep("^\\s*#", code, value = TRUE, invert = TRUE)   # on ignore les commentaires
   bare <- "(^|[^.[:alnum:]_])(ggplot|aes|geom_[a-z_]+|labs|theme|theme_[a-z]+|scale_[a-z_]+|element_[a-z]+|wrap_plots|plot_annotation)[[:space:]]*\\("

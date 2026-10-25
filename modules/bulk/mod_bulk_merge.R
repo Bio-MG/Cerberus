@@ -2,7 +2,7 @@
 # mod_bulk_merge.R — NEW-2 : fusion de jeux bulk ("Merge Data") — UI +
 # orchestration. Panneau « Multi-jeux — Fusion de jeux » + onglet de sortie.
 # =============================================================================
-# Logique pure : R/bulk/bulk_merge.R (contrat gelé BULK_MERGE_CONTRACT.md).
+# Logique pure : tools/pkg_skeleton/R/bulk_merge.R (contrat gelé BULK_MERGE_CONTRACT.md).
 # Le module écrit UNIQUEMENT global_data$bulk_obj (comportement d'un import —
 # contrat §7) : il ne reçoit pas l'état réactif du pipeline (shared state),
 # n'écrit jamais le conteneur bulk_datasets. Les étages (Filtrage -> DE) se

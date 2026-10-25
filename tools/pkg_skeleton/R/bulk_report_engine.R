@@ -1,5 +1,5 @@
 # =============================================================================
-# R/bulk/bulk_report_engine.R — Bulk report generation engine
+# tools/pkg_skeleton/R/bulk_report_engine.R — Bulk report generation engine
 # (extracted from mod_bulk_report.R, Block 9 refactor)
 # =============================================================================
 # Pure functions: no Shiny reactivity. Called by mod_bulk_report_server().

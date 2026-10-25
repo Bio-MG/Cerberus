@@ -1,5 +1,5 @@
 # =============================================================================
-# R/bulk/bulk_wgcna.R — Réseaux de co-expression WGCNA SAFE-MODE
+# tools/pkg_skeleton/R/bulk_wgcna.R — Réseaux de co-expression WGCNA SAFE-MODE
 # (roadmap Bulk V2, Milestone 4 — chantier Flux E).
 # =============================================================================
 # GARDES DE LA MISSION (§2.4 — non négociables) :

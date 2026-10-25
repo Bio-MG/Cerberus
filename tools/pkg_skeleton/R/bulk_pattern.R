@@ -1,11 +1,11 @@
 # =============================================================================
-# R/bulk/bulk_pattern.R — Clustering de profils d'expression (STAT-S3, MVP)
+# tools/pkg_skeleton/R/bulk_pattern.R — Clustering de profils d'expression (STAT-S3, MVP)
 # =============================================================================
 # Fiche ROADMAP_presentation_stats.md §3 (STAT-S3), re-mesurée le 2026-09-13 :
 # `shared_rv$vst_mat` (étape 1) + métadonnées `global_data$bulk_obj$metadata`
 # + listes de gènes DE (`shared_rv$contrasts`) — même pattern que
 # mod_bulk_pathways. NOTE d'adaptation : la fiche plaçait le moteur dans
-# R/core/ ; l'arbre actuel place les moteurs bulk dans R/bulk/ (bulk_wgcna.R,
+# R/core/ ; l'arbre actuel place les moteurs bulk dans tools/pkg_skeleton/R/ (bulk_wgcna.R,
 # bulk_gsva.R, bulk_survival.R) — alignement sur l'existant.
 #
 # MVP kmeans, ZÉRO dépendance nouvelle :

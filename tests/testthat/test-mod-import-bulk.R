@@ -8,7 +8,7 @@
 # Classe : `bulk_import_error`. Le dépôt qualifie déjà l'import par son OBJET
 # (`rdata_import_error`, `communication_import_error`) ; le domaine ici est
 # l'import **bulk**, et le nom s'aligne sur la famille `bulk_*` (`bulk_de_error`,
-# `bulk_gsva_error`, `bulk_merge_error`) — `R/bulk/bulk_import_engine.R` pourra
+# `bulk_gsva_error`, `bulk_merge_error`) — `tools/pkg_skeleton/R/bulk_import_engine.R` pourra
 # reprendre la même classe.
 #
 # ⚠️ PREUVE D'EXÉCUTION PARTIELLE, MESURÉE (pas supposée). Les 10 sites vivent
@@ -46,7 +46,7 @@ source_project_file("modules/import/mod_rdata_picker.R")
 # MESURÉ : sans cette ligne, le bloc per_sample lève
 # « could not find function ".infer_sample_id" » — un test qui ne charge pas
 # ses dépendances ne teste pas le module, il teste son ordre de chargement.
-source_project_file("R/bulk/bulk_import_engine.R")
+source_project_file("tools/pkg_skeleton/R/bulk_import_engine.R")
 source_project_file("modules/import/mod_import_bulk.R")
 source_project_file("tools/check_conventions.R")
 

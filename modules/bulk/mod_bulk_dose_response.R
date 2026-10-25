@@ -1,7 +1,7 @@
 # =============================================================================
 # modules/bulk/mod_bulk_dose_response.R — Dose–réponse / time-course (NEW-1)
 # =============================================================================
-# UI + orchestration UNIQUEMENT : tout le calcul vit dans R/bulk/dose_response.R
+# UI + orchestration UNIQUEMENT : tout le calcul vit dans tools/pkg_skeleton/R/dose_response.R
 # (contrat gelé : docs/contracts/BULK_DOSE_RESPONSE_CONTRACT.md).
 #
 # Sources de gènes : résultat DE du contraste actif (up / down / all_sig),

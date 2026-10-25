@@ -13,10 +13,10 @@ source_project_file("tools/pkg_skeleton/R/provenance.R")
 # D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
 # (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
 load_project_pkg()
-source_project_file("R/bulk/bulk_batch_qc.R")
-source_project_file("R/bulk/bulk_gsva.R")
-source_project_file("R/bulk/bulk_gene_sets.R")
-source_project_file("R/bulk/bulk_signatures.R")
+source_project_file("tools/pkg_skeleton/R/bulk_batch_qc.R")
+source_project_file("tools/pkg_skeleton/R/bulk_gsva.R")
+source_project_file("tools/pkg_skeleton/R/bulk_gene_sets.R")
+source_project_file("tools/pkg_skeleton/R/bulk_signatures.R")
 
 .bsig_top_level_names <- function(relpath) {
   exprs <- parse(file.path(ts_project_root(), relpath))
@@ -55,7 +55,7 @@ test_that("public API surface is frozen (names + signatures)", {
     want <- names(expected_api[[fn_name]]); if (is.null(want)) want <- character(0)
     expect_setequal(got, want)
   }
-  defined <- .bsig_top_level_names("R/bulk/bulk_signatures.R")
+  defined <- .bsig_top_level_names("tools/pkg_skeleton/R/bulk_signatures.R")
   public <- setdiff(defined, grep("^\\.", defined, value = TRUE))
   expect_setequal(public, c(bulk_signatures_public_api(),
                             "BULK_SIGNATURES_DISCLAIMER"))
@@ -88,7 +88,7 @@ test_that("relative-scores disclaimer is frozen in result, export and UI", {
 
 # ── Ressources LOCALES (jamais réseau) ─────────────────────────────────────
 test_that("resources are local-only (message cites no download; no url fetch)", {
-  src <- paste(readLines(file.path(ts_project_root(), "R/bulk/bulk_signatures.R"),
+  src <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/bulk_signatures.R"),
                          encoding = "UTF-8"), collapse = "\n")
   expect_false(grepl("download\\.file|url\\(|curl::|httr::|download_file", src),
                info = "appel réseau dans le domaine signatures")
@@ -102,7 +102,7 @@ test_that("resources are local-only (message cites no download; no url fetch)", 
 
 # ── Réutilisation du moteur M2 + erreurs re-classées ───────────────────────
 test_that("reuses M2 engine and re-classes errors (no duplication)", {
-  src <- paste(readLines(file.path(ts_project_root(), "R/bulk/bulk_signatures.R"),
+  src <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/bulk_signatures.R"),
                          encoding = "UTF-8"), collapse = "\n")
   expect_match(src, "compute_pathway_scores(", fixed = TRUE)
   expect_match(src, "bulk_filter_gene_sets(", fixed = TRUE)
@@ -114,7 +114,7 @@ test_that("reuses M2 engine and re-classes errors (no duplication)", {
 
 # ── États d'erreur gelés ───────────────────────────────────────────────────
 test_that("error states are frozen", {
-  src <- paste(readLines(file.path(ts_project_root(), "R/bulk/bulk_signatures.R")),
+  src <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/bulk_signatures.R")),
                collapse = "\n")
   states <- regmatches(src, gregexpr('state = "[a-z_]+"', src))[[1]]
   expect_setequal(unique(states),
@@ -150,7 +150,7 @@ test_that("config thresholds are reused from M2", {
 
 # ── Pureté Shiny du fichier R/ ─────────────────────────────────────────────
 test_that("R file stays pure (no Shiny reactivity)", {
-  src <- paste(readLines(file.path(ts_project_root(), "R/bulk/bulk_signatures.R")),
+  src <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/bulk_signatures.R")),
                collapse = "\n")
   expect_false(grepl("shiny::|reactive\\(|renderPlot|observeEvent\\(|showNotification\\(|moduleServer",
                      src))
@@ -173,13 +173,13 @@ test_that("modules consume the contract", {
   expect_match(parent_src, "mod_bulk_signatures_server(", fixed = TRUE)
   app_src <- paste(readLines(file.path(ts_project_root(), "app.R"),
                              encoding = "UTF-8"), collapse = "\n")
-  expect_match(app_src, 'source("R/bulk/bulk_signatures.R")', fixed = TRUE)
+  expect_match(app_src, 'source("tools/pkg_skeleton/R/bulk_signatures.R")', fixed = TRUE)
   expect_match(app_src, 'source("modules/bulk/mod_bulk_signatures.R")', fixed = TRUE)
 })
 
 # ── Autonomie ggplot2 ──────────────────────────────────────────────────────
-test_that("R/bulk/bulk_signatures.R has no bare ggplot2 calls", {
-  path <- file.path(ts_project_root(), "R/bulk/bulk_signatures.R")
+test_that("tools/pkg_skeleton/R/bulk_signatures.R has no bare ggplot2 calls", {
+  path <- file.path(ts_project_root(), "tools/pkg_skeleton/R/bulk_signatures.R")
   code <- readLines(path, warn = FALSE, encoding = "UTF-8")
   code <- grep("^\\s*#", code, value = TRUE, invert = TRUE)
   bare <- "(^|[^.[:alnum:]_])(ggplot|aes|geom_[a-z_]+|labs|theme|theme_[a-z]+|scale_[a-z_]+|element_[a-z]+|annotate)[[:space:]]*\\("

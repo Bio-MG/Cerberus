@@ -16,8 +16,8 @@ source_project_file("tools/pkg_skeleton/R/provenance.R")
 # D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
 # (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
 load_project_pkg()
-source_project_file("R/bulk/bulk_batch_qc.R")
-source_project_file("R/bulk/bulk_gsva.R")
+source_project_file("tools/pkg_skeleton/R/bulk_batch_qc.R")
+source_project_file("tools/pkg_skeleton/R/bulk_gsva.R")
 
 .bgsva_top_level_names <- function(relpath) {
   exprs <- parse(file.path(ts_project_root(), relpath))
@@ -67,7 +67,7 @@ test_that("public API surface is frozen (names + signatures)", {
     want <- names(expected_api[[fn_name]]); if (is.null(want)) want <- character(0)
     expect_setequal(got, want)
   }
-  defined <- .bgsva_top_level_names("R/bulk/bulk_gsva.R")
+  defined <- .bgsva_top_level_names("tools/pkg_skeleton/R/bulk_gsva.R")
   public <- setdiff(defined, grep("^\\.", defined, value = TRUE))
   expect_setequal(public, bulk_gsva_public_api())
 })
@@ -100,7 +100,7 @@ test_that("error class and states are frozen", {
   # NB : raw_counts_rejected est HÉRITÉ du domaine QC batch via le
   # re-classage e$state (la garde bulk_assert_transformed_matrix est
   # réutilisée, jamais dupliquée) — le wrapper doit rester présent.
-  src <- paste(readLines(file.path(ts_project_root(), "R/bulk/bulk_gsva.R")),
+  src <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/bulk_gsva.R")),
                collapse = "\n")
   states_found <- regmatches(src, gregexpr('state = "[a-z_]+"', src))[[1]]
   expect_setequal(unique(states_found),
@@ -112,7 +112,7 @@ test_that("error class and states are frozen", {
 
 # ── Garde mission : BPPARAM sur gsva(), jamais MulticoreParam sous Windows ─
 test_that("BPPARAM discipline is frozen (call site + Windows serial)", {
-  src <- paste(readLines(file.path(ts_project_root(), "R/bulk/bulk_gsva.R")),
+  src <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/bulk_gsva.R")),
                collapse = "\n")
   # BPPARAM est passé à GSVA::gsva() — jamais au constructeur (STATUS.md §2h).
   expect_match(src, "GSVA::gsva(par, BPPARAM = bulk_bpparam(workers), verbose = FALSE)",
@@ -133,7 +133,7 @@ test_that("BPPARAM discipline is frozen (call site + Windows serial)", {
 # ── Porte de recouvrement + nettoyage d'identifiants gelés ─────────────────
 test_that("overlap gate and Ensembl version stripping are frozen", {
   expect_match(
-    paste(readLines(file.path(ts_project_root(), "R/bulk/bulk_gsva.R")),
+    paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/bulk_gsva.R")),
           collapse = "\n"),
     'gsub("\\\\.[0-9]+$", ""', fixed = TRUE)
   m <- matrix(rnorm(30 * 6) + 8, 30, 6,
@@ -177,7 +177,7 @@ test_that("config thresholds are declared and pinned", {
 
 # ── Pureté Shiny + réutilisation ───────────────────────────────────────────
 test_that("R file stays pure (no Shiny reactivity, reused guards only)", {
-  src <- paste(readLines(file.path(ts_project_root(), "R/bulk/bulk_gsva.R")),
+  src <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/bulk_gsva.R")),
                collapse = "\n")
   expect_false(grepl("shiny::|reactive\\(|renderPlot|observeEvent\\(|showNotification\\(|moduleServer",
                      src))
@@ -204,8 +204,8 @@ test_that("mod_bulk_pathways consumes the contract (Scores par échantillon)", {
 })
 
 # ── Autonomie ggplot2 : le fichier doit tourner SANS ggplot2 attaché ───────
-test_that("R/bulk/bulk_gsva.R prefixes every ggplot2 call", {
-  path <- file.path(ts_project_root(), "R/bulk/bulk_gsva.R")
+test_that("tools/pkg_skeleton/R/bulk_gsva.R prefixes every ggplot2 call", {
+  path <- file.path(ts_project_root(), "tools/pkg_skeleton/R/bulk_gsva.R")
   code <- readLines(path, warn = FALSE, encoding = "UTF-8")
   code <- grep("^\\s*#", code, value = TRUE, invert = TRUE)
   bare <- "(^|[^.[:alnum:]_])(ggplot|aes|geom_[a-z_]+|labs|theme|theme_[a-z]+|scale_[a-z_]+|element_[a-z]+|facet_[a-z]+|coord_[a-z]+|guide_[a-z]+|annotate)[[:space:]]*\\("

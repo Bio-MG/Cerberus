@@ -11,7 +11,7 @@ source_project_file("tools/pkg_skeleton/R/provenance.R")
 # D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
 # (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
 load_project_pkg()
-source_project_file("R/bulk/bulk_pattern.R")
+source_project_file("tools/pkg_skeleton/R/bulk_pattern.R")
 
 # ── Fixtures ───────────────────────────────────────────────────────────────────
 # 24 gènes x 6 échantillons, 2 groupes (3 vs 3) : 3 formes de profils nettes.

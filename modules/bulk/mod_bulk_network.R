@@ -1,7 +1,7 @@
 # =============================================================================
 # modules/bulk/mod_bulk_network.R — Réseau PCSF / interactome (NEW-3)
 # =============================================================================
-# UI + orchestration UNIQUEMENT : tout le calcul vit dans R/bulk/bulk_network.R
+# UI + orchestration UNIQUEMENT : tout le calcul vit dans tools/pkg_skeleton/R/bulk_network.R
 # (logique pure, contract-first — docs/contracts/BULK_NETWORK_CONTRACT.md).
 #
 # ⚠️ SÉMANTIQUE AFFICHÉE, PAS SEULEMENT DOCUMENTÉE. Le réseau est DÉRIVÉ DES

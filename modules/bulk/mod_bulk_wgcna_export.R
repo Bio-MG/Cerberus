@@ -3,7 +3,7 @@
 # =============================================================================
 # UNE route pour UN artefact : la table gene -> module que le telechargement
 # humain `dl_wgcna_genes` ecrit (mod_bulk_wgcna.R) via `build_wgcna_export()`
-# (R/bulk/bulk_wgcna.R). L'exporteur appelle le MEME builder, et le contrat de
+# (tools/pkg_skeleton/R/bulk_wgcna.R). L'exporteur appelle le MEME builder, et le contrat de
 # forme du builder (`type == "bulk_wgcna_modules"`) est le verdict canonique —
 # un objet stocke non canonique devient un verdict `invalid` honnete.
 #

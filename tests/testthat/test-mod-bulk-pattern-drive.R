@@ -5,7 +5,7 @@
 # Phase D. `run_pattern_profile()` repeats the human observer's five steps on a
 # FROZEN input set, with the ONE parameter that cannot be frozen - the group
 # column - resolved by RULE (.bulk_pattern_group_column) instead of by value.
-# `R/bulk/bulk_pattern.R` is untouched: its exported surface is frozen by
+# `tools/pkg_skeleton/R/bulk_pattern.R` is untouched: its exported surface is frozen by
 # test-bulk-pattern-contract-freeze.R, so the wrapper lives in the module layer.
 #
 # What this file has to prove, and why each one is here:
@@ -26,7 +26,7 @@ source_project_file("R/core/error_state.R")           # ts_error_state
 source_project_file("tools/pkg_skeleton/R/provenance.R")            # new_provenance_entry
 source_project_file("R/core/drive_allowlist.R")
 source_project_file("R/core/drive_watcher.R")
-source_project_file("R/bulk/bulk_pattern.R")          # the frozen domain
+source_project_file("tools/pkg_skeleton/R/bulk_pattern.R")          # the frozen domain
 source_project_file("modules/bulk/mod_bulk_pattern.R")  # the code under test
 
 if (!exists(".tr", envir = globalenv()))

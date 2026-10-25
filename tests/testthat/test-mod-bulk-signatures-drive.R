@@ -5,7 +5,7 @@
 # Phase C. The action calls the module-level `run_signatures()`, which composes
 # the SAME two R/ calls as the human observer
 # (modules/bulk/mod_bulk_signatures.R:122-174) with a FROZEN input set. The human
-# observer is neither re-wired nor duplicated, and `R/bulk/bulk_signatures.R` is
+# observer is neither re-wired nor duplicated, and `tools/pkg_skeleton/R/bulk_signatures.R` is
 # untouched: its exported surface is frozen by
 # test-bulk-signatures-contract-freeze.R, so the wrapper lives in the module layer
 # (the same decision as `run_annot()` / `run_markers()` in the SC domain).
@@ -26,10 +26,10 @@ source_project_file("config/defaults.R")
 source_project_file("config/thresholds.R")   # TS_BULK_GSVA_MIN_SIZE / MAX_SIZE
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")    # %||%
 source_project_file("R/core/error_state.R")   # ts_error_state
-source_project_file("R/bulk/bulk_provenance.R")  # bulk_ensure_provenance (store path)
+source_project_file("tools/pkg_skeleton/R/bulk_provenance.R")  # bulk_ensure_provenance (store path)
 source_project_file("R/core/drive_allowlist.R")
 source_project_file("R/core/drive_watcher.R")
-source_project_file("R/bulk/bulk_signatures.R")
+source_project_file("tools/pkg_skeleton/R/bulk_signatures.R")
 source_project_file("modules/bulk/mod_bulk_signatures.R")  # the code under test
 
 if (!exists(".tr", envir = globalenv()))

@@ -1,7 +1,7 @@
 # =============================================================================
 # test-bulk-provenance.R — Manifeste de provenance Bulk (roadmap Bulk V2, M1)
 # =============================================================================
-source_project_file("R/bulk/bulk_provenance.R")
+source_project_file("tools/pkg_skeleton/R/bulk_provenance.R")
 
 .meta_prov <- function(n = 12) {
   data.frame(row.names = paste0("s", seq_len(n)),

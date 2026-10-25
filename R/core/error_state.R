@@ -2,7 +2,7 @@
 # R/core/error_state.R — Accesseur GÉNÉRIQUE de l'état sémantique d'une erreur
 # =============================================================================
 # CHRYSALIS / §14.1. Sourcé dans le bloc CORE de app.R, donc AVANT tout fichier
-# de domaine : les 11 accesseurs `*_error_state()` de R/bulk/ et R/sc/ en
+# de domaine : les 11 accesseurs `*_error_state()` de tools/pkg_skeleton/R/ et R/sc/ en
 # dépendent par délégation.
 #
 # ── Doctrine (CONVENTIONS.md §14.1, tranchée le 2026-09-19) ──────────────────

@@ -17,7 +17,7 @@
 # `report_validator`) : ce sont **deux domaines distincts** — le *bundle* de
 # rapports générique vs le rapport **Bulk** — exactement comme
 # `bulk_pathways_error` (§2cn) cohabite avec `pathway_error` (§2bp).
-# `R/bulk/bulk_report_engine.R` **ne déclare aucune** `errorCondition` (mesuré) :
+# `tools/pkg_skeleton/R/bulk_report_engine.R` **ne déclare aucune** `errorCondition` (mesuré) :
 # il n'y a donc rien à partager avec lui.
 #
 # 🔴 **LE LOT QUI BOUCLE LE DOMAINE `modules/bulk/`.** Le garde ne signale qu'**un**

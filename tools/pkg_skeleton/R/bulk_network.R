@@ -1,5 +1,5 @@
 # =============================================================================
-# R/bulk/bulk_network.R — Interactome LOCAL + conversion d'identifiants (NEW-3)
+# tools/pkg_skeleton/R/bulk_network.R — Interactome LOCAL + conversion d'identifiants (NEW-3)
 # =============================================================================
 # Jalons N-1 (conversion UniProt -> SYMBOL, taux tracé), N-2 (chargement +
 # mémoïsation du réseau Reactome dédupliqué) et N-3 (moteur PCSF heuristique

@@ -2,7 +2,7 @@
 # mod_bulk_wgcna.R — Bulk V2 M4 : réseaux de co-expression WGCNA (safe-mode)
 # — UI + orchestration.
 # =============================================================================
-# Logique pure : R/bulk/bulk_wgcna.R (contrat gelé). Deux étapes guidées :
+# Logique pure : tools/pkg_skeleton/R/bulk_wgcna.R (contrat gelé). Deux étapes guidées :
 #   1) « Analyse du power » (pickSoftThreshold — plots fit/connectivité) ;
 #   2) « Construire les modules » (blockwiseModules, power retenu ou manuel)
 #      puis corrélations MEs <-> traits (bicor).

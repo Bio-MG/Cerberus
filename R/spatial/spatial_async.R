@@ -176,8 +176,8 @@ APP_DAEMON_SOURCE_FILES <- c(
   # ORDRE : batch_correction.R AVANT bulk_helpers.R — run_bulk_de_dispatch()
   # appelle bulk_assert_raw_counts(), defini dans le premier. Mesure : sourcer
   # bulk_helpers.R seul laisse cette fonction introuvable dans le daemon.
-  "R/bulk/batch_correction.R",
-  "R/bulk/bulk_helpers.R"
+  "tools/pkg_skeleton/R/batch_correction.R",
+  "tools/pkg_skeleton/R/bulk_helpers.R"
 )
 
 #' Resolve the application root WITHOUT trusting getwd() (4E-4)

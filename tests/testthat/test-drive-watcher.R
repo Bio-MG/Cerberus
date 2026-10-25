@@ -3617,11 +3617,11 @@ test_that("the drive layer CALLS no pipeline, no Seurat accessor and no matrix c
   }
 
   # POSITIVE CONTROL — a scan that cannot FIND what it forbids asserts nothing.
-  # MEASURED: `R/bulk/bulk_helpers.R` calls `run_bulk_de_dispatch` three times
+  # MEASURED: `tools/pkg_skeleton/R/bulk_helpers.R` calls `run_bulk_de_dispatch` three times
   # and `DESeq` once. Without this, an empty result above would be equally
   # consistent with "the drive layer is clean" and "the scanner is blind", and
   # a blind scanner is precisely the C9 failure this repo already measured once.
-  control <- .drv_calls(file.path(ts_project_root(), "R/bulk/bulk_helpers.R"))$calls
+  control <- .drv_calls(file.path(ts_project_root(), "tools/pkg_skeleton/R/bulk_helpers.R"))$calls
   expect_true("run_bulk_de_dispatch" %in% control)
   expect_true("DESeq" %in% control)
 

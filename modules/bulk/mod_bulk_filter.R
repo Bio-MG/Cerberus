@@ -132,7 +132,7 @@ mod_bulk_filter_qc_ui <- function(id) {
 
 # ---------------------------------------------------------------------------
 # UI: QC Batch tab (Bulk V2 M1, contrat BULK_BATCH_QC_CONTRACT.md)
-# Consomme UNIQUEMENT R/bulk/bulk_batch_qc.R (garde anti-counts-bruts,
+# Consomme UNIQUEMENT tools/pkg_skeleton/R/bulk_batch_qc.R (garde anti-counts-bruts,
 # design-check, variance partition) sur shared_rv$vst_mat. Aucune validation
 # locale : toute garde scientifique vient du contrat.
 # ---------------------------------------------------------------------------
@@ -543,7 +543,7 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
     # QC BATCH (Bulk V2 M1 — contrat BULK_BATCH_QC_CONTRACT.md)
     # Design-check (alerte collinearite) + scree + variance partition, le tout
     # sur shared_rv$vst_mat. Aucune validation locale : les gardes viennent
-    # de R/bulk/bulk_batch_qc.R (erreurs classees bulk_batch_qc_error).
+    # de tools/pkg_skeleton/R/bulk_batch_qc.R (erreurs classees bulk_batch_qc_error).
     # =========================================================================
     batch_design_check <- reactive({
       req(global_data$bulk_obj, global_data$bulk_obj$metadata)
@@ -645,7 +645,7 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
     # =========================================================================
     # STAT-S1 — CORRECTION DE BATCH (ComBat-seq)
     # Contrat : docs/contracts/BATCH_CORRECTION_CONTRACT.md
-    # Consomme R/bulk/batch_correction.R (pur). Aucune validation locale : les
+    # Consomme tools/pkg_skeleton/R/batch_correction.R (pur). Aucune validation locale : les
     # gardes viennent du contrat (erreurs classees bulk_batch_correction_error).
     # L'etage est OPTIONNEL : rien ne change tant que l'utilisateur ne clique
     # pas « Appliquer ».

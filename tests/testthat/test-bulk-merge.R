@@ -1,7 +1,7 @@
 # =============================================================================
 # test-bulk-merge.R — NEW-2 : fusion de jeux bulk ("Merge Data")
 # =============================================================================
-# Couvre la logique PURE de R/bulk/bulk_merge.R hors Shiny :
+# Couvre la logique PURE de tools/pkg_skeleton/R/bulk_merge.R hors Shiny :
 #   - surface publique + états d'erreur gelés ;
 #   - alignement exact des gènes (intersection, comptes par jeu) ;
 #   - métadonnées combinées (union-fill, renommage en collision, resync
@@ -15,11 +15,11 @@
 #   - bulk_merge_to_bulk_obj : façonnage bulk_obj + provenance.
 # =============================================================================
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")         # %||%
-source_project_file("R/bulk/bulk_multi.R")         # MD-1 (validateur réutilisé)
-source_project_file("R/bulk/bulk_batch_qc.R")      # bulk_batch_design_check (STAT-S1)
-source_project_file("R/bulk/bulk_provenance.R")    # manifeste de provenance
-source_project_file("R/bulk/batch_correction.R")   # STAT-S1 (run_combat_seq)
-source_project_file("R/bulk/bulk_merge.R")         # moteur NEW-2
+source_project_file("tools/pkg_skeleton/R/bulk_multi.R")         # MD-1 (validateur réutilisé)
+source_project_file("tools/pkg_skeleton/R/bulk_batch_qc.R")      # bulk_batch_design_check (STAT-S1)
+source_project_file("tools/pkg_skeleton/R/bulk_provenance.R")    # manifeste de provenance
+source_project_file("tools/pkg_skeleton/R/batch_correction.R")   # STAT-S1 (run_combat_seq)
+source_project_file("tools/pkg_skeleton/R/bulk_merge.R")         # moteur NEW-2
 
 .expect_merge_state <- function(expr, state) {
   err <- tryCatch(force(expr), error = function(e) e)
@@ -83,7 +83,7 @@ test_that("error states are frozen and nothing else is emitted", {
     c("invalid_input", "insufficient_datasets", "no_common_genes",
       "invalid_metadata", "design_not_applicable")
   )
-  src <- paste(readLines(file.path(ts_project_root(), "R/bulk/bulk_merge.R"),
+  src <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/bulk_merge.R"),
                          warn = FALSE), collapse = "\n")
   emitted <- unique(regmatches(src,
                                gregexpr('(?<=state = ")[^"]+', src,

@@ -8,7 +8,7 @@
 # the session's DE thresholds (`shared_rv$padj_thresh` / `$lfc_thresh`, with
 # `%||%` defaults) — the WIP's frozen-threshold pair is deliberately NOT the
 # merged behaviour, and the closed-set pin below keeps it from coming back.
-# `R/bulk/bulk_network.R` is untouched: its exported surface is frozen by
+# `tools/pkg_skeleton/R/bulk_network.R` is untouched: its exported surface is frozen by
 # test-bulk-network-contract-freeze.R (`bulk_network_public_api()`), so the
 # wrapper lives in the module layer.
 #
@@ -29,7 +29,7 @@ source_project_file("tools/pkg_skeleton/R/io_helpers.R")            # %||%
 source_project_file("R/core/error_state.R")           # ts_error_state
 source_project_file("R/core/drive_allowlist.R")
 source_project_file("R/core/drive_watcher.R")
-source_project_file("R/bulk/bulk_network.R")          # the frozen domain
+source_project_file("tools/pkg_skeleton/R/bulk_network.R")          # the frozen domain
 source_project_file("modules/bulk/mod_bulk_network.R")  # the code under test
 
 if (!exists(".tr", envir = globalenv()))

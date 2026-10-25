@@ -1,5 +1,5 @@
 # =============================================================================
-# test-bulk-import-engine.R — tests for R/bulk/bulk_import_engine.R
+# test-bulk-import-engine.R — tests for tools/pkg_skeleton/R/bulk_import_engine.R
 # =============================================================================
 # 23ᵉ incrément de la dette de conventions (2026-09-18).
 # Créé AVANT la conversion (règle 5 : test d'abord, rouge d'abord) ⇒ ce
@@ -41,7 +41,7 @@
 # passerait le test d'erreur sans rien prouver.
 # =============================================================================
 
-source_project_file("R/bulk/bulk_import_engine.R")
+source_project_file("tools/pkg_skeleton/R/bulk_import_engine.R")
 
 .bie_err <- function(expr) {
   tryCatch({ expr; NULL },
@@ -153,7 +153,7 @@ test_that("bulk_import_engine.R ne contribue aucun signalement C10", {
   e <- new.env(parent = globalenv())
   sys.source(file.path(ts_project_root(), "tools/check_conventions.R"), envir = e)
   before <- length(e$.REPORT$warns)
-  e$check_c10_error_style(file.path(ts_project_root(), "R/bulk/bulk_import_engine.R"))
+  e$check_c10_error_style(file.path(ts_project_root(), "tools/pkg_skeleton/R/bulk_import_engine.R"))
   w <- e$.REPORT$warns
   n <- length(w) - before
   if (n > 0L) {

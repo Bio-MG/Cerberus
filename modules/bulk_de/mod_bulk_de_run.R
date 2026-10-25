@@ -621,7 +621,7 @@
 
   # ── D4 (2026-10-20) : calcul DE ad-hoc NON BLOQUANT ──────────────────────
   # Pattern identique aux sous-onglets spatiaux : ExtendedTask$new(fn) où fn
-  # rend un mirai. Le corps appelle run_de_core() (R/bulk/bulk_helpers.R,
+  # rend un mirai. Le corps appelle run_de_core() (tools/pkg_skeleton/R/bulk_helpers.R,
   # préchargé dans les daemons via APP_DAEMON_SOURCE_FILES) : le daemon et le
   # repli synchrone exécutent donc le MÊME code, pas deux copies.
   de_adhoc_task <- ExtendedTask$new(function(counts, meta, engine, shrink_lfc, padj_method) {

@@ -5,7 +5,7 @@
 # échantillon (handoff §4) : le score complète les PCA avant/après ComBat-seq
 # par un chiffre. 0 = lots séparés, 1 = mélange parfait.
 # =============================================================================
-source_project_file("R/bulk/bulk_batch_metrics.R")
+source_project_file("tools/pkg_skeleton/R/bulk_batch_metrics.R")
 
 .bm_batches <- function(n_per = 6L) rep(c("B1", "B2"), each = n_per)
 

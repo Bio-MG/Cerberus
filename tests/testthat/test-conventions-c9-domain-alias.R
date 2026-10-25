@@ -107,25 +107,31 @@ test_that("C9 : l'alias de domaine ne DEBORDE pas (temoin de traversee)", {
   # la population C9) — successeur : `R/bulk/bulk_report_engine.R`, 3e domaine
   # represente. Reaction documentee (le patron §2df) : solde dans les DEUX
   # sens pour le sortant + presence du fichier au nouveau domicile.
+  # ⚠️ AMENDE le 2026-10-25 (D2 M5 LOT 3) : `R/bulk/bulk_report_engine.R` quitte
+  # la liste A SON TOUR (le domaine R/bulk ENTIER — 18 fichiers — demenage dans
+  # tools/pkg_skeleton/R/ et sort de la population C9 ; mesure du lot :
+  # bulk_report_engine.R etait le SEUL bulk flagge, C9 14 → 13). Aucun fichier
+  # bulk ne reste dans R/ : le temoin de traversee ne represente plus que 2
+  # domaines (spatial, core), et le solde du sortant est asseré dans les DEUX
+  # sens (dossier R/bulk vide + fichier present au paquet), meme forme que les
+  # soldes M4-suite et M5 lot 2.
   files <- c("R/spatial/spatial_export.R",
-             "R/core/rdata_io.R",
-             "R/bulk/bulk_report_engine.R")
-  expect_length(.c9_flagged(.c9_abs(files)), 3L)
+             "R/core/rdata_io.R")
+  expect_length(.c9_flagged(.c9_abs(files)), 2L)
   # Et le solde explicite : `sc_export.R` n'est PLUS signale, mais il l'etait —
   # on l'assere pour qu'une regression (la garde qui cesse de voir un fichier
   # sans test) ne puisse pas se cacher derriere ce retrait.
   expect_length(.c9_flagged(.c9_abs("R/sc/sc_export.R")), 0L)
   expect_length(.c9_flagged(.c9_abs("R/sc/sc_state.R")), 1L)
-  # M5 lot 2 : le temoin reports sorti est bien sorti (le dossier R/reports
-  # ne peut plus rien cacher) et les 4 fichiers vivent bien dans le paquet.
-  expect_false(dir.exists(file.path(ts_project_root(), "R", "reports")) &&
-                 length(list.files(file.path(ts_project_root(), "R", "reports"),
+  # M5 lot 3 : le temoin bulk sorti est bien sorti (le dossier R/bulk ne peut
+  # plus rien cacher) et les 18 fichiers vivent bien dans le paquet.
+  expect_false(dir.exists(file.path(ts_project_root(), "R", "bulk")) &&
+                 length(list.files(file.path(ts_project_root(), "R", "bulk"),
                                    pattern = "[.]R$")) > 0L)
   pkg <- file.path(ts_project_root(), "tools", "pkg_skeleton", "R")
-  for (f in c("report_collector.R", "report_validator.R",
-              "report_render.R", "report_bundle.R")) {
+  for (f in c("bulk_report_engine.R", "bulk_helpers.R", "batch_correction.R")) {
     expect_true(file.exists(file.path(pkg, f)),
-                info = paste(f, "absent du paquet apres extraction M5 lot 2"))
+                info = paste(f, "absent du paquet apres extraction M5 lot 3"))
   }
 })
 
@@ -141,15 +147,23 @@ test_that("C9 : dans R/plotting/, SEUL palettes.R reste signale (invariant)", {
                  length(list.files("R/plotting", pattern = "[.]R$")) > 0L)
 })
 
-test_that("C9 : le plafond de dette est 14 (mesure du lot D2 M5 lot 2)", {
+test_that("C9 : le plafond de dette est 14 (recompose par le lot D2 M5 lot 3)", {
   # Plafond, pas egalite : le compte doit pouvoir BAISSER quand un test est
   # ecrit, mais ne doit jamais REMONTER (une regression de l'alias le ferait).
   # ⚠️ Le plafond SUIT la derniere mesure : il valait 22 (§2cy), puis 21 (§2db),
-  # 20 (§2dd), 19 (§2df). Mesure M5 lot 1 : population 18, plafond laisse a 19
-  # (composition inchangee ce lot-la). D2 M5 LOT 2 (2026-10-25) : les 4
-  # fichiers de R/reports demenagent dans tools/pkg_skeleton/R/ et quittent la
-  # population (18 - 4 = 14, mesure exacte) — le plafond suit : 19 -> 14. Le
-  # laisser a 19 autoriserait un retour en arriere SILENCIEUX de 5 fichiers.
+  # 20 (§2dd), 19 (§2df), 14 (M5 lot 2). D2 M5 LOT 3 (2026-10-25) : les 18
+  # fichiers de R/bulk demenagent dans tools/pkg_skeleton/R/ et quittent la
+  # population — le SEUL bulk flagge etait `bulk_report_engine.R` (14 - 1 = 13,
+  # mesure exacte re-jouee avant le deplacement a 12:47). ⚠️ DECOMPOSITION EN
+  # DEUX SENS, au 13:04 : un fichier ETRANGER au lot est apparu EN VOL
+  # (`R/core/cerberus_handoff.R`, non suivi, ecrit 13:01 par la session
+  # CERBERUS — check_writers re-verifie avant commit) et entre dans la
+  # population C9 (+1, toujours sans test eponyme). Solde net du lot :
+  # 14 - 1 (bulk) + 1 (etranger) = 14 — la COMPOSITION change, le COMPTE non.
+  # Le plafond reste donc 14 (il ne remonte pas : l'etranger compense la sortie
+  # bulk) ; sa recomposition est asserée par le solde bulk ci-dessus et par le
+  # pin C9b (meme decomposition). Si la session CERBERUS paie sa dette C9, le
+  # compte redescend a 13 et le plafond reste correct.
   flagged <- .c9_flagged(.c9_population())
   expect_true(length(flagged) <= 14L)
   # Et le contrat dans l'autre sens, pour que le plafond ne devienne pas

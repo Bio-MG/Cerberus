@@ -129,7 +129,7 @@ test_that("the bulk_pathways publication is wired (text locks), and its catalogu
   expect_true(grepl("vocab = drive_vocabulary", src, fixed = TRUE))
   # Le domaine = LES VALEURS du select réel (source, pas libellé i18n) —
   # 11 sources déclarées, courtes, toutes sous la garde verbatim.
-  source_project_file("R/bulk/bulk_gene_sets.R")
+  source_project_file("tools/pkg_skeleton/R/bulk_gene_sets.R")
   srcs <- as.character(unname(bulk_gene_set_choices()))
   expect_length(srcs, 11L)
   expect_true("msigdb_hallmark" %in% srcs)

@@ -1,5 +1,5 @@
 # =============================================================================
-# R/bulk/bulk_gene_sets.R — CATALOGUE de jeux de gènes NATIF (Bulk V2, PLOT-S6b)
+# tools/pkg_skeleton/R/bulk_gene_sets.R — CATALOGUE de jeux de gènes NATIF (Bulk V2, PLOT-S6b)
 # =============================================================================
 # PROBLÈME RÉSOLU
 # Les scores de voies par échantillon (GSVA/ssGSEA, `bulk_gsva.R`) exigeaient un

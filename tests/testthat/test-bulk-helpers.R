@@ -26,11 +26,11 @@
 
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")   # defines %||%, sourced first in app.R
 source_project_file("R/core/validation.R")     # canonical guards (app.R loads before bulk_helpers)
-source_project_file("R/bulk/bulk_helpers.R")
+source_project_file("tools/pkg_skeleton/R/bulk_helpers.R")
 # PLOT-S6c (P0) : build_dds() et run_bulk_de_dispatch() appellent la garde de
 # counts de bulk_assert_raw_counts() (domaine correction de batch) — le
 # fichier doit donc être chargé ici aussi.
-source_project_file("R/bulk/batch_correction.R")
+source_project_file("tools/pkg_skeleton/R/batch_correction.R")
 # D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
 # (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
 load_project_pkg()
@@ -359,7 +359,7 @@ test_that("bulk_helpers : les stop() du moteur DE sont CLASSEES bulk_de_error", 
   # P0 : ces assertions DOIVENT echouer AVANT la conversion — un `stop()` nu
   # leve un simpleError, pas une condition classee. Sans ce rouge prealable,
   # elles ne prouveraient rien (CONVENTIONS.md §7 : forme attendue).
-  # Elles bornent la conversion des 19 sites de `R/bulk/bulk_helpers.R` : les
+  # Elles bornent la conversion des 19 sites de `tools/pkg_skeleton/R/bulk_helpers.R` : les
   # 3 sites DEJA convertis portaient `bulk_de_error`, les 19 autres non.
   # RegEx ASCII seulement (cf. l'avertissement sur la locale, plus haut).
   m <- matrix(0, nrow = 3, ncol = 2, dimnames = list(c("g1", "g2", "g3"), c("s1", "s2")))
@@ -390,7 +390,7 @@ test_that("bulk_helpers : un message multi-arguments n'est pas TRONQUE par error
   # pas du message :
   #   stop("A : ", "B", " fin")                   -> "A : B fin"
   #   errorCondition("A : ", "B", " fin", class=)  -> "A : "   <-- TRONQUE
-  # Les 3 sites de R/bulk/bulk_helpers.R dont le message tient en PLUSIEURS
+  # Les 3 sites de tools/pkg_skeleton/R/bulk_helpers.R dont le message tient en PLUSIEURS
   # arguments doivent donc passer par paste0(). Ces assertions etaient ROUGES
   # avant le correctif : le message s'arretait a la 1re portion.
   # RegEx ASCII seulement (cf. l'avertissement sur la locale, plus haut).
@@ -414,7 +414,7 @@ test_that("bulk_helpers : un message multi-arguments n'est pas TRONQUE par error
 # ---------------------------------------------------------------------------
 # WHY THIS EXISTS. `extract_deseq2_contrast()` records the shrinkage outcome in
 # three attributes on the result it returns (`shrunk`, `shrunk_method`,
-# `shrunk_reason`; see R/bulk/bulk_helpers.R ~l.323-349). Nothing on the drive
+# `shrunk_reason`; see tools/pkg_skeleton/R/bulk_helpers.R ~l.323-349). Nothing on the drive
 # protocol published them, so a snapshot reported
 #
 #     n_significant = <n>   under   convention = "padj < 0.05 & |log2FoldChange| > 1"

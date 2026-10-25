@@ -4,7 +4,7 @@
 # =============================================================================
 # ONE route for ONE artefact: the node table the human `dl_network` handler
 # writes (mod_bulk_network.R) via `build_bulk_network_table_export()`
-# (R/bulk/bulk_network.R) — nodes with their in-subgraph degree, role,
+# (tools/pkg_skeleton/R/bulk_network.R) — nodes with their in-subgraph degree, role,
 # prize and provenance. The exporter calls the SAME builder, and the builder's
 # own `assert_bulk_network_result()` is the canonical-shape verdict — a stored
 # non-canonical object becomes an honest `invalid` VERDICT. The full result

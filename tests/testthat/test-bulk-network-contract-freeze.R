@@ -10,7 +10,7 @@
 # snapshot), sync code <-> contrat, clés i18n.
 # =============================================================================
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")      # %||%
-source_project_file("R/bulk/bulk_network.R")
+source_project_file("tools/pkg_skeleton/R/bulk_network.R")
 
 .ts_top_level_names <- function(relpath) {
   exprs <- parse(file.path(ts_project_root(), relpath), keep.source = FALSE)
@@ -38,7 +38,7 @@ source_project_file("R/bulk/bulk_network.R")
   gsub("[[:space:]]+", " ", txt)
 }
 
-.engine_src  <- .ts_read("R/bulk/bulk_network.R")
+.engine_src  <- .ts_read("tools/pkg_skeleton/R/bulk_network.R")
 .module_src  <- .ts_read("modules/bulk/mod_bulk_network.R")
 .contract    <- .ts_read("docs/contracts/BULK_NETWORK_CONTRACT.md")
 .app_src     <- .ts_read("app.R")
@@ -62,9 +62,9 @@ test_that("public API surface is frozen (names + signatures)", {
   expect_identical(bulk_network_public_api(), sort(bulk_network_public_api()))
   expect_setequal(bulk_network_public_api(),
                   intersect(bulk_network_public_api(),
-                            .ts_top_level_names("R/bulk/bulk_network.R")))
+                            .ts_top_level_names("tools/pkg_skeleton/R/bulk_network.R")))
   # tout top-level NON pointé est public (aucune fonction cachée)
-  tl <- .ts_top_level_names("R/bulk/bulk_network.R")
+  tl <- .ts_top_level_names("tools/pkg_skeleton/R/bulk_network.R")
   expect_setequal(tl[!startsWith(tl, ".")], bulk_network_public_api())
 
   # ⚠️ `names(formals(f))` vaut NULL — et non character(0) — pour une fonction
@@ -209,7 +209,7 @@ test_that("module writes ONLY shared_rv$network_result", {
 
 # ── Ancres de câblage (contrat §11) ───────────────────────────────────────
 test_that("app.R and mod_bulk.R anchors are present", {
-  expect_match(.app_src, 'source("R/bulk/bulk_network.R")', fixed = TRUE)
+  expect_match(.app_src, 'source("tools/pkg_skeleton/R/bulk_network.R")', fixed = TRUE)
   expect_match(.app_src, 'source("modules/bulk/mod_bulk_network.R")', fixed = TRUE)
   expect_match(.parent_src, 'value = "panel_network"', fixed = TRUE)
   expect_match(.parent_src, 'value = "tab_bulk_network"', fixed = TRUE)
@@ -240,7 +240,7 @@ test_that("thresholds are declared in config and consumed by name", {
 
 # ── Contrat MD-1 INCHANGÉ : network_result hors du snapshot multi-jeux ────
 test_that("the frozen MD-1 snapshot field set is NOT modified (contrat §11.1)", {
-  source_project_file("R/bulk/bulk_multi.R")
+  source_project_file("tools/pkg_skeleton/R/bulk_multi.R")
   expect_identical(bulk_multi_pipeline_fields(), c(
     "mapping_applied", "mapping_summary", "filtered_counts", "vst_mat",
     "contrasts", "active_contrast", "multimethod_de",

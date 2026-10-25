@@ -1,5 +1,5 @@
 # =============================================================================
-# R/bulk/dose_response.R — Dose–réponse / time-course (NEW-1, MVP drc)
+# tools/pkg_skeleton/R/dose_response.R — Dose–réponse / time-course (NEW-1, MVP drc)
 # =============================================================================
 # Fiche ROADMAP_presentation_stats.md §6 (NEW-1), re-mesurée le 2026-09-13 :
 # `shared_rv$vst_mat` + métadonnées numériques (dose ou temps déclarés) +

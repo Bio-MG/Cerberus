@@ -1,5 +1,5 @@
 # =============================================================================
-# R/bulk/bulk_survival.R — Survie & associations cliniques (roadmap Bulk V2,
+# tools/pkg_skeleton/R/bulk_survival.R — Survie & associations cliniques (roadmap Bulk V2,
 # Milestone 5 — chantier Flux E).
 # =============================================================================
 # GARDES DE LA MISSION (§2.5 — non négociables) :

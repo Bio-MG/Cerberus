@@ -20,9 +20,9 @@ source_project_file("R/core/error_state.R")
 # `communication_import_error`, PAS `communication_error` — piège de lecture.
 .es_accessors <- function() {
   list(
-    list(fn = "bulk_network_error_state",        file = "R/bulk/bulk_network.R",           classe = NA_character_),
-    list(fn = "bulk_pattern_error_state",        file = "R/bulk/bulk_pattern.R",           classe = NA_character_),
-    list(fn = "bulk_dose_error_state",           file = "R/bulk/dose_response.R",          classe = NA_character_),
+    list(fn = "bulk_network_error_state",        file = "tools/pkg_skeleton/R/bulk_network.R",           classe = NA_character_),
+    list(fn = "bulk_pattern_error_state",        file = "tools/pkg_skeleton/R/bulk_pattern.R",           classe = NA_character_),
+    list(fn = "bulk_dose_error_state",           file = "tools/pkg_skeleton/R/dose_response.R",          classe = NA_character_),
     list(fn = "da_design_error_state",           file = "R/sc/sc_abundance_design.R",      classe = "da_design_error"),
     list(fn = "milo_error_state",                file = "R/sc/sc_abundance_milo.R",        classe = "milo_error"),
     list(fn = "sccoda_error_state",              file = "R/sc/sc_abundance_sccoda.R",      classe = "sccoda_error"),

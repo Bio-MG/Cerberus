@@ -4,8 +4,8 @@
 # =============================================================================
 # Un seul endroit pour construire les heatmaps ComplexHeatmap de l'application,
 # la ou trois implementations coexistaient :
-#   - plot_heatmap_bulk()              (R/bulk/bulk_helpers.R)
-#   - plot_sample_correlation_heatmap()(R/bulk/bulk_helpers.R)
+#   - plot_heatmap_bulk()              (tools/pkg_skeleton/R/bulk_helpers.R)
+#   - plot_sample_correlation_heatmap()(tools/pkg_skeleton/R/bulk_helpers.R)
 #   - build_sc_hierarchical_heatmap()  (R/sc/sc_helpers.R)
 #
 # MESURE PREALABLE (2026-09-12) — les trois sites DIVERGENT sur 9 axes. Aucune

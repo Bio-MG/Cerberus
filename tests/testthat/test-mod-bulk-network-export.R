@@ -15,7 +15,7 @@ source_project_file("tools/pkg_skeleton/R/io_helpers.R")            # %||%
 source_project_file("R/core/error_state.R")
 source_project_file("R/core/drive_allowlist.R")
 source_project_file("R/core/drive_watcher.R")
-source_project_file("R/bulk/bulk_network.R")
+source_project_file("tools/pkg_skeleton/R/bulk_network.R")
 source_project_file("modules/bulk/mod_bulk_network_export.R")
 
 if (!exists(".tr", envir = globalenv()))

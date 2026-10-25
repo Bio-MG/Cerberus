@@ -1,4 +1,4 @@
-# R/bulk/bulk_multi.R — MD-1 : conteneur `bulk_datasets` & jeux bulk nommés
+# tools/pkg_skeleton/R/bulk_multi.R — MD-1 : conteneur `bulk_datasets` & jeux bulk nommés
 # =============================================================================
 # Contrat gelé : docs/contracts/BULK_MULTI_CONTRACT.md
 # Test de gel  : tests/testthat/test-bulk-multi-contract-freeze.R

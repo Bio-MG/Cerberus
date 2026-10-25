@@ -1,5 +1,5 @@
 # =============================================================================
-# R/bulk/bulk_merge.R — NEW-2 : fusion de jeux bulk ("Merge Data")
+# tools/pkg_skeleton/R/bulk_merge.R — NEW-2 : fusion de jeux bulk ("Merge Data")
 # =============================================================================
 # Contrat gelé : docs/contracts/BULK_MERGE_CONTRACT.md
 # Test de gel  : tests/testthat/test-bulk-merge-contract-freeze.R

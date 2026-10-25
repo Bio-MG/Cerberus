@@ -1,5 +1,5 @@
 # =============================================================================
-# R/bulk/bulk_batch_metrics.R — Métrique de mélange des batchs (STAT-S1)
+# tools/pkg_skeleton/R/bulk_batch_metrics.R — Métrique de mélange des batchs (STAT-S1)
 # =============================================================================
 # Pure domain logic (aucun symbole Shiny). Parité du domaine SC :
 # R/sc/sc_batch_metrics.R (roadmap 4.3, audit 2026-09-27) transposé au niveau

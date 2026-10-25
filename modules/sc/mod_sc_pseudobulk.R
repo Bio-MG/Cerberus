@@ -32,7 +32,7 @@
 # run (aggregated counts + metadata + the single DE contrast) into
 # global_data$bulk_datasets via bulk_multi_register(producer = "pseudobulk"),
 # making it selectable in mod_bulk_multi.R's "Comparaison multi-jeux" tab.
-# Pure logic lives in R/bulk/bulk_multi.R (frozen contract
+# Pure logic lives in tools/pkg_skeleton/R/bulk_multi.R (frozen contract
 # BULK_MULTI_CONTRACT.md §6, producer 3); this module only READS its own pb$
 # state — bulk_obj / shared_rv are never touched here.
 # =============================================================================

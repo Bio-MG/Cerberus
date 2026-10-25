@@ -1,5 +1,5 @@
 # =============================================================================
-# R/bulk/bulk_gsva.R — Scores de voies PAR ÉCHANTILLON (GSVA / ssGSEA / PLAGE /
+# tools/pkg_skeleton/R/bulk_gsva.R — Scores de voies PAR ÉCHANTILLON (GSVA / ssGSEA / PLAGE /
 # z-score) — roadmap Bulk V2, Milestone 2 (chantier Flux E).
 # =============================================================================
 # PRINCIPE : contrairement à l'ORA/GSEA de mod_bulk_pathways.R (qui teste

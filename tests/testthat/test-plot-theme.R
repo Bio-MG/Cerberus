@@ -17,7 +17,7 @@ source_project_file("tools/pkg_skeleton/R/io_helpers.R")     # %||% (sourced fir
 # D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
 # (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
 load_project_pkg()
-source_project_file("R/bulk/bulk_helpers.R")
+source_project_file("tools/pkg_skeleton/R/bulk_helpers.R")
 
 # bulk_helpers.R builds plots with BARE ggplot()/aes()/geom_*() calls (global.R
 # attaches ggplot2 in the app) -> the test must attach it too.
@@ -25,11 +25,11 @@ library(ggplot2)
 
 # Fichiers migres par PLOT-S1 (Spatial : remplacement mecanique, valeurs
 # historiques conservees). Volontairement EXCLUS :
-#   - R/bulk/bulk_batch_qc.R      (WIP non suivi)
-#   - R/bulk/bulk_report_engine.R (theme a l'interieur d'un script R genere)
+#   - tools/pkg_skeleton/R/bulk_batch_qc.R      (WIP non suivi)
+#   - tools/pkg_skeleton/R/bulk_report_engine.R (theme a l'interieur d'un script R genere)
 .plot_s1_migrated_files <- c(
   "R/sc/sc_plotting.R",
-  "R/bulk/bulk_helpers.R",
+  "tools/pkg_skeleton/R/bulk_helpers.R",
   "R/spatial/spatial_export.R",
   "modules/spatial/mod_spatial_lr.R",
   "modules/spatial/mod_spatial_multi.R",

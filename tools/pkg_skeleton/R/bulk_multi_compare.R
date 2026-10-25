@@ -1,4 +1,4 @@
-# R/bulk/bulk_multi_compare.R — MD-2 : comparaison multi-jeux bulk
+# tools/pkg_skeleton/R/bulk_multi_compare.R — MD-2 : comparaison multi-jeux bulk
 # =============================================================================
 # Contrat gelé : docs/contracts/BULK_MULTI_CONTRACT.md §10
 # Test de gel  : tests/testthat/test-bulk-multi-compare-contract-freeze.R

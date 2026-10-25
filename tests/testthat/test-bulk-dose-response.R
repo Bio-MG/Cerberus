@@ -8,7 +8,7 @@
 # assert canonique. Hors-ligne : drc est un calcul local.
 # =============================================================================
 source_project_file("tools/pkg_skeleton/R/provenance.R")
-source_project_file("R/bulk/dose_response.R")
+source_project_file("tools/pkg_skeleton/R/dose_response.R")
 
 # ── Fixture : courbes de Hill synthétiques, EC50 = 1 connu ────────────────────
 # 5 doses x 2 réplicats, réponse montante (g1..g4) et descendante (g5..g8),

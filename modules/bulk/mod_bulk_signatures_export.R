@@ -4,7 +4,7 @@
 # =============================================================================
 # ONE route for ONE artefact: the long signature x sample scores grid the
 # human `dl_sig_csv` handler writes (mod_bulk_signatures.R) via
-# `build_signature_scores_export()` (R/bulk/bulk_signatures.R). The exporter
+# `build_signature_scores_export()` (tools/pkg_skeleton/R/bulk_signatures.R). The exporter
 # calls the SAME builder — one source of truth for the schema, including the
 # §M3 disclaimer column that must travel with the export. The RDS download
 # (the full result object with QC) is a DIFFERENT artefact and gets no route.

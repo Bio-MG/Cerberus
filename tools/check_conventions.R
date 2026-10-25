@@ -53,7 +53,7 @@
 #'     line <- gsub("'([^'\\\\]|\\\\.)*'", "''", line, perl = TRUE)
 #'
 #' Une chaîne R peut s'étendre sur PLUSIEURS lignes — c'est le cas des scripts
-#' reproductibles embarqués dans `R/bulk/bulk_report_engine.R` et
+#' reproductibles embarqués dans `tools/pkg_skeleton/R/bulk_report_engine.R` et
 #' `R/sc/sc_export.R` — et une regex appliquée ligne par ligne ne peut pas la
 #' voir. Conséquences mesurées sur les 16 signalements C6 : **5 étaient FAUX**,
 #' dont `R/sc/sc_export.R:47` (devenue :46 apres D2-M3, 2026-10-24), exactement le cas que le commentaire précédent
@@ -716,7 +716,7 @@ check_c8_contract_tests <- function() {
   }
 }
 
-#' Convention de nommage RÉELLE du dépôt : `R/bulk/bulk_gsva.R` se teste dans
+#' Convention de nommage RÉELLE du dépôt : `tools/pkg_skeleton/R/bulk_gsva.R` se teste dans
 #' `tests/testthat/test-bulk-gsva.R` (domaine en préfixe, `_` -> `-`), et non
 #' `test-bulk_gsva.R`. Les deux formes sont acceptées pour ne pas pénaliser
 #' l'historique.

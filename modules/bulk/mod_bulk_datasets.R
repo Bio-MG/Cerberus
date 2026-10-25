@@ -2,7 +2,7 @@
 # mod_bulk_datasets.R — MD-1 : gestion du conteneur `bulk_datasets`
 # (jeux bulk nommés pour la comparaison multi-jeux) — UI + orchestration.
 # =============================================================================
-# Logique pure : R/bulk/bulk_multi.R (contrat gelé BULK_MULTI_CONTRACT.md).
+# Logique pure : tools/pkg_skeleton/R/bulk_multi.R (contrat gelé BULK_MULTI_CONTRACT.md).
 # Ce module ne fait que LIRE global_data$bulk_obj et shared_rv, SAUF
 # l'activation (amendé 2026-09-27, parité SC_MULTI roadmap 4.1) : le bouton
 # « Activer ce dataset » écrit global_data$bulk_obj via bulk_multi_get() —

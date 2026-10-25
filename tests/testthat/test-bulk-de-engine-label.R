@@ -21,7 +21,7 @@
 # VIDE — le sous-titre l'omet, au lieu de deviner.
 # =============================================================================
 
-source_project_file("R/bulk/bulk_helpers.R")
+source_project_file("tools/pkg_skeleton/R/bulk_helpers.R")
 
 .eng_df <- function() {
   data.frame(gene = c("A", "B", "C"),

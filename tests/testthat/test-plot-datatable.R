@@ -202,7 +202,7 @@ test_that("ts_datatable_buttons() est deterministe", {
 # --- 3. Anti-regression -------------------------------------------------------
 
 .tsd_migrated <- c(
-  "R/bulk/bulk_helpers.R",
+  "tools/pkg_skeleton/R/bulk_helpers.R",
   "R/core/pathway_helpers.R",
   "R/sc/sc_helpers.R",
   "modules/bulk_de/mod_bulk_de_multimethod.R",
@@ -234,7 +234,7 @@ test_that("PLOT-S3 : les 6 sites canoniques passent par ts_datatable()", {
 test_that("DT-EXPORT : les sites canoniques sont normalises (page 15 + boutons)", {
   # page_length = 15L + filename_base sur les tables de resultats
   expect_match(paste(readLines(file.path(ts_project_root(),
-                                         "R/bulk/bulk_helpers.R")), collapse = "\n"),
+                                         "tools/pkg_skeleton/R/bulk_helpers.R")), collapse = "\n"),
                "ts_datatable\\(df_display, page_length = 15L, filename_base = \"bulk_degenes\"\\)")
   expect_match(paste(readLines(file.path(ts_project_root(),
                                          "R/core/pathway_helpers.R")), collapse = "\n"),

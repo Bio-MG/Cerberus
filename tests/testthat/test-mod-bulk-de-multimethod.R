@@ -11,7 +11,7 @@
 # (retirer le préfixe `mod_`, garder le domaine) appliqué SANS collision :
 # `mod_bulk_de_multimethod.R` → `bulk_de_multimethod_error`, nom LIBRE.
 # ⚠️ La tentation était de RÉUTILISER `bulk_de_error` — il existe déjà, mais il
-# appartient à `R/bulk/bulk_helpers.R`. Mesure du dépôt (33ᵉ incrément) :
+# appartient à `tools/pkg_skeleton/R/bulk_helpers.R`. Mesure du dépôt (33ᵉ incrément) :
 # **AUCUNE** classe n'est partagée entre un fichier de `R/` et un fichier de
 # `modules/` (les seules classes multi-fichiers vivent TOUTES à l'intérieur de
 # `R/` : `report_error` sur 4 fichiers, `communication_context_error` sur 4,

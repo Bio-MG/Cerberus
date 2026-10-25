@@ -164,7 +164,7 @@
     status = function() NULL,
     result = function() NULL)
   e$removeNotification <- function(...) invisible(NULL)
-  e$run_de_core <- ts_ast_assignment("R/bulk/bulk_helpers.R", "run_de_core", e)
+  e$run_de_core <- ts_ast_assignment("tools/pkg_skeleton/R/bulk_helpers.R", "run_de_core", e)
   e$.de_drive_commit <- tryCatch(
     ts_ast_assignment(.MDR_FILE, ".de_drive_commit", e), error = function(e) NULL)
   e$.de_drive_fail <- tryCatch(
@@ -470,14 +470,14 @@ test_that("the REAL probe tells a landed round trip, a pending one, and a human 
 # test mesure donc la sonde reelle, pas une version reecrite ici.
 #
 # La sonde appelle `bulk_de_shrinkage_state()`, qui vit dans
-# `R/bulk/bulk_helpers.R` — un fichier que ce test ne source PAS (il n'injecte
+# `tools/pkg_skeleton/R/bulk_helpers.R` — un fichier que ce test ne source PAS (il n'injecte
 # que des STUBS, cf. `e$build_dds` plus haut). Un STUB pour cette fonction ne
 # prouverait qu'une chose : que la sonde recopie trois noms. Il faut donc le
 # VRAI, et le fichier est source dans un env JETEABLE pour que ses 1 700 lignes
 # ne derangent aucun des stubs installes ici ; seule la fonction est greffeee.
 .MDR_SHRINK_ENV <- local({
   e <- new.env(parent = globalenv())
-  sys.source(file.path(ts_project_root(), "R/bulk/bulk_helpers.R"), envir = e)
+  sys.source(file.path(ts_project_root(), "tools/pkg_skeleton/R/bulk_helpers.R"), envir = e)
   e
 })
 
@@ -581,8 +581,8 @@ test_that("la sonde ne publie JAMAIS le cadre de resultats ni une valeur de lign
 # mirai. Le corps du job appelle run_de_core(), fonction PURE de
 # bulk_helpers.R, préchargée dans les daemons — le chemin asynchrone et le
 # repli synchrone exécutent donc le MÊME code.
-source_project_file("R/bulk/batch_correction.R")
-source_project_file("R/bulk/bulk_helpers.R")
+source_project_file("tools/pkg_skeleton/R/batch_correction.R")
+source_project_file("tools/pkg_skeleton/R/bulk_helpers.R")
 source_project_file("R/spatial/spatial_async.R")
 
 .d4_counts <- function() {
@@ -653,8 +653,8 @@ test_that("D4 : le module soumet le calcul ad-hoc via ExtendedTask + mirai", {
 
 test_that("D4 : le préchargement des daemons inclut les fichiers DE, dans l'ordre", {
   files <- APP_DAEMON_SOURCE_FILES
-  i_batch <- match("R/bulk/batch_correction.R", files)
-  i_helpers <- match("R/bulk/bulk_helpers.R", files)
+  i_batch <- match("tools/pkg_skeleton/R/batch_correction.R", files)
+  i_helpers <- match("tools/pkg_skeleton/R/bulk_helpers.R", files)
   expect_false(is.na(i_batch), info = "bulk_assert_raw_counts() vit dans batch_correction.R")
   expect_false(is.na(i_helpers))
   expect_lt(i_batch, i_helpers)   # la dépendance est sourcée AVANT son appelant

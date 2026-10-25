@@ -1,10 +1,10 @@
 # =============================================================================
-# R/bulk/bulk_batch_qc.R — Diagnostics d'effets batch (roadmap Bulk V2,
+# tools/pkg_skeleton/R/bulk_batch_qc.R — Diagnostics d'effets batch (roadmap Bulk V2,
 # Milestone 1) — PCA par batch, décomposition de variance, plan d'expérience.
 # =============================================================================
 # FONCTIONS PURES (aucune réactivité Shiny) consommées par mod_bulk_filter.R
 # (onglet "QC Batch"). Réutilise les APIs existantes — jamais dupliquées :
-#   - plot_bulk_pca() / plot_scree_bulk() (R/bulk/bulk_helpers.R) pour la PCA
+#   - plot_bulk_pca() / plot_scree_bulk() (tools/pkg_skeleton/R/bulk_helpers.R) pour la PCA
 #     et la variance expliquée ;
 #   - check_design_confounding() (R/core/validation.R) pour la collinéarité
 #     batch × condition ;

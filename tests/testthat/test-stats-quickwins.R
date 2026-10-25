@@ -16,14 +16,14 @@
 
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")     # %||%
 source_project_file("R/core/validation.R")     # guards canoniques (avant bulk_helpers)
-source_project_file("R/bulk/bulk_helpers.R")
+source_project_file("tools/pkg_skeleton/R/bulk_helpers.R")
 # PLOT-S6c : build_dds() / run_bulk_de_dispatch() appellent bulk_assert_raw_counts(),
 # defini dans le domaine correction de batch. Sans cette ligne le fichier ne passe
 # qu'au sein de la suite complete (un fichier source plus tot, dans l'ordre
 # alphabetique, deposait la fonction dans l'environnement global) et ECHOUE en
 # cible : mesure le 2026-09-17 (10 erreurs "could not find function").
-source_project_file("R/bulk/batch_correction.R")
-source_project_file("R/bulk/bulk_report_engine.R")
+source_project_file("tools/pkg_skeleton/R/batch_correction.R")
+source_project_file("tools/pkg_skeleton/R/bulk_report_engine.R")
 # Meme classe de bug que ci-dessus : build_de_results_dt() appelle ts_datatable(),
 # defini dans R/plotting/datatable.R. Manquait aussi -> 3 erreurs en cible
 # (mesure 2026-09-17).
@@ -410,7 +410,7 @@ test_that("EVERY ORA call site in R/ passes a background (no fourth violator)", 
   # The point of "unified" is that there is ONE rule, so this is an exhaustive
   # sweep rather than a check of the site that happens to be broken. A test that
   # only inspects the known offender cannot notice a fifth call site.
-  files <- c("R/core/pathway_helpers.R", "R/bulk/bulk_report_engine.R")
+  files <- c("R/core/pathway_helpers.R", "tools/pkg_skeleton/R/bulk_report_engine.R")
   for (f in files) {
     src <- paste(readLines(file.path(ts_project_root(), f), warn = FALSE),
                  collapse = "\n")
@@ -538,7 +538,7 @@ test_that("the availability gate is REAL, and no site falls back silently", {
   # `apeglm` is an OPTIONAL dependency and is documented as one. The gate has to
   # be a real availability test, not a comment: a first draft simply tried
   # lfcShrink and caught the error, which is the behaviour being replaced.
-  src <- paste(readLines(file.path(ts_project_root(), "R/bulk/bulk_helpers.R"),
+  src <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/bulk_helpers.R"),
                          warn = FALSE), collapse = "\n")
   expect_true(grepl('requireNamespace("apeglm"', src, fixed = TRUE))
   # The old one-liner is gone: a bare `error = function(e) res` on the shrink

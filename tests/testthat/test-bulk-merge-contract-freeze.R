@@ -9,11 +9,11 @@
 # moteur, sync code <-> contrat, clés i18n.
 # =============================================================================
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")         # %||%
-source_project_file("R/bulk/bulk_multi.R")
-source_project_file("R/bulk/bulk_batch_qc.R")
-source_project_file("R/bulk/bulk_provenance.R")
-source_project_file("R/bulk/batch_correction.R")
-source_project_file("R/bulk/bulk_merge.R")
+source_project_file("tools/pkg_skeleton/R/bulk_multi.R")
+source_project_file("tools/pkg_skeleton/R/bulk_batch_qc.R")
+source_project_file("tools/pkg_skeleton/R/bulk_provenance.R")
+source_project_file("tools/pkg_skeleton/R/batch_correction.R")
+source_project_file("tools/pkg_skeleton/R/bulk_merge.R")
 
 .ts_top_level_names <- function(relpath) {
   exprs <- parse(file.path(ts_project_root(), relpath))
@@ -35,7 +35,7 @@ source_project_file("R/bulk/bulk_merge.R")
         collapse = "\n")
 }
 
-.engine_src <- .ts_read("R/bulk/bulk_merge.R")
+.engine_src <- .ts_read("tools/pkg_skeleton/R/bulk_merge.R")
 .module_src <- .ts_read("modules/bulk/mod_bulk_merge.R")
 .contract   <- .ts_read("docs/contracts/BULK_MERGE_CONTRACT.md")
 .app_src    <- .ts_read("app.R")
@@ -52,7 +52,7 @@ test_that("public API surface is frozen (names + signatures)", {
   )
   expect_setequal(
     bulk_merge_public_api(),
-    intersect(bulk_merge_public_api(), .ts_top_level_names("R/bulk/bulk_merge.R"))
+    intersect(bulk_merge_public_api(), .ts_top_level_names("tools/pkg_skeleton/R/bulk_merge.R"))
   )
   expected_args <- list(
     bulk_merge_public_api             = list(),
@@ -158,7 +158,7 @@ test_that("module writes ONLY global_data$bulk_obj (never shared_rv / container)
 
 # ── Ancres de câblage (contrat §9) ─────────────────────────────────────────
 test_that("app.R and mod_bulk.R anchors are present", {
-  expect_match(.app_src, 'source("R/bulk/bulk_merge.R")', fixed = TRUE)
+  expect_match(.app_src, 'source("tools/pkg_skeleton/R/bulk_merge.R")', fixed = TRUE)
   expect_match(.app_src, 'source("modules/bulk/mod_bulk_merge.R")', fixed = TRUE)
   expect_match(.parent_src, 'value = "panel_merge"', fixed = TRUE)
   expect_match(.parent_src, 'value = "tab_bulk_merge"', fixed = TRUE)

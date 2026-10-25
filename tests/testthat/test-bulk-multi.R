@@ -6,7 +6,7 @@
 # plafond, producteurs), suppression, résumé, ISOLATION par copie (garde §2.2
 # — muter la source après enregistrement ne change jamais l'entrée).
 # =============================================================================
-source_project_file("R/bulk/bulk_multi.R")
+source_project_file("tools/pkg_skeleton/R/bulk_multi.R")
 
 .bulk_multi_obj <- function(n_genes = 50, n_samples = 6, seed = 1,
                             import_mode = "merged_matrix") {

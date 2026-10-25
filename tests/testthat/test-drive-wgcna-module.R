@@ -24,7 +24,7 @@ source_project_file("tools/pkg_skeleton/R/io_helpers.R")            # %||%
 source_project_file("R/core/error_state.R")
 source_project_file("R/core/drive_allowlist.R")
 source_project_file("R/core/drive_watcher.R")
-source_project_file("R/bulk/bulk_wgcna.R")            # le contrat gelé ( builders)
+source_project_file("tools/pkg_skeleton/R/bulk_wgcna.R")            # le contrat gelé ( builders)
 source_project_file("modules/bulk/mod_bulk_wgcna_export.R")
 source_project_file("modules/bulk/mod_bulk_wgcna.R")  # le serveur RÉEL
 suppressPackageStartupMessages(library(shiny))

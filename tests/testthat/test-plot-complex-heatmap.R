@@ -21,7 +21,7 @@ suppressWarnings(suppressPackageStartupMessages({
 # D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
 # (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
 load_project_pkg()
-source_project_file("R/bulk/bulk_helpers.R")
+source_project_file("tools/pkg_skeleton/R/bulk_helpers.R")
 
 # --- Fixtures / utilitaires -------------------------------------------------
 

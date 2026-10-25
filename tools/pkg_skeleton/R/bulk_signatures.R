@@ -1,5 +1,5 @@
 # =============================================================================
-# R/bulk/bulk_signatures.R — Scores de SIGNATURES CELLULAIRES (MSigDB Hallmark,
+# tools/pkg_skeleton/R/bulk_signatures.R — Scores de SIGNATURES CELLULAIRES (MSigDB Hallmark,
 # PROGENy, DoRothEA, RDS local) — roadmap Bulk V2, Milestone 3 (chantier Flux E).
 # =============================================================================
 # PRINCIPE : score des signatures par échantillon (réutilisation maximale du

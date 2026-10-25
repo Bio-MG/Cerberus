@@ -132,32 +132,32 @@ source("R/sc/sc_export.R")
 source("R/sc/sc_metadata.R")  # Design expérimental (condition/réplicat) — feature 6×10X, audit 2026-09-27 (PUR : aucun symbole Shiny)
 source("R/sc/sc_batch_metrics.R")  # Métrique de mélange des batchs (roadmap 4.3) — PUR : aucun symbole Shiny
 
-# ── Bloc 06 : R/bulk + R/sc/sc_multi (logique pure) ──────────────────────────
-source("R/bulk/bulk_helpers.R")
-source("R/bulk/bulk_provenance.R")  # Bulk V2 M1 : manifeste bulk_obj$provenance (pur, testé)
-source("R/bulk/bulk_batch_qc.R")    # Bulk V2 M1 : diagnostics batch (pur, contrat gelé)
-source("R/bulk/batch_correction.R")  # STAT-S1 : correction de batch ComBat-seq (pur, contrat gelé)
-source("R/bulk/bulk_batch_metrics.R") # STAT-S1 : métrique de mélange des batchs avant/après ComBat (pur)
-source("R/bulk/bulk_gsva.R")          # Bulk V2 M2 : scores de voies par échantillon (pur, contrat gelé)
-source("R/bulk/bulk_signatures.R")    # Bulk V2 M3 : signatures cellulaires (pur, contrat gelé)
+# ── Bloc 06 : paquet (ex-R/bulk) + R/sc/sc_multi (logique pure) ──────────────────────────
+source("tools/pkg_skeleton/R/bulk_helpers.R")
+source("tools/pkg_skeleton/R/bulk_provenance.R")  # Bulk V2 M1 : manifeste bulk_obj$provenance (pur, testé)
+source("tools/pkg_skeleton/R/bulk_batch_qc.R")    # Bulk V2 M1 : diagnostics batch (pur, contrat gelé)
+source("tools/pkg_skeleton/R/batch_correction.R")  # STAT-S1 : correction de batch ComBat-seq (pur, contrat gelé)
+source("tools/pkg_skeleton/R/bulk_batch_metrics.R") # STAT-S1 : métrique de mélange des batchs avant/après ComBat (pur)
+source("tools/pkg_skeleton/R/bulk_gsva.R")          # Bulk V2 M2 : scores de voies par échantillon (pur, contrat gelé)
+source("tools/pkg_skeleton/R/bulk_signatures.R")    # Bulk V2 M3 : signatures cellulaires (pur, contrat gelé)
 # PLOT-S6b : jeux de genes NATIFS (bulk_gene_set_choices, bulk_load_gene_sets).
 # OBLIGATOIRE : mod_bulk_pathways.R appelle bulk_gene_set_choices() a la
 # CONSTRUCTION de l'UI => sans cette ligne l'app ne demarre pas du tout
 # (« impossible de trouver la fonction "bulk_gene_set_choices" », appele depuis
 # hasGroups(choices)). Le fichier etait teste (test-bulk-gene-sets.R le source
 # directement) mais absent d'ici. Garde : tests/testthat/test-app-sourcing.R.
-source("R/bulk/bulk_gene_sets.R")     # PLOT-S6b : jeux de gènes NATIFS (pur, contrat gelé)
-source("R/bulk/bulk_wgcna.R")         # Bulk V2 M4 : WGCNA safe-mode (pur, contrat gelé)
-source("R/bulk/bulk_survival.R")      # Bulk V2 M5 : survie & clinique (pur, contrat gelé)
-source("R/bulk/bulk_pattern.R")       # STAT-S3 : clustering de profils (kmeans MVP, pur, contrat gelé)
-source("R/bulk/dose_response.R")      # NEW-1 : dose-réponse / time-course (drc, pur, contrat gelé)
-source("R/bulk/bulk_multi.R")         # MD-1 : conteneur bulk_datasets & jeux nommés (pur, contrat gelé)
-source("R/bulk/bulk_multi_compare.R") # MD-2 : comparaison multi-jeux (pur, contrat gelé §10)
-source("R/bulk/bulk_merge.R")         # NEW-2 : fusion de jeux bulk (pur, contrat gelé)
-source("R/bulk/bulk_network.R")       # NEW-3 : interactome local Reactome + PCSF (pur, contrat gelé)
+source("tools/pkg_skeleton/R/bulk_gene_sets.R")     # PLOT-S6b : jeux de gènes NATIFS (pur, contrat gelé)
+source("tools/pkg_skeleton/R/bulk_wgcna.R")         # Bulk V2 M4 : WGCNA safe-mode (pur, contrat gelé)
+source("tools/pkg_skeleton/R/bulk_survival.R")      # Bulk V2 M5 : survie & clinique (pur, contrat gelé)
+source("tools/pkg_skeleton/R/bulk_pattern.R")       # STAT-S3 : clustering de profils (kmeans MVP, pur, contrat gelé)
+source("tools/pkg_skeleton/R/dose_response.R")      # NEW-1 : dose-réponse / time-course (drc, pur, contrat gelé)
+source("tools/pkg_skeleton/R/bulk_multi.R")         # MD-1 : conteneur bulk_datasets & jeux nommés (pur, contrat gelé)
+source("tools/pkg_skeleton/R/bulk_multi_compare.R") # MD-2 : comparaison multi-jeux (pur, contrat gelé §10)
+source("tools/pkg_skeleton/R/bulk_merge.R")         # NEW-2 : fusion de jeux bulk (pur, contrat gelé)
+source("tools/pkg_skeleton/R/bulk_network.R")       # NEW-3 : interactome local Reactome + PCSF (pur, contrat gelé)
 source("R/sc/sc_multi.R")             # MD-4 : conteneur sc_datasets & double jeu SC (pur, contrat gelé)
-source("R/bulk/bulk_report_engine.R")
-source("R/bulk/bulk_import_engine.R")
+source("tools/pkg_skeleton/R/bulk_report_engine.R")
+source("tools/pkg_skeleton/R/bulk_import_engine.R")
 
 # ── Bloc 07 : R/spatial (logique pure) ───────────────────────────────────────
 source("R/spatial/spatial_async.R")

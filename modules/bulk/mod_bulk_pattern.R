@@ -1,7 +1,7 @@
 # =============================================================================
 # modules/bulk/mod_bulk_pattern.R — Clustering de profils d'expression (STAT-S3)
 # =============================================================================
-# UI + orchestration UNIQUEMENT : tout le calcul vit dans R/bulk/bulk_pattern.R
+# UI + orchestration UNIQUEMENT : tout le calcul vit dans tools/pkg_skeleton/R/bulk_pattern.R
 # (logique pure, contract-first — docs/contracts/BULK_PATTERN_CONTRACT.md).
 #
 # Sources de gènes : résultat DE du contraste actif (up / down / all_sig),
@@ -18,13 +18,13 @@
 # The pure domain (`run_pattern_clustering()` and friends) is FROZEN and is not
 # touched: everything below is the same module-layer wrapper pattern already used
 # by `bulk-signatures-run_signatures`, and for the same reason - a public name in
-# R/bulk/bulk_pattern.R would change `bulk_pattern_public_api()`, which
+# tools/pkg_skeleton/R/bulk_pattern.R would change `bulk_pattern_public_api()`, which
 # test-bulk-pattern-contract-freeze.R pins.
 #
 # THE ONE PARAMETER THAT CANNOT BE FROZEN IS THE GROUP COLUMN, and it is handled
 # by a RULE rather than a value (see .bulk_pattern_group_column). `run_pattern_clustering()`
 # takes `group_column` as a REQUIRED argument and raises when it is not a metadata
-# column (R/bulk/bulk_pattern.R:111-117), so a frozen literal would either error or
+# column (tools/pkg_skeleton/R/bulk_pattern.R:111-117), so a frozen literal would either error or
 # silently pick whichever column happens to be first.
 # =============================================================================
 
@@ -134,7 +134,7 @@
 #' .bulk_pattern_drive_ready().
 #'
 #' Errors are raised with the DOMAIN's own `.bulk_pattern_stop()`
-#' (R/bulk/bulk_pattern.R:41) rather than a second copy: a same-named function in
+#' (tools/pkg_skeleton/R/bulk_pattern.R:41) rather than a second copy: a same-named function in
 #' two sourced files is a real hazard, because app.R sources in a FIXED order
 #' (R/ at :123, this module at :193) and only the LAST definition is live. The
 #' duplication gate flags it, and the failure would have been silent.

@@ -9,9 +9,9 @@
 # =============================================================================
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")   # %||% (sourcé en premier par app.R)
 source_project_file("R/core/validation.R")
-source_project_file("R/bulk/bulk_helpers.R") # build_contrast_gene_sets & co
-source_project_file("R/bulk/bulk_multi.R")
-source_project_file("R/bulk/bulk_multi_compare.R")
+source_project_file("tools/pkg_skeleton/R/bulk_helpers.R") # build_contrast_gene_sets & co
+source_project_file("tools/pkg_skeleton/R/bulk_multi.R")
+source_project_file("tools/pkg_skeleton/R/bulk_multi_compare.R")
 # D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
 # (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
 load_project_pkg()
@@ -48,7 +48,7 @@ test_that("public API surface is frozen (names + signatures)", {
   expect_setequal(
     bulk_multi_compare_public_api(),
     intersect(bulk_multi_compare_public_api(),
-              .ts_top_level_names("R/bulk/bulk_multi_compare.R"))
+              .ts_top_level_names("tools/pkg_skeleton/R/bulk_multi_compare.R"))
   )
   expected_args <- list(
     bulk_multi_compare_public_api  = list(),
@@ -79,7 +79,7 @@ test_that("public API surface is frozen (names + signatures)", {
 # ── États MD-2 : émis ⊆ ensemble gelé du domaine, et les 3 nouveaux présents
 test_that("MD-2 error states belong to the frozen domain set (no silent inflation)", {
   states <- bulk_multi_error_states()
-  src <- .ts_read("R/bulk/bulk_multi_compare.R")
+  src <- .ts_read("tools/pkg_skeleton/R/bulk_multi_compare.R")
   emitted <- unique(regmatches(src,
                                gregexpr('(?<=state = ")[^"]+', src,
                                         perl = TRUE))[[1L]])
@@ -100,8 +100,8 @@ test_that("MD-2 error states belong to the frozen domain set (no silent inflatio
 })
 
 # ── PURETÉ Shiny (contrat §10.2.6) ─────────────────────────────────────────
-test_that("R/bulk/bulk_multi_compare.R contains no Shiny symbols (pure logic)", {
-  src <- .ts_read("R/bulk/bulk_multi_compare.R")
+test_that("tools/pkg_skeleton/R/bulk_multi_compare.R contains no Shiny symbols (pure logic)", {
+  src <- .ts_read("tools/pkg_skeleton/R/bulk_multi_compare.R")
   forbidden <- c(
     "reactiveVal(?!ues)", "reactive\\(", "observeEvent", "observe\\(",
     "output\\$", "input\\$", "moduleServer", "showNotification",
@@ -115,7 +115,7 @@ test_that("R/bulk/bulk_multi_compare.R contains no Shiny symbols (pure logic)", 
 
 # ── RÉUTILISATION stricte (garde §10.2.4) ──────────────────────────────────
 test_that("compare engine reuses existing helpers, never re-implements", {
-  src <- .ts_read("R/bulk/bulk_multi_compare.R")
+  src <- .ts_read("tools/pkg_skeleton/R/bulk_multi_compare.R")
   for (helper in c("build_contrast_gene_sets(", "build_contrast_intersection_dt(",
                    "plot_volcano_bulk(")) {
     expect_match(src, helper, fixed = TRUE, info = helper)
@@ -134,7 +134,7 @@ test_that("compare engine reuses existing helpers, never re-implements", {
 # ── Ancres app.R (contrat §10.4) ───────────────────────────────────────────
 test_that("app.R anchors: source, session snapshot, restore, reset", {
   app <- .ts_read("app.R")
-  expect_match(app, 'source("R/bulk/bulk_multi_compare.R")', fixed = TRUE)
+  expect_match(app, 'source("tools/pkg_skeleton/R/bulk_multi_compare.R")', fixed = TRUE)
   expect_match(app, 'source("modules/bulk/mod_bulk_multi.R")', fixed = TRUE)
   expect_match(app, "bulk_multi_comparison = global_data$bulk_multi_comparison,",
                fixed = TRUE)
@@ -163,7 +163,7 @@ test_that("contract §10 cites the API, structure and key guards", {
                    "jaccard_up", "pct_same_direction", "stored_")) {
     expect_match(doc, anchor, fixed = TRUE, info = anchor)
   }
-  src <- .ts_read("R/bulk/bulk_multi_compare.R")
+  src <- .ts_read("tools/pkg_skeleton/R/bulk_multi_compare.R")
   expect_match(src, "docs/contracts/BULK_MULTI_CONTRACT.md", fixed = TRUE)
 })
 

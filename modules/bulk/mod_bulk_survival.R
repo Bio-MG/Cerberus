@@ -2,7 +2,7 @@
 # mod_bulk_survival.R — Bulk V2 M5 : survie & associations cliniques
 # (Kaplan-Meier + Cox univariés) — UI + orchestration.
 # =============================================================================
-# Logique pure : R/bulk/bulk_survival.R (contrat gelé).
+# Logique pure : tools/pkg_skeleton/R/bulk_survival.R (contrat gelé).
 # GARDES mission §2.5 : onglets de survie RESTREINTS tant que les métadonnées
 # ne contiennent pas un temps numérique valide et un statut binaire avec >= 10
 # événements (alerte permanente + boutons désactivés) ; découpes médiane /

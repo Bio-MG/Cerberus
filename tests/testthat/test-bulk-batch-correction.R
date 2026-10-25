@@ -1,7 +1,7 @@
 # =============================================================================
 # test-bulk-batch-correction.R — STAT-S1 : correction de batch (ComBat-seq)
 # =============================================================================
-# Couvre la logique PURE de R/bulk/batch_correction.R hors Shiny :
+# Couvre la logique PURE de tools/pkg_skeleton/R/batch_correction.R hors Shiny :
 #   - garde counts bruts (symétrique de bulk_assert_transformed_matrix) ;
 #   - contrôle du plan (réutilise bulk_batch_design_check) ;
 #   - libellé de provenance ;
@@ -20,8 +20,8 @@
 # =============================================================================
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")
 source_project_file("R/core/validation.R")
-source_project_file("R/bulk/bulk_batch_qc.R")
-source_project_file("R/bulk/batch_correction.R")
+source_project_file("tools/pkg_skeleton/R/bulk_batch_qc.R")
+source_project_file("tools/pkg_skeleton/R/batch_correction.R")
 
 # ── Fixture : effet lot multiplicatif par gène + effet condition réel ───────
 .bc_fixture <- function(seed = 42L, n_genes = 400L, n_per_batch = 3L) {
@@ -295,8 +295,8 @@ test_that("plot_batch_correction_pca combines two PCAs and rejects NULL", {
 })
 
 # ── Le fichier reste PUR (aucune réactivité Shiny) ─────────────────────────
-test_that("R/bulk/batch_correction.R stays pure R", {
-  src <- paste(readLines(file.path(ts_project_root(), "R/bulk/batch_correction.R")),
+test_that("tools/pkg_skeleton/R/batch_correction.R stays pure R", {
+  src <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/batch_correction.R")),
                collapse = "\n")
   expect_false(grepl("shiny::|reactive\\(|renderPlot|observeEvent\\(|showNotification\\(|moduleServer",
                      src))

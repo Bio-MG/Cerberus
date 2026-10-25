@@ -11,8 +11,8 @@ source_project_file("tools/pkg_skeleton/R/provenance.R")
 # D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
 # (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
 load_project_pkg()
-source_project_file("R/bulk/bulk_batch_qc.R")
-source_project_file("R/bulk/bulk_wgcna.R")
+source_project_file("tools/pkg_skeleton/R/bulk_batch_qc.R")
+source_project_file("tools/pkg_skeleton/R/bulk_wgcna.R")
 
 test_that("surface publique figée", {
   expect_setequal(
@@ -195,7 +195,7 @@ test_that("plots et export : consommateurs purs", {
 # M11 (2026-10-17) — les p module<->trait doivent être AJUSTÉES, et le plafond
 # de gènes ne doit plus passer par une branche morte
 # ---------------------------------------------------------------------------
-# Deux défauts mesurés dans R/bulk/bulk_wgcna.R :
+# Deux défauts mesurés dans tools/pkg_skeleton/R/bulk_wgcna.R :
 #   (a) `grep -c 'p.adjust|corPvalueStudent'` = 0 : la table module<->trait
 #       n'ajustait RIEN. Une heatmap de 20 modules x 10 traits, c'est 200 tests ;
 #       à 0.05 brut, ~10 étoiles sont attendues par hasard. Les étoiles
@@ -265,7 +265,8 @@ test_that("M11: la table module<->trait porte p ET p_adj, et les étoiles suiven
 })
 
 test_that("M11: le plafond de gènes lit la constante réelle, sans nom fantôme", {
-  src <- readLines(file.path(ts_project_root(), "R", "bulk", "bulk_wgcna.R"),
+  # D2 M5 lot 3 : le fichier vit desormais dans l'arbre du paquet.
+  src <- readLines(file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "bulk_wgcna.R"),
                    warn = FALSE, encoding = "UTF-8")
   # On scanne le CODE, pas les commentaires : le correctif lui-même doit pouvoir
   # nommer le nom fantôme pour expliquer le piège. Un garde qui rougit sur sa

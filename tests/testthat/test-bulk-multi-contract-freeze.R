@@ -8,7 +8,7 @@
 # bulk_datasets dans le pipeline existant (garde §2.3), sync code <-> contrat,
 # clés i18n.
 # =============================================================================
-source_project_file("R/bulk/bulk_multi.R")
+source_project_file("tools/pkg_skeleton/R/bulk_multi.R")
 .local_source_if_exists("config/thresholds.R")
 
 .ts_top_level_names <- function(relpath) {
@@ -43,7 +43,7 @@ test_that("public API surface is frozen (names + signatures)", {
   )
   expect_setequal(
     bulk_multi_public_api(),
-    intersect(bulk_multi_public_api(), .ts_top_level_names("R/bulk/bulk_multi.R"))
+    intersect(bulk_multi_public_api(), .ts_top_level_names("tools/pkg_skeleton/R/bulk_multi.R"))
   )
   expected_args <- list(
     bulk_multi_public_api         = list(),
@@ -83,7 +83,7 @@ test_that("error states are frozen in code AND contract (no silent inflation)", 
   # Chaque état émis par le source appartient à l'ensemble gelé (le fichier
   # MD-1 n'émet que les 7 états de stockage ; les états MD-2 vivent dans
   # bulk_multi_compare.R, gelés par son propre test).
-  src <- .ts_read("R/bulk/bulk_multi.R")
+  src <- .ts_read("tools/pkg_skeleton/R/bulk_multi.R")
   emitted <- unique(regmatches(src,
                                gregexpr('(?<=state = ")[^"]+', src,
                                         perl = TRUE))[[1L]])
@@ -123,8 +123,8 @@ test_that("captured pipeline fields are frozen (12 fields, doc-synced)", {
 })
 
 # ── PURETÉ Shiny (contrat §2.7) ────────────────────────────────────────────
-test_that("R/bulk/bulk_multi.R contains no Shiny symbols (pure logic)", {
-  src <- .ts_read("R/bulk/bulk_multi.R")
+test_that("tools/pkg_skeleton/R/bulk_multi.R contains no Shiny symbols (pure logic)", {
+  src <- .ts_read("tools/pkg_skeleton/R/bulk_multi.R")
   # Regexes (perl) : « reactiveVal » ne doit pas matcher « reactiveValues »
   # cité dans un message FR ; on vise les CONSTRUCTS Shiny dans le code.
   forbidden <- c(
@@ -140,7 +140,7 @@ test_that("R/bulk/bulk_multi.R contains no Shiny symbols (pure logic)", {
 
 # ── Producteurs étiquetés (contrat §2.8) ───────────────────────────────────
 test_that("producer tags are frozen (import | pipeline_save | pseudobulk)", {
-  src <- .ts_read("R/bulk/bulk_multi.R")
+  src <- .ts_read("tools/pkg_skeleton/R/bulk_multi.R")
   for (p in c('"import"', '"pipeline_save"', '"pseudobulk"')) {
     expect_match(src, p, fixed = TRUE, info = p)
   }
@@ -173,7 +173,7 @@ test_that("capacity threshold is declared in config and consumed with fallback",
   expect_identical(TS_BULK_MULTI_MAX_DATASETS, 20L)
   cfg <- .ts_read("config/thresholds.R")
   expect_match(cfg, "TS_BULK_MULTI_MAX_DATASETS <- 20L", fixed = TRUE)
-  src <- .ts_read("R/bulk/bulk_multi.R")
+  src <- .ts_read("tools/pkg_skeleton/R/bulk_multi.R")
   expect_match(src, 'exists("TS_BULK_MULTI_MAX_DATASETS", inherits = TRUE)',
                fixed = TRUE)
   # Le contrat cite le seuil et la valeur.
@@ -190,7 +190,7 @@ test_that("app.R anchors: init, session snapshot, restore fallback, reset", {
   expect_match(app, "global_data$bulk_datasets <- snapshot$bulk_datasets %||% list()",
                fixed = TRUE)
   expect_match(app, "global_data$bulk_datasets <- list()", fixed = TRUE)
-  expect_match(app, 'source("R/bulk/bulk_multi.R")', fixed = TRUE)
+  expect_match(app, 'source("tools/pkg_skeleton/R/bulk_multi.R")', fixed = TRUE)
   expect_match(app, 'source("modules/bulk/mod_bulk_datasets.R")', fixed = TRUE)
 })
 
@@ -217,10 +217,10 @@ test_that("existing bulk pipeline never references bulk_datasets (additive stric
     "modules/bulk_de/mod_bulk_de_summary.R",
     "modules/bulk_de/mod_bulk_de_pairwise.R",
     "modules/bulk/mod_bulk_pathways.R",
-    "R/bulk/bulk_gsva.R",
-    "R/bulk/bulk_signatures.R",
-    "R/bulk/bulk_wgcna.R",
-    "R/bulk/bulk_survival.R"
+    "tools/pkg_skeleton/R/bulk_gsva.R",
+    "tools/pkg_skeleton/R/bulk_signatures.R",
+    "tools/pkg_skeleton/R/bulk_wgcna.R",
+    "tools/pkg_skeleton/R/bulk_survival.R"
   )
   for (f in untouched) {
     expect_false(grepl("bulk_datasets", .ts_read(f), fixed = TRUE),
@@ -307,7 +307,7 @@ test_that("contract doc cites the public API, structure and key guards", {
                    "MD-4", "Zéro mutation", "Isolation par copie")) {
     expect_match(doc, anchor, fixed = TRUE, info = anchor)
   }
-  src <- .ts_read("R/bulk/bulk_multi.R")
+  src <- .ts_read("tools/pkg_skeleton/R/bulk_multi.R")
   expect_match(src, "docs/contracts/BULK_MULTI_CONTRACT.md", fixed = TRUE)
 })
 

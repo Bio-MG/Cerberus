@@ -8,7 +8,7 @@
 # invisibly and never mutate a global — callers assign it to
 # `global_data$sc_datasets` themselves.
 #
-# MIRROR of R/bulk/bulk_multi.R (MD-1) applied to the Single-Cell domain —
+# MIRROR of tools/pkg_skeleton/R/bulk_multi.R (MD-1) applied to the Single-Cell domain —
 # same structure, same error class, but:
 #   - obj is a Seurat object (not a bulk_obj list) — heavy: capacity default
 #     TS_SC_MULTI_MAX_DATASETS = 20 (RAM 32 GB budget; raised from 5 on

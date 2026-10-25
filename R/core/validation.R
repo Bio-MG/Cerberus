@@ -6,11 +6,11 @@
 # explicitly noted. Sourced in app.R BEFORE any domain file so every domain
 # (Bulk, SC, Spatial) can call these without namespace prefix.
 #
-#   - check_design_confounding  (moved from R/bulk/bulk_helpers.R)
-#   - validate_bulk_design      (moved from R/bulk/bulk_helpers.R)
+#   - check_design_confounding  (moved from tools/pkg_skeleton/R/bulk_helpers.R)
+#   - validate_bulk_design      (moved from tools/pkg_skeleton/R/bulk_helpers.R)
 #   - validate_seurat_reduction (extracted from R/sc/sc_helpers.R pattern)
 #
-# R/bulk/bulk_helpers.R retains IDENTICAL copies for standalone test sourcing
+# tools/pkg_skeleton/R/bulk_helpers.R retains IDENTICAL copies for standalone test sourcing
 # (tests/testthat/test-bulk-helpers.R sources bulk_helpers directly). Canonical
 # source of truth is THIS file; app.R loads it first, so the second definition
 # never overwrites with divergent logic. Keep in sync if bulk_helpers copy changes.

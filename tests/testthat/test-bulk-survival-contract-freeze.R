@@ -13,7 +13,7 @@ source_project_file("tools/pkg_skeleton/R/provenance.R")
 # D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
 # (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
 load_project_pkg()
-source_project_file("R/bulk/bulk_survival.R")
+source_project_file("tools/pkg_skeleton/R/bulk_survival.R")
 
 .sv_top_level_names <- function(relpath) {
   exprs <- parse(file.path(ts_project_root(), relpath))
@@ -59,14 +59,14 @@ test_that("public API surface is frozen (names + signatures)", {
     want <- names(expected_api[[fn_name]]); if (is.null(want)) want <- character(0)
     expect_setequal(got, want)
   }
-  defined <- .sv_top_level_names("R/bulk/bulk_survival.R")
+  defined <- .sv_top_level_names("tools/pkg_skeleton/R/bulk_survival.R")
   public <- setdiff(defined, grep("^\\.", defined, value = TRUE))
   expect_setequal(public, bulk_survival_public_api())
 })
 
 # ── GARDES MISSION gelés structurellement ──────────────────────────────────
 test_that("mission guards are frozen in source (events, no cutpoint, coding)", {
-  src <- paste(readLines(file.path(ts_project_root(), "R/bulk/bulk_survival.R")),
+  src <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/bulk_survival.R")),
                collapse = "\n")
   # 1. Plancher d'événements consommé de la config (jamais codé en dur).
   expect_match(src, "TS_BULK_SURV_MIN_EVENTS", fixed = TRUE)
@@ -94,7 +94,7 @@ test_that("mission guards are frozen in source (events, no cutpoint, coding)", {
 
 # ── États d'erreur gelés ───────────────────────────────────────────────────
 test_that("error states are frozen", {
-  src <- paste(readLines(file.path(ts_project_root(), "R/bulk/bulk_survival.R")),
+  src <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/bulk_survival.R")),
                collapse = "\n")
   states <- regmatches(src, gregexpr('state = "[a-z_]+"', src))[[1]]
   expect_setequal(unique(states),
@@ -110,14 +110,14 @@ test_that("config threshold is declared and pinned", {
 
 # ── Pureté Shiny + autonomie ggplot2 ───────────────────────────────────────
 test_that("R file stays pure and ggplot2-autonomous", {
-  src <- paste(readLines(file.path(ts_project_root(), "R/bulk/bulk_survival.R")),
+  src <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/bulk_survival.R")),
                collapse = "\n")
   expect_false(grepl("shiny::|reactive\\(|renderPlot|observeEvent\\(|showNotification\\(|moduleServer",
                      src))
   expect_match(src, "new_provenance_entry(", fixed = TRUE)
   expect_match(src, "ts_theme(", fixed = TRUE)
   code <- grep("^\\s*#",
-               readLines(file.path(ts_project_root(), "R/bulk/bulk_survival.R"),
+               readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/bulk_survival.R"),
                          warn = FALSE, encoding = "UTF-8"),
                value = TRUE, invert = TRUE)
   bare <- "(^|[^.[:alnum:]_])(ggplot|aes|geom_[a-z_]+|labs|theme|theme_[a-z]+|scale_[a-z_]+|element_[a-z]+|annotate)[[:space:]]*\\("
@@ -149,7 +149,7 @@ test_that("modules consume the contract", {
   expect_match(parent_src, "mod_bulk_survival_server(", fixed = TRUE)
   app_src <- paste(readLines(file.path(ts_project_root(), "app.R"),
                              encoding = "UTF-8"), collapse = "\n")
-  expect_match(app_src, 'source("R/bulk/bulk_survival.R")', fixed = TRUE)
+  expect_match(app_src, 'source("tools/pkg_skeleton/R/bulk_survival.R")', fixed = TRUE)
   expect_match(app_src, 'source("modules/bulk/mod_bulk_survival.R")', fixed = TRUE)
 })
 

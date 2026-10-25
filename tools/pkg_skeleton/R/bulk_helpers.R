@@ -174,9 +174,11 @@ if (!exists("check_design_confounding", envir = .GlobalEnv) ||
     !exists("validate_bulk_design", envir = .GlobalEnv)) {
   # Resolve project root relative to this file's location (works both in app.R
   # and when test-bulk-helpers.R sources this file directly via helper-source.R)
+  # D2 M5 lot 3 : le fichier vit desormais dans tools/pkg_skeleton/R/ — TROIS
+  # dirname() pour remonter a la racine projet (etait : deux, chemin R/bulk/).
   .bulk_helpers_validation_candidates <- c(
     "R/core/validation.R",
-    file.path(dirname(dirname(normalizePath("R/bulk/bulk_helpers.R", mustWork = FALSE))), "R", "core", "validation.R"),
+    file.path(dirname(dirname(dirname(normalizePath("tools/pkg_skeleton/R/bulk_helpers.R", mustWork = FALSE)))), "R", "core", "validation.R"),
     file.path(getwd(), "R", "core", "validation.R")
   )
   for (.p in .bulk_helpers_validation_candidates) {

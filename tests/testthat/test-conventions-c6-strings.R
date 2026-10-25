@@ -10,7 +10,7 @@
 # regex LIGNE PAR LIGNE. Elle ne peut donc pas voir une chaîne qui s'étend sur
 # PLUSIEURS lignes — alors que son propre commentaire annonce couvrir ce cas, en
 # citant `R/sc/sc_export.R`. Or `R/sc/sc_export.R:47` est bel et bien signalé.
-# Le fichier `R/bulk/bulk_report_engine.R` en est le cas massif : il EMBARQUE le
+# Le fichier `tools/pkg_skeleton/R/bulk_report_engine.R` en est le cas massif : il EMBARQUE le
 # texte d'un script R reproductible dans des littéraux `'...'` multi-lignes, avec
 # des `library()` à l'intérieur. Ces `library()` sont signalés C6 alors qu'ils ne
 # sont JAMAIS exécutés au `source()` — ce sont des caractères dans une chaîne.
@@ -224,7 +224,7 @@ test_that("C6 : les library() imbriques du depot ne sont plus signales", {
   # main).
   files <- c("R/core/pathway_helpers.R",   # clusterProfiler / org.*.eg.db / ReactomePA
              "R/spatial/spatial_async.R",  # Seurat + BPCells dans un worker mirai
-             "R/bulk/bulk_wgcna.R")        # require("WGCNA") dans une fonction
+             "tools/pkg_skeleton/R/bulk_wgcna.R")        # require("WGCNA") dans une fonction
   total <- 0L
   for (rel in files) {
     f <- .c6_repo(rel)
@@ -400,9 +400,9 @@ test_that("C10 : les fichiers du depot routes par un constructeur classe sont mu
   # C10. Le constructeur est verifie en PRE-REQUIS : s'il disparait ou cesse
   # d'etre classe, c'est le TEST qu'il faut reecrire — pas laisser passer en
   # silence (c'est exactement ainsi que C6 avait derive, cf. §12.1).
-  for (f in c("R/bulk/bulk_multi.R",
+  for (f in c("tools/pkg_skeleton/R/bulk_multi.R",
               "R/sc/sc_multi.R",
-              "R/bulk/bulk_multi_compare.R")) {
+              "tools/pkg_skeleton/R/bulk_multi_compare.R")) {
     path <- .c6_repo(f)
     expect_true(length(.collect_classed_error_ctors(path)) >= 1L,
                 info = sprintf("%s : plus aucun constructeur classe detecte — test a reecrire", f))
@@ -544,7 +544,7 @@ test_that("C10 : les re-leves REELS du depot ne sont plus signales", {
                    info = "R/core/jobs.R devrait etre muet (son seul site etait stop(e))")
   expect_identical(.c10_flagged_lines(.c6_repo("R/sc/sc_abundance_milo.R")), integer(0),
                    info = "R/sc/sc_abundance_milo.R devrait etre muet")
-  for (spec in list(list("R/bulk/bulk_helpers.R", 694L),
+  for (spec in list(list("tools/pkg_skeleton/R/bulk_helpers.R", 694L),
                     list("R/sc/sc_helpers.R", 1205L))) {
     flagged <- .c10_flagged_lines(.c6_repo(spec[[1]]))
     expect_false(spec[[2]] %in% flagged,

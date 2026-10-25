@@ -314,19 +314,26 @@ test_that("C9b : NE superpose PAS a C9 (un fichier sans test eponyme est HORS po
 })
 
 test_that("C9b : un fichier ENTIEREMENT exerce n'est pas signale (temoin de traversee)", {
-  # Faux positif a eviter : `R/bulk/bulk_gsva.R` possede 10 fonctions et son test
+  # Faux positif a eviter : `bulk_gsva.R` possede 10 fonctions et son test
   # les cite TOUTES (mesure du 2026-09-20). Si la regle signalait tout fichier
   # dote d'un test eponyme, elle rendrait 70 lignes pour zero information.
-  expect_false("R/bulk/bulk_gsva.R" %in% .c9b_flagged(.c9b_population()))
+  # ⚠️ D2 M5 LOT 3 (2026-10-25) : le fichier a demenage dans le paquet
+  # (tools/pkg_skeleton/R/bulk_gsva.R, ex-R/bulk/) et quitte la population
+  # C9b (collectee sur R/ uniquement). Le temoin SUIT le fichier : on passe le
+  # chemin du paquet DIRECTEMENT au garde (check_c9b_owned_functions_mentioned
+  # accepte n'importe quel chemin) — le fichier reste entierement exerce par
+  # test-bulk-gsva.R, donc le garde ne doit TOUJOURS pas le signaler.
+  bulk_gsva_pkg <- file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "bulk_gsva.R")
+  expect_false(bulk_gsva_pkg %in% .c9b_flagged(bulk_gsva_pkg))
 })
 
 # =============================================================================
 # DIRECTION 5 — le plafond de la population (invariant prospectif)
 # =============================================================================
-test_that("C9b : la population signalee est un PLAFOND a 39, jamais un compte exact", {
+test_that("C9b : la population signalee est un PLAFOND a 22, jamais un compte exact", {
   # Plafond, pas egalite : le compte doit pouvoir BAISSER quand un test est
   # ecrit, mais JAMAIS remonter. Un plafond ecrit en `==` deviendrait rouge au
-  # premier trou bouche — piege paye au §2cx sur `test-conventions-c10-scope.R`.
+  # premier trou bouge — piege paye au §2cx sur `test-conventions-c10-scope.R`.
   # ⚠️ Le plafond est 39 (mesure du 2026-09-21), PAS 4 : c'est le chiffre
   # CORRIGE. Voir la direction 6 pour ce que la mesure de 4 ratait.
   # 🔴 La valeur precedente (37, 43e increment) etait FAUSSE DES SA POSE : la
@@ -336,8 +343,20 @@ test_that("C9b : la population signalee est un PLAFOND a 39, jamais un compte ex
   # est rouge depuis le jour de sa naissance, sans rapport avec un changement de
   # `R/` (mesure `git archive` + `diff` de listes, pas deduction). Lecon : un
   # plafond se MESURE sur une ligne de base EXTRAITE, jamais ne se recopie.
+  # ⚠️ D2 M5 LOT 3 (2026-10-25) : les 18 fichiers de R/bulk demenagent dans
+  # tools/pkg_skeleton/R/ et quittent la population C9b (R/ uniquement). Mesure
+  # exacte rejouee AVANT le deplacement : 33 files flagges dont 12 bulk —
+  # bulk_batch_qc, bulk_gene_sets, bulk_helpers, bulk_import_engine, bulk_merge,
+  # bulk_multi, bulk_multi_compare, bulk_network, bulk_pattern, bulk_provenance,
+  # bulk_wgcna, dose_response (bulk_report_engine EXCLU : porte par C9, clause de
+  # non-superposition ; bulk_batch_metrics et bulk_gsva non flagges). ⚠️
+  # DECOMPOSITION EN DEUX SENS, au 13:04 : un fichier ETRANGER au lot est apparu
+  # EN VOL (`R/core/cerberus_handoff.R`, non suivi, ecrit 13:01 par la session
+  # CERBERUS) et entre dans la population C9b (+1). Solde net du lot :
+  # 33 - 12 (bulk) + 1 (etranger) = 22. Le plafond suit : 39 -> 22. Le laisser
+  # a 39 autoriserait un retour en arriere SILENCIEUX de 17 fichiers.
   flagged <- .c9b_flagged(.c9b_population())
-  expect_true(length(flagged) <= 39L,
+  expect_true(length(flagged) <= 22L,
               info = paste(flagged, collapse = ", "))
   expect_gt(length(flagged), 0L)
 })
@@ -356,7 +375,7 @@ test_that("C9b : une fonction PRIVEE (commencant par un point) est bien VUE", {
   #   (b) la detection des MENTIONS privees (`.mention_tokens()`).
   # Si l'une des deux redevenait aveugle au point, ce test rougirait.
   defs <- .collect_function_names(.read_code_lines(
-    file.path(ts_project_root(), "R/bulk/bulk_merge.R"))$code)
+    file.path(ts_project_root(), "tools/pkg_skeleton/R/bulk_merge.R"))$code)
   expect_true(".bulk_merge_stop" %in% defs)
 
   toks <- .mention_tokens(c("try(.bulk_merge_stop(msg, st))",

@@ -10,8 +10,8 @@ source_project_file("R/core/validation.R")
 # D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
 # (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
 load_project_pkg()
-source_project_file("R/bulk/bulk_helpers.R")
-source_project_file("R/bulk/bulk_batch_qc.R")
+source_project_file("tools/pkg_skeleton/R/bulk_helpers.R")
+source_project_file("tools/pkg_skeleton/R/bulk_batch_qc.R")
 
 # ggplot2 est attache par global.R dans l'app, mais PAS dans ce harnais.
 # plot_bulk_varpart() prefixe ses propres appels (il doit rester autonome) ;
@@ -146,7 +146,7 @@ test_that("plots : consommateurs purs ggplot", {
 # =============================================================================
 # Garde 236 — dependance optionnelle `variancePartition` (35e increment C10)
 # =============================================================================
-# Site : R/bulk/bulk_batch_qc.R:236 — `stop("absent")`, branche
+# Site : tools/pkg_skeleton/R/bulk_batch_qc.R:236 — `stop("absent")`, branche
 #   `if (!requireNamespace("variancePartition", quietly = TRUE))` placee dans le
 #   `tryCatch(..., error = function(e) ...)` de bulk_variance_partition().
 #
@@ -181,7 +181,7 @@ test_that("plots : consommateurs purs ggplot", {
 
 #' Le noeud `if (!requireNamespace("variancePartition", ...))` du fichier.
 .bq_guard <- function() {
-  p   <- ts_ast_parse("R/bulk/bulk_batch_qc.R")
+  p   <- ts_ast_parse("tools/pkg_skeleton/R/bulk_batch_qc.R")
   hit <- ts_ast_find(p, function(x) {
     if (!ts_ast_is_call_to(x, "if")) return(FALSE)
     l <- as.list(x)
@@ -277,7 +277,7 @@ test_that("garde 236 : la classe est AVALEE — rien ne s'echappe (inobservable)
 })
 
 test_that("garde 236 : le gestionnaire englobant ne RELANCE pas (verrou source falsifiable)", {
-  h <- ts_ast_trycatch_handler("R/bulk/bulk_batch_qc.R", ".varpart_pure_r_fallback")
+  h <- ts_ast_trycatch_handler("tools/pkg_skeleton/R/bulk_batch_qc.R", ".varpart_pure_r_fallback")
   expect_null(ts_ast_find(h, function(x) ts_ast_is_call_to(x, "stop")))
 })
 
@@ -297,5 +297,5 @@ test_that("garde 236 : la classe est gelee, le `state` est ABSENT (verrou source
 })
 
 test_that("bulk_batch_qc.R ne contribue aucun signalement C10 (35e increment)", {
-  expect_identical(ts_c10_sites("R/bulk/bulk_batch_qc.R"), integer(0))
+  expect_identical(ts_c10_sites("tools/pkg_skeleton/R/bulk_batch_qc.R"), integer(0))
 })

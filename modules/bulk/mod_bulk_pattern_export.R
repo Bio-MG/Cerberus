@@ -4,7 +4,7 @@
 # =============================================================================
 # ONE route for ONE artefact: the gene/cluster table the human `dl_pattern`
 # handler writes (mod_bulk_pattern.R) via `build_pattern_table_export()`
-# (R/bulk/bulk_pattern.R). The exporter calls the SAME builder, and the
+# (tools/pkg_skeleton/R/bulk_pattern.R). The exporter calls the SAME builder, and the
 # builder's own `assert_bulk_pattern_result()` is the canonical-shape verdict
 # — a stored non-canonical object becomes an honest `invalid` VERDICT.
 #

@@ -14,8 +14,8 @@ source_project_file("R/core/validation.R")
 # D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
 # (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
 load_project_pkg()
-source_project_file("R/bulk/bulk_helpers.R")
-source_project_file("R/bulk/bulk_batch_qc.R")
+source_project_file("tools/pkg_skeleton/R/bulk_helpers.R")
+source_project_file("tools/pkg_skeleton/R/bulk_batch_qc.R")
 
 .bqc_top_level_names <- function(relpath) {
   exprs <- parse(file.path(ts_project_root(), relpath))
@@ -57,7 +57,7 @@ test_that("public API surface is frozen (names + signatures)", {
     expect_setequal(got, want)
   }
   # Helpers internes préfixés d'un point, jamais publics.
-  defined <- .bqc_top_level_names("R/bulk/bulk_batch_qc.R")
+  defined <- .bqc_top_level_names("tools/pkg_skeleton/R/bulk_batch_qc.R")
   public <- setdiff(defined, grep("^\\.", defined, value = TRUE))
   expect_setequal(public, bulk_batch_qc_public_api())
   expect_true(all(c(".subset_variable_genes",
@@ -87,7 +87,7 @@ test_that("error class and states are frozen", {
   expect_identical(err_col$state, "invalid_input")
 
   # Seuls deux états existent (garde contre l'inflation silencieuse).
-  src <- paste(readLines(file.path(ts_project_root(), "R/bulk/bulk_batch_qc.R")),
+  src <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/bulk_batch_qc.R")),
                collapse = "\n")
   expect_match(src, 'state = "invalid_input"', fixed = TRUE)
   expect_match(src, 'state = "raw_counts_rejected"', fixed = TRUE)
@@ -98,7 +98,7 @@ test_that("error class and states are frozen", {
 
 # ── Heuristique anti-counts-bruts gelée ────────────────────────────────────
 test_that("raw-counts heuristic thresholds are frozen", {
-  src <- paste(readLines(file.path(ts_project_root(), "R/bulk/bulk_batch_qc.R")),
+  src <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/bulk_batch_qc.R")),
                collapse = "\n")
   expect_match(src, "0.95", fixed = TRUE)
   expect_match(src, "1e-8", fixed = TRUE)
@@ -156,7 +156,7 @@ test_that("config thresholds are declared and pinned", {
 
 # ── Pureté Shiny + réutilisation (pas de duplication) ──────────────────────
 test_that("R file stays pure (no Shiny reactivity, no reimplemented helpers)", {
-  src <- paste(readLines(file.path(ts_project_root(), "R/bulk/bulk_batch_qc.R")),
+  src <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/bulk_batch_qc.R")),
                collapse = "\n")
   # Motifs de CODE réactif (les commentaires citent "réactivité Shiny" et les
   # modules — d'où l'ancrage sur des tokens de code, pas des mots libres).
@@ -185,8 +185,8 @@ test_that("mod_bulk_filter consumes the contract (QC Batch tab)", {
 # Regression vecue : plot_bulk_varpart() appelait ggplot()/labs()/theme() nus.
 # Ca marche dans l'app (global.R attache ggplot2) mais CASSE dans tout contexte
 # externe — dont le harnais de test — avec "could not find function ggplot".
-test_that("R/bulk/bulk_batch_qc.R prefixes every ggplot2 call", {
-  path <- file.path(ts_project_root(), "R/bulk/bulk_batch_qc.R")
+test_that("tools/pkg_skeleton/R/bulk_batch_qc.R prefixes every ggplot2 call", {
+  path <- file.path(ts_project_root(), "tools/pkg_skeleton/R/bulk_batch_qc.R")
   code <- readLines(path, warn = FALSE, encoding = "UTF-8")
   code <- grep("^\\s*#", code, value = TRUE, invert = TRUE)   # on ignore les commentaires
 

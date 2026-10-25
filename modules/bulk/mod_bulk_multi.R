@@ -2,7 +2,7 @@
 # mod_bulk_multi.R — MD-2 : comparaison multi-jeux bulk (côte à côte +
 # recouvrement DEGs + concordance de direction) — UI + orchestration.
 # =============================================================================
-# Logique pure : R/bulk/bulk_multi_compare.R (contrat gelé
+# Logique pure : tools/pkg_skeleton/R/bulk_multi_compare.R (contrat gelé
 # BULK_MULTI_CONTRACT.md §10). Ce module ne fait que LIRE
 # global_data$bulk_datasets : aucune écriture sur le jeu actif ni sur le
 # conteneur. Résultat écrit en plat dans

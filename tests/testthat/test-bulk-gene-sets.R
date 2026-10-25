@@ -17,9 +17,9 @@ source_project_file("tools/pkg_skeleton/R/provenance.R")
 # D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
 # (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
 load_project_pkg()
-source_project_file("R/bulk/bulk_batch_qc.R")
-source_project_file("R/bulk/bulk_gsva.R")
-source_project_file("R/bulk/bulk_gene_sets.R")
+source_project_file("tools/pkg_skeleton/R/bulk_batch_qc.R")
+source_project_file("tools/pkg_skeleton/R/bulk_gsva.R")
+source_project_file("tools/pkg_skeleton/R/bulk_gene_sets.R")
 
 test_that("surface publique figée (symboles + formals)", {
   expect_setequal(
@@ -174,7 +174,7 @@ test_that("bulk_write_gmt : aller-retour EXACT, et refuse ce qui serait vide", {
 
 #' Les définitions `<- function(...)` du fichier, par NOM.
 .bgs_progeny_defs <- function(names_wanted) {
-  p   <- ts_ast_parse("R/bulk/bulk_gene_sets.R")
+  p   <- ts_ast_parse("tools/pkg_skeleton/R/bulk_gene_sets.R")
   out <- list()
   for (i in seq_along(p)) {                      # (1) par INDEX — cf. helper-ast.R
     ts_ast_walk(p[[i]], function(x) {

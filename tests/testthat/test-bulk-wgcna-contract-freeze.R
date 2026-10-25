@@ -14,8 +14,8 @@ source_project_file("tools/pkg_skeleton/R/provenance.R")
 # D2 M4 (2026-10-25) : R/plotting vit desormais dans l'arbre du paquet
 # (tools/pkg_skeleton/R/) — charge via load_project_pkg() (cf. helper-source.R).
 load_project_pkg()
-source_project_file("R/bulk/bulk_batch_qc.R")
-source_project_file("R/bulk/bulk_wgcna.R")
+source_project_file("tools/pkg_skeleton/R/bulk_batch_qc.R")
+source_project_file("tools/pkg_skeleton/R/bulk_wgcna.R")
 
 .wg_top_level_names <- function(relpath) {
   exprs <- parse(file.path(ts_project_root(), relpath))
@@ -60,14 +60,14 @@ test_that("public API surface is frozen (names + signatures)", {
     want <- names(expected_api[[fn_name]]); if (is.null(want)) want <- character(0)
     expect_setequal(got, want)
   }
-  defined <- .wg_top_level_names("R/bulk/bulk_wgcna.R")
+  defined <- .wg_top_level_names("tools/pkg_skeleton/R/bulk_wgcna.R")
   public <- setdiff(defined, grep("^\\.", defined, value = TRUE))
   expect_setequal(public, c(bulk_wgcna_public_api(), "labels2colors_safe"))
 })
 
 # ── GARDES MISSION gelés structurellement ──────────────────────────────────
 test_that("mission guards are frozen in source (N>=15, HVG bounds, TOM, threads)", {
-  src <- paste(readLines(file.path(ts_project_root(), "R/bulk/bulk_wgcna.R")),
+  src <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/bulk_wgcna.R")),
                collapse = "\n")
   # 1. Arrêt dur N < TS_BULK_WGCNA_MIN_SAMPLES — cité dans les DEUX compute.
   expect_match(src, "TS_BULK_WGCNA_MIN_SAMPLES", fixed = TRUE)
@@ -84,7 +84,7 @@ test_that("mission guards are frozen in source (N>=15, HVG bounds, TOM, threads)
   expect_match(src, "WGCNA::disableWGCNAThreads()", fixed = TRUE)
   code_nocomment <- paste(grep("^\\s*#",
                                readLines(file.path(ts_project_root(),
-                                                   "R/bulk/bulk_wgcna.R"),
+                                                   "tools/pkg_skeleton/R/bulk_wgcna.R"),
                                          warn = FALSE),
                                value = TRUE, invert = TRUE),
                           collapse = "\n")
@@ -104,7 +104,7 @@ test_that("mission guards are frozen in source (N>=15, HVG bounds, TOM, threads)
 
 # ── États d'erreur gelés ───────────────────────────────────────────────────
 test_that("error states are frozen", {
-  src <- paste(readLines(file.path(ts_project_root(), "R/bulk/bulk_wgcna.R")),
+  src <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/bulk_wgcna.R")),
                collapse = "\n")
   states <- regmatches(src, gregexpr('state = "[a-z_]+"', src))[[1]]
   # raw_counts_rejected est HÉRITÉ du garde M1 via re-classage (e$state) —
@@ -157,14 +157,14 @@ test_that("config thresholds are declared and pinned", {
 
 # ── Pureté Shiny + autonomie ggplot2 ───────────────────────────────────────
 test_that("R file stays pure and ggplot2-autonomous", {
-  src <- paste(readLines(file.path(ts_project_root(), "R/bulk/bulk_wgcna.R")),
+  src <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/bulk_wgcna.R")),
                collapse = "\n")
   expect_false(grepl("shiny::|reactive\\(|renderPlot|observeEvent\\(|showNotification\\(|moduleServer",
                      src))
   expect_match(src, "new_provenance_entry(", fixed = TRUE)
   expect_match(src, "ts_theme(", fixed = TRUE)
   code <- grep("^\\s*#",
-               readLines(file.path(ts_project_root(), "R/bulk/bulk_wgcna.R"),
+               readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/bulk_wgcna.R"),
                          warn = FALSE, encoding = "UTF-8"),
                value = TRUE, invert = TRUE)
   bare <- "(^|[^.[:alnum:]_])(ggplot|aes|geom_[a-z_]+|labs|theme|theme_[a-z]+|scale_[a-z_]+|element_[a-z]+|annotate)[[:space:]]*\\("
@@ -194,7 +194,7 @@ test_that("modules consume the contract", {
   expect_match(parent_src, "mod_bulk_wgcna_server(", fixed = TRUE)
   app_src <- paste(readLines(file.path(ts_project_root(), "app.R"),
                              encoding = "UTF-8"), collapse = "\n")
-  expect_match(app_src, 'source("R/bulk/bulk_wgcna.R")', fixed = TRUE)
+  expect_match(app_src, 'source("tools/pkg_skeleton/R/bulk_wgcna.R")', fixed = TRUE)
   expect_match(app_src, 'source("modules/bulk/mod_bulk_wgcna.R")', fixed = TRUE)
 })
 

@@ -1,5 +1,5 @@
 # =============================================================================
-# R/bulk/bulk_import_engine.R — Bulk import parsing & validation engine
+# tools/pkg_skeleton/R/bulk_import_engine.R — Bulk import parsing & validation engine
 # (extracted from mod_import_bulk.R, Block 9 refactor)
 # =============================================================================
 # Pure functions: no Shiny reactivity. Called by mod_import_bulk_server().

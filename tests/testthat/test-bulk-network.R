@@ -11,7 +11,7 @@
 # reactome.db EST installé et au lockfile, donc ce skip ne doit PAS se
 # déclencher ici (un skip qui masque une vraie erreur est un piège connu).
 # =============================================================================
-source_project_file("R/bulk/bulk_network.R")
+source_project_file("tools/pkg_skeleton/R/bulk_network.R")
 
 # Réseau construit une seule fois pour tout le fichier (≈9 s), puis mémoïsé.
 .network_fixture <- local({
@@ -24,7 +24,7 @@ source_project_file("R/bulk/bulk_network.R")
 
 # Noms top-level non préfixés d'un point (doivent tous être dans l'API publique)
 .network_top_level <- function() {
-  exprs <- parse(file.path(ts_project_root(), "R/bulk/bulk_network.R"),
+  exprs <- parse(file.path(ts_project_root(), "tools/pkg_skeleton/R/bulk_network.R"),
                  keep.source = FALSE)
   nms <- character(0)
   for (e in exprs) {

@@ -1,5 +1,5 @@
 # =============================================================================
-# R/bulk/batch_correction.R — Correction de batch par ComBat-seq (STAT-S1)
+# tools/pkg_skeleton/R/batch_correction.R — Correction de batch par ComBat-seq (STAT-S1)
 # =============================================================================
 # Contrat gelé : docs/contracts/BATCH_CORRECTION_CONTRACT.md
 # Gelé par    : tests/testthat/test-bulk-batch-correction-contract-freeze.R
@@ -57,7 +57,7 @@ bulk_batch_correction_public_api <- function() {
 #' On exige donc que la fraction de valeurs exactement entières dépasse 95 %.
 #' Une matrice VST / log2-CPM / TPM est continue (log2 d'un rapport) : sa
 #' fraction d'entiers est quasi nulle. Le seuil de 95 % est le MÊME que celui
-#' de `bulk_assert_transformed_matrix()` (R/bulk/bulk_batch_qc.R), appliqué
+#' de `bulk_assert_transformed_matrix()` (tools/pkg_skeleton/R/bulk_batch_qc.R), appliqué
 #' dans l'autre sens — les deux gardes sont symétriques et ne peuvent pas
 #' accepter la même matrice.
 #'
@@ -131,7 +131,7 @@ bulk_assert_raw_counts <- function(mat, context = "correction de batch",
 
 #' Contrôle du plan de correction : lot × condition + faisabilité ComBat-seq
 #'
-#' Réutilise `bulk_batch_design_check()` (R/bulk/bulk_batch_qc.R) pour la
+#' Réutilise `bulk_batch_design_check()` (tools/pkg_skeleton/R/bulk_batch_qc.R) pour la
 #' cross-table et la collinéarité — aucune logique de plan d'expérience n'est
 #' dupliquée ici. Cette fonction AJOUTE ce qui est propre à ComBat-seq :
 #'   - l'effectif minimal par lot (TS_BULK_BATCH_MIN_SAMPLES_PER_BATCH) ;
@@ -196,7 +196,7 @@ bulk_batch_correction_design <- function(metadata, batch_col, condition_col = NU
 #' Libellé de provenance décrivant la correction appliquée
 #'
 #' Pure construction de chaîne : la provenance est PRODUITE ici puis écrite par
-#' l'appelant via `bulk_update_provenance()` (R/bulk/bulk_provenance.R). Le
+#' l'appelant via `bulk_update_provenance()` (tools/pkg_skeleton/R/bulk_provenance.R). Le
 #' libellé PRÉSERVE la normalisation déjà déclarée (il la préfixe) au lieu de
 #' l'écraser — l'historique de provenance enregistre par ailleurs la
 #' transition, donc aucune information n'est perdue.
@@ -306,7 +306,7 @@ run_combat_seq <- function(counts_matrix, batch, group = NULL,
 #' Diagnostic avant / après : deux PCA côte à côte
 #'
 #' Consomme DEUX objets ggplot déjà construits par `plot_bulk_pca()`
-#' (R/bulk/bulk_helpers.R) — aucun code de tracé n'est dupliqué ici, la
+#' (tools/pkg_skeleton/R/bulk_helpers.R) — aucun code de tracé n'est dupliqué ici, la
 #' fonction ne fait que les composer. Les panneaux sont étiquetés A (avant) et
 #' B (après) ; la légende de correspondance est dans le sous-titre.
 #'

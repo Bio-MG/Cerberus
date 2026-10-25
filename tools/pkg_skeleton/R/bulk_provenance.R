@@ -1,5 +1,5 @@
 # =============================================================================
-# R/bulk/bulk_provenance.R — Manifeste de provenance Bulk RNA-seq (roadmap Bulk
+# tools/pkg_skeleton/R/bulk_provenance.R — Manifeste de provenance Bulk RNA-seq (roadmap Bulk
 # V2, Milestone 1) — PREREQUIS des analyses GSVA/WGCNA/survie.
 # =============================================================================
 # PRINCIPE (AGENTS.md regle 6) : la provenance est PRODUITE (a l'import, puis a
