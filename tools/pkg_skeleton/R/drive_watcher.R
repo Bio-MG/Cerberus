@@ -545,15 +545,42 @@ ts_drive_write_ready <- function(session, token, armed = FALSE, last_seq = 0L, h
   # definition, so the body is treated as file scope and every `session$` /
   # `input$` is reported as unbound. Keeping the signature on ONE line is the
   # fix; it is a property of the guard, not a style preference.
-  port <- tryCatch(session$request$REMOTE_PORT, error = function(e) NULL)
-  if (is.null(port)) port <- tryCatch(session$clientData_port(), error = function(e) NULL)
+  # MEASURED 2026-10-26, 3 boots / 1 rsession: the old source here,
+  # `session$request$REMOTE_PORT`, is the CLIENT's own ephemeral TCP source
+  # port for that one request — a fresh random value per connection that no
+  # agent can dial (ready.json advertised 58190 / 53214 / 57068 while the app
+  # served on 7346 throughout). The honest port is the one a client actually
+  # REACHED: the port part of `HTTP_HOST`. The `clientData$url_port` fallback
+  # is only readable inside a reactive context (the poller observe is one);
+  # beyond that, a same-session carry keeps the last port the client reached,
+  # and a brand-new session with no reachable port publishes NULL — an honest
+  # unknown, never a peer's random source port.
+  host <- tryCatch(session$request$HTTP_HOST, error = function(e) NULL)
+  port <- NULL
+  if (is.character(host) && length(host) == 1L && grepl(":[0-9]{2,5}$", host)) {
+    cand <- sub("^.*:", "", host)
+    if (grepl("^[0-9]{2,5}$", cand) && cand != "0") port <- cand
+  }
+  if (is.null(port)) {
+    cd_port <- tryCatch(session$clientData$url_port, error = function(e) NULL)
+    if (is.character(cd_port) && length(cd_port) == 1L &&
+        grepl("^[0-9]{2,5}$", cd_port) && cd_port != "0") port <- cd_port
+  }
 
-  prev <- if (is.null(hb_n) || is.null(started_at)) ts_drive_read_ready() else NULL
+  # One read now feeds THREE continuations (port, hb_n, started_at). The old
+  # code read prev only when the caller passed neither hb_n nor started_at, so
+  # the poller's beats never carried a previous port. The ready.json write is
+  # throttled (~1 s), so the extra small-JSON read per written beat is noise
+  # against the contract correctness it buys.
+  prev <- ts_drive_read_ready()
+  same <- !is.null(prev) && !is.null(prev$session_token) &&
+    identical(as.character(prev$session_token), as.character(token))
+
+  if (is.null(port) && same) port <- prev$port
 
   n <- if (!is.null(hb_n)) {
     as.integer(hb_n)
-  } else if (!is.null(prev) && !is.null(prev$hb_n) &&
-             identical(as.character(prev$session_token), as.character(token))) {
+  } else if (same && !is.null(prev$hb_n)) {
     # Same session: continue its counter. A different token means a new
     # session owns the file, so the counter legitimately restarts.
     as.integer(prev$hb_n)
@@ -564,8 +591,7 @@ ts_drive_write_ready <- function(session, token, armed = FALSE, last_seq = 0L, h
 
   started <- if (!is.null(started_at)) {
     as.character(started_at)
-  } else if (!is.null(prev) && !is.null(prev$started_at) &&
-             identical(as.character(prev$session_token), as.character(token))) {
+  } else if (same && !is.null(prev$started_at)) {
     as.character(prev$started_at)
   } else {
     ts_drive_now_iso()
@@ -760,6 +786,55 @@ ts_drive_arm_state <- function(token) {
   if (wildcard_ok) return(list(armed = TRUE, reason = "wildcard token (dev launcher)"))
 
   list(armed = FALSE, reason = sprintf("token mismatch (%s)", arm_token))
+}
+
+#' Reap an `arm.json` left armed by a session that no longer exists.
+#'
+#' MEASURED 2026-10-24 (live incident) and REPRODUCED 2026-10-26 over three
+#' boots of one rsession: after an app restart the leftover `arm.json` keeps
+#' `armed: true` for a token nobody holds, so every later session reads
+#' "token mismatch" forever and the operator's panel offers a takeover of a
+#' ghost. Called from `ts_drive_attach()` with the NEW session's token, it
+#' flips the stale arm to `armed: false` IN PLACE — the old token, a `reaped`
+#' mark and a timestamp stay on the wire for auditability.
+#'
+#' Two arms are deliberately never touched: the wildcard (`"*"` belongs to the
+#' dev launcher, not to this function) and the CURRENT session's token (an
+#' arm written by this very session is not stale by definition). A malformed
+#' or already-disarmed file is a no-op. Returns the reaped payload with a
+#' `written` attribute, invisibly; `written = FALSE` means nothing changed.
+ts_drive_reap_stale_arm <- function(token) {
+  arm <- ts_drive_read_json(ts_drive_path("arm.json"))
+  if (is.null(arm)) return(invisible(list(written = FALSE, reason = "no arm.json")))
+  proto <- as.character(arm$protocol %||% "")
+  if (!identical(proto, TS_DRIVE_PROTOCOL)) {
+    return(invisible(list(written = FALSE, reason = sprintf("protocol %s", proto))))
+  }
+  if (!isTRUE(arm$armed)) {
+    return(invisible(list(written = FALSE, reason = "already disarmed")))
+  }
+  arm_token <- as.character(arm$token %||% "")
+  if (identical(arm_token, token)) {
+    return(invisible(list(written = FALSE, reason = "current session's arm")))
+  }
+  if (identical(arm_token, "*")) {
+    return(invisible(list(written = FALSE, reason = "wildcard is the launcher's")))
+  }
+  reaped <- list(
+    protocol   = TS_DRIVE_PROTOCOL,
+    token      = arm_token,
+    armed      = FALSE,
+    reaped     = TRUE,
+    reaped_at  = ts_drive_now_iso(),
+    reaped_for = as.character(token)
+  )
+  ok <- ts_drive_write_json(reaped, ts_drive_path("arm.json"))
+  if (isTRUE(ok)) {
+    message(sprintf("[drive] reaped stale arm.json (token=%s) for new session %s",
+                    arm_token, token))
+  }
+  attr(reaped, "written") <- isTRUE(ok)
+  invisible(reaped)
 }
 
 
@@ -4289,6 +4364,13 @@ ts_drive_attach <- function(session, input, poll_ms = 800) {
     message(sprintf("[drive] ready.json write FAILED at attach: %s",
                     if (is.null(boot_err)) "unknown" else boot_err$message))
   }
+
+  # A leftover `armed: true` from a session that no longer exists must not
+  # survive this boot (MEASURED 2026-10-24 live; REPRODUCED 2026-10-26 x3):
+  # every later session would read "token mismatch" forever. The reap keeps
+  # the old token on the wire, flips armed to false, and leaves the wildcard
+  # and the current session's own arm alone.
+  ts_drive_reap_stale_arm(token)
 
   # One console line (not stop(), not a modal) so a human/agent log can copy
   # the token straight out of the R console.

@@ -762,8 +762,17 @@ server <- function(input, output, session) {
       # The human has to be able to NAME this session when an agent is attached
       # (`transcripto_drive_status` publishes the same derived id), otherwise
       # "drive my session" is ambiguous as soon as a second tab exists.
+      # MEASURED 2026-10-26: the fixed label "ID de session :" made a conflict
+      # state read as if the DISPLAYED id were the other session's, when it is
+      # always THIS connection's own derived id — the label now says which.
       session_id    = .drive$session_id,
-      session_label = .tr("ID de session :"),
+      session_label = switch(
+        st$state,
+        armed        = .tr("ID de session (donnez-le \u00e0 l'agent) :"),
+        armed_other  = .tr("Votre connexion (non arm\u00e9e) :"),
+        no_handshake = .tr("Votre connexion (sans handshake) :"),
+        .tr("ID de session :")
+      ),
       hint = .tr("Un agent externe (MCP) peut piloter cette session pour des tests ou du d\u00e9bogage. L'app applique arm.json au tick suivant (~800 ms).")
     )
   })
