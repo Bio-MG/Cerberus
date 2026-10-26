@@ -1177,30 +1177,47 @@ mod_sc_server <- function(id, global_data) {
     })
 
     # =========================================================================
-    # AUTO-PIPELINE SERVER
+    # ASYNC SC AUTO-PIPELINE (ExtendedTask + mirai) — Features 15 & 16
     # =========================================================================
-    observeEvent(input$sc_ap_confirm, {
-      removeModal()
-      req(global_data$sc_obj)
-      # Roadmap 5.2 : run_sc_auto_pipeline relance maintenant son erreur
-      # (journalisée + notifiée en amont) — on l'avale ICI uniquement pour
-      # éviter un "Unhandled error" Shiny côté session ; le drive, lui,
-      # exploite la propagation pour marquer le job en échec.
-      tryCatch(
-        run_sc_auto_pipeline(input, global_data, shared_rv, session, sc_log_rv),
-        error = function(e) NULL
-      )
+    sc_ap_log_file <- tempfile(pattern = "sc_ap_log_", fileext = ".txt")
+    sc_task_context <- shiny::reactiveVal(NULL)
+
+    ext_task_cls <- if (exists("ExtendedTask", where = asNamespace("shiny"), inherits = FALSE)) {
+      get("ExtendedTask", envir = asNamespace("shiny"))
+    } else if (exists("ExtendedTask", where = asNamespace("bslib"), inherits = FALSE)) {
+      get("ExtendedTask", envir = asNamespace("bslib"))
+    } else {
+      get0("ExtendedTask", envir = globalenv())
+    }
+
+    sc_pipeline_task <- if (!is.null(ext_task_cls)) {
+      ext_task_cls$new(function(obj, params, log_file) {
+        ensure_app_daemons()
+        mirai::mirai(
+          run_sc_auto_pipeline_core(obj, params, log_file = log_file),
+          obj = obj, params = params, log_file = log_file,
+          .timeout = TS_SC_AUTO_PIPELINE_TIMEOUT_S * 1000L
+        )
+      })
+    } else {
+      NULL
+    }
+    if (!is.null(sc_pipeline_task)) {
+      tryCatch(bslib::bind_task_button(sc_pipeline_task, "btn_auto_pipeline_sc"), error = function(e) NULL)
+    }
+
+    # Reactive log tracker for streaming background daemon log lines
+    sc_log_tracker <- create_reactive_tracker(session, sc_ap_log_file, interval_ms = 800)
+    observe({
+      lines <- sc_log_tracker()
+      if (length(lines) > 0) {
+        sc_log_rv(paste(lines, collapse = "\n"))
+      }
     })
 
     # =========================================================================
     # DRIVE LIVE CONTROL — the SC auto-pipeline, one frozen action
     # =========================================================================
-    # Thin by construction: the observer below only wires the protocol to the
-    # file-level helpers, and every decision (readiness, parameters, per-step
-    # outcomes, terminal status) lives in those helpers, where it is testable
-    # without a session. `ignoreInit = TRUE` is load-bearing — a bare
-    # observeEvent() on a reactiveVal fires once at module init, which would
-    # launch the whole pipeline on every page load.
     drive_counter  <- shiny::reactiveVal(0L)
     drive_run_state <- shiny::reactiveVal("idle")
     drive_last_steps <- new.env(parent = emptyenv())
@@ -1228,9 +1245,6 @@ mod_sc_server <- function(id, global_data) {
         has_data = !is.null(obj),
         ready = ready,
         steps = drive_last_steps$value,
-        # The auto-pipeline produces SEVERAL artefacts, so its descriptor names
-        # them rather than describing a frame: the referent for its count is the
-        # set of steps that produced something.
         descriptor = ts_drive_table_descriptor(
           data.frame(step = names(.sc_ap_produced(shared_rv)),
                      stringsAsFactors = FALSE),
@@ -1239,12 +1253,6 @@ mod_sc_server <- function(id, global_data) {
       )
     }
 
-    # The id is written as a LITERAL, not as `.SC_AP_DRIVE_BUTTON`: the wiring
-    # guard in test-drive-watcher.R greps the module sources for
-    # `ts_drive_publish_token(.*"<id>"` to prove a token is actually published —
-    # a constant would make the binding a promise again, which is precisely what
-    # that guard exists to prevent. The literal is pinned against the allowlist
-    # constant in test-mod-sc-drive.R, so the duplication cannot drift.
     ts_drive_publish_token(global_data, "sc-pipeline-run_auto_pipeline", drive_counter,
       ready = .sc_ap_drive_ready, state = .sc_ap_drive_state, long = TRUE,
       timeout_s = TS_SC_AUTO_PIPELINE_TIMEOUT_S
@@ -1260,8 +1268,100 @@ mod_sc_server <- function(id, global_data) {
                           job_id = drive_job$id)
     }
 
+    if (!is.null(sc_pipeline_task)) {
+      observeEvent(sc_pipeline_task$status(), {
+        st <- sc_pipeline_task$status()
+        ctx <- sc_task_context()
+        if (is.null(ctx)) return()
+
+        if (identical(st, "success")) {
+          drive_run_state("done")
+          res <- tryCatch(sc_pipeline_task$result(), error = function(e) e)
+          if (inherits(res, "error")) {
+            err_msg <- conditionMessage(res)
+            clean_msg <- ts_drive_badge_sanitize(paste0("SC auto-pipeline failed: ", err_msg), 200L)
+            ts_drive_record_error(clean_msg, module = "sc_pipeline")
+            showNotification(paste(.tr("Erreur Pipeline SC:"), err_msg), type = "error", duration = 10)
+            drive_run_state("error")
+            if (!is.null(ctx$job_id)) {
+              .close_sc_ap_drive_job("error", error = clean_msg)
+            }
+          } else {
+            if (!is.null(res$obj)) {
+              global_data$sc_obj <- res$obj
+              if ("pseudotime" %in% colnames(res$obj@meta.data)) {
+                traj_red_use <- if ("umap" %in% names(res$obj@reductions)) "umap" else "pca"
+                state_set(shared_rv, "traj_reduction", traj_red_use)
+                state_set(shared_rv, "traj_method", "exploratory_knn")
+              }
+            }
+            markers_res <- res$markers_data %||% res$markers
+            if (!is.null(markers_res) && is.data.frame(markers_res) && nrow(markers_res) > 0) {
+              state_set(shared_rv, "markers_data", markers_res)
+            }
+            if (!is.null(res$pathway_results)) {
+              state_set(shared_rv, "pathway_results", res$pathway_results)
+              if (!is.null(ctx$params$sc_ap_pathway_db)) {
+                state_set(shared_rv, "pathway_db", ctx$params$sc_ap_pathway_db)
+              }
+            }
+            corr_data <- res$correlated_genes %||% res$correlations
+            if (!is.null(corr_data)) {
+              state_set(shared_rv, "correlated_genes", corr_data)
+              state_set(shared_rv, "correlations", corr_data)
+              if (!is.null(markers_res) && nrow(markers_res) > 0) {
+                state_set(shared_rv, "corr_target_gene", markers_res$gene[1])
+              }
+            }
+            state_set(shared_rv, "active_tab", "tab_viz")
+            showNotification(.tr("✓ Pipeline Single-Cell terminé avec succès."), type = "message", duration = 8)
+            if (!is.null(ctx$job_id)) {
+              produced <- .sc_ap_produced(shared_rv)
+              n_genes_before <- if (inherits(ctx$obj_before, "Seurat")) nrow(ctx$obj_before) else NA_integer_
+              steps <- .sc_ap_step_outcomes(res$obj, .sc_ap_drive_selection(), produced = produced, n_genes_before = n_genes_before)
+              drive_last_steps$value <- steps
+              .close_sc_ap_drive_job("done", error = NULL)
+            }
+          }
+          sc_task_context(NULL)
+        } else if (identical(st, "error")) {
+          drive_run_state("error")
+          err <- tryCatch(sc_pipeline_task$result(), error = function(e) e)
+          err_msg <- if (inherits(err, "error")) conditionMessage(err) else "SC auto-pipeline failed in daemon"
+          clean_msg <- ts_drive_badge_sanitize(paste0("SC auto-pipeline failed: ", err_msg), 200L)
+          ts_drive_record_error(clean_msg, module = "sc_pipeline")
+          showNotification(paste(.tr("Erreur Pipeline SC:"), err_msg), type = "error", duration = 10)
+          if (!is.null(ctx$job_id)) {
+            .close_sc_ap_drive_job("error", error = clean_msg)
+          }
+          sc_task_context(NULL)
+        }
+      })
+    }
+
+    observeEvent(input$sc_ap_confirm, {
+      removeModal()
+      req(global_data$sc_obj)
+      pool_ok <- requireNamespace("mirai", quietly = TRUE) &&
+        isTRUE(tryCatch(ensure_app_daemons(), error = function(e) FALSE)) &&
+        isTRUE(tryCatch(mirai::daemons_set(), error = function(e) FALSE))
+
+      if (pool_ok) {
+        params <- sc_ap_normalize_params(as.list(input))
+        obj <- shiny::isolate(global_data$sc_obj)
+        cat("", file = sc_ap_log_file)
+        sc_task_context(list(mode = "ui", job_id = NULL, params = params, obj_before = obj))
+        drive_run_state("running")
+        sc_pipeline_task$invoke(obj, params, sc_ap_log_file)
+      } else {
+        tryCatch(
+          run_sc_auto_pipeline(input, global_data, shared_rv, session, sc_log_rv),
+          error = function(e) NULL
+        )
+      }
+    })
+
     observeEvent(drive_counter(), {
-      # Fail closed: an unready module never starts a job it cannot finish.
       if (!isTRUE(.sc_ap_drive_ready())) return()
       drive_job$id <- NULL
       job <- tryCatch(ts_drive_job_state(), error = function(e) NULL)
@@ -1270,10 +1370,23 @@ mod_sc_server <- function(id, global_data) {
         drive_job$id <- job$job_id
       }
       drive_run_state("running")
-      res <- .sc_ap_run_drive(global_data, shared_rv, session, sc_log_rv,
-                              .close_sc_ap_drive_job)
-      drive_last_steps$value <- res$steps
-      drive_run_state(res$status)
+
+      pool_ok <- requireNamespace("mirai", quietly = TRUE) &&
+        isTRUE(tryCatch(ensure_app_daemons(), error = function(e) FALSE)) &&
+        isTRUE(tryCatch(mirai::daemons_set(), error = function(e) FALSE))
+
+      if (pool_ok) {
+        params <- .sc_ap_drive_inputs()
+        obj <- shiny::isolate(global_data$sc_obj)
+        cat("", file = sc_ap_log_file)
+        sc_task_context(list(mode = "drive", job_id = drive_job$id, params = params, obj_before = obj))
+        sc_pipeline_task$invoke(obj, params, sc_ap_log_file)
+      } else {
+        res <- .sc_ap_run_drive(global_data, shared_rv, session, sc_log_rv,
+                                .close_sc_ap_drive_job)
+        drive_last_steps$value <- res$steps
+        drive_run_state(res$status)
+      }
     }, ignoreInit = TRUE)
 
     annot_drive_counter <- shiny::reactiveVal(0L)

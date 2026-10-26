@@ -10844,6 +10844,14 @@
     {
       "fr": "ID de session :",
       "en": "Session ID:"
+    },
+    {
+      "fr": "✓ Pipeline Single-Cell terminé avec succès.",
+      "en": "✓ Single-Cell pipeline finished successfully."
+    },
+    {
+      "fr": "Erreur Pipeline SC:",
+      "en": "SC Pipeline Error:"
     }
   ]
 }

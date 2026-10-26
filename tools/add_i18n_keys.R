@@ -653,7 +653,12 @@ new_entries <- list(
   c("Loom / H5AD (velocyto, scVelo)", "Loom / H5AD (velocyto, scVelo)"),
   c("Fichier velocity .loom / .h5ad", "Velocity .loom / .h5ad file"),
   c("Lecture stricte des couches spliced/unspliced (+ ambiguous si present). Aucune inference ; les symboles de gènes dupliqués sont rendus uniques (avertissement affiché).",
-    "Strict reading of the spliced/unspliced layers (+ ambiguous when present). No inference; duplicated gene symbols are made unique (warning shown).")
+    "Strict reading of the spliced/unspliced layers (+ ambiguous when present). No inference; duplicated gene symbols are made unique (warning shown)."),
+  # --- Milestone M3 SC Async Auto-pipeline ---
+  c("\u2713 Pipeline Single-Cell termin\u00e9 avec succ\u00e8s.",
+    "\u2713 Single-Cell pipeline finished successfully."),
+  c("Erreur Pipeline SC:",
+    "SC Pipeline Error:")
 )
 
 fr_existing <- vapply(j$translation, function(x) x$fr %||% "", character(1))

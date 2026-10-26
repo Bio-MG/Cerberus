@@ -213,3 +213,27 @@ test_that("the SC pipeline declares NO seed, and that gap is recorded, not silen
   body <- sub("(?s).*robust_find_clusters <- function.*?\\n\\}", "", helpers, perl = TRUE)
   expect_false(grepl("random\\.seed", body))
 })
+
+test_that("sc_pipeline_qc raises sc_pipeline_error cleanly on low-cell inputs in headless R", {
+  mat <- matrix(stats::rpois(50 * 5, 5), nrow = 50, ncol = 5,
+                dimnames = list(paste0("G", 1:50), paste0("C", 1:5)))
+  obj5 <- suppressWarnings(SeuratObject::CreateSeuratObject(counts = mat))
+  err <- tryCatch(
+    sc_pipeline_qc(obj5, min_genes = 10, max_genes = 1000, max_mt = 20, min_cells = 10),
+    error = function(e) e
+  )
+  expect_s3_class(err, "sc_pipeline_error")
+  expect_match(conditionMessage(err), "Seulement [0-9]+ cellule\\(s\\) après QC")
+})
+
+test_that("run_sc_auto_pipeline_core raises sc_pipeline_error cleanly when run_qc = TRUE on low cells", {
+  mat <- matrix(stats::rpois(50 * 5, 5), nrow = 50, ncol = 5,
+                dimnames = list(paste0("G", 1:50), paste0("C", 1:5)))
+  obj5 <- suppressWarnings(SeuratObject::CreateSeuratObject(counts = mat))
+  res <- tryCatch(
+    run_sc_auto_pipeline_core(obj5, params = list(run_qc = TRUE)),
+    error = function(e) e
+  )
+  expect_s3_class(res, "sc_pipeline_error")
+})
+

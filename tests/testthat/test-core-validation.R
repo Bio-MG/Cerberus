@@ -48,6 +48,11 @@ test_that("assert_seurat fails on NULL and non-Seurat with the context cited", {
   expect_error(assert_seurat(list(a = 1), context = "etape trajet"), "Seurat")
 })
 
+test_that("assert_seurat rejects S3 spoof mocks", {
+  s3_mock <- structure(list(), class = "Seurat")
+  expect_error(assert_seurat(s3_mock, context = "etape trajet"), "Seurat")
+})
+
 # ---------------------------------------------------------------------------
 # assert_assay()
 # ---------------------------------------------------------------------------

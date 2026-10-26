@@ -901,5 +901,10 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
                            selected=character(0), server=TRUE)
     })
 
+    # M3 / Feature 18: publish sc_embeddings export route
+    ts_drive_publish_export(global_data, "sc_embeddings", function() {
+      sc_viz_export_embeddings_csv(shared_rv, global_data)
+    })
+
   }) # /moduleServer
 }

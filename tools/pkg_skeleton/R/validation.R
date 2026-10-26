@@ -222,7 +222,7 @@ validate_seurat_reduction <- function(obj, reduction) {
 #' @param context Contexte d'appel cite dans le message d'erreur.
 #' @return L'objet, invisible.
 assert_seurat <- function(obj, context = "analyse") {
-  if (is.null(obj) || !inherits(obj, "Seurat")) {
+  if (is.null(obj) || !isS4(obj) || !inherits(obj, "Seurat") || !methods::is(obj, "Seurat")) {
     stop(sprintf(
       "Echec %s : un objet Seurat valide est requis (recu : %s).",
       context, if (is.null(obj)) "NULL" else paste(class(obj), collapse = "/")

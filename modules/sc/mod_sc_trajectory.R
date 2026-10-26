@@ -870,5 +870,10 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
                format = input$traj_export_fmt %||% "png")
       }
     )
+
+    # M3 / Feature 18: publish sc_trajectory export route
+    ts_drive_publish_export(global_data, "sc_trajectory", function() {
+      sc_trajectory_export_pseudotime_csv(shared_rv, global_data)
+    })
   }) # /moduleServer
 }

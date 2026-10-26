@@ -359,5 +359,10 @@ mod_sc_annotation_server <- function(id, global_data, shared_rv) {
                   file, row.names=FALSE)
       }
     )
+
+    # M3 / Feature 18: publish sc_annotation export route
+    ts_drive_publish_export(global_data, "sc_annotation", function() {
+      sc_annotation_export_cell_metadata_csv(shared_rv, global_data)
+    })
   })
 }

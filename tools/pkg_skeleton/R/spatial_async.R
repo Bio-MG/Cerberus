@@ -174,6 +174,13 @@ APP_DAEMON_SOURCE_FILES <- c(
   "tools/pkg_skeleton/R/sc_abundance_design.R",
   "tools/pkg_skeleton/R/sc_abundance_milo.R",
   "tools/pkg_skeleton/R/sc_abundance_milo_views.R",
+  # --- SC : Core Pipeline Extraction (M3 / Feature 14) ----------------------
+  "tools/pkg_skeleton/R/sc_bpcells.R",
+  "tools/pkg_skeleton/R/sc_helpers.R",
+  "tools/pkg_skeleton/R/sc_batch_metrics.R",
+  "tools/pkg_skeleton/R/sc_trajectory.R",
+  "tools/pkg_skeleton/R/pathway_helpers.R",
+  "tools/pkg_skeleton/R/sc_pipeline.R",
   # --- Bulk : analyse differentielle (D4, 2026-10-20) ----------------------
   # bulk_helpers.R est PUR (aucune reactivite) : le meme run_de_core() sert le
   # chemin daemon ET le repli synchrone. Sans ce preload le job echoue avec
@@ -266,6 +273,10 @@ init_spatial_daemons <- function(n_daemons = ts_mirai_n_daemons(),
       suppressPackageStartupMessages({
         if (requireNamespace("Seurat", quietly = TRUE))  library(Seurat)
         if (requireNamespace("BPCells", quietly = TRUE)) library(BPCells)
+        if (requireNamespace("Matrix", quietly = TRUE))  library(Matrix)
+        if (requireNamespace("RANN", quietly = TRUE))    library(RANN)
+        if (requireNamespace("igraph", quietly = TRUE))  library(igraph)
+        if (requireNamespace("harmony", quietly = TRUE)) library(harmony)
       })
       for (.f in .abs_files) {
         if (file.exists(.f)) {
