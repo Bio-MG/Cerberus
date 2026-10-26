@@ -7,6 +7,11 @@ j <- jsonlite::fromJSON(json_path, simplifyVector = FALSE)
 
 # key (fr) -> en
 new_entries <- list(
+  # --- C3-17 (2026-10-26): M3 async pipeline progress message, used at
+  # tools/pkg_skeleton/R/sc_pipeline.R:565 — the C7 guard is blind to
+  # tools/pkg_skeleton/R/ (all_code, check_conventions.R:1442) so this key
+  # stayed missing silently until now.
+  c("Calcul en cours...", "Computing..."),
   c("Scores par \u00e9chantillon (GSVA / ssGSEA)",
     "Per-sample scores (GSVA / ssGSEA)"),
   c("Attribue \u00e0 chaque \u00e9chantillon un score par voie \u2014 PCA et heatmaps par voie m\u00eame sans contraste. Exige la matrice VST (\u00e9tape 1) et un fichier .gmt (nom<TAB>description<TAB>g\u00e8nes...). Les jeux dont moins de 20 % des g\u00e8nes sont retrouv\u00e9s sont rejet\u00e9s (d\u00e9calage d'identifiants).",

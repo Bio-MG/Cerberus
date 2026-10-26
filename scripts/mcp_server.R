@@ -3638,8 +3638,9 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
     capabilities = list(tools = list(listChanged = FALSE)),
     serverInfo = list(name = "cerberus-drive", version = "0.6.0-m4"),
     instructions = paste0(
-      "Access to a LIVE Cerberus drive session. Eleven tools: four read-only ",
-      "(status, verdict, state digest, passive snapshot), one controlled import (import, ",
+      "Access to a LIVE Cerberus drive session. Eleven tools: five read-only ",
+      "(status, verdict, state digest, passive snapshot, bounded read of the ",
+      "exported artefact), one controlled import (import, ",
       "action=import_file only), one controlled input write (set_inputs), ",
       "one controlled run (run, action=run_pipeline only), one bounded observation ",
       "(wait), one controlled arm/disarm and one controlled export (export, the ",
@@ -4046,5 +4047,5 @@ if ("--check" %in% .args) {
        save = "no")
 }
 
-.ts_stderr("mcp_server: serving 10 drive tools (3 read-only + import + set_inputs + run + wait + arm/disarm + export + read) (stdio, NDJSON, native JSON-RPC)")
+.ts_stderr("mcp_server: serving 11 drive tools (5 read-only: status/verdict/state/snapshot/read + import + set_inputs + run + wait + arm/disarm + export) (stdio, NDJSON, native JSON-RPC)")
 .ts_serve()

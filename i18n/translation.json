@@ -10852,6 +10852,10 @@
     {
       "fr": "Erreur Pipeline SC:",
       "en": "SC Pipeline Error:"
+    },
+    {
+      "fr": "Calcul en cours...",
+      "en": "Computing..."
     }
   ]
 }
