@@ -65,7 +65,7 @@ if (file.exists(file.path(e2e_project_root(), "tools/pkg_skeleton/R/batch_correc
 e2e_source_if_exists("tools/pkg_skeleton/R/drive_allowlist.R")
 e2e_source_if_exists("tools/pkg_skeleton/R/drive_watcher.R")
 e2e_source_if_exists("tools/pkg_skeleton/R/spatial_async.R")
-e2e_source_if_exists("R/core/cerberus_handoff.R")
+e2e_source_if_exists("tools/pkg_skeleton/R/cerberus_handoff.R")
 e2e_source_if_exists("tools/cerberus_handoff.R")
 
 # Progressive milestone sources (source if available)
@@ -88,7 +88,7 @@ options(ts.drive.hb_interval = 2)
 # ── Milestone Readiness & Capability Detection ──────────────────────────────
 
 is_m1_ready <- function() {
-  file.exists(file.path(e2e_project_root(), "R/core/cerberus_handoff.R")) &&
+  file.exists(file.path(e2e_project_root(), "tools/pkg_skeleton/R/cerberus_handoff.R")) &&
   file.exists(file.path(e2e_project_root(), "tools/cerberus_handoff.R")) &&
   exists("cerberus_handoff_validate_drop", mode = "function")
 }

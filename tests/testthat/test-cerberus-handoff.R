@@ -9,7 +9,7 @@ if (file.exists(file.path(ts_project_root(), "tools/pkg_skeleton/R/batch_correct
 } else if (file.exists(file.path(ts_project_root(), "R/bulk/batch_correction.R"))) {
   source_project_file("R/bulk/batch_correction.R")
 }
-source_project_file("R/core/cerberus_handoff.R")
+source_project_file("tools/pkg_skeleton/R/cerberus_handoff.R")
 source_project_file("tools/cerberus_handoff.R")
 
 # ── Helper de creation de drops temporaires -----------------------------------

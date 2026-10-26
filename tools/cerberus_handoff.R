@@ -43,7 +43,10 @@ cerberus_handoff_root <- function() {
 
 # ── Chargement du moteur de validation et dépendances -----------------------
 cerberus_handoff_load_engine <- function(root = cerberus_handoff_root()) {
-  engine_file <- file.path(root, "R", "core", "cerberus_handoff.R")
+  # J1 CERBERUS (2026-10-26) : le moteur suit l'arbre du paquet (D2 M5) —
+  # ex-R/core/cerberus_handoff.R, dernier etranger de R/core (git mv, sha256
+  # inchange 6208f2bf). Le moteur est pur R : il garde ses replis exists().
+  engine_file <- file.path(root, "tools", "pkg_skeleton", "R", "cerberus_handoff.R")
   if (!file.exists(engine_file)) {
     stop(sprintf("Moteur de validation introuvable : %s", engine_file), call. = FALSE)
   }

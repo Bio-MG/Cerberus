@@ -160,10 +160,11 @@ test_that("le manifeste existe et n'est pas trivial", {
     info = paste("R/.sources_manifest.txt ABSENT -- le generer :",
                  "Rscript tools/sources_manifest.R --build"))
   if (is.null(lines)) return(invisible(NULL))
-  # tripwire de vacuite : 155 fichiers attendus (145 explicites + 10 boucle) ;
-  # un extracteur regex casse rendrait peu ou rien -- 100 = plancher.
+  # tripwire de vacuite : 158 fichiers attendus (145 explicites + 10 boucle
+  # + 3 export drive M3, re-basage J1 CERBERUS 2026-10-26, mesure sur HEAD
+  # aa364ea) ; un extracteur regex casse rendrait peu ou rien -- 100 = plancher.
   expect_true(length(lines) >= 100L,
-    info = sprintf("manifeste trivial : %d lignes (155 attendues)", length(lines)))
+    info = sprintf("manifeste trivial : %d lignes (158 attendues)", length(lines)))
   # aucune ligne vide ni doublon : le format est une liste ORDONNEE de chemins
   expect_false(any(!nzchar(lines)))
   expect_identical(anyDuplicated(lines), 0L)

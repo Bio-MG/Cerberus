@@ -9,7 +9,7 @@ if (file.exists(file.path(ts_project_root(), "tools/pkg_skeleton/R/batch_correct
 } else if (file.exists(file.path(ts_project_root(), "R/bulk/batch_correction.R"))) {
   source_project_file("R/bulk/batch_correction.R")
 }
-source_project_file("R/core/cerberus_handoff.R")
+source_project_file("tools/pkg_skeleton/R/cerberus_handoff.R")
 
 .ch_top_level_names <- function(relpath) {
   exprs <- parse(file.path(ts_project_root(), relpath), keep.source = FALSE)
@@ -87,7 +87,7 @@ test_that("public API surface is frozen (names + signatures)", {
     expect_identical(got, want, info = paste("signature de", fn_name))
   }
 
-  defined <- .ch_top_level_names("R/core/cerberus_handoff.R")
+  defined <- .ch_top_level_names("tools/pkg_skeleton/R/cerberus_handoff.R")
   public <- setdiff(defined, grep("^\\.", defined, value = TRUE))
   expect_setequal(public, cerberus_handoff_public_api())
 })
@@ -120,14 +120,14 @@ test_that("constants and error states are frozen", {
   )
   expect_setequal(cerberus_handoff_states(), expected_states)
 
-  src <- paste(readLines(file.path(ts_project_root(), "R/core/cerberus_handoff.R"), warn = FALSE), collapse = "\n")
+  src <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/cerberus_handoff.R"), warn = FALSE), collapse = "\n")
   states_found <- unique(regmatches(src, gregexpr('state = "[a-z_]+"', src))[[1]])
   expected_state_calls <- paste0('state = "', expected_states, '"')
   expect_setequal(states_found, expected_state_calls)
 })
 
-test_that("R/core/cerberus_handoff.R is pure (no Shiny symbols)", {
-  src <- paste(readLines(file.path(ts_project_root(), "R/core/cerberus_handoff.R"), warn = FALSE), collapse = "\n")
+test_that("tools/pkg_skeleton/R/cerberus_handoff.R is pure (no Shiny symbols)", {
+  src <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/cerberus_handoff.R"), warn = FALSE), collapse = "\n")
   for (sym in c("reactiveVal", "reactiveValues", "observeEvent", "output\\$",
                 "input\\$", "moduleServer", "showNotification",
                 "isolate\\(", "reactive\\(", "renderPlot")) {
@@ -161,12 +161,12 @@ test_that("warning codes and covariate confounding are frozen and mapped", {
     "non_integer_counts_tolerated"
   )
 
-  # 1. AST check: ensure R/core/cerberus_handoff.R actively emits covariate_confounded
-  src <- paste(readLines(file.path(ts_project_root(), "R/core/cerberus_handoff.R"), warn = FALSE), collapse = "\n")
+  # 1. AST check: ensure tools/pkg_skeleton/R/cerberus_handoff.R actively emits covariate_confounded
+  src <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/cerberus_handoff.R"), warn = FALSE), collapse = "\n")
   warn_calls <- unique(regmatches(src, gregexpr('add_warn\\("[a-z_]+"', src))[[1]])
   warn_codes_found <- sub('^add_warn\\("', '', sub('"$', '', warn_calls))
   expect_true("covariate_confounded" %in% warn_codes_found,
-              info = "add_warn('covariate_confounded', ...) absent de R/core/cerberus_handoff.R")
+              info = "add_warn('covariate_confounded', ...) absent de tools/pkg_skeleton/R/cerberus_handoff.R")
 
   # 2. Contract document sync: verify that CERBERUS_HANDOFF_CONTRACT.md contains all warning codes
   doc_path <- file.path(ts_project_root(), "docs", "contracts", "CERBERUS_HANDOFF_CONTRACT.md")

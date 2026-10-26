@@ -574,6 +574,16 @@ test_that("C9b : la POPULATION SCANNEE est celle de C9 (le cablage passe r_files
 
   .REPORT$errors <- list()
   .REPORT$warns  <- list()
+  # J1 CERBERUS (2026-10-26) : R/ est DESORMAIS VIDE (dernier etranger
+  # CERBERUS demenage au paquet : git mv cerberus_handoff.R ; copie
+  # drive_watcher.R supprimee). Le temoin de non-vacuite survit via un
+  # fixture temporaire : si run_check cessait de scanner R/ (ou elargissait
+  # a tests/ ou modules/), le fixture ne serait pas vu (ou mal place) et le
+  # temoin rougirait -- il reste falsifiable a population vide.
+  fixture <- file.path(ts_project_root(), "R", "c9b_pop_fixture_tmp.R")
+  writeLines("# fixture temporaire du temoin de cablage C9b (detruit en on.exit)",
+             fixture)
+  on.exit(unlink(fixture), add = TRUE)
   invisible(capture.output(run_check(use_git = FALSE)))
 
   # Controle de VALIDITE : si l'espion n'avait pas ete installe, `seen` serait

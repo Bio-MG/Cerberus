@@ -367,8 +367,8 @@ test_that("F06-3: cerberus_handoff_schema_version returns cerberus-exchange/v1",
   expect_identical(cerberus_handoff_schema_version(), "cerberus-exchange/v1")
 })
 
-test_that("F06-4: R/core/cerberus_handoff.R maintains pure R purity (no Shiny symbols)", {
-  code_path <- file.path(e2e_project_root(), "R/core/cerberus_handoff.R")
+test_that("F06-4: tools/pkg_skeleton/R/cerberus_handoff.R maintains pure R purity (no Shiny symbols)", {
+  code_path <- file.path(e2e_project_root(), "tools/pkg_skeleton/R/cerberus_handoff.R")
   lines <- readLines(code_path, warn = FALSE)
   code_only <- paste(lines[!grepl("^\\s*#", lines)], collapse = " ")
   shiny_symbols <- c("reactiveVal", "reactiveValues", "observeEvent", "isolate", "renderPlot", "uiOutput")
