@@ -237,8 +237,18 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
         error     = ""
       )
       # 1) Un job en vol est le SEUL producteur de `running` (cf. plus haut).
+      #    N8 (SW-5b, registre round3, J2 2026-10-26) : un job TERMINAL —
+      #    `$pending` pose par `ts_drive_job_finish()` (drive_watcher.R:4182) —
+      #    n'est PAS en vol, meme s'il reste au registre : le beat qui ecrit le
+      #    result terminal projette `ts_drive_snapshot()` AVANT le clear
+      #    (drive_watcher.R:3723-3747), donc repondre `running` ici gelait le
+      #    mensonge dans le result terminal d'un run_de en erreur. Sur chemin
+      #    d'erreur le miroir se reinitialise a l'etat PROPRE du module
+      #    (branches 2/3 ci-dessous — le job run_de appartient a bulk_de : ni
+      #    son statut ni son action ne sont a publier ici). Un job REELLEMENT
+      #    en vol (sans pending) reste le seul producteur de `running`.
       job <- ts_drive_job_state()
-      if (!is.null(job)) {
+      if (!is.null(job) && is.null(job$pending)) {
         btn <- if (is.null(job$button)) "" else as.character(job$button)[1]
         out$action <- if (nzchar(btn)) sub("^bulk-pathways-", "", btn) else NA_character_
         out$seq    <- if (is.null(job$seq)) NA_integer_ else as.integer(job$seq)

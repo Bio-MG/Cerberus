@@ -241,9 +241,18 @@ test_that("mod_bulk_pathways.R ne contribue aucun signalement C10", {
 }
 
 .mbp_job <- function(seq = 7L, action = "run_pipeline",
-                     button = "bulk-pathways-run_pathway") {
-  list(seq = seq, module = "bulk_pathways", action = action, button = button,
-       started_at = "2026-09-24T00:00:00Z", started = as.numeric(Sys.time()))
+                     button = "bulk-pathways-run_pathway",
+                     module = "bulk_pathways", status = NULL, pending = NULL) {
+  out <- list(seq = seq, module = module, action = action, button = button,
+              started_at = "2026-09-24T00:00:00Z", started = as.numeric(Sys.time()))
+  # N8 (SW-5b, registre round3) : `status` + `pending` reproduisent l'etat EXACT
+  # du registre apres `ts_drive_job_set_pending()` (drive_watcher.R:4123-4126) —
+  # le job passe `status <- "error"` et recoit `$pending`, et RESTE au registre
+  # jusqu'au clear (le clear n'arrive qu'apres l'ecriture du result terminal,
+  # drive_watcher.R:3743-3747).
+  if (!is.null(status)) out$status <- status
+  if (!is.null(pending)) out$pending <- pending
+  out
 }
 
 # ---------------------------------------------------------------------------
@@ -362,6 +371,60 @@ test_that("`empty` n'est pas `done` : le compte de resultats les separe", {
   # Si ces deux etaient identiques, le jalon n'aurait rien apporte : c'est
   # EXACTEMENT la confusion que `result.json` faisait avant.
   expect_false(identical(d$status, e$status))
+})
+
+# ---------------------------------------------------------------------------
+# (h) N8 (SW-5b, registre round3) : un job TERMINAL n'est pas `running`
+# ---------------------------------------------------------------------------
+test_that("un job resolu (pending pose) ne fige pas `running` dans le miroir", {
+  # N8 mesure au rejeu SW-5b : dans le result TERMINAL d'un run_de en erreur,
+  # `snapshot.modules.bulk_pathways` restait `status: "running"`. Mecanique :
+  # `ts_drive_job_finish()` pose le terminal en `pending` (drive_watcher.R:4182)
+  # mais le job RESTE au registre — le beat qui ecrit le result terminal
+  # projette `ts_drive_snapshot()` AVANT le clear (drive_watcher.R:3723-3747),
+  # et la branche « job en vol » du probe repondait `running` pour tout job
+  # non-NULL, terminal compris. Le result terminal du run_de gelait donc le
+  # mensonge d'affichage : registre de statut par module non reinitialise sur
+  # le chemin d'erreur (hors contrat job — le job run_de appartient au module
+  # bulk_de, pas a bulk_pathways).
+  #
+  # L'honnetete du miroir : un job qui porte un `$pending` n'est PAS en vol.
+  # Le probe retombe sur l'etat PROPRE du module (branches 2/3 : ici
+  # `not_ready` — bulk_pathways n'a rien resolu lui-meme). Il ne peut pas
+  # publier `error` a la place : rapporter l'echec d'un job qu'il ne possede
+  # pas serait le mensonge symetrique (il ne mesure ni ne peut rejouer ce
+  # travail — meme regle que « un statut RESOLU ne survit pas a la
+  # disparition de l'objet de travail », commentaire du probe).
+  job_de_error <- .mbp_job(seq = 12L, button = "bulk-de-run_de",
+                           module = "bulk_de", status = "error",
+                           pending = list(status = "error",
+                                          wire_status = "error",
+                                          error = "DE failed upstream"))
+  got <- .mbp_call_state(.mbp_state_env(job = job_de_error))
+  # Le mensonge N8, exactement : `running` fige dans le result terminal.
+  expect_false(identical(got$status, "running"),
+               info = paste("le miroir reste running sur job terminal :",
+                            got$action))
+  # Le statut honnete est l'etat propre du module — dans le contrat 5 statuts.
+  expect_identical(got$status, "not_ready",
+                   info = "le probe doit retomber sur l'etat propre du module")
+  expect_true(got$status %in% .MBP_STATE_STATUSES)
+  # Et le miroir ne revendique pas l'action du job etranger (le `sub()`
+  # de la branche running laissait passer "bulk-de-run_de" brut).
+  expect_identical(got$action, NA_character_,
+                   info = "l'action d'un job etranger ne doit pas etre publiee")
+  # Symetrie : la fenetre pending d'un job REUSSI n'est pas un vol non plus.
+  job_de_done <- .mbp_job(seq = 13L, button = "bulk-de-run_de",
+                          module = "bulk_de", status = "done",
+                          pending = list(status = "done", wire_status = "done",
+                                         error = NULL))
+  got_done <- .mbp_call_state(.mbp_state_env(job = job_de_done))
+  expect_false(identical(got_done$status, "running"))
+  expect_identical(got_done$status, "not_ready")
+  # Un job EN VOL (sans pending) reste le producteur legitime de `running`
+  # — le cas (e) ci-dessus, rejoue ici pour lier les deux branches.
+  expect_identical(.mbp_call_state(.mbp_state_env(job = .mbp_job()))$status,
+                   "running")
 })
 
 # ---------------------------------------------------------------------------
