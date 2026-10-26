@@ -159,7 +159,10 @@ TS_DRIVE_EXPORT_ROUTES <- list(
   bulk_signatures = "bulk_signatures_scores_csv",
   bulk_pattern    = "bulk_pattern_clusters_csv",
   bulk_network    = "bulk_network_nodes_csv",
-  bulk_wgcna      = "bulk_wgcna_genes_csv"
+  bulk_wgcna      = "bulk_wgcna_genes_csv",
+  sc_embeddings   = "sc_embeddings_csv",
+  sc_annotation   = "sc_cell_metadata_csv",
+  sc_trajectory   = "sc_trajectory_pseudotime_csv"
 )
 
 #' Modules allowed to publish an EXPORT route, derived from the routes above.
@@ -337,18 +340,26 @@ TS_DRIVE_EXPORT_STEM_BULK_SIGNATURES <- "bulk_signatures_scores"
 TS_DRIVE_EXPORT_STEM_BULK_PATTERN <- "bulk_pattern_clusters"
 TS_DRIVE_EXPORT_STEM_BULK_NETWORK <- "bulk_network_nodes"
 TS_DRIVE_EXPORT_STEM_BULK_WGCNA <- "bulk_wgcna_genes"
+TS_DRIVE_EXPORT_STEM_SC_EMBEDDINGS <- "sc_embeddings_umap_2d"
+TS_DRIVE_EXPORT_STEM_SC_ANNOTATION <- "sc_cell_metadata"
+TS_DRIVE_EXPORT_STEM_SC_TRAJECTORY <- "sc_trajectory_pseudotime"
 
 TS_DRIVE_EXPORT_STEMS <- c(
-  spatial_qc      = TS_DRIVE_EXPORT_STEM,
-  bulk_de         = TS_DRIVE_EXPORT_STEM_BULK_DE,
-  bulk_pathways   = TS_DRIVE_EXPORT_STEM_BULK_PATHWAYS,
-  sc_markers      = TS_DRIVE_EXPORT_STEM_SC_MARKERS,
-  sc_pathways     = TS_DRIVE_EXPORT_STEM_SC_PATHWAYS,
-  bulk_filter     = TS_DRIVE_EXPORT_STEM_BULK_FILTER,
-  bulk_signatures = TS_DRIVE_EXPORT_STEM_BULK_SIGNATURES,
-  bulk_pattern    = TS_DRIVE_EXPORT_STEM_BULK_PATTERN,
-  bulk_network    = TS_DRIVE_EXPORT_STEM_BULK_NETWORK,
-  bulk_wgcna      = TS_DRIVE_EXPORT_STEM_BULK_WGCNA
+  spatial_qc          = TS_DRIVE_EXPORT_STEM,
+  bulk_de             = TS_DRIVE_EXPORT_STEM_BULK_DE,
+  bulk_pathways       = TS_DRIVE_EXPORT_STEM_BULK_PATHWAYS,
+  sc_markers          = TS_DRIVE_EXPORT_STEM_SC_MARKERS,
+  sc_pathways         = TS_DRIVE_EXPORT_STEM_SC_PATHWAYS,
+  bulk_filter         = TS_DRIVE_EXPORT_STEM_BULK_FILTER,
+  bulk_signatures     = TS_DRIVE_EXPORT_STEM_BULK_SIGNATURES,
+  bulk_pattern        = TS_DRIVE_EXPORT_STEM_BULK_PATTERN,
+  bulk_network        = TS_DRIVE_EXPORT_STEM_BULK_NETWORK,
+  bulk_wgcna          = TS_DRIVE_EXPORT_STEM_BULK_WGCNA,
+  sc_embeddings       = "sc_embeddings_umap_2d",
+  sc_embeddings_tsne  = "sc_embeddings_tsne_2d",
+  sc_embeddings_pca   = "sc_embeddings_pca_2d",
+  sc_annotation       = "sc_cell_metadata",
+  sc_trajectory       = "sc_trajectory_pseudotime"
 )
 
 #' The per-route column CONTRACT, declared (option 1 of the 2026-10-03
@@ -423,6 +434,18 @@ TS_DRIVE_EXPORT_COLUMNS <- list(
     # differentiator being whether the session's traits were correlated.
     guaranteed  = c("gene", "module"),
     mode_traits = c("gene", "module", "trait_cor_method")
+  ),
+  sc_embeddings = list(
+    guaranteed = c("cell_id"),
+    mode_umap  = c("cell_id", "UMAP_1", "UMAP_2"),
+    mode_tsne  = c("cell_id", "tSNE_1", "tSNE_2"),
+    mode_pca   = c("cell_id", "PC_1", "PC_2")
+  ),
+  sc_annotation = list(
+    guaranteed = c("cell_id", "cluster")
+  ),
+  sc_trajectory = list(
+    guaranteed = c("cell_id", "pseudotime")
   )
 )
 
@@ -489,6 +512,8 @@ TS_DRIVE_SC_MARKERS_MODULE <- "sc_markers"
 TS_DRIVE_SC_MARKERS_TOP_TAB <- "tab_sc"
 TS_DRIVE_SC_MARKERS_PANELS <- "4_markers"
 TS_DRIVE_SC_MARKERS_ACCORDION_IDS <- c("sc-acc_workflow", "sc-acc_analyse")
+TS_DRIVE_SC_EMBEDDINGS_MODULE <- "sc_embeddings"
+TS_DRIVE_SC_TRAJECTORY_MODULE <- "sc_trajectory"
 
 # --- Bulk signatures (measured in modules/bulk/mod_bulk_signatures.R) --------
 # The tenth action, and the FIRST Bulk action outside the import/filter/DE/pathway
@@ -875,7 +900,8 @@ TS_DRIVE_MODULES <- c("import_bulk", "import_spatial", TS_DRIVE_SC_IMPORT_MODULE
                       "spatial_pipeline", TS_DRIVE_SPATIAL_QC_MODULE,
                       TS_DRIVE_SC_MODULE,
                       TS_DRIVE_SC_ANNOTATION_MODULE, TS_DRIVE_SC_MARKERS_MODULE,
-                      TS_DRIVE_SC_PATHWAYS_MODULE)
+                      TS_DRIVE_SC_PATHWAYS_MODULE,
+                      TS_DRIVE_SC_EMBEDDINGS_MODULE, TS_DRIVE_SC_TRAJECTORY_MODULE)
 
 #' Widget kinds the injector knows how to adapt (spec S5).
 #'

@@ -102,6 +102,7 @@ if ("--check" %in% .args) {
   .ts_stderr("  jsonlite     : ", if (.ts_have_jsonlite) as.character(utils::packageVersion("jsonlite")) else "MISSING")
   .ts_stderr("  transport    : stdio (no network port)")
   .ts_stderr("  tools        : transcripto_drive_status, transcripto_drive_read_result (read-only)")
+  .ts_stderr("                 transcripto_drive_state (M2: passive, read-only)")
   .ts_stderr("                 transcripto_drive_snapshot (M3a: passive, read-only)")
   .ts_stderr("                 transcripto_drive_import (S3: controlled import, scenario.json only)")
   .ts_stderr("                 transcripto_drive_set_inputs (M3b: controlled write, scenario.json only)")
@@ -127,8 +128,18 @@ if (!.ts_have_jsonlite) {
   capture.output(source(path, local = FALSE), type = "output")
   invisible(TRUE)
 }
-.ts_source_quiet(file.path(.project_root, "R", "core", "drive_allowlist.R"))
-.ts_source_quiet(file.path(.project_root, "R", "core", "drive_watcher.R"))
+.ts_allowlist_path <- if (file.exists(file.path(.project_root, "R", "core", "drive_allowlist.R"))) {
+  file.path(.project_root, "R", "core", "drive_allowlist.R")
+} else {
+  file.path(.project_root, "tools", "pkg_skeleton", "R", "drive_allowlist.R")
+}
+.ts_source_quiet(.ts_allowlist_path)
+.ts_drive_watcher_path <- if (file.exists(file.path(.project_root, "R", "core", "drive_watcher.R"))) {
+  file.path(.project_root, "R", "core", "drive_watcher.R")
+} else {
+  file.path(.project_root, "tools", "pkg_skeleton", "R", "drive_watcher.R")
+}
+.ts_source_quiet(.ts_drive_watcher_path)
 ts_drive_boot(.project_root)
 
 # --- 3. Framing: newline-delimited JSON (MCP stdio) -------------------------
@@ -545,6 +556,25 @@ ts_drive_boot(.project_root)
                   structured$status, structured$ack_seq, structured$active_module,
                   structured$status_terminal)
   .ts_tool_ok(structured, text)
+}
+
+#' Read-only passive state digest published automatically by live poller.
+#' Does not require arming, scenario authoring, or session assertions.
+.ts_tool_state <- function() {
+  state <- tryCatch(ts_drive_read_state(), error = function(e) NULL)
+  if (is.null(state)) {
+    return(.ts_tool_err(
+      "NO_SESSION",
+      "No passive state is available: tools/_drive/state.json is absent.",
+      "Ensure the app is running in interactive/drive mode."
+    ))
+  }
+  text <- sprintf("drive state: module=%s status=%s errors=%d hash=%s",
+                  state$active_module %|NA|% "unknown",
+                  state$pipeline_status %|NA|% "unknown",
+                  if (is.list(state$errors)) length(state$errors) else 0L,
+                  state$content_hash %|NA|% "none")
+  .ts_tool_ok(state, text)
 }
 
 # --- 7b. M2 — the ONE controlled arm/disarm tool ----------------------------
@@ -1836,6 +1866,18 @@ TS_MCP_EXPORT_COLUMNS <- list(
     # differentiator being whether the session's traits were correlated.
     guaranteed  = c("gene", "module"),
     mode_traits = c("gene", "module", "trait_cor_method")
+  ),
+  sc_embeddings = list(
+    guaranteed = c("cell_id"),
+    mode_umap  = c("cell_id", "UMAP_1", "UMAP_2"),
+    mode_tsne  = c("cell_id", "tSNE_1", "tSNE_2"),
+    mode_pca   = c("cell_id", "PC_1", "PC_2")
+  ),
+  sc_annotation = list(
+    guaranteed = c("cell_id", "cluster")
+  ),
+  sc_trajectory = list(
+    guaranteed = c("cell_id", "pseudotime")
   )
 )
 
@@ -2553,7 +2595,7 @@ TS_MCP_RUN_BUTTONS <- list(
   # "this module exposes no run action". The two existing importers keep their real
   # buttons, so the check below still holds them to the stricter rule.
   missing <- setdiff(TS_DRIVE_MODULES, names(TS_MCP_RUN_BUTTONS))
-  orphans <- setdiff(missing, TS_DRIVE_IMPORT_MODULES)
+  orphans <- setdiff(missing, c(TS_DRIVE_IMPORT_MODULES, TS_DRIVE_EXPORT_MODULES))
   if (length(orphans)) {
     problems <- c(problems,
                   sprintf("module(s) with no run action and no importer: %s",
@@ -3570,6 +3612,17 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
                  session_token = list(type = "string")),
                additionalProperties = FALSE)),
            required = list("armed"),
+           additionalProperties = FALSE)),
+    list(name = "transcripto_drive_state",
+         description = paste0(
+           "Read the passive observation channel state digest emitted by the live ",
+           "Cerberus session. Returns the latest state.json (session token, active module, ",
+           "pipeline status, recent error count, and state hash). Differs from ",
+           "transcripto_drive_status in that it provides a lightweight reactive ",
+           "fingerprint without triggering an active drive read."),
+         inputSchema = list(
+           type = "object",
+           properties = list(),
            additionalProperties = FALSE))
   )
 }
@@ -3585,8 +3638,8 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
     capabilities = list(tools = list(listChanged = FALSE)),
     serverInfo = list(name = "cerberus-drive", version = "0.6.0-m4"),
     instructions = paste0(
-      "Access to a LIVE Cerberus drive session. Nine tools: three read-only ",
-      "(status, verdict, passive snapshot), one controlled import (import, ",
+      "Access to a LIVE Cerberus drive session. Eleven tools: four read-only ",
+      "(status, verdict, state digest, passive snapshot), one controlled import (import, ",
       "action=import_file only), one controlled input write (set_inputs), ",
       "one controlled run (run, action=run_pipeline only), one bounded observation ",
       "(wait), one controlled arm/disarm and one controlled export (export, the ",
@@ -3618,6 +3671,7 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
     nm <- if (is.list(params)) .as_chr(params$name) else NA_character_
     if (is.na(nm)) return(.ts_error(id, -32602, "Invalid params: 'name' must be one string."))
     if (identical(nm, "transcripto_drive_status")) return(.ts_result(id, .ts_tool_status()))
+    if (identical(nm, "transcripto_drive_state")) return(.ts_result(id, .ts_tool_state()))
     if (identical(nm, "transcripto_drive_import")) {
       args <- if (is.list(params$arguments)) params$arguments else list()
       # PROTOCOL-level shape checks stay here; domain refusals live in the tool.
@@ -3905,8 +3959,10 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
 # and the value schema DEFINED (section 7e). R defines top to bottom, so calling
 # this from section 1 would be a "could not find function" error.
 if ("--check" %in% .args) {
-  drive_ok <- file.exists(file.path(.project_root, "R", "core", "drive_watcher.R")) &&
-    file.exists(file.path(.project_root, "R", "core", "drive_allowlist.R"))
+  drive_ok <- (file.exists(file.path(.project_root, "R", "core", "drive_watcher.R")) ||
+               file.exists(file.path(.project_root, "tools", "pkg_skeleton", "R", "drive_watcher.R"))) &&
+              (file.exists(file.path(.project_root, "R", "core", "drive_allowlist.R")) ||
+               file.exists(file.path(.project_root, "tools", "pkg_skeleton", "R", "drive_allowlist.R")))
   .ts_stderr("  drive readers: ", if (drive_ok) "present" else "MISSING")
   .ts_schema_problems <- .ts_mcp_schema_problems()
   .ts_run_problems <- .ts_mcp_run_problems()

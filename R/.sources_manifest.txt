@@ -85,8 +85,10 @@ modules/import/mod_import_spatial.R
 modules/import/mod_geo.R
 modules/sc/mod_sc_pipeline.R
 modules/sc/mod_sc_metadata.R
+modules/sc/mod_sc_annotation_export.R
 modules/sc/mod_sc_annotation.R
 modules/sc/mod_sc_rarity.R
+modules/sc/mod_sc_viz_export.R
 modules/sc/mod_sc_viz.R
 modules/sc/mod_sc_markers_export.R
 modules/sc/mod_sc_markers.R
@@ -94,6 +96,7 @@ modules/sc/mod_sc_pseudobulk.R
 modules/sc/mod_sc_corr.R
 modules/sc/mod_sc_pathways_export.R
 modules/sc/mod_sc_pathways.R
+modules/sc/mod_sc_trajectory_export.R
 modules/sc/mod_sc_trajectory.R
 modules/sc/mod_sc_velocity.R
 modules/sc/mod_sc_communication.R

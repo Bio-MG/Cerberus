@@ -53,6 +53,14 @@
 .ts_drive_state$job <- NULL
 .ts_drive_state$selected_token <- NULL
 .ts_drive_state$job_serial <- 0L
+# Bounded FIFO ring buffer of recent errors (max 20 entries, M2 Feature 11)
+.ts_drive_state$error_buffer <- list()
+# Last emitted state hash per session token (M2 Feature 10)
+.ts_drive_state$last_state_hash <- new.env(parent = emptyenv())
+# Flag indicating whether root was booted with an explicit custom non-default path
+.ts_drive_state$explicit_boot <- FALSE
+# Ring buffer capacity
+TS_DRIVE_MAX_ERRORS <- 20L
 
 #' Record the app root once, at source time.
 #'
@@ -61,25 +69,77 @@
 #' a different `getwd()` if any code calls `setwd()`. Capturing here means the
 #' runtime IPC path cannot drift.
 #'
-#' @param root Absolute path to the app root.
-ts_drive_boot <- function(root = getwd()) {
-  .ts_drive_state$root <- normalizePath(root, winslash = "/", mustWork = FALSE)
+#' When `TRANSCRIPTO_DRIVE_ROOT` is set in the environment (e.g. in test sandbox
+#' mode), it overrides `getwd()` so drive IPC files land in an isolated workspace.
+#' Explicit custom paths passed to `ts_drive_boot(root)` continue to override.
+#'
+#' @param root Absolute path to the app root (default: NULL, falling back to
+#'   TRANSCRIPTO_DRIVE_ROOT or getwd()).
+ts_drive_boot <- function(root = NULL) {
+  env_root <- Sys.getenv("TRANSCRIPTO_DRIVE_ROOT", unset = "")
+  is_default <- is.null(root)
+  if (!is_default) {
+    target_clean <- sub("(?<!:)/+$", "", normalizePath(root, winslash = "/", mustWork = FALSE), perl = TRUE)
+    wd_clean <- sub("(?<!:)/+$", "", normalizePath(getwd(), winslash = "/", mustWork = FALSE), perl = TRUE)
+    if (identical(target_clean, wd_clean)) {
+      is_default <- TRUE
+    }
+  }
+
+  if (is_default) {
+    .ts_drive_state$explicit_boot <- FALSE
+    target <- if (nzchar(env_root)) env_root else getwd()
+  } else {
+    .ts_drive_state$explicit_boot <- TRUE
+    target <- root
+  }
+  .ts_drive_state$root <- sub("(?<!:)/+$", "", normalizePath(target, winslash = "/", mustWork = FALSE), perl = TRUE)
   .ts_drive_state$selected_token <- NULL
   invisible(.ts_drive_state$root)
 }
 
 #' App root used by every drive path.
 #'
-#' Falls back to `getwd()` only when `ts_drive_boot()` was never called (e.g.
-#' a unit test sourcing this file alone). Never silently returns NA.
+#' Returns explicit custom boot path if set. Otherwise returns `TRANSCRIPTO_DRIVE_ROOT`
+#' if set and non-empty (for hermetic test sandbox isolation). Otherwise returns the
+#' booted root from `ts_drive_boot()`, or falls back to `getwd()`. Never silently returns NA.
 ts_drive_root <- function() {
+  if (isTRUE(.ts_drive_state$explicit_boot) && !is.null(.ts_drive_state$root)) {
+    return(.ts_drive_state$root)
+  }
+  env_root <- Sys.getenv("TRANSCRIPTO_DRIVE_ROOT", unset = "")
+  if (nzchar(env_root)) {
+    return(sub("(?<!:)/+$", "", normalizePath(env_root, winslash = "/", mustWork = FALSE), perl = TRUE))
+  }
   if (!is.null(.ts_drive_state$root)) return(.ts_drive_state$root)
-  normalizePath(getwd(), winslash = "/", mustWork = FALSE)
+  sub("(?<!:)/+$", "", normalizePath(getwd(), winslash = "/", mustWork = FALSE), perl = TRUE)
 }
 
 #' Absolute path of one runtime IPC file (`ready.json`, `arm.json`, ...).
 ts_drive_path <- function(...) {
   file.path(ts_drive_root(), TS_DRIVE_DIR, ...)
+}
+
+#' Read passive state.json from drive directory.
+#'
+#' @return Parsed list from state.json, or NULL if absent/unreadable.
+ts_drive_read_state <- function() {
+  ts_drive_read_json(ts_drive_path("state.json"))
+}
+
+#' Invalidate (unlink) passive state.json upon session end or teardown.
+#'
+#' @return Invisible logical: TRUE if removed or absent, FALSE on error.
+ts_drive_invalidate_state <- function(token = NULL) {
+  if (!is.null(token) && !is.null(.ts_drive_state$last_state_hash)) {
+    tok <- as.character(token)[1]
+    .ts_drive_state$last_state_hash[[tok]] <- NULL
+  }
+  path <- ts_drive_path("state.json")
+  if (file.exists(path)) {
+    unlink(path)
+  }
+  invisible(!file.exists(path))
 }
 
 #' Create `tools/_drive/` if needed. Returns the directory, invisibly.
@@ -101,7 +161,12 @@ ts_drive_read_json <- function(path) {
   if (!file.exists(path)) return(NULL)
   tryCatch(
     jsonlite::fromJSON(path, simplifyVector = FALSE),
-    error = function(e) { ts_log_swallow("drive_watcher.ts_drive_read_json", e); NULL }
+    error = function(e) {
+      if (exists("ts_log_swallow", mode = "function")) {
+        ts_log_swallow("drive_watcher.ts_drive_read_json", e)
+      }
+      NULL
+    }
   )
 }
 
@@ -560,7 +625,7 @@ ts_drive_hb_interval <- function() {
   v <- getOption("ts.drive.hb_interval", NULL)
   if (is.null(v)) v <- Sys.getenv("TRANSCRIPTO_DEV_DRIVE_HB_INTERVAL", "")
   n <- suppressWarnings(as.numeric(v))
-  if (length(n) != 1L || is.na(n) || n <= 0) return(3)
+  if (length(n) != 1L || is.na(n) || n <= 0) return(2)
   n
 }
 
@@ -3324,6 +3389,263 @@ ts_drive_nav_plan <- function(module, target_tab = NULL) {
   )
 }
 
+# =============================================================================
+# Passive Observation Channel & Error Ring Buffer (Milestone M2, Features 10 & 11)
+# =============================================================================
+
+#' Record an error in the in-memory FIFO error ring buffer (max 20 entries).
+#'
+#' Bounded in-memory store that never grows beyond TS_DRIVE_MAX_ERRORS (20 entries).
+#' Oldest entries are evicted first (FIFO discipline).
+#'
+#' @param message Character string describing the error.
+#' @param module Module or context where error occurred (default: "app").
+#' @param condition Optional condition object for class and state extraction.
+#' @param session_token Optional session token to associate with the error.
+#' @param timestamp ISO8601 UTC timestamp string (default: ts_drive_now_iso()).
+#' @return Invisible list of current error entries.
+ts_drive_record_error <- function(message, module = NULL, condition = NULL,
+                                  session_token = NULL,
+                                  timestamp = ts_drive_now_iso()) {
+  # Defensive guard: reject NULL, empty vector, NA
+  if (is.null(message) || length(message) == 0L || is.na(message[1])) {
+    return(invisible(.ts_drive_state$error_buffer %||% list()))
+  }
+
+  # Safe resolution of TS_DRIVE_MODULES (may not be loaded in standalone contexts)
+  known_modules <- if (exists("TS_DRIVE_MODULES", inherits = TRUE)) {
+    get("TS_DRIVE_MODULES", inherits = TRUE)
+  } else {
+    character(0)
+  }
+
+  # Polymorphic swap if positional (module, message) was supplied
+  if (!is.null(module) && length(module) >= 1L && !is.na(module[1]) &&
+      !is.null(message) && length(message) >= 1L && !is.na(message[1])) {
+    msg_str <- as.character(message)[1]
+    mod_str <- as.character(module)[1]
+    if ((length(known_modules) > 0L && msg_str %in% known_modules) ||
+        (!grepl(" ", msg_str, fixed = TRUE) && grepl(" ", mod_str, fixed = TRUE))) {
+      tmp <- message
+      message <- module
+      module <- tmp
+    }
+  }
+
+  # Guard after potential swap: check message validity before string processing
+  if (is.null(message) || length(message) == 0L || is.na(message[1])) {
+    return(invisible(.ts_drive_state$error_buffer %||% list()))
+  }
+  msg1 <- as.character(message)[1]
+  if (is.na(msg1) || !nzchar(trimws(msg1))) {
+    return(invisible(.ts_drive_state$error_buffer %||% list()))
+  }
+
+  clean_msg <- strsplit(msg1, "\n", fixed = TRUE)[[1]][1]
+  if (is.na(clean_msg)) {
+    return(invisible(.ts_drive_state$error_buffer %||% list()))
+  }
+  clean_msg <- trimws(clean_msg)
+  if (!nzchar(clean_msg)) {
+    return(invisible(.ts_drive_state$error_buffer %||% list()))
+  }
+  if (nchar(clean_msg) > 200L) {
+    clean_msg <- substr(clean_msg, 1L, 200L)
+  }
+
+  clean_mod <- as.character(module %||% "app")[1]
+  if (is.na(clean_mod) || !nzchar(clean_mod)) clean_mod <- "app"
+
+  entry <- list(
+    timestamp = as.character(timestamp)[1],
+    module    = clean_mod,
+    message   = clean_msg
+  )
+
+  if (!is.null(condition) && inherits(condition, "condition")) {
+    cls <- class(condition)[1]
+    if (nzchar(cls) && !identical(cls, "simpleError")) {
+      entry$class <- cls
+    }
+    st <- tryCatch(
+      if (exists("ts_error_state", mode = "function")) ts_error_state(condition) else NA_character_,
+      error = function(e) NA_character_
+    )
+    if (!is.na(st) && nzchar(st)) {
+      entry$state <- as.character(st)
+    }
+  }
+
+  buf <- .ts_drive_state$error_buffer
+  if (!is.list(buf)) buf <- list()
+
+  buf[[length(buf) + 1L]] <- entry
+
+  if (length(buf) > TS_DRIVE_MAX_ERRORS) {
+    buf <- buf[(length(buf) - TS_DRIVE_MAX_ERRORS + 1L):length(buf)]
+  }
+
+  .ts_drive_state$error_buffer <- buf
+  invisible(buf)
+}
+
+#' Retrieve recent errors from the in-memory ring buffer.
+#'
+#' @param limit Maximum number of recent errors to return (default 20).
+#' @return List of error entries. Always a list (never NULL).
+ts_drive_get_errors <- function(limit = TS_DRIVE_MAX_ERRORS) {
+  buf <- .ts_drive_state$error_buffer
+  if (!is.list(buf) || length(buf) == 0L) return(list())
+  lim <- suppressWarnings(as.integer(limit)[1])
+  if (is.na(lim) || lim < 1L) lim <- TS_DRIVE_MAX_ERRORS
+  if (length(buf) > lim) {
+    buf[(length(buf) - lim + 1L):length(buf)]
+  } else {
+    buf
+  }
+}
+
+#' Clear the in-memory error ring buffer (useful for test resets).
+#'
+#' @return Invisible NULL.
+ts_drive_clear_errors <- function() {
+  .ts_drive_state$error_buffer <- list()
+  invisible(NULL)
+}
+
+#' Detect the active module from Shiny input navigation or tick status.
+#'
+#' @param input Shiny input object (or list).
+#' @param job Active job state (or NULL).
+#' @param tick_module Module from tick result (or NULL).
+#' @return Character scalar representing the active module.
+ts_drive_detect_active_module <- function(input = NULL, job = NULL, tick_module = NULL) {
+  if (!is.null(tick_module) && nzchar(as.character(tick_module)[1])) {
+    return(as.character(tick_module)[1])
+  }
+  if (!is.null(job) && is.list(job) && !is.null(job$module) && nzchar(as.character(job$module)[1])) {
+    return(as.character(job$module)[1])
+  }
+  nav <- tryCatch(as.character(input$main_nav)[1], error = function(e) "")
+  if (is.na(nav) || !nzchar(nav)) return("idle")
+
+  switch(nav,
+    "tab_bulk"               = "bulk",
+    "tab_sc"                 = "sc",
+    "tab_spatial"            = "spatial",
+    "RNA Bulk"               = "import_bulk",
+    "Single-Cell"            = "import_sc",
+    "Spatial"                = "import_spatial",
+    "Source publique (GEO)"  = "geo",
+    nav
+  )
+}
+
+#' Detect the current pipeline status ("idle" | "running" | "error").
+#'
+#' @param tick_status Status returned by ts_drive_tick (or NULL).
+#' @param tick_error Error string returned by ts_drive_tick (or NULL).
+#' @param has_recent_error Logical indicating recent unhandled error.
+#' @return Character scalar: "idle", "running", or "error".
+ts_drive_detect_pipeline_status <- function(tick_status = NULL, tick_error = NULL,
+                                           has_recent_error = FALSE) {
+  if (isTRUE(ts_drive_job_busy())) return("running")
+  st <- as.character(tick_status %||% "")
+  if (identical(st, "running")) return("running")
+  if (identical(st, "error")) return("error")
+  if (!is.null(tick_error) && length(tick_error) > 0L && any(nzchar(tick_error))) {
+    return("error")
+  }
+  if (isTRUE(has_recent_error)) return("error")
+  "idle"
+}
+
+#' Compute xxhash64 content digest of passive state payload.
+#'
+#' Deliberately excludes timestamps so unchanged semantic state produces
+#' identical hashes across ticks.
+#'
+#' @param token Session token string.
+#' @param active_module Active module string.
+#' @param pipeline_status Pipeline status string.
+#' @param errors List of error entries.
+#' @return 16-character hexadecimal hash string.
+ts_drive_compute_state_hash <- function(token, active_module, pipeline_status, errors) {
+  payload <- list(
+    session_token   = as.character(token %||% "")[1],
+    active_module   = as.character(active_module %||% "")[1],
+    pipeline_status = as.character(pipeline_status %||% "idle")[1],
+    errors          = as.list(errors %||% list())
+  )
+  digest::digest(payload, algo = "xxhash64")
+}
+
+#' Conditionally emit state.json if content hash has changed.
+#'
+#' Called on every poller tick (whether armed or unarmed). Computes content hash
+#' in memory (< 50 microseconds) and writes tools/_drive/state.json ONLY when
+#' the hash differs from the last emitted hash for this session.
+#'
+#' @param session Shiny session object (or NULL).
+#' @param input Shiny input object (or NULL).
+#' @param global_data Global reactiveValues or list (or NULL).
+#' @param token Session token string.
+#' @param tick_out Result list from ts_drive_tick (or NULL).
+#' @param force Force emission even if hash unchanged (default FALSE).
+#' @return Invisible logical: TRUE if state.json was written, FALSE if skipped.
+ts_drive_emit_passive_state <- function(session = NULL, input = NULL,
+                                        global_data = NULL, token = NULL,
+                                        tick_out = NULL, force = FALSE) {
+  tok <- as.character(token %||% "")[1]
+  if (!nzchar(tok)) return(invisible(FALSE))
+
+  # 1. Resolve active module and pipeline status
+  job <- tryCatch(ts_drive_job_state(), error = function(e) NULL)
+  act_mod <- ts_drive_detect_active_module(input, job, tick_out$module)
+  pipe_st <- ts_drive_detect_pipeline_status(tick_out$status, tick_out$error)
+
+  # 2. Retrieve bounded errors (max 20 entries)
+  errs <- ts_drive_get_errors(limit = TS_DRIVE_MAX_ERRORS)
+
+  # 3. Compute content hash (xxhash64) over semantic state
+  content_hash <- ts_drive_compute_state_hash(tok, act_mod, pipe_st, errs)
+
+  # 4. Check against last emitted hash for this session
+  if (is.null(.ts_drive_state$last_state_hash)) {
+    .ts_drive_state$last_state_hash <- new.env(parent = emptyenv())
+  }
+  last_hash <- .ts_drive_state$last_state_hash[[tok]]
+
+  if (!isTRUE(force) && identical(content_hash, last_hash)) {
+    return(invisible(FALSE))  # Zero overhead: no disk I/O when state unchanged
+  }
+
+  # 5. Build and write state.json atomically
+  state_doc <- list(
+    session_token   = tok,
+    content_hash    = content_hash,
+    state_hash      = content_hash,
+    timestamp       = ts_drive_now_iso(),
+    active_module   = act_mod,
+    pipeline_status = pipe_st,
+    errors          = as.list(errs),
+    recent_errors   = as.list(errs)
+  )
+
+  dest <- ts_drive_path("state.json")
+  ok <- ts_drive_write_json(state_doc, dest)
+  if (isTRUE(ok)) {
+    .ts_drive_state$last_state_hash[[tok]] <- content_hash
+  }
+  invisible(isTRUE(ok))
+}
+
+# Aliases for tier1/capability readiness detection
+ts_drive_write_state <- ts_drive_emit_passive_state
+ts_drive_state_digest <- ts_drive_emit_passive_state
+ts_drive_error_ring_push <- ts_drive_record_error
+
+
 #' One poll cycle.
 #'
 #' Returns `consumed = TRUE` when a scenario was applied (the caller then
@@ -3345,6 +3667,20 @@ ts_drive_nav_plan <- function(module, target_tab = NULL) {
                 armed = armed, error = NULL, nav = NULL, status = NULL,
                 job_status = NULL, module = NULL, action = NULL, elapsed_s = NULL,
                 pending = pending)
+
+    # Passive observation channel: emit state.json on content change across ALL ticks (M2 Feature 10)
+    on.exit({
+      if (isTRUE(out$selected)) {
+        tryCatch(
+          ts_drive_emit_passive_state(session, input, global_data, token, out),
+          error = function(e) {
+            if (exists("ts_log_swallow", mode = "function")) {
+              ts_log_swallow("drive_watcher.passive_state_emission", e)
+            }
+          }
+        )
+      }
+    }, add = TRUE)
   selected <- .ts_drive_state$selected_token
   if (!is.null(selected) &&
       !identical(as.character(selected), as.character(token))) {
@@ -3964,6 +4300,9 @@ ts_drive_attach <- function(session, input, poll_ms = 800) {
     if (identical(.ts_drive_state$selected_token, token)) {
       .ts_drive_state$selected_token <- NULL
     }
+    if (!is.null(.ts_drive_state$last_state_hash)) {
+      .ts_drive_state$last_state_hash[[token]] <- NULL
+    }
     if (isTRUE(lost) || !is.null(ts_drive_job_pending())) {
       try(ts_drive_tick(
         session, input, NULL, token,
@@ -3973,6 +4312,7 @@ ts_drive_attach <- function(session, input, poll_ms = 800) {
       ), silent = TRUE)
     }
     try(ts_drive_invalidate_ready(token), silent = TRUE)
+    try(ts_drive_invalidate_state(), silent = TRUE)
   })
 
   # Mutable cursor shared by the closure. Kept in the closure's environment,

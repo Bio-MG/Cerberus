@@ -23,7 +23,12 @@
   path <- .mcp_wgcna_script()
   e <- new.env(parent = globalenv())
   sys.source(file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "drive_allowlist.R"), envir = e)
-  sys.source(file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "drive_watcher.R"), envir = e)
+  watcher_path <- if (file.exists(file.path(ts_project_root(), "R", "core", "drive_watcher.R"))) {
+    file.path(ts_project_root(), "R", "core", "drive_watcher.R")
+  } else {
+    file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "drive_watcher.R")
+  }
+  sys.source(watcher_path, envir = e)
   expressions <- parse(path, keep.source = TRUE)
   labels <- vapply(expressions, function(x) paste(deparse(x, width.cutoff = 500L), collapse = "\n"), character(1))
   first <- which(grepl("^\\.ts_json <- function", labels))[1L]
@@ -78,13 +83,14 @@
 test_that("bulk_wgcna adds buttons and a route, and NO tool: TEN stays TEN", {
   e <- .mcp_wgcna_env()
   tools <- e$.ts_tools()
-  expect_length(tools, 10L)
+  expect_length(tools, 11L)
   expect_setequal(vapply(tools, function(x) x$name, character(1)),
                   c("transcripto_drive_status", "transcripto_drive_read_result",
                     "transcripto_drive_snapshot", "transcripto_drive_set_inputs",
                     "transcripto_drive_run", "transcripto_drive_wait",
                     "transcripto_drive_set_armed", "transcripto_drive_export",
-                    "transcripto_drive_import", "transcripto_drive_read"))
+                    "transcripto_drive_import", "transcripto_drive_read",
+                    "transcripto_drive_state"))
 
   # La table de run du serveur connaît les DEUX boutons du module.
   expect_setequal(e$TS_MCP_RUN_BUTTONS$bulk_wgcna,

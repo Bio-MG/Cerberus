@@ -10,7 +10,12 @@
   path <- .mcp_local_script()
   e <- new.env(parent = globalenv())
   sys.source(file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "drive_allowlist.R"), envir = e)
-  sys.source(file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "drive_watcher.R"), envir = e)
+  watcher_path <- if (file.exists(file.path(ts_project_root(), "R", "core", "drive_watcher.R"))) {
+    file.path(ts_project_root(), "R", "core", "drive_watcher.R")
+  } else {
+    file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "drive_watcher.R")
+  }
+  sys.source(watcher_path, envir = e)
   expressions <- parse(path, keep.source = TRUE)
   labels <- vapply(expressions, function(x) paste(deparse(x, width.cutoff = 500L), collapse = "\n"), character(1))
   first <- which(grepl("^\\.ts_json <- function", labels))[1L]
@@ -31,13 +36,14 @@ test_that("local MCP keeps TEN tools and resolves only the Spatial pipeline butt
   # for — a module never adds a tool — is asserted directly in
   # test-mcp-sc-local.R, where it can be stated over the module inventory
   # instead of over a count. See the note there.
-  expect_length(tools, 10L)
+  expect_length(tools, 11L)
   expect_setequal(vapply(tools, function(x) x$name, character(1)), c(
     "transcripto_drive_status", "transcripto_drive_read_result",
     "transcripto_drive_snapshot", "transcripto_drive_set_inputs",
     "transcripto_drive_run", "transcripto_drive_wait",
     "transcripto_drive_set_armed", "transcripto_drive_export",
-    "transcripto_drive_import", "transcripto_drive_read"
+    "transcripto_drive_import", "transcripto_drive_read",
+    "transcripto_drive_state"
   ))
   expect_length(e$.ts_mcp_run_problems(), 0L)
   expect_identical(e$TS_MCP_RUN_ACTIONS, "run_pipeline")

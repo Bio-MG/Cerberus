@@ -49,11 +49,11 @@
     n_rows = n_rows, n_cols = n_cols, columns = columns))
 }
 
-test_that("every declared export route streams a preview (all 10 stems)", {
+test_that("every declared export route streams a preview (all 15 stems)", {
   e <- .read_export_env()
   on.exit(unlink(e$ts_drive_root(), recursive = TRUE, force = TRUE), add = TRUE)
   stems <- e$TS_DRIVE_EXPORT_STEMS
-  expect_length(stems, 10L)
+  expect_length(stems, 15L)
   for (route in names(stems)) {
     # Suffixe unique par route : le répertoire d'export est partagé entre les
     # tests du processus, aucun croisement possible.

@@ -59,11 +59,11 @@ if (!exists(".tr", envir = globalenv()))
 # =============================================================================
 test_that("bulk_wgcna joins the frozen route table, the stems, and the contract", {
   routes <- get0("TS_DRIVE_EXPORT_ROUTES", envir = globalenv())
-  expect_length(routes, 10L)
+  expect_length(routes, 13L)
   expect_identical(routes$bulk_wgcna, "bulk_wgcna_genes_csv")
 
   stems <- get0("TS_DRIVE_EXPORT_STEMS", envir = globalenv())
-  expect_length(stems, 10L)
+  expect_length(stems, 15L)
   expect_identical(stems[["bulk_wgcna"]], .wgc_stem())
   expect_identical(.wgc_stem(), "bulk_wgcna_genes")
 

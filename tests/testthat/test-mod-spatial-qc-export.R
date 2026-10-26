@@ -118,21 +118,20 @@ if (!exists(".tr_plain", envir = globalenv()))
 # =============================================================================
 # 1. The route table is FROZEN DATA
 # =============================================================================
-test_that("the export route table declares exactly TEN frozen routes", {
+test_that("the export route table declares exactly THIRTEEN frozen routes", {
   routes <- .exp_routes()
   if (!is.list(routes)) {
     testthat::expect_true(is.list(routes),
       info = "TS_DRIVE_EXPORT_ROUTES must exist and declare the routes as frozen data")
     return(invisible(NULL))
   }
-  # TEN since Slice 4 (bulk_wgcna joins with the gene->module table its
-  # product call granted), and still closed: the verb exists for NAMED
-  # artefacts, one per route, and every artefact decision stays the app’s.
-  expect_length(routes, 10L)
+  # THIRTEEN since M3 (SC downstream export routes sc_embeddings, sc_annotation, sc_trajectory)
+  expect_length(routes, 13L)
   expect_setequal(names(routes),
                   c("spatial_qc", "bulk_de", "bulk_pathways", "sc_markers",
                     "sc_pathways", "bulk_filter", "bulk_signatures",
-                    "bulk_pattern", "bulk_network", "bulk_wgcna"))
+                    "bulk_pattern", "bulk_network", "bulk_wgcna",
+                    "sc_embeddings", "sc_annotation", "sc_trajectory"))
   # The routes are REGISTRY KEYS, not handler names the caller supplies.
   expect_type(routes$spatial_qc, "character")
   expect_length(routes$spatial_qc, 1L)

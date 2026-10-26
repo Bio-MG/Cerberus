@@ -10,7 +10,12 @@
   path <- .mcp_sc_local_script()
   e <- new.env(parent = globalenv())
   sys.source(file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "drive_allowlist.R"), envir = e)
-  sys.source(file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "drive_watcher.R"), envir = e)
+  watcher_path <- if (file.exists(file.path(ts_project_root(), "R", "core", "drive_watcher.R"))) {
+    file.path(ts_project_root(), "R", "core", "drive_watcher.R")
+  } else {
+    file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "drive_watcher.R")
+  }
+  sys.source(watcher_path, envir = e)
   expressions <- parse(path, keep.source = TRUE)
   labels <- vapply(expressions, function(x) paste(deparse(x, width.cutoff = 500L), collapse = "\n"), character(1))
   first <- which(grepl("^\\.ts_json <- function", labels))[1L]
@@ -68,13 +73,14 @@ test_that("local MCP keeps TEN tools and resolves the three SC action buttons", 
   # for a new protocol capability (import, READING), never for a module". The
   # read reads the CURRENT export verdict; it names no route, no handle, no
   # path, and adds no module surface.
-  expect_length(tools, 10L)
+  expect_length(tools, 11L)
   expect_setequal(vapply(tools, function(x) x$name, character(1)), c(
     "transcripto_drive_status", "transcripto_drive_read_result",
     "transcripto_drive_snapshot", "transcripto_drive_set_inputs",
     "transcripto_drive_run", "transcripto_drive_wait",
     "transcripto_drive_set_armed", "transcripto_drive_export",
-    "transcripto_drive_import", "transcripto_drive_read"
+    "transcripto_drive_import", "transcripto_drive_read",
+    "transcripto_drive_state"
   ))
   # THE RULE, enforced where it can be: every module in the app's own table must be
   # reachable through the EXISTING tools, so a new module is a new entry in
@@ -646,8 +652,8 @@ test_that("the export tool refuses a module outside the app's route table", {
   # payload carries the caller's module verbatim, and only that field moves.
   # Driven by the APP's own table, so a route added later joins this loop or
   # the test goes red — the route table cannot grow silently.
-  for (i in seq_along(names(TS_DRIVE_EXPORT_ROUTES))) {
-    m <- names(TS_DRIVE_EXPORT_ROUTES)[i]
+  for (i in seq_along(names(e$TS_DRIVE_EXPORT_ROUTES))) {
+    m <- names(e$TS_DRIVE_EXPORT_ROUTES)[i]
     ri <- e$.ts_tool_export(9L + i, m, expect)
     expect_false(ri$isError, info = sprintf("route '%s' must pass the gate", m))
     scenario <- jsonlite::fromJSON(e$ts_drive_path("scenario.json"), simplifyVector = FALSE)
@@ -1112,7 +1118,7 @@ test_that("indexed inputs are validated against the published vocabulary, and th
 
   # 7. Les cinq ids restent des ENTRÉES : le compte d'outils ne bouge pas.
   tools <- e$.ts_tools()
-  expect_length(tools, 10L)
+  expect_length(tools, 11L)
 })
 
 # =============================================================================

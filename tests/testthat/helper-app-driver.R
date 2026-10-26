@@ -89,13 +89,36 @@ ts_e2e_with_child_locale <- function(expr) {
   force(expr)
 }
 
+#' Retrieve the private drive sandbox path attached to an AppDriver instance
+app_driver_sandbox_dir <- function(driver) {
+  attr(driver, "ts_drive_sandbox", exact = TRUE)
+}
+
 #' Best-effort AppDriver constructor — skips (never fails) if shinytest2 or
 #' a headless Chrome (chromote) is unavailable. Generous timeouts : global.R
 #' charge toute la pile de packages, et l'init des 6 daemons mirai est
 #' différée à la première ouverture de l'onglet Spatial (boot lazy, voir
 #' l'en-tête de app.R).
+#'
+#' Automatically isolates test execution in a private drive sandbox via
+#' `TRANSCRIPTO_DRIVE_ROOT`, preventing any interference with host tools/_drive/ready.json.
 new_app_driver <- function(name) {
   testthat::skip_if_not_installed("shinytest2")
+
+  # M2: Isolated drive sandbox per AppDriver instance to protect host tools/_drive/ready.json
+  sandbox_dir <- normalizePath(tempfile("ts_drive_sandbox_"), winslash = "/", mustWork = FALSE)
+  dir.create(file.path(sandbox_dir, "tools", "_drive"), recursive = TRUE, showWarnings = FALSE)
+
+  old_drive_root <- Sys.getenv("TRANSCRIPTO_DRIVE_ROOT", unset = NA_character_)
+  Sys.setenv(TRANSCRIPTO_DRIVE_ROOT = sandbox_dir)
+  on.exit({
+    if (is.na(old_drive_root)) {
+      Sys.unsetenv("TRANSCRIPTO_DRIVE_ROOT")
+    } else {
+      Sys.setenv(TRANSCRIPTO_DRIVE_ROOT = old_drive_root)
+    }
+  }, add = TRUE)
+
   err <- NULL
   driver <- tryCatch(
     ts_e2e_with_child_locale(
@@ -115,12 +138,28 @@ new_app_driver <- function(name) {
   # doit plus se déguiser en « Chrome absent » (8 tests restes invisibles
   # ainsi jusqu'au 2026-09-16).
   if (is.null(driver)) {
+    unlink(sandbox_dir, recursive = TRUE, force = TRUE)
     msg <- if (is.null(err)) "raison inconnue" else err
     if (grepl("multibyte|encoding|locale|LC_", msg, ignore.case = TRUE)) {
       testthat::skip(paste("Locale inutilisable par le processus enfant :", msg))
     }
     testthat::skip(paste("AppDriver indisponible (Chromote/headless Chrome ?) :", msg))
   }
+
+  # Wrap stop() and register finalizer to ensure the temporary sandbox is cleaned up
+  # without ever touching <repo_root>/tools/_drive/ready.json
+  attr(driver, "ts_drive_sandbox") <- sandbox_dir
+  orig_stop <- driver$stop
+  unlockBinding("stop", driver)
+  driver$stop <- function(...) {
+    on.exit(unlink(sandbox_dir, recursive = TRUE, force = TRUE), add = TRUE)
+    orig_stop(...)
+  }
+  lockBinding("stop", driver)
+  reg.finalizer(driver, function(e) {
+    unlink(sandbox_dir, recursive = TRUE, force = TRUE)
+  }, onexit = TRUE)
+
   driver
 }
 
