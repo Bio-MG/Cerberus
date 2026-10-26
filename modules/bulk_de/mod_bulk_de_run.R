@@ -575,6 +575,15 @@
   # `error` ne doit jamais lever à son tour.
   observeEvent(de_drive_task$status(), {
     st <- de_drive_task$status()
+    # SW-8 (2026-10-26) : l'ExtendedTask invalide ce statut AUSSI au beat
+    # "running" (shiny 1.14.0 : do_invoke pose rv_status("running") EN PREMIER,
+    # avant onFulfilled/onRejected). Consommer la cellule sur ce beat
+    # détruisait le job avant son statut terminal — `cell$finish()` jamais
+    # appelé, job fantôme, canal drive bloqué (« another job is already
+    # running »). La clôture appartient SEULEMENT à un beat terminal — même
+    # convention que l'observateur ad-hoc ci-dessous et mod_spatial_cluster.R :
+    # rien n'est consommé avant le test du statut terminal.
+    if (!identical(st, "success") && !identical(st, "error")) return()
     cell <- de_drive_job$cell
     de_drive_job$cell <- NULL
     if (is.null(cell)) return()   # défensif : un statut sans soumission ne ferme rien

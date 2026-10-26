@@ -793,3 +793,102 @@ test_that("D4(a) : un statut sans cellule déposée ne ferme rien", {
   # Aucune cellule => aucun job drive à fermer (défensif).
   expect_length(e$calls, 0L)
 })
+
+# =============================================================================
+# SW-8 (2026-10-26) — la séquence DEUX-BEATS de l'ExtendedTask
+# =============================================================================
+# Le défaut mesuré (maquette n4sim, Rscript --vanilla, shiny 1.14.0) :
+# `ExtendedTask$invoke` → `do_invoke` exécute `private$rv_status("running")` en
+# PREMIER (avant onFulfilled/onRejected). Le reactiveVal de statut passe donc
+# "initial" → "running" → terminal : l'observateur est invalidé À LA SOUMISSION
+# avec `st = "running"`. La version ci-dessus consommait alors la cellule
+# (lignes 578-579) AVANT tout test de statut, puis sortait — et au beat terminal
+# (`st = "error"`, le onRejected du rejet DESeq2) la cellule était déjà NULL :
+# `cell$finish()` jamais appelé, job fantôme, canal drive bloqué pour toujours.
+#
+# Les tests D4(a) existants appellent le bloc UNE fois avec un statut DÉJÀ
+# terminal : ils ne reproduisent jamais running → terminal, d'où suite verte
+# malgré le défaut. Ces tests simulent les DEUX invalidations du reactiveVal —
+# le rejet est immédiat (le onRejected d'une ExtendedTask qui lève, sans mirai
+# ni attente ni flush réactif), même mécanique AST-lift que ci-dessus.
+
+.mdr_cell <- function(e) {
+  # La cellule que la soumission (trigger) aurait déposée — même forme que
+  # D4(a) ci-dessus, avec l'enregistreur `e$calls`.
+  cell <- new.env(parent = emptyenv())
+  cell$ctx <- list(cname = "b_vs_a", engine = "deseq2", condition_col = "cond",
+                   group_target = "b", group_ref = "a", shrink_lfc = FALSE,
+                   padj_method = "BH", padj_thresh = 0.05, lfc_thresh = 1,
+                   bypass_info = NULL)
+  cell$finish <- function(status, error = NULL) {
+    e$calls[[length(e$calls) + 1L]] <<- list(button = .MDR_BUTTON,
+                                             status = status, error = error)
+  }
+  e$de_drive_job$cell <- cell
+  cell
+}
+
+.mdr_beat <- function(e, status_block, status, result = function() NULL) {
+  e$de_drive_task <- list(status = function() status, result = result)
+  f <- function() NULL
+  body(f) <- status_block
+  environment(f) <- e
+  shiny::withReactiveDomain(shiny::MockShinySession$new(), f())
+  invisible(e)
+}
+
+test_that("SW-8 deux-beats : un beat running ne consomme PAS la cellule — le rejet qui suit ferme bien le job", {
+  status_block <- ts_ast_observe_block(.MDR_FILE, "de_drive_task$status")
+  e <- .mdr_env()
+  e$de_drive_job <- new.env(parent = emptyenv())
+  e$de_drive_job$cell <- NULL
+  e$removeNotification <- function(...) invisible(NULL)
+  .mdr_cell(e)
+
+  # BEAT 1 — la transition initial → running au moment de $invoke (shiny
+  # 1.14.0, do_invoke). Rien ne doit être fermé au vol : la clôture appartient
+  # au beat terminal.
+  .mdr_beat(e, status_block, "running")
+  expect_false(is.null(e$de_drive_job$cell),
+               info = "un beat running ne consomme pas la cellule — la clôture appartient au beat terminal")
+  expect_length(e$calls, 0L)
+
+  # BEAT 2 — le rejet simulé, immédiat (onRejected d'une ExtendedTask qui lève).
+  .mdr_beat(e, status_block, "error", result = function() stop(.MDR_MSG))
+  expect_identical(.mdr_status(e), "error",
+                   info = "une DE qui a LEVÉ n'est pas un refus : verdict terminal écrit, jamais running figé")
+  err <- .mdr_last(e)$error
+  expect_true(is.character(err) && length(err) == 1L && nzchar(err))
+  expect_true(grepl("DE failed", err, fixed = TRUE),
+              info = "le message publié reste actionnable")
+  expect_false(grepl(.MDR_SECRET, err, fixed = TRUE),
+               info = "un jeton traverse le caviardage du champ error")
+  expect_null(e$de_drive_job$cell,
+              info = "la cellule est consommée UNE fois, par le beat terminal")
+})
+
+test_that("SW-8 deux-beats miroir : un beat running suivi du succès ferme `done`", {
+  status_block <- ts_ast_observe_block(.MDR_FILE, "de_drive_task$status")
+  e <- .mdr_env()
+  e$de_drive_job <- new.env(parent = emptyenv())
+  e$de_drive_job$cell <- NULL
+  e$removeNotification <- function(...) invisible(NULL)
+  .mdr_cell(e)
+
+  # BEAT 1 — idem : le succès passe AUSSI par le beat running.
+  .mdr_beat(e, status_block, "running")
+  expect_false(is.null(e$de_drive_job$cell),
+               info = "le chemin du succès est symétrique : rien ne ferme au beat running")
+  expect_length(e$calls, 0L)
+
+  # BEAT 2 — le succès : un résultat réel de run_de_core (lift AST, comme D4(a)).
+  out <- e$run_de_core(e$shared_rv$filtered_counts, e$global_data$bulk_obj$metadata,
+                       "deseq2", "cond", "b", "a")
+  .mdr_beat(e, status_block, "success", result = function() out)
+  expect_identical(.mdr_status(e), "done",
+                   info = "le chemin du succès ferme aussi le job au beat terminal")
+  expect_null(.mdr_last(e)$error, info = "le champ error reste NULL hors `error`")
+  expect_identical(e$shared_rv$active_contrast, "b_vs_a")
+  expect_null(e$de_drive_job$cell,
+              info = "la cellule est consommée UNE fois, par le beat terminal")
+})
