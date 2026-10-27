@@ -237,3 +237,27 @@ test_that("run_sc_auto_pipeline_core raises sc_pipeline_error cleanly when run_q
   expect_s3_class(res, "sc_pipeline_error")
 })
 
+# ── Jalon filets (2026-10-27) : contrat du filet de classification Step 2-5 ──
+# Une condition déjà classée par le dépôt est RELANCÉE telle quelle (F20 —
+# jamais de re-classement silencieux) ; une erreur brute de dépendance sort
+# re-classifiée sc_pipeline_error, message d'origine préservé.
+test_that("the Step 2-5 net preserves domain classes and reclasses raw errors", {
+  cls <- c("sc_ambient_package_missing", "sc_qc_error", "sc_pipeline_error",
+           "sc_velocity_engine_missing")
+  expect_true(all(vapply(cls, function(cl)
+    .ap_is_domain_classed(errorCondition("x", class = cl)), logical(1))))
+  expect_false(.ap_is_domain_classed(simpleError("x")))
+  expect_false(.ap_is_domain_classed(errorCondition("x")))
+
+  keep <- tryCatch(.ap_classed_step(stop(errorCondition("déjà classée — intacte",
+                                                        class = "sc_ambient_package_missing"))),
+                   error = function(e) e)
+  expect_true(inherits(keep, "sc_ambient_package_missing"))
+  expect_identical(conditionMessage(keep), "déjà classée — intacte")
+
+  conv <- tryCatch(.ap_classed_step(stop("erreur brute de dépendance")),
+                   error = function(e) e)
+  expect_true(inherits(conv, "sc_pipeline_error"))
+  expect_match(conditionMessage(conv), "erreur brute de dépendance", fixed = TRUE)
+})
+

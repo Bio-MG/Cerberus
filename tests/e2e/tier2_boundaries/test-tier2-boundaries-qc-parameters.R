@@ -10,9 +10,10 @@
 #
 # M5 dé-façadage (2026-10-27, décision O17) : chaque bloc exécute le MOTEUR ou
 # le CŒUR réel sur la fixture du helper (120 gènes × 80 cellules, Poisson).
-# ⚠️ Deux découvertes de mesure consignées dans le jalon M5 (comportement
-# actuel, épinglé honnête) : sc_ap_res = 3.0 et l'objet < pca_dim propagent
-# une erreur de dépendance NON classée (défaut à filet, hors contrat du cœur).
+# ✅ Jalon filets (2026-10-27) : les 2 erreurs de dépendance non classées
+# découvertes en M5 (sc_ap_res = 3.0 et objet < pca_dim) sont CORRIGÉES — le
+# cœur rend désormais des `sc_pipeline_error` (garde de dimension + filet de
+# classification Step 2-5, message de dépendance préservé).
 # =============================================================================
 
 if (!exists("e2e_project_root", mode = "function")) {
@@ -91,27 +92,29 @@ test_that("T2-QC-5: pipeline handles extreme resolution values (0.05 vs 3.0)", {
   low <- run_sc_auto_pipeline_core(.t2qc_obj(), params = list(sc_ap_res = 0.05))
   expect_s4_class(low$obj, "Seurat")
   expect_identical(length(unique(low$obj$seurat_clusters)), 1L)
-  # ⚠️ Découverte M5 : res = 3.0 sur la fixture 80 cellules produit une erreur
-  # de dépendance NON classée (propagation brute hors contrat du cœur) —
-  # épinglé comme comportement ACTUEL : l'erreur est capturable (pas de crash
-  # de session) et identifie le problème de dimension. Filet à poser au cœur
-  # (jalon futur), pas de maquillage ici.
+  # ✅ Corrigé au jalon filets (2026-10-27) : l'échec FindClusters à haute
+  # résolution sort désormais CLASSÉ (sc_pipeline_error), le message de
+  # dépendance étant préservé derrière le préfixe du filet — plus aucune
+  # erreur brute ne franchit la frontière du cœur.
   high <- tryCatch(run_sc_auto_pipeline_core(.t2qc_obj(),
                                              params = list(sc_ap_res = 3.0)),
                    error = function(e) e)
   expect_s3_class(high, "error")
-  expect_true(nzchar(conditionMessage(high)))
+  expect_true(inherits(high, "sc_pipeline_error"),
+              info = paste(class(high), collapse = ","))
+  expect_match(conditionMessage(high), "autopipeline", fixed = TRUE)
 })
 
 test_that("T2-QC-6: pipeline gracefully fails on fewer cells than requested clusters", {
   if (!is_m3_ready()) skip("M3 SC async pipeline not yet active")
-  # ⚠️ Découverte M5 : 12 cellules < pca_dim (20) — l'erreur irlba/PCA sort
-  # NON classée du cœur (même famille que T2-QC-5). Épinglé honnête : l'erreur
-  # est capturable et nomme la contrainte de dimension ; aucun crash de
-  # session. La classification (sc_pipeline_error) reste à poser au cœur.
+  # ✅ Corrigé au jalon filets (2026-10-27) : le garde de dimension du cœur
+  # refuse 12 cellules < pca_dim (20) avec une erreur CLASSÉE et actionnable
+  # (les deux knobs nommés) — l'erreur irlba brute n'est plus atteignable.
   err <- tryCatch(run_sc_auto_pipeline_core(.t2qc_obj(nc = 12),
                                             params = list(sc_ap_res = 5)),
                   error = function(e) e)
   expect_s3_class(err, "error")
+  expect_true(inherits(err, "sc_pipeline_error"),
+              info = paste(class(err), collapse = ","))
   expect_match(conditionMessage(err), "strictly less|dimension", ignore.case = TRUE)
 })

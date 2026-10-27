@@ -68,6 +68,48 @@ test_that("state.json conforms to frozen schema when emitted", {
   expect_identical(length(st$errors), 0L)
 })
 
+test_that("emitter: ring error older than the recency window keeps status idle", {
+  sb <- tempfile("sb_recency_")
+  dir.create(file.path(sb, "tools", "_drive"), recursive = TRUE)
+  on.exit(unlink(sb, recursive = TRUE), add = TRUE)
+  ts_drive_boot(sb)
+  ts_drive_clear_errors()
+
+  # Jalon filets (2026-10-27, O18) : la récence a une FENÊTRE. Une erreur plus
+  # vieille que TS_DRIVE_ERROR_RECENCY_SECS reste listée mais ne porte plus le
+  # statut "error" — le digest ne ment pas sur la santé courante.
+  old_ts <- format(Sys.time() - 3600, "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+  ts_drive_record_error("erreur ancienne hors fenêtre", module = "bulk_de", timestamp = old_ts)
+  w <- ts_drive_emit_passive_state(token = "tok_recency_old", force = TRUE)
+  expect_true(w)
+  st <- ts_drive_read_state()
+  expect_identical(length(st$errors), 1L)
+  expect_identical(st$pipeline_status, "idle")
+})
+
+test_that("recency helper: TRUE within window, FALSE for old, malformed, or empty", {
+  iso_now <- function(offset_secs) {
+    format(Sys.time() + offset_secs, "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+  }
+  expect_true(.ts_drive_has_recent_error(list(
+    list(timestamp = iso_now(-30), module = "sc_pipeline", message = "récente"))))
+  expect_true(.ts_drive_has_recent_error(list(
+    list(timestamp = iso_now(-899), module = "sc_pipeline", message = "limite haute"))))
+  expect_false(.ts_drive_has_recent_error(list(
+    list(timestamp = iso_now(-901), module = "sc_pipeline", message = "limite basse"))))
+  expect_false(.ts_drive_has_recent_error(list(
+    list(timestamp = iso_now(-7200), module = "sc_pipeline", message = "vieille"))))
+  # La NOUVELLE entrée décide : une entrée vieille puis une récente ⇒ récent.
+  expect_true(.ts_drive_has_recent_error(list(
+    list(timestamp = iso_now(-7200), module = "a", message = "x"),
+    list(timestamp = iso_now(-10),   module = "b", message = "y"))))
+  # Jamais de crash sur un tampon malformé — jamais récent.
+  expect_false(.ts_drive_has_recent_error(list(list(timestamp = "n'importe quoi"))))
+  expect_false(.ts_drive_has_recent_error(list(list(message = "sans timestamp"))))
+  expect_false(.ts_drive_has_recent_error(list()))
+  expect_false(.ts_drive_has_recent_error(NULL))
+})
+
 test_that("state.json content hash is computed deterministically with xxhash64", {
   token <- "tok_det_123"
   mod <- "bulk_de"

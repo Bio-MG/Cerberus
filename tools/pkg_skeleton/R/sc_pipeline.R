@@ -119,6 +119,31 @@ sc_pipeline_qc <- function(obj, min_genes, max_genes, max_mt, min_cells = 10) {
   withr::with_seed(.SC_AP_SEED, force(expr))
 }
 
+# ── Jalon filets (2026-10-27) : filet de classification Step 2-5 ─────────────
+# Les erreurs de dépendance BRUTES (Seurat/irlba/umap-rgl…) ne franchissent
+# plus la frontière du cœur : converties en `sc_pipeline_error`, message
+# d'origine préservé in extenso. Une condition DÉJÀ classée par le dépôt
+# (`<domaine>_error` / `<domaine>_missing` — doctrine C5, erreurs M4 comme
+# sc_ambient_package_missing) est RELANCÉE telle quelle (F20 : jamais de
+# re-classement silencieux). Défauts mesurés : T2-QC-5 (FindClusters à haute
+# résolution, « invalid first argument ») et T2-QC-6 (irlba, npcs >= cellules).
+.ap_is_domain_classed <- function(e) {
+  any(grepl("_(error|missing)$", class(e)))
+}
+
+.ap_classed_step <- function(expr) {
+  tryCatch(
+    expr,
+    error = function(e) {
+      if (.ap_is_domain_classed(e)) stop(e)
+      stop(errorCondition(
+        .sc_tr("Échec de l'autopipeline SC (normalisation/PCA/clustering) : %s",
+               conditionMessage(e)),
+        class = "sc_pipeline_error"))
+    }
+  )
+}
+
 #' Pure headless Single-Cell auto-pipeline core
 #'
 #' @param obj Seurat object (validated via assert_seurat)
@@ -275,6 +300,17 @@ run_sc_auto_pipeline_core <- function(obj, params = list(), log_file = NULL) {
                 sketch_params$ncells < n_total_cells &&
                 identical(integration, "none")
 
+  # ── Garde de dimension (jalon filets, 2026-10-27) ──────────────────────────
+  # T2-QC-6 (M5) : 12 cellules < pca_dim (20) faisaient sortir l'erreur irlba
+  # brute (« max(nu, nv) must be strictly less than min(nrow(A), ncol(A)) »).
+  # Refus CLASSÉ et actionnable avant tout calcul : les deux knobs nommés.
+  if (!isTRUE(use_sketch) && n_total_cells <= pca_dim) {
+    stop(errorCondition(
+      .sc_tr("Pas assez de cellules (%d) pour %d dimensions PCA (pca_dim). Fournissez plus de cellules ou réduisez pca_dim.",
+             n_total_cells, pca_dim),
+      class = "sc_pipeline_error"))
+  }
+
   if (exists("sc_backend_status", mode = "function") && sc_backend_status(obj) == "disk") {
     .ap_old_plan <- future::plan()
     on.exit(future::plan(.ap_old_plan), add = TRUE)
@@ -287,6 +323,10 @@ run_sc_auto_pipeline_core <- function(obj, params = list(), log_file = NULL) {
   mixing_before <- NULL
   mixing_after <- NULL
 
+  # Filet de classification autour de TOUTE la branche sketch/complete (le
+  # block est évalué dans le frame de l'appelant — même mécanisme que
+  # .seeded_ap) : voir .ap_classed_step ci-dessus.
+  .ap_classed_step({
   if (isTRUE(use_sketch)) {
     # ── Sketch Branch ────────────────────────────────────────────────────────
     log_fn(sprintf("Sketch : %s / %s cellules...", format(sketch_params$ncells, big.mark=" "), format(n_total_cells, big.mark=" ")))
@@ -399,6 +439,7 @@ run_sc_auto_pipeline_core <- function(obj, params = list(), log_file = NULL) {
       step_times$tsne_s <- as.numeric(difftime(Sys.time(), t_tsne, units = "secs"))
     }
   }
+  })
 
   n_cl <- length(unique(obj$seurat_clusters))
 

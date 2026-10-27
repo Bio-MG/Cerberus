@@ -140,3 +140,55 @@ testthat::test_that("SC auto-pipeline fails gracefully when QC removes nearly al
   # Original object untouched (commit never reached).
   testthat::expect_identical(dim(shiny::isolate(res$global_data$sc_obj)), dim(obj))
 })
+
+# ── Jalon filets (2026-10-27) : classification des erreurs de dépendance ─────
+# Deux défauts épinglés en M5 (T2-QC-5 / T2-QC-6) : des erreurs de dépendance
+# BRUTES sortaient du cœur (irlba quand npcs >= n_cellules ; FindClusters à
+# haute résolution). Le filet de Step 2-5 les re-classifie `sc_pipeline_error`
+# sans altérer le message d'origine ; une condition DÉJÀ classée par le dépôt
+# est préservée telle quelle (doctrine F20 — jamais de re-classement).
+
+testthat::test_that("core refuses cells <= pca_dim with a classed actionable error", {
+  testthat::skip_if_not_installed("Seurat")
+  library(Seurat)
+  set.seed(42)
+  m <- matrix(rpois(120L * 12L, lambda = 3), nrow = 120L, ncol = 12L,
+              dimnames = list(paste0("Gene-", seq_len(120L)), paste0("Cell-", seq_len(12L))))
+  obj <- suppressWarnings(CreateSeuratObject(counts = m))
+  err <- tryCatch(run_sc_auto_pipeline_core(obj, params = list(run_qc = FALSE)),
+                  error = function(e) e)
+  testthat::expect_s3_class(err, "error")
+  testthat::expect_true(inherits(err, "sc_pipeline_error"),
+                        info = paste(class(err), collapse = ","))
+  testthat::expect_match(conditionMessage(err), "cellule", ignore.case = TRUE)
+  testthat::expect_match(conditionMessage(err), "pca_dim", ignore.case = TRUE)
+})
+
+testthat::test_that("core classes the raw FindClusters failure at extreme resolution", {
+  testthat::skip_if_not_installed("Seurat")
+  library(Seurat)
+  set.seed(42)
+  m <- matrix(rpois(120L * 80L, lambda = 3), nrow = 120L, ncol = 80L,
+              dimnames = list(paste0("Gene-", seq_len(120L)), paste0("Cell-", seq_len(80L))))
+  obj <- suppressWarnings(CreateSeuratObject(counts = m))
+  err <- tryCatch(run_sc_auto_pipeline_core(obj, params = list(run_qc = FALSE, sc_ap_res = 3.0)),
+                  error = function(e) e)
+  testthat::expect_s3_class(err, "error")
+  testthat::expect_true(inherits(err, "sc_pipeline_error"),
+                        info = paste(class(err), collapse = ","))
+  # Message de dépendance préservé in extenso derrière le préfixe du filet.
+  testthat::expect_match(conditionMessage(err), "autopipeline", fixed = TRUE)
+  testthat::expect_gt(nchar(conditionMessage(err)), nchar("autopipeline"))
+})
+
+testthat::test_that("the classification net preserves an already classed condition verbatim", {
+  testthat::skip_if_not_installed("Seurat")
+  origin <- errorCondition("moteur M4 classé — inchangé", class = "sc_ambient_package_missing")
+  err <- tryCatch(.ap_classed_step(stop(origin)), error = function(e) e)
+  testthat::expect_true(inherits(err, "sc_ambient_package_missing"))
+  testthat::expect_identical(conditionMessage(err), "moteur M4 classé — inchangé")
+  raw <- tryCatch(.ap_classed_step(stop("erreur brute de dépendance")),
+                  error = function(e) e)
+  testthat::expect_true(inherits(raw, "sc_pipeline_error"))
+  testthat::expect_match(conditionMessage(raw), "erreur brute de dépendance", fixed = TRUE)
+})

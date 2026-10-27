@@ -83,14 +83,11 @@ test_that("T3-ERR-3: state.json pipeline_status reflects error state on pipeline
   # has_recent_error = TRUE ⇒ "error".
   expect_identical(ts_drive_detect_pipeline_status(NULL, NULL, has_recent_error = TRUE),
                    "error")
-  # ⚠️ (2) Découverte M5 (2026-10-27) : l'ÉMETTEUR ne passe JAMAIS
-  # has_recent_error au détecteur (ts_drive_emit_passive_state appelle
-  # ts_drive_detect_pipeline_status(tick_out$status, tick_out$error) à deux
-  # arguments) — le chemin ring→"error" est donc INATTEIGNABLE en l'état.
-  # Comportement mesuré et épinglé honnête : le status N'EST JAMAIS "error"
-  # par le chemin ring (non câblé) — il reste "idle" ou "running" (ce dernier
-  # quand un job d'un AUTRE fichier e2e a laissé un état de job vivant, le
-  # tampon de job étant lui aussi global au processus runner).
-  expect_true(st$pipeline_status %in% c("idle", "running"),
-              info = paste("status inattendu :", st$pipeline_status))
+  # ✅ (2) Corrigé au jalon filets (2026-10-27, O18) : l'ÉMETTEUR câble
+  # désormais has_recent_error (fenêtre TS_DRIVE_ERROR_RECENCY_SECS = 900 s) —
+  # une erreur récente du tampon porte pipeline_status = "error" ; le chemin
+  # ring→"error" est ATTEIGNABLE et le statut ne ment plus. Une erreur plus
+  # vieille que la fenêtre retombe hors statut (test unitaire dédié).
+  expect_identical(st$pipeline_status, "error",
+                   info = paste("status inattendu :", st$pipeline_status))
 })

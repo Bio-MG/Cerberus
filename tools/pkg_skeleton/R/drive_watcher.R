@@ -61,6 +61,10 @@
 .ts_drive_state$explicit_boot <- FALSE
 # Ring buffer capacity
 TS_DRIVE_MAX_ERRORS <- 20L
+# Jalon filets (2026-10-27, O18) : fenêtre de récence d'une erreur du tampon
+# pour porter pipeline_status = "error" dans le digest passif. Au-delà,
+# l'erreur reste LISTÉE dans state.json mais ne porte plus le statut courant.
+TS_DRIVE_ERROR_RECENCY_SECS <- 900L
 
 #' Record the app root once, at source time.
 #'
@@ -3588,6 +3592,36 @@ ts_drive_clear_errors <- function() {
   invisible(NULL)
 }
 
+#' Jalon filets (2026-10-27, O18) : TRUE quand l'entrée la plus récente du
+#' tampon d'erreurs a moins de TS_DRIVE_ERROR_RECENCY_SECS secondes.
+#'
+#' Le chemin ring→"error" du détecteur était INATTEIGNABLE (défaut épinglé M5,
+#' T3-ERR-3 : l'émetteur appelait ts_drive_detect_pipeline_status à 2
+#' arguments). L'émetteur passe désormais cette récence à has_recent_error.
+#' Timestamp malformé ou absent ⇒ jamais récent (l'émetteur ne crash jamais
+#' sur le contenu du tampon).
+#'
+#' @param errs List d'entrées du tampon (ts_drive_get_errors()).
+#' @return Logical scalar.
+.ts_drive_has_recent_error <- function(errs = NULL) {
+  if (!is.list(errs) || length(errs) == 0L) return(FALSE)
+  newest <- errs[[length(errs)]]$timestamp
+  if (is.null(newest) || !is.character(newest) || is.na(newest[1]) || !nzchar(newest[1])) {
+    return(FALSE)
+  }
+  ts <- tryCatch(
+    strptime(newest[1], "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
+    error = function(e) NULL
+  )
+  if (is.null(ts) || is.na(ts)) return(FALSE)
+  age <- as.numeric(difftime(Sys.time(), as.POSIXct(ts), units = "secs"))
+  win <- if (exists("TS_DRIVE_ERROR_RECENCY_SECS", inherits = TRUE)) {
+    suppressWarnings(as.numeric(get("TS_DRIVE_ERROR_RECENCY_SECS", inherits = TRUE)))
+  } else 900
+  if (is.na(win) || win <= 0) win <- 900
+  is.finite(age) && age >= 0 && age <= win
+}
+
 #' Detect the active module from Shiny input navigation or tick status.
 #'
 #' @param input Shiny input object (or list).
@@ -3677,10 +3711,16 @@ ts_drive_emit_passive_state <- function(session = NULL, input = NULL,
   # 1. Resolve active module and pipeline status
   job <- tryCatch(ts_drive_job_state(), error = function(e) NULL)
   act_mod <- ts_drive_detect_active_module(input, job, tick_out$module)
-  pipe_st <- ts_drive_detect_pipeline_status(tick_out$status, tick_out$error)
-
-  # 2. Retrieve bounded errors (max 20 entries)
+  # 2. Retrieve bounded errors (max 20 entries) — lu AVANT le statut : le
+  #    tampon alimente désormais AUSSI le détecteur (récence, jalon filets).
   errs <- ts_drive_get_errors(limit = TS_DRIVE_MAX_ERRORS)
+  # Jalon filets (2026-10-27, O18) : câblage has_recent_error — le chemin
+  # ring→"error" était INATTEIGNABLE (défaut épinglé M5, T3-ERR-3 : le
+  # détecteur était appelé à 2 arguments). Une erreur plus vieille que la
+  # fenêtre retombe hors statut (test unitaire dédié).
+  pipe_st <- ts_drive_detect_pipeline_status(
+    tick_out$status, tick_out$error,
+    has_recent_error = .ts_drive_has_recent_error(errs))
 
   # 3. Compute content hash (xxhash64) over semantic state
   content_hash <- ts_drive_compute_state_hash(tok, act_mod, pipe_st, errs)
