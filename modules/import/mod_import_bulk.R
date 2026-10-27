@@ -573,7 +573,21 @@ mod_import_bulk_server <- function(id, global_data) {
       }
       bulk_obj
     }
-    
+
+    # ── O16 (2026-10-27) : détection TPM/FPKM À L'IMPORT (bannière avant analyse) ──
+    # Le garde aval bulk_assert_raw_counts() refuse l'analyse APRÈS coup (piège
+    # mesuré 2026-10-24) ; ce signal prévient DÈS le chargement : notification
+    # PERSISTANTE (duration = NULL) + ligne de log, jamais bloquant.
+    .warn_if_transformed_bulk <- function(obj) {
+      sig <- tryCatch(bulk_counts_transformed_signature(obj$counts),
+                      error = function(e) NULL)
+      if (is.null(sig) || identical(sig$verdict, "raw") ||
+          identical(sig$verdict, "unknown")) return(invisible(NULL))
+      add_log(paste("⚠️", sig$message))
+      showNotification(sig$message, type = "warning", duration = NULL)
+      invisible(NULL)
+    }
+
     # =========================================================================
     # MODE MERGED_MATRIX — inchangé
     # =========================================================================
@@ -748,6 +762,7 @@ mod_import_bulk_server <- function(id, global_data) {
       global_data$bulk_obj_epoch <- (global_data$bulk_obj_epoch %||% 0L) + 1L  # purge résultats partagés (jeu remplacé)
       temp_data$is_loaded  <- TRUE
       .register_multi_dataset(global_data$bulk_obj)
+      .warn_if_transformed_bulk(global_data$bulk_obj)  # O16 : bannière TPM/FPKM avant analyse
       add_log(paste("✅ Import (drive) réussi :", nrow(bulk_obj$counts), "gènes ×",
                     ncol(bulk_obj$counts), "échantillons"))
       showNotification(paste("✅ Import piloté réussi :", ncol(bulk_obj$counts),
@@ -1267,6 +1282,7 @@ mod_import_bulk_server <- function(id, global_data) {
           global_data$bulk_obj <- bulk_obj
           global_data$bulk_obj_epoch <- (global_data$bulk_obj_epoch %||% 0L) + 1L  # purge résultats partagés (jeu remplacé)
           temp_data$is_loaded  <- TRUE
+          .warn_if_transformed_bulk(global_data$bulk_obj)  # O16 : bannière TPM/FPKM avant analyse
           add_log(paste("✅ Import réussi!", nrow(bulk_obj$counts), "gènes ×",
                         ncol(bulk_obj$counts), "échantillons"))
           .register_multi_dataset(global_data$bulk_obj)  # MD-1 (label optionnel)
@@ -1426,6 +1442,7 @@ mod_import_bulk_server <- function(id, global_data) {
 
         temp_data$is_loaded <- TRUE
         removeNotification(id = ns("progress"))
+        .warn_if_transformed_bulk(global_data$bulk_obj)  # O16 : bannière TPM/FPKM avant analyse
         add_log(paste("✅ Import multi-fichiers réussi —",
                       nrow(result$counts_mat), "gènes ×",
                       ncol(result$counts_mat), "échantillons"))

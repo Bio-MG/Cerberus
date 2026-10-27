@@ -106,6 +106,18 @@ TS_DA_MILO_SEED                  <- 14L        # graine enregistree dans la prov
 # voisinages croit avec le nombre de cellules.
 TS_DA_MILO_TIMEOUT_MS            <- 30 * 60 * 1000L  # 30 min
 
+# --- Bulk import — détection TPM/FPKM à l'upload (O16, 2026-10-27) ------------
+# Signature mesurée du piège du 2026-10-24 (docs/audits/COUNTS_NON_INTEGER_
+# 2026-10-24.md) : matrice transformée dont les colonnes somment ≈1e6 (TPM/
+# FPKM/CPM) avec des valeurs continues dans ]0;1[. La fenêtre de somme médiane
+# des colonnes et la fraction minimale de valeurs < 1 qualifient cette
+# signature (le garde aval bulk_assert_raw_counts refuse l'analyse ; O16
+# ajoute le signal DÈS l'import).
+TS_BULK_TPM_COLSUM_LOW   <- 5e5     # borne basse de la fenêtre de somme médiane
+TS_BULK_TPM_COLSUM_HIGH  <- 5e6     # borne haute de la fenêtre de somme médiane
+TS_BULK_TPM_UNIT_FRAC    <- 0.01    # fraction minimale de valeurs dans ]0;1[
+
+
 # --- scCODA (4E-2) ------------------------------------------------------------
 # DA compositionnelle au niveau ECHANTILLON via l'environnement Python sccoda
 # (detection explicite — jamais de repli silencieux). Defauts MCMC = defauts

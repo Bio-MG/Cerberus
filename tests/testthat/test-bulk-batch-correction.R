@@ -294,6 +294,47 @@ test_that("plot_batch_correction_pca combines two PCAs and rejects NULL", {
                class = "bulk_batch_correction_error")
 })
 
+# ---------------------------------------------------------------------------
+# O16 (2026-10-27) : bulk_counts_transformed_signature — détection à l'upload
+# ---------------------------------------------------------------------------
+test_that("bulk_counts_transformed_signature : counts bruts => verdict raw", {
+  mat <- matrix(c(0L, 5L, 12L, 200L, 3L, 47L), nrow = 3, ncol = 2)
+  sig <- bulk_counts_transformed_signature(mat)
+  expect_identical(sig$verdict, "raw")
+  expect_identical(sig$n_non_integer, 0L)
+})
+
+test_that("bulk_counts_transformed_signature : signature TPM (colonnes ≈1e6 + valeurs dans ]0;1[)", {
+  # Le piège mesuré du 2026-10-24 : 2 colonnes sommant à 1e6, valeurs
+  # continues, dont une fraction < 1.
+  set.seed(7)
+  c1 <- c(0, 0.3, 12.75, 880000.5, 119986.2)
+  c2 <- c(0, 0.9, 4.25, 900001.1, 99993.75)
+  mat <- cbind(c1, c2)
+  sig <- bulk_counts_transformed_signature(mat)
+  expect_identical(sig$verdict, "tpm_fpkm_likely")
+  expect_true(is.finite(sig$median_colsum))
+  expect_true(sig$median_colsum >= 5e5 && sig$median_colsum <= 5e6)
+  expect_true(sig$frac_unit_interval > 0)
+  # Le message cite le garde aval et le remède.
+  expect_match(sig$message, "bulk_assert_raw_counts", fixed = TRUE)
+  expect_match(sig$message, "counts bruts", fixed = TRUE)
+})
+
+test_that("bulk_counts_transformed_signature : matrice continue sans signature 1e6 => transformed_generic", {
+  set.seed(11)
+  mat <- matrix(rnorm(40, mean = 5), nrow = 20, ncol = 2)  # valeurs négatives possibles
+  sig <- bulk_counts_transformed_signature(mat)
+  expect_identical(sig$verdict, "transformed_generic")
+})
+
+test_that("bulk_counts_transformed_signature : ne s'arrête JAMAIS (entrée invalide => unknown)", {
+  expect_no_error(sig <- bulk_counts_transformed_signature(NULL))
+  expect_identical(sig$verdict, "unknown")
+  expect_no_error(sig <- bulk_counts_transformed_signature(data.frame(a = 1:3)))
+  expect_true(sig$verdict %in% c("unknown", "raw", "tpm_fpkm_likely", "transformed_generic"))
+})
+
 # ── Le fichier reste PUR (aucune réactivité Shiny) ─────────────────────────
 test_that("tools/pkg_skeleton/R/batch_correction.R stays pure R", {
   src <- paste(readLines(file.path(ts_project_root(), "tools/pkg_skeleton/R/batch_correction.R")),

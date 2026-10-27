@@ -129,6 +129,90 @@ bulk_assert_raw_counts <- function(mat, context = "correction de batch",
   invisible(mat)
 }
 
+#' Signature « matrice transformée » à l'UPLOAD (O16, 2026-10-27)
+#'
+#' Détecteur NON BLOQUANT qui complète `bulk_assert_raw_counts()` : le garde
+#' aval refuse l'analyse APRÈS coup (le piège mesuré du 2026-10-24 —
+#' docs/audits/COUNTS_NON_INTEGER_2026-10-24.md — n'était découvert qu'au lancement
+#' de la DE) ; ce détecteur classe la matrice DÈS L'IMPORT pour qu'une bannière
+#' d'avertissement précède toute analyse. Trois verdicts :
+#'   - "raw"                 : toutes les valeurs finies sont entières >= 0 ;
+#'   - "tpm_fpkm_likely"     : non entière + signature TPM/FPKM/CPM (valeurs
+#'     positives dans ]0;1[ ET somme médiane des colonnes dans la fenêtre
+#'     [TS_BULK_TPM_COLSUM_LOW, TS_BULK_TPM_COLSUM_HIGH] — colonnes ≈1e6) ;
+#'   - "transformed_generic" : non entière sans cette signature (VST,
+#'     log2-CPM, ...) ou valeurs négatives.
+#' Ne s'arrête JAMAIS (un détecteur qui plante ne prévient de rien) : entrée
+#' invalide ⇒ verdict "unknown".
+#'
+#' @param mat Matrice numérique (gènes x échantillons).
+#' @return list(verdict, n_values, n_non_integer, frac_integer, max_dev,
+#'   frac_unit_interval, median_colsum, message) — message FR affichable tel
+#'   quel dans une bannière.
+#' @export
+bulk_counts_transformed_signature <- function(mat) {
+  out <- list(verdict = "unknown", n_values = 0L, n_non_integer = 0L,
+              frac_integer = NA_real_, max_dev = NA_real_,
+              frac_unit_interval = NA_real_, median_colsum = NA_real_,
+              message = "entrée invalide (matrice numérique requise)")
+  if (is.null(mat)) return(out)
+  if (!is.matrix(mat)) mat <- tryCatch(as.matrix(mat), error = function(e) NULL)
+  if (is.null(mat) || !is.numeric(mat)) return(out)
+  vals <- as.vector(mat)
+  fin <- vals[is.finite(vals)]
+  out$n_values <- length(fin)
+  if (length(fin) == 0L) return(out)
+  if (any(fin < 0)) {
+    out$verdict <- "transformed_generic"
+    out$message <- paste0(
+      "⚠️ Cette matrice ne ressemble PAS à des counts bruts (valeurs négatives ",
+      "présentes — des counts ne peuvent pas être négatifs). L'analyse ",
+      "différentielle sera refusée par le garde aval (bulk_assert_raw_counts) : ",
+      "fournissez la matrice de counts bruts.")
+    return(out)
+  }
+  is_int <- abs(fin - round(fin)) < 1e-8
+  out$n_non_integer <- sum(!is_int)
+  out$frac_integer <- mean(is_int)
+  if (out$n_non_integer > 0L) {
+    out$max_dev <- max(abs(fin[!is_int] - round(fin[!is_int])))
+  } else {
+    out$verdict <- "raw"
+    out$message <- "counts bruts (toutes les valeurs finies sont entières >= 0)"
+    return(out)
+  }
+  nz <- fin[fin > 0]
+  out$frac_unit_interval <- if (length(nz) > 0L) mean(nz < 1) else 0
+  cs <- colSums(mat)
+  cs_pos <- cs[is.finite(cs) & cs > 0]
+  out$median_colsum <- if (length(cs_pos) > 0L) stats::median(cs_pos) else NA_real_
+  low <- if (exists("TS_BULK_TPM_COLSUM_LOW")) TS_BULK_TPM_COLSUM_LOW else 5e5
+  high <- if (exists("TS_BULK_TPM_COLSUM_HIGH")) TS_BULK_TPM_COLSUM_HIGH else 5e6
+  unit_frac <- if (exists("TS_BULK_TPM_UNIT_FRAC")) TS_BULK_TPM_UNIT_FRAC else 0.01
+  tpm_like <- isTRUE(out$frac_unit_interval >= unit_frac) &&
+    is.finite(out$median_colsum) && out$median_colsum >= low &&
+    out$median_colsum <= high
+  if (tpm_like) {
+    out$verdict <- "tpm_fpkm_likely"
+    out$message <- paste0(
+      "⚠️ Matrice TPM/FPKM/CPM PROBABLE à l'import : ", length(fin) - length(nz),
+      " valeurs nulles, ", sum(fin > 0 & fin < 1), " valeur(s) dans ]0;1[ (",
+      sprintf("%.1f%%", 100 * out$frac_unit_interval),
+      " des valeurs positives) et somme médiane des colonnes ≈ ",
+      format(out$median_colsum, digits = 2, scientific = TRUE),
+      " (signature ≈1e6). L'analyse différentielle sera REFUSÉE par le garde ",
+      "aval (bulk_assert_raw_counts) : fournissez la matrice de counts bruts.")
+  } else {
+    out$verdict <- "transformed_generic"
+    out$message <- paste0(
+      "⚠️ Matrice continue détectée à l'import (", out$n_non_integer,
+      " valeur(s) non entière(s) sur ", length(fin), " — VST / log2-CPM ?). ",
+      "L'analyse différentielle sera REFUSÉE par le garde aval ",
+      "(bulk_assert_raw_counts) : fournissez la matrice de counts bruts.")
+  }
+  out
+}
+
 #' Contrôle du plan de correction : lot × condition + faisabilité ComBat-seq
 #'
 #' Réutilise `bulk_batch_design_check()` (tools/pkg_skeleton/R/bulk_batch_qc.R) pour la
