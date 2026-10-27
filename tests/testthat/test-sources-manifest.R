@@ -4,8 +4,8 @@
 # POURQUOI CE FICHIER (plan D2 jalon M1,
 # docs/proposals/D2_SOURCE_RETIREMENT_PLAN.md rev. 2 -- document local)
 #
-# app.R source 155 fichiers : 145 source("...") explicites + 10 fichiers via
-# la boucle list.files("modules/bulk_de") (app.R:197). Cette liste ordonnee
+# app.R source 158 fichiers : 145 source("...") explicites + 10 bulk_de
+# depliees (M2) + 3 export drive (M3 fe47823). Cette liste ordonnee
 # est le prochain chantier de retrait (D2 M2+) : avant de la decouper, elle
 # doit etre ECRITE quelque part et verifiee par machine. Le manifeste
 # R/.sources_manifest.txt est genere par tools/sources_manifest.R (parse AST

@@ -1,8 +1,8 @@
 # tools/sources_manifest.R -- D2 M1 : manifeste machine-verifie de la liste
 # ordonnee des source() de app.R.
 #
-# POURQUOI : la liste des 155 fichiers sourcés par app.R (145 source("...")
-# explicites + 10 via la boucle list.files("modules/bulk_de"), app.R:197) est
+# POURQUOI : la liste des 158 fichiers sourcés par app.R (145 source("...")
+# explicites + 10 bulk_de dépliées (M2) + 3 export drive (M3 fe47823)) est
 # le prochain chantier de retrait (plan D2, docs/proposals/
 # D2_SOURCE_RETIREMENT_PLAN.md rev. 2, jalon M1). Avant de la découper (M2),
 # elle doit être ÉCRITE et vérifiable : ce tool la dérive par PARSE AST

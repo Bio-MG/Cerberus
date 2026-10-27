@@ -455,13 +455,13 @@ test_that("C9b : la population signalee est un PLAFOND a 0, jamais un compte exa
   # le plafond suit : 14 -> 0. Le laisser a 14 autoriserait un retour en
   # arriere SILENCIEUX de 14 fichiers.
   flagged <- .c9b_flagged(.c9b_population())
-  # ⚠️ +1 ÉTRANGER EN VOL (post-lot, mesuré 17:5x) : `R/core/drive_watcher.R`
-  # — fichier NON SUIVI recréé par la session CERBERUS (lot câblage app.R/drive)
-  # — est entré dans la population C9b (test éponyme présent, 31/101 fonctions
-  # possédées jamais mentionnées). Solde net lot 6 : 0 + 1 = 1 ; le plafond
-  # suit 0 -> 1. Le lot CERBERUS recomposera à 0 (il est responsable du
-  # fichier). Le laisser à 0 ferait porter au lot 6 une dette étrangère.
-  expect_true(length(flagged) <= 1L,
+  # ✅ RÉSORBE (2026-10-26, J1 d2fdac8) : la copie étrangère
+  # `R/core/drive_watcher.R` (session CERBERUS) était byte-identique au
+  # squelette — supprimée (git rm -f) et le moteur CLI cerberus_handoff.R
+  # déménagé au squelette ; R/ ne contient plus que le manifeste + .gitkeep.
+  # Le plafond retourne à 0 ; le témoin de non-vacuité ci-dessous garde le
+  # plafond falsifiable.
+  expect_true(length(flagged) == 0L,
               info = paste(flagged, collapse = ", "))
   # Le contrat dans l'autre sens : le rouge existe ENCORE a l'adresse du
   # paquet (temoin de NON-VACUITE deplace — le plafond 0 doit rester
