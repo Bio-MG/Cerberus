@@ -48,6 +48,13 @@
 # disk I/O) only pays off once RAM would otherwise be the bottleneck.
 .BPCELLS_AUTO_THRESHOLD <- if (exists("TS_BPCELLS_AUTO_THRESHOLD")) TS_BPCELLS_AUTO_THRESHOLD else 150000L
 
+# M4 (features 19-22, jalon CERBERUS 2026-10-26) : défauts des contrôles
+# contrefactuels doublets/ambiant — SOURCE UNIQUE defaults.R (contrat
+# PROJECT.md:146-147, convention QW-2 anti-fork UI/drive) ; retombe sur le
+# littéral contractuel si defaults.R n'est pas résidente (test isolé).
+.PIPELINE_DOUBLET_CUTOFF_DEFAULT <- if (exists("TS_SC_QC_DOUBLET_SCORE_CUTOFF")) TS_SC_QC_DOUBLET_SCORE_CUTOFF else 0.25
+.PIPELINE_MAX_CONTAMINATION_DEFAULT <- if (exists("TS_SC_QC_MAX_CONTAMINATION")) TS_SC_QC_MAX_CONTAMINATION else 0.20
+
 # ── UI ────────────────────────────────────────────────────────────────────────
 
 mod_sc_pipeline_ui <- function(id) {
@@ -64,6 +71,27 @@ mod_sc_pipeline_ui <- function(id) {
         span(i18n$t("Valeurs conseillées pour jeux de test réduits :")),
         " ",
         span(i18n$t("Min gènes = 50, Max gènes = 10 000, % Mito = 40."))),
+    # --- M4 (features 19-22) : QC doublets & ambiant — contrôles contrefactuels.
+    # L'activation par défaut suit la présence du package (opt-in honnête) ;
+    # les défauts lisent defaults.R (source unique QW-2).
+    hr(),
+    h6(i18n$t("QC Doublets & Ambiant (scDblFinder)"), style="font-weight:bold;"),
+    checkboxInput(ns("doublets_enabled"),
+                  i18n$t("Filtrer les doublets (scDblFinder)"),
+                  value = requireNamespace("scDblFinder", quietly = TRUE)),
+    layout_columns(
+      sliderInput(ns("doublet_score_cutoff"), i18n$t("Seuil score doublet"),
+                  0, 1, .PIPELINE_DOUBLET_CUTOFF_DEFAULT, step = 0.05),
+      sliderInput(ns("max_contamination"), i18n$t("Contamination ambiante max"),
+                  0, 1, .PIPELINE_MAX_CONTAMINATION_DEFAULT, step = 0.05)
+    ),
+    checkboxInput(ns("run_ambient"),
+                  i18n$t("Décontamination ambiante (SoupX/celda) — opt-in"),
+                  value = FALSE),
+    div(class="small text-muted mb-2",
+        i18n$t("Exclut les cellules appelées doublets dont le score dépasse strictement le seuil ; la détection tourne une fois, le seuil ne pilote que le filtrage."),
+        " ",
+        i18n$t("Sans moteur SoupX/celda installé, l'étape ambiante est une erreur classée (jamais de repli silencieux).")),
     # --- UI: sketch size preset selector ---
     selectInput(
       ns("sketch_preset"),
@@ -162,6 +190,10 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
       updateNumericInput(session, "qc_min_gene", label = .tr("Min Gènes"))
       updateNumericInput(session, "qc_max_gene", label = .tr("Max Gènes"))
       updateSliderInput(session, "qc_mt", label = .tr("% Mito Max"))
+      updateCheckboxInput(session, "doublets_enabled", label = .tr("Filtrer les doublets (scDblFinder)"))
+      updateSliderInput(session, "doublet_score_cutoff", label = .tr("Seuil score doublet"))
+      updateSliderInput(session, "max_contamination", label = .tr("Contamination ambiante max"))
+      updateCheckboxInput(session, "run_ambient", label = .tr("Décontamination ambiante (SoupX/celda) — opt-in"))
       updateSelectInput(session, "sketch_preset",
         label = .tr("Taille du sketch (vitesse vs precision)"),
         choices = setNames(
@@ -305,6 +337,60 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
         )
         qc_snap$Pct_Conserve <- round(100 * qc_snap$Cellules_apres / pmax(qc_snap$Cellules_avant, 1), 1)
         state_set(shared_rv, "qc_snapshot", qc_snap)
+
+        # ── Step 1c : QC doublets & ambiant (M4, features 19-24) ─────────────
+        # scDblFinder runs after QC (cf. commentaire historique ci-dessus) —
+        # appel du moteur PUR sc_filter_doublets_and_ambient (zéro Shiny) :
+        # scores pré-filtre par cellule, exclusion stricte score > cutoff,
+        # provenance PRODUITE par le moteur (convention provenance.R:4-9,
+        # jamais reconstruite), distributions avant/après (feature 22) stockées
+        # dans shared_rv pour les violons, puis le sous-ensemble propre se
+        # propage à toute la suite du pipeline (feature 24). Une erreur classée
+        # sc_qc_error (ex. run_ambient sans SoupX/celda) ATTEINT le tryCatch
+        # englobant : notification d'erreur, jamais de repli silencieux.
+        if (isTRUE(input$doublets_enabled)) {
+          if (requireNamespace("scDblFinder", quietly = TRUE) &&
+              exists("sc_filter_doublets_and_ambient", mode = "function")) {
+            p$set(0.18, .tr("QC — doublets (scDblFinder)..."))
+            m4_res <- sc_filter_doublets_and_ambient(obj, params = list(
+              seed = .SC_PIPELINE_SEED,
+              batch_var = "orig.ident",
+              doublet_score_cutoff = input$doublet_score_cutoff %||% .PIPELINE_DOUBLET_CUTOFF_DEFAULT,
+              max_contamination    = input$max_contamination    %||% .PIPELINE_MAX_CONTAMINATION_DEFAULT,
+              run_ambient          = isTRUE(input$run_ambient)
+            ))
+            obj <- m4_res$obj
+            # Feature 22 : feuilles numériques finies de qc_metrics -> violons.
+            state_set(shared_rv, "qc_dist_before",
+                      list(nCount_RNA   = m4_res$qc_metrics$distributions$nCount_RNA$before,
+                           nFeature_RNA = m4_res$qc_metrics$distributions$nFeature_RNA$before))
+            state_set(shared_rv, "qc_dist_after",
+                      list(nCount_RNA   = m4_res$qc_metrics$distributions$nCount_RNA$after,
+                           nFeature_RNA = m4_res$qc_metrics$distributions$nFeature_RNA$after))
+            # Récap doublets par échantillon -> colonnes additionnelles de qc_snapshot.
+            excl_cells <- as.character(m4_res$provenance$cells_excluded)
+            if ("orig.ident" %in% colnames(meta_pre)) {
+              exc_by_sample <- table(factor(meta_pre[excl_cells, "orig.ident"], levels = samples))
+              qc_snap$Doublets_exclus <- as.integer(
+                ifelse(is.na(exc_by_sample[samples]), 0L, exc_by_sample[samples]))
+            } else {
+              qc_snap$Doublets_exclus <- 0L
+            }
+            qc_snap$Pct_Doublets <- round(100 * qc_snap$Doublets_exclus /
+                                            pmax(qc_snap$Cellules_apres, 1), 1)
+            state_set(shared_rv, "qc_snapshot", qc_snap)
+            # Feature 23 : l'entrée de provenance PRODUITE par le moteur.
+            provenance_append(shared_rv, m4_res$provenance)
+            if (length(excl_cells) > 0) {
+              showNotification(sprintf(.tr("✓ Doublets : %d cellule(s) exclue(s)."),
+                                       length(excl_cells)),
+                               type = "message", duration = 6)
+            }
+          } else {
+            showNotification(.tr("scDblFinder non installé — étape doublets ignorée."),
+                             type = "warning", duration = 8)
+          }
+        }
 
         # ── Step 1b : Backend disque (BPCells) — Step-3.7A ─────────────────
         p$set(0.22, .tr("Backend stockage..."))

@@ -109,9 +109,13 @@ test_that("the drive input set is frozen, closed, and carries no modal-only key"
     "sc_ap_sketch_preset", "sc_ap_sketch_ncells_custom",
     "sc_ap_singler", "sc_ap_singler_ref", "sc_ap_singler_level",
     "sc_ap_markers", "sc_ap_pathway", "sc_ap_pathway_db", "sc_ap_pathway_org",
-    "sc_ap_correlation", "sc_ap_trajectory"
+    "sc_ap_correlation", "sc_ap_trajectory",
+    # M4 (2026-10-26) : QC doublets & ambiant — opt-in (le drive n'ajoute
+    # aucun calcul non éprouvé : sc_ap_doublets reste FALSE).
+    "sc_ap_doublets", "sc_ap_run_ambient",
+    "sc_ap_doublet_score_cutoff", "sc_ap_max_contamination"
   ))
-  expect_length(inputs, 24L)
+  expect_length(inputs, 28L)
   # Declared values. `sketch_preset = "max"` means FULL dataset: the drive never
   # depends on a hidden sub-sampling decision, and `bpcells = FALSE` keeps the
   # action free of any disk write.
@@ -124,6 +128,12 @@ test_that("the drive input set is frozen, closed, and carries no modal-only key"
   expect_identical(inputs$sc_ap_singler, FALSE)
   expect_identical(inputs$sc_ap_correlation, FALSE)
   expect_identical(inputs$sc_ap_trajectory, TRUE)
+  # M4 (2026-10-26) : le drive n'ajoute aucun calcul non éprouvé — doublets
+  # OPT-IN OFF ; les seuils suivent la source unique defaults.R (QW-2).
+  expect_identical(inputs$sc_ap_doublets, FALSE)
+  expect_identical(inputs$sc_ap_run_ambient, FALSE)
+  expect_equal(inputs$sc_ap_doublet_score_cutoff, TS_SC_QC_DOUBLET_SCORE_CUTOFF)
+  expect_equal(inputs$sc_ap_max_contamination, TS_SC_QC_MAX_CONTAMINATION)
   # QW-2 (2026-09-30) : les défauts drive lisent la source unique config/ —
   # les anciens 10/50 (plus permissifs que l'UI) créaient un fork de
   # reproductibilité. Le pin suit désormais la constante, pas un littéral.

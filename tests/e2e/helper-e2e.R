@@ -80,7 +80,15 @@ if (file.exists(file.path(e2e_project_root(), "tools/pkg_skeleton/R/sc_pipeline.
 e2e_source_if_exists("modules/sc/mod_sc_viz_export.R")
 e2e_source_if_exists("modules/sc/mod_sc_annotation_export.R")
 e2e_source_if_exists("modules/sc/mod_sc_trajectory_export.R")
-e2e_source_if_exists("R/sc/sc_qc_doublets.R")
+# M4 (2026-10-26) : le moteur doublets/QC vit dans l'arbre paquet (migration
+# D2 M5) — le legs R/sc/sc_qc_doublets.R n'existe plus sur l'arbre. Même
+# pattern de repli que sc_pipeline.R ci-dessus (lignes 75-79) : paquet
+# prioritaire, legs sinon. Sans ce fallback, is_m4_ready() resterait FALSE.
+if (file.exists(file.path(e2e_project_root(), "tools/pkg_skeleton/R/sc_qc_doublets.R"))) {
+  e2e_source_if_exists("tools/pkg_skeleton/R/sc_qc_doublets.R")
+} else {
+  e2e_source_if_exists("R/sc/sc_qc_doublets.R")
+}
 
 # Continuous heartbeat configuration for M3
 options(ts.drive.hb_interval = 2)

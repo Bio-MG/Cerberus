@@ -14,14 +14,14 @@
 #' Paramètres normalisés de l'autopipeline — LE point de passage unique
 #'
 #' Prend une liste brute (UI convertie, scénario drive, appel direct) et rend
-#' un jeu FERMÉ de 22 clés : défauts canoniques appliqués aux clés absentes,
+#' un jeu FERMÉ de 28 clés : défauts canoniques appliqués aux clés absentes,
 #' clés inconnues perdues. La classe « une clé manquante change silencieusement
 #' un seuil » (audit C-1) est fermée STRUCTURELLEMENT : le cœur ne voit jamais
 #' de NULL. Les défauts vivent ICI (couche pure) — le canal drive délègue.
 #'
 #' @param p Named list (ou vide). Les reactiveValues doivent être convertis
 #'   par l'appelant (`shiny::reactiveValuesToList(input)`).
-#' @return Named list de 22 clés `sc_ap_*`.
+#' @return Named list de 28 clés `sc_ap_*` (M4 2026-10-26 : +4 clés doublets/ambiant).
 sc_ap_normalize_params <- function(p = list()) {
   d <- list(
     sc_ap_mapping              = FALSE,
@@ -47,7 +47,15 @@ sc_ap_normalize_params <- function(p = list()) {
     sc_ap_pathway_db           = "GOBP",
     sc_ap_pathway_org          = "human",
     sc_ap_correlation          = FALSE,
-    sc_ap_trajectory           = TRUE
+    sc_ap_trajectory           = TRUE,
+    # M4 (2026-10-26, jalon CERBERUS) : QC doublets & ambiant. Défauts = source
+    # unique defaults.R (convention QW-2). sc_ap_doublets est OPT-IN (FALSE) :
+    # l'appel moteur est PARESSEUX (Step 1c) et le cœur reste exécutable sans
+    # scDblFinder ; le canal drive hérite du même jeu fermé (délégation).
+    sc_ap_doublets             = FALSE,
+    sc_ap_run_ambient          = FALSE,
+    sc_ap_doublet_score_cutoff = TS_SC_QC_DOUBLET_SCORE_CUTOFF,
+    sc_ap_max_contamination    = TS_SC_QC_MAX_CONTAMINATION
   )
   for (k in names(d)) d[[k]] <- p[[k]] %||% d[[k]]
   d
@@ -125,6 +133,7 @@ run_sc_auto_pipeline_core <- function(obj, params = list(), log_file = NULL) {
   step_times <- list(
     mapping_s    = 0,
     qc_s         = 0,
+    doublets_s   = 0,
     norm_s       = 0,
     pca_s        = 0,
     harmony_s    = 0,
@@ -207,6 +216,40 @@ run_sc_auto_pipeline_core <- function(obj, params = list(), log_file = NULL) {
   } else {
     log_fn("QC ignoré (matrice pré-filtrée fournie).")
     step_times$qc_s <- 0
+  }
+
+  # ── Step 1c (M4, 2026-10-26) : QC doublets & ambiant — appel PARESSEUX ──────
+  # scDblFinder est OPTIONNEL : le cœur doit rester exécutable sans le package
+  # (log + skip quand le moteur n'est pas résident). Quand le moteur tourne,
+  # ses erreurs classées (ex. sc_ambient_package_missing si run_ambient sans
+  # SoupX/celda) se propagent TELLES QUELLES — jamais de repli silencieux
+  # (feature 20). L'appel est AVANT la conversion BPCells (Step 1b) : la
+  # détection exige des counts en mémoire. Provenance + distributions
+  # rejoignent la liste de retour (consommables par le rapport).
+  m4_provenance <- NULL
+  m4_distributions <- NULL
+  if (isTRUE(p_norm$sc_ap_doublets)) {
+    if (exists("sc_filter_doublets_and_ambient", mode = "function")) {
+      t_m4 <- Sys.time()
+      log_fn("QC doublets & ambiant (scDblFinder)...")
+      m4_res <- sc_filter_doublets_and_ambient(obj, params = list(
+        seed = seed,
+        batch_var = batch_var,
+        doublet_score_cutoff = p_norm$sc_ap_doublet_score_cutoff,
+        max_contamination = p_norm$sc_ap_max_contamination,
+        run_ambient = isTRUE(p_norm$sc_ap_run_ambient)
+      ))
+      obj <- m4_res$obj
+      m4_provenance <- m4_res$provenance
+      m4_distributions <- m4_res$qc_metrics$distributions
+      log_fn(sprintf("✓ QC doublets : %d cellules conservées (exclues: %d)",
+                     ncol(obj),
+                     length(as.character(m4_res$provenance$cells_excluded))))
+      step_times$doublets_s <- as.numeric(difftime(Sys.time(), t_m4, units = "secs"))
+    } else {
+      log_fn("QC doublets ignoré : moteur sc_filter_doublets_and_ambient indisponible (scDblFinder optionnel).")
+      step_times$doublets_s <- 0
+    }
   }
 
   # ── Step 1b: Backend disque (BPCells) ──────────────────────────────────────
@@ -521,7 +564,9 @@ run_sc_auto_pipeline_core <- function(obj, params = list(), log_file = NULL) {
     markers_data     = markers,
     pathway_results  = pw,
     correlated_genes = corr_res,
-    qc_snapshot      = qc_snapshot
+    qc_snapshot      = qc_snapshot,
+    doublets_provenance = m4_provenance,   # M4 : entrée new_provenance_entry (NULL si step désactivé)
+    qc_distributions    = m4_distributions # M4 : distributions nCount/nFeature avant/après (NULL si step désactivé)
   )
 }
 

@@ -44,6 +44,13 @@ TS_SC_QC_MIN_GENES         <- 100    # min gènes/cellule
 TS_SC_QC_MAX_GENES         <- 8000   # max gènes/cellule
 TS_SC_QC_MAX_PCT_MT        <- 20     # % mitochondrial max
 TS_SC_QC_PCA_DIMS          <- 20     # dims PCA par défaut
+# M4 (2026-10-26, jalon CERBERUS) : seuils contrefactuels du moteur doublets &
+# ambiant (sc_qc_doublets.R) — contrat PROJECT.md:146-147. Source unique
+# consommée par l'UI (mod_sc_pipeline.R), le moteur et le normalisateur
+# (sc_ap_normalize_params) — convention QW-2 (jalon anti-C-1 : l'UI et le
+# canal drive doivent lire CES valeurs, jamais un littéral local).
+TS_SC_QC_DOUBLET_SCORE_CUTOFF <- 0.25 # seuil score doublet (exclusion stricte >)
+TS_SC_QC_MAX_CONTAMINATION    <- 0.20 # contamination ambiante max (chemin SoupX/celda)
 
 # --- Single-Cell analysis caps ---------------------------------------------
 TS_MAX_PER_CLUSTER_MARKERS <- 1000L   # subsample cap for FindAllMarkers

@@ -10856,6 +10856,46 @@
     {
       "fr": "Calcul en cours...",
       "en": "Computing..."
+    },
+    {
+      "fr": "QC Doublets & Ambiant (scDblFinder)",
+      "en": "Doublet & Ambient QC (scDblFinder)"
+    },
+    {
+      "fr": "Filtrer les doublets (scDblFinder)",
+      "en": "Filter doublets (scDblFinder)"
+    },
+    {
+      "fr": "Seuil score doublet",
+      "en": "Doublet score cutoff"
+    },
+    {
+      "fr": "Contamination ambiante max",
+      "en": "Max ambient contamination"
+    },
+    {
+      "fr": "Décontamination ambiante (SoupX/celda) — opt-in",
+      "en": "Ambient decontamination (SoupX/celda) — opt-in"
+    },
+    {
+      "fr": "Exclut les cellules appelées doublets dont le score dépasse strictement le seuil ; la détection tourne une fois, le seuil ne pilote que le filtrage.",
+      "en": "Excludes cells called doublets whose score strictly exceeds the cutoff; detection runs once, the cutoff only drives filtering."
+    },
+    {
+      "fr": "Sans moteur SoupX/celda installé, l'étape ambiante est une erreur classée (jamais de repli silencieux).",
+      "en": "Without an installed SoupX/celda engine, the ambient step is a classed error (never a silent fallback)."
+    },
+    {
+      "fr": "QC — doublets (scDblFinder)...",
+      "en": "QC — doublets (scDblFinder)..."
+    },
+    {
+      "fr": "✓ Doublets : %d cellule(s) exclue(s).",
+      "en": "✓ Doublets: %d cell(s) excluded."
+    },
+    {
+      "fr": "scDblFinder non installé — étape doublets ignorée.",
+      "en": "scDblFinder not installed — doublet step skipped."
     }
   ]
 }

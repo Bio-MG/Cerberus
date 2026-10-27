@@ -31,7 +31,10 @@ assign(".tr", function(key) key, envir = globalenv())
   "sc_ap_sketch_preset", "sc_ap_sketch_ncells_custom",
   "sc_ap_singler", "sc_ap_singler_ref", "sc_ap_singler_level",
   "sc_ap_markers", "sc_ap_pathway", "sc_ap_pathway_db", "sc_ap_pathway_org",
-  "sc_ap_correlation", "sc_ap_trajectory"
+  "sc_ap_correlation", "sc_ap_trajectory",
+  # M4 (2026-10-26) : QC doublets & ambiant — opt-in, défauts = defaults.R.
+  "sc_ap_doublets", "sc_ap_run_ambient",
+  "sc_ap_doublet_score_cutoff", "sc_ap_max_contamination"
 )
 
 test_that("sc_ap_normalize_params rend le jeu FERMÉ avec les défauts canoniques", {
@@ -45,6 +48,11 @@ test_that("sc_ap_normalize_params rend le jeu FERMÉ avec les défauts canonique
   expect_true(isTRUE(p$sc_ap_trajectory))
   expect_false(isTRUE(p$sc_ap_mapping))
   expect_identical(p$sc_ap_norm, "log")
+  # M4 : opt-in strict + défauts lus depuis la source unique defaults.R (QW-2).
+  expect_false(isTRUE(p$sc_ap_doublets))
+  expect_false(isTRUE(p$sc_ap_run_ambient))
+  expect_equal(p$sc_ap_doublet_score_cutoff, TS_SC_QC_DOUBLET_SCORE_CUTOFF)
+  expect_equal(p$sc_ap_max_contamination,    TS_SC_QC_MAX_CONTAMINATION)
 })
 
 test_that("les valeurs fournies gagnent, les clés inconnues sont PERDUES", {

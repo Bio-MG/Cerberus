@@ -151,6 +151,12 @@ source("tools/pkg_skeleton/R/sc_pipeline.R")
 source("tools/pkg_skeleton/R/sc_export.R")
 source("tools/pkg_skeleton/R/sc_metadata.R")  # Design expérimental (condition/réplicat) — feature 6×10X, audit 2026-09-27 (PUR : aucun symbole Shiny)
 source("tools/pkg_skeleton/R/sc_batch_metrics.R")  # Métrique de mélange des batchs (roadmap 4.3) — PUR : aucun symbole Shiny
+# M4 (2026-10-26, jalon CERBERUS) : moteur doublets & RNA ambiant — scDblFinder,
+# erreurs classées sc_qc_error (jamais de repli silencieux, feature 20),
+# provenance new_provenance_entry (feature 23). PUR : aucun symbole Shiny ;
+# résolu au runtime — les modules sont sourcés bien après. Garde manifeste :
+# source littéral top-level (R/.sources_manifest.txt, test-sources-manifest.R).
+source("tools/pkg_skeleton/R/sc_qc_doublets.R")
 
 # ── Bloc 06 : paquet (ex-R/bulk, incl. ex-R/sc/sc_multi) (logique pure) ─────
 source("tools/pkg_skeleton/R/bulk_helpers.R")

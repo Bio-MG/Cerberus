@@ -148,7 +148,7 @@ test_that("the detector itself works (negative case)", {
   expect_length(.app_missing(fake_disk, fake_disk), 0L)
 })
 
-test_that("M2 semantics: 158 explicit sources, zero hidden sourcing loop", {
+test_that("M2 semantics: 159 explicit sources, zero hidden sourcing loop", {
   # ANCIEN seuil (2026-09-16) : expect_gt(length(.app_explicit(.app_src)), 50L)
   # -- plancher anti-extracteur-cassé, remplacé en M2 par un épingle EXACT :
   # 155 = 145 source() historiques + 10 de l'ancienne boucle bulk_de DEPLIEE
@@ -158,11 +158,13 @@ test_that("M2 semantics: 158 explicit sources, zero hidden sourcing loop", {
   # (158 = 145 + 10 bulk_de deplies + 3 routes d'export drive M3 posees par
   # fe47823 : mod_sc_annotation_export.R, mod_sc_viz_export.R,
   # mod_sc_trajectory_export.R). Les 3 gardes etaient ROUGES sur ce decalage.
+  # M4 CERBERUS (2026-10-26) : re-basage 158 -> 159 (+1 moteur
+  # sc_qc_doublets.R, source litteral top-level apres sc_batch_metrics.R).
   expect_identical(
-    length(.app_explicit(.app_src)), 158L,
-    info = paste("app.R doit porter exactement 158 source() explicites",
-                 "(M2 : 145 + 10 bulk_de deplies, puis + 3 export drive M3)",
-                 "-- le compte observe differe")
+    length(.app_explicit(.app_src)), 159L,
+    info = paste("app.R doit porter exactement 159 source() explicites",
+                 "(M2 : 145 + 10 bulk_de deplies, + 3 export drive M3,",
+                 "+ 1 moteur sc_qc_doublets M4) -- le compte observe differe")
   )
   # et plus AUCUNE boucle list.files() de sourcing : M2 a deplie la derniere,
   # le tri alphabetique implicite etait une variable cachee.

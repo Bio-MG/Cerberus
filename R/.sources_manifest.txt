@@ -45,6 +45,7 @@ tools/pkg_skeleton/R/sc_pipeline.R
 tools/pkg_skeleton/R/sc_export.R
 tools/pkg_skeleton/R/sc_metadata.R
 tools/pkg_skeleton/R/sc_batch_metrics.R
+tools/pkg_skeleton/R/sc_qc_doublets.R
 tools/pkg_skeleton/R/bulk_helpers.R
 tools/pkg_skeleton/R/bulk_provenance.R
 tools/pkg_skeleton/R/bulk_batch_qc.R
