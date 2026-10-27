@@ -66,5 +66,15 @@ test_that("T3-HQC-3: pseudoreplicated drop is blocked from entering biological Q
 
 test_that("T3-HQC-4: validated single-cell count matrix feeds downstream doublet caller", {
   if (!is_m4_ready()) skip("M4 doublet engine not yet active for cross-feature execution")
-  expect_true(TRUE)
+  # M5 : la matrice validée du harnais handoff traverse le MOTEUR M4 et rend
+  # un objet downstream-ready (RunPCA direct exigé par F24-4 côté contrat).
+  set.seed(7)
+  m <- matrix(rpois(120 * 60, lambda = 3), nrow = 120, ncol = 60)
+  rownames(m) <- paste0("Gene-", seq_len(120))
+  colnames(m) <- paste0("Cell-", seq_len(60))
+  obj <- suppressWarnings(Seurat::CreateSeuratObject(counts = m))
+  res <- sc_filter_doublets_and_ambient(obj, params = list(seed = 42))
+  expect_s4_class(res$obj, "Seurat")
+  expect_equal(ncol(res$obj), 60L)
+  expect_true(length(as.character(res$provenance$cells_used)) == 60L)
 })

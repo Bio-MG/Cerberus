@@ -65,5 +65,20 @@ test_that("T4-CCC-2: population column specified in manifest exists in sampleshe
 
 test_that("T4-CCC-3: cell-cell communication downstream routing preserves population annotations", {
   if (!is_m3_ready()) skip("M3 pipeline integration not yet active")
-  expect_true(TRUE)
+  # M5 : le cœur async PRÉSERVE les annotations de population du meta.data
+  # d'entrée (clé de voûte M6 : les colonnes de design survivent au pipeline —
+  # sinon CCC/DA perdent leurs identités).
+  set.seed(11)
+  m <- matrix(rpois(120 * 60, lambda = 3), nrow = 120, ncol = 60)
+  rownames(m) <- paste0("Gene-", seq_len(120))
+  colnames(m) <- paste0("Cell-", seq_len(60))
+  obj <- suppressWarnings(Seurat::CreateSeuratObject(counts = m))
+  obj$population <- factor(rep(c("Tcell", "Bcell", "Mono"), length.out = 60))
+  obj$disease_stage <- "baseline"
+  res <- run_sc_auto_pipeline_core(obj, params = list(sc_ap_res = 0.5))
+  for (col in c("population", "disease_stage", "orig.ident")) {
+    expect_true(col %in% colnames(res$obj@meta.data),
+                info = paste("colonne de population perdue :", col))
+  }
+  expect_true(!is.null(res$timings) && is.list(res$timings))
 })

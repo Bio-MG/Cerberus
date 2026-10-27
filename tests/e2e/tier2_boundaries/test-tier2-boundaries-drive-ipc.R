@@ -38,7 +38,15 @@ test_that("T2-IPC-2: TS_DRIVE_EXPORT_FORBIDDEN contains path injection parameter
 
 test_that("T2-IPC-3: ring buffer overflow stress keeps exactly 20 latest entries (FIFO)", {
   if (!is_m2_ready()) skip("M2 error ring buffer not yet active")
-  expect_true(TRUE)
+  # M5 : stress 30 messages DISTINCTS — le tampon global reste borné à 20 et
+  # les 10 plus anciens de la rafale ont été évincés.
+  msgs <- sprintf("T2-IPC-3-stress-%02d", seq_len(30L))
+  for (m in msgs) ts_drive_record_error(m, module = "drive_watcher")
+  ring <- ts_drive_get_errors()
+  expect_length(ring, 20L)
+  texts <- vapply(ring, function(x) x$message %||% NA_character_, character(1))
+  expect_false(any(msgs[1:10] %in% texts))
+  expect_true(all(msgs[11:30] %in% texts))
 })
 
 test_that("T2-IPC-4: path traversal attempts in export route requests are rejected", {

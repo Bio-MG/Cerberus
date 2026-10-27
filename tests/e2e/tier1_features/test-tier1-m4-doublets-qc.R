@@ -216,17 +216,29 @@ test_that("F20-4: error message names the exact missing R package", {
   expect_true(any(named))
 })
 
-test_that("F20-5: valid environment with installed package executes decontamination", {
+test_that("F20-5: ambient path is total — decontamination runs, or the classed refusal is the contract", {
   if (!is_m4_ready()) skip("M4 ambient RNA guard not yet active")
-  if (!.m4_has_ambient_engine()) {
-    skip("No ambient decontamination engine (SoupX/celda) installed in this environment")
-  }
   obj <- .make_test_sc_obj()
-  res <- sc_filter_doublets_and_ambient(obj, params = list(run_ambient = TRUE, seed = 42))
-  expect_s4_class(res$obj, "Seurat")
-  expect_true(is.list(res$qc_metrics))
-  expect_true(is.list(res$provenance))
-  expect_true(all(is.finite(.m4_numeric_leaves(res$qc_metrics))))
+  if (.m4_has_ambient_engine()) {
+    res <- sc_filter_doublets_and_ambient(obj, params = list(run_ambient = TRUE, seed = 42))
+    expect_s4_class(res$obj, "Seurat")
+    expect_true(is.list(res$qc_metrics))
+    expect_true(is.list(res$provenance))
+    expect_true(all(is.finite(.m4_numeric_leaves(res$qc_metrics))))
+  } else {
+    # O17 (2026-10-27) : couple F20 neutralisé côté test — le 5ᵉ garde ne
+    # SKIPPE PLUS quand SoupX/celda est absent : le refus classé EST le
+    # comportement documenté du chemin ambiant (aucun repli silencieux, même
+    # doctrine que F20-1..4, énoncée du point de vue « la voie est TOTALE »).
+    # Sur un hôte AVEC moteur, la branche haute exécute la décontamination.
+    err <- tryCatch(
+      sc_filter_doublets_and_ambient(obj, params = list(run_ambient = TRUE, seed = 42)),
+      error = function(e) e
+    )
+    expect_s3_class(err, "sc_ambient_package_missing")
+    expect_s3_class(err, "sc_qc_error")
+    expect_true(grepl("SoupX|celda|DecontX", conditionMessage(err), ignore.case = TRUE))
+  }
 })
 
 # ── Feature 21: Counterfactual QC Threshold Controls ─────────────────────────

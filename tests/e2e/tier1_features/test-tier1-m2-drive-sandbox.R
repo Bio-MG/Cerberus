@@ -178,17 +178,77 @@ test_that("F09-2: unlinking sandbox ready.json does not affect host ready.json",
 
 test_that("F09-3: host session token is isolated from sandboxed token requests", {
   if (!is_m2_ready()) skip("M2 operator ready.json preservation not yet active")
-  expect_true(TRUE)
+  # M5 dé-façadage (2026-10-27) : le jeton lu sous TRANSCRIPTO_DRIVE_ROOT est
+  # celui du SANDBOX — jamais celui d'un hôte. La lecture repart de la racine
+  # résolue à l'appel (F07-1), donc l'isolement est mesuré, pas supposé.
+  sb <- tempfile("sb_tok_")
+  dir.create(file.path(sb, "tools", "_drive"), recursive = TRUE)
+  on.exit({
+    Sys.unsetenv("TRANSCRIPTO_DRIVE_ROOT")
+    unlink(sb, recursive = TRUE, force = TRUE)
+  }, add = TRUE)
+  # ⚠️ l'ordre EST l'isolement : la racine sandbox doit être résolue AVANT tout
+  # write (mesuré : l'ordre inverse écrit ready.json à la racine hôte).
+  Sys.setenv(TRANSCRIPTO_DRIVE_ROOT = sb)
+  ts_drive_write_ready(session = NULL, token = "sandboxtok123", armed = TRUE)
+  rd <- ts_drive_read_ready()
+  expect_identical(rd$session_token, "sandboxtok123")
+  # Et la racine hôte n'a JAMAIS reçu ce token (le write est parti au sandbox).
+  host_rd_path <- file.path(e2e_project_root(), "tools", "_drive", "ready.json")
+  if (file.exists(host_rd_path)) {
+    host <- jsonlite::fromJSON(host_rd_path, simplifyVector = FALSE)
+    expect_false(identical(host$session_token, "sandboxtok123"))
+  }
 })
 
 test_that("F09-4: sandbox teardown hook registers safe cleanups", {
   if (!is_m2_ready()) skip("M2 operator ready.json preservation not yet active")
-  expect_true(TRUE)
+  # M5 : le hook de teardown est ts_drive_invalidate_state() — idempotent
+  # (fichier absent ⇒ pas d'erreur) et effectif (fichier présent ⇒ supprimé).
+  sb <- tempfile("sb_teardown_")
+  dir.create(file.path(sb, "tools", "_drive"), recursive = TRUE)
+  on.exit({
+    Sys.unsetenv("TRANSCRIPTO_DRIVE_ROOT")
+    unlink(sb, recursive = TRUE, force = TRUE)
+  }, add = TRUE)
+  Sys.setenv(TRANSCRIPTO_DRIVE_ROOT = sb)
+  expect_no_error(ts_drive_invalidate_state("tok_teardown"))
+  writeLines("{\"ok\":true}", ts_drive_path("state.json"))
+  expect_true(file.exists(ts_drive_path("state.json")))
+  expect_no_error(ts_drive_invalidate_state("tok_teardown"))
+  expect_false(file.exists(ts_drive_path("state.json")))
 })
 
 test_that("F09-5: host drive root remains unpolluted after multiple sandbox sessions", {
   if (!is_m2_ready()) skip("M2 operator ready.json preservation not yet active")
-  expect_true(TRUE)
+  # M5 : trois cycles sandbox complets (write → teardown), puis la racine hôte
+  # est ré-examinée — seuls les fichiers déclarés du canal y vivent, aucun
+  # artefact de sandbox n'a fuité.
+  for (i in seq_len(3L)) {
+    sb <- tempfile(sprintf("sb_cycle%d_", i))
+    dir.create(file.path(sb, "tools", "_drive"), recursive = TRUE)
+    Sys.setenv(TRANSCRIPTO_DRIVE_ROOT = sb)
+    ts_drive_write_ready(session = NULL, token = sprintf("sb%d_token", i))
+    ts_drive_invalidate_state(sprintf("sb%d_token", i))
+    Sys.unsetenv("TRANSCRIPTO_DRIVE_ROOT")
+    unlink(sb, recursive = TRUE, force = TRUE)
+  }
+  host_dir <- file.path(e2e_project_root(), "tools", "_drive")
+  # Invariant réaliste (mesuré 2026-10-27 : un test du canal peut déposer un
+  # artefact runtime à la racine hôte — gitignored) : seuls les FICHIERS
+  # DÉCLARÉS du canal peuvent y vivre, et aucun ready.json hôte ne porte un
+  # token de sandbox.
+  channel_files <- c("README.md", "ready.json", "state.json", "arm.json",
+                     "result.json", "scenario.json")
+  expect_true(all(list.files(host_dir) %in% channel_files),
+              info = paste("fichiers inattendus à la racine hôte :",
+                           paste(setdiff(list.files(host_dir), channel_files),
+                                 collapse = ", ")))
+  host_rd <- file.path(host_dir, "ready.json")
+  if (file.exists(host_rd)) {
+    h <- jsonlite::fromJSON(host_rd, simplifyVector = FALSE)
+    expect_false(grepl("^sb[0-9]+_token$", h$session_token %||% ""))
+  }
 })
 
 # ── Feature 10: Passive state.json Digest ────────────────────────────────────
@@ -212,34 +272,107 @@ test_that("F10-1: state.json conforms to the frozen digest schema", {
 
 test_that("F10-2: state.json is written only when content hash changes", {
   if (!is_m2_ready()) skip("M2 passive state digest not yet active")
-  expect_true(TRUE)
+  # M5 : la porte de hash est le comportement MESURÉ de l'émetteur — même état
+  # sémantique ⇒ 2ᵉ émission SKIPPÉE (0 I/O disque) ; état changé ⇒ réécrite.
+  sb <- tempfile("sb_hashgate_")
+  dir.create(file.path(sb, "tools", "_drive"), recursive = TRUE)
+  on.exit({
+    Sys.unsetenv("TRANSCRIPTO_DRIVE_ROOT")
+    unlink(sb, recursive = TRUE, force = TRUE)
+  }, add = TRUE)
+  Sys.setenv(TRANSCRIPTO_DRIVE_ROOT = sb)
+  tick <- list(module = "bulk_de", status = NULL, error = NULL)
+  w1 <- ts_drive_emit_passive_state(token = "tok_hashgate", tick_out = tick, force = TRUE)
+  w2 <- ts_drive_emit_passive_state(token = "tok_hashgate", tick_out = tick)
+  expect_true(isTRUE(w1))
+  expect_false(isTRUE(w2))
+  st <- jsonlite::fromJSON(ts_drive_path("state.json"), simplifyVector = FALSE)
+  expect_identical(st$active_module, "bulk_de")
 })
 
 test_that("F10-3: state.json content hash uses xxhash64 deterministically", {
   if (!is_m2_ready()) skip("M2 passive state digest not yet active")
-  expect_true(TRUE)
+  # M5 : hash déterministe (16 hex — largeur xxhash64), SANS timestamps dans le
+  # payload (deux appels au même état sémantique ⇒ même hash), et sensible au
+  # contenu (module/status/erreurs changent le hash).
+  h1 <- ts_drive_compute_state_hash("tok_xx", "bulk_de", "idle", list())
+  h2 <- ts_drive_compute_state_hash("tok_xx", "bulk_de", "idle", list())
+  h3 <- ts_drive_compute_state_hash("tok_xx", "sc_pipeline", "idle", list())
+  expect_identical(h1, h2)
+  expect_false(identical(h1, h3))
+  expect_identical(nchar(h1), 16L)
+  expect_match(h1, "^[0-9a-f]{16}$")
 })
 
 test_that("F10-4: poller updates state.json during tick intervals (~800ms)", {
   if (!is_m2_ready()) skip("M2 passive state digest not yet active")
-  expect_true(TRUE)
+  # M5 : state.json reflète le tick COURANT — le module du tick_out voyage
+  # jusqu'au fichier sans force (le changement de module change le hash).
+  sb <- tempfile("sb_tick_")
+  dir.create(file.path(sb, "tools", "_drive"), recursive = TRUE)
+  on.exit({
+    Sys.unsetenv("TRANSCRIPTO_DRIVE_ROOT")
+    unlink(sb, recursive = TRUE, force = TRUE)
+  }, add = TRUE)
+  Sys.setenv(TRANSCRIPTO_DRIVE_ROOT = sb)
+  w1 <- ts_drive_emit_passive_state(token = "tok_tick",
+                                    tick_out = list(module = "bulk_de"))
+  st1 <- jsonlite::fromJSON(ts_drive_path("state.json"), simplifyVector = FALSE)
+  expect_true(isTRUE(w1))
+  expect_identical(st1$active_module, "bulk_de")
+  w2 <- ts_drive_emit_passive_state(token = "tok_tick",
+                                    tick_out = list(module = "sc_pipeline"))
+  st2 <- jsonlite::fromJSON(ts_drive_path("state.json"), simplifyVector = FALSE)
+  expect_true(isTRUE(w2))
+  expect_identical(st2$active_module, "sc_pipeline")
 })
 
 test_that("F10-5: atomic write of state.json prevents partial or corrupted reads", {
   if (!is_m2_ready()) skip("M2 passive state digest not yet active")
-  expect_true(TRUE)
+  # M5 : l'écriture atomique (tmp + rename) laisse un state.json TOUJOURS
+  # parsable et aucun fichier temporaire résiduel dans le canal.
+  sb <- tempfile("sb_atomic_")
+  dir.create(file.path(sb, "tools", "_drive"), recursive = TRUE)
+  on.exit({
+    Sys.unsetenv("TRANSCRIPTO_DRIVE_ROOT")
+    unlink(sb, recursive = TRUE, force = TRUE)
+  }, add = TRUE)
+  Sys.setenv(TRANSCRIPTO_DRIVE_ROOT = sb)
+  for (i in seq_len(4L)) {
+    ts_drive_emit_passive_state(
+      token = "tok_atomic",
+      tick_out = list(module = paste0("mod_", i)), force = TRUE)
+    st <- jsonlite::fromJSON(ts_drive_path("state.json"), simplifyVector = FALSE)
+    expect_identical(st$session_token, "tok_atomic")
+  }
+  leftover <- setdiff(list.files(ts_drive_path()), c("state.json", "ready.json"))
+  expect_length(leftover, 0L)
 })
 
 # ── Feature 11: Bounded Error Ring Buffer ────────────────────────────────────
 
 test_that("F11-1: error ring buffer capacity is bounded at exactly 20 entries", {
   if (!is_m2_ready()) skip("M2 error ring buffer not yet active")
-  expect_true(TRUE)
+  # M5 : le tampon est GLOBAL au processus — on pousse 25 messages DISTINCTS
+  # et on borne la propriété sur LEURS empreintes : exactement 20 survivent.
+  msgs <- sprintf("F11-1-capacity-%02d", seq_len(25L))
+  for (m in msgs) ts_drive_record_error(m, module = "import_bulk")
+  ring <- ts_drive_get_errors()
+  expect_length(ring, 20L)
 })
 
 test_that("F11-2: inserting 21st error evicts oldest entry (FIFO semantics)", {
   if (!is_m2_ready()) skip("M2 error ring buffer not yet active")
-  expect_true(TRUE)
+  # M5 : FIFO mesuré sur le tampon global — les 5 PLUS ANCIENS des 25 poussés
+  # ont disparu, les 20 plus récents sont là (ordre relatif préservé).
+  msgs <- sprintf("F11-2-fifo-%02d", seq_len(25L))
+  for (m in msgs) ts_drive_record_error(m, module = "import_bulk")
+  ring <- ts_drive_get_errors()
+  texts <- vapply(ring, function(x) x$message %||% NA_character_, character(1))
+  expect_false(any(msgs[1:5] %in% texts))
+  expect_true(all(msgs[6:25] %in% texts))
+  kept_idx <- match(msgs[6:25], texts)
+  expect_true(all(diff(kept_idx[!is.na(kept_idx)]) > 0L))
 })
 
 test_that("F11-3: error ring entry conforms to schema (timestamp, module, message)", {
@@ -254,12 +387,36 @@ test_that("F11-3: error ring entry conforms to schema (timestamp, module, messag
 
 test_that("F11-4: empty ring buffer serializes as empty array in state.json", {
   if (!is_m2_ready()) skip("M2 error ring buffer not yet active")
-  expect_true(TRUE)
+  # M5 : la FIDÉLITÉ de sérialisation est mesurée sur l'état réel — state.json
+  # $errors == le contenu du tampon au moment de l'émission. Le cas « vide »
+  # du schéma est garanti par le mécanisme du writer (as.list(errs) puis
+  # toJSON, qui rend bien [] pour une liste vide) : les deux maillons épinglés.
+  expect_identical(jsonlite::toJSON(list(), auto_unbox = FALSE), jsonlite::toJSON(list()))
+  sb <- tempfile("sb_ringser_")
+  dir.create(file.path(sb, "tools", "_drive"), recursive = TRUE)
+  on.exit({
+    Sys.unsetenv("TRANSCRIPTO_DRIVE_ROOT")
+    unlink(sb, recursive = TRUE, force = TRUE)
+  }, add = TRUE)
+  Sys.setenv(TRANSCRIPTO_DRIVE_ROOT = sb)
+  ts_drive_record_error("F11-4-serialisation", module = "import_bulk")
+  ts_drive_emit_passive_state(token = "tok_ringser", force = TRUE)
+  ring <- ts_drive_get_errors()
+  st <- jsonlite::fromJSON(ts_drive_path("state.json"), simplifyVector = FALSE)
+  expect_identical(length(st$errors), length(ring))
 })
 
 test_that("F11-5: ring buffer preserves order of consecutive errors", {
   if (!is_m2_ready()) skip("M2 error ring buffer not yet active")
-  expect_true(TRUE)
+  # M5 : trois erreurs consécutives conservent leur ORDRE RELATIF dans le
+  # tampon (quel que soit le sens de stockage, l'ordre de poussée est lisible).
+  ids <- sprintf("F11-5-order-%d", c(1L, 2L, 3L))
+  for (m in ids) ts_drive_record_error(m, module = "import_bulk")
+  ring <- ts_drive_get_errors()
+  texts <- vapply(ring, function(x) x$message %||% NA_character_, character(1))
+  idx <- match(ids, texts)
+  expect_false(any(is.na(idx)))
+  expect_true(all(diff(idx) > 0L) || all(diff(idx) < 0L))
 })
 
 # ── Feature 12: MCP transcripto_drive_state Tool ─────────────────────────────
@@ -272,20 +429,54 @@ test_that("F12-1: transcripto_drive_state endpoint is defined in MCP server", {
 
 test_that("F12-2: transcripto_drive_state query requires zero parameters", {
   if (!is_m2_ready()) skip("M2 MCP tool not yet active")
-  expect_true(TRUE)
+  # M5 : le schéma d'entrée est épinglé AU SOURCE — properties vide et
+  # additionalProperties FALSE = zéro paramètre, par construction.
+  src <- paste(readLines(file.path(e2e_project_root(), "scripts/mcp_server.R"),
+                         warn = FALSE), collapse = "\n")
+  start <- regexpr('list(name = "transcripto_drive_state"', src, fixed = TRUE)
+  expect_true(start > 0L)
+  block <- substr(src, start, start + 900L)
+  expect_match(block, "properties = list()", fixed = TRUE)
+  expect_match(block, "additionalProperties = FALSE", fixed = TRUE)
 })
 
 test_that("F12-3: transcripto_drive_state returns passive state without arming session", {
   if (!is_m2_ready()) skip("M2 MCP tool not yet active")
-  expect_true(TRUE)
+  # M5 : la tool est PASSIVE — elle lit state.json et n'écrit JAMAIS arm.json
+  # (verrou source sur le CORPS exact de .ts_tool_state, coupé à la fonction
+  # suivante pour ne pas avaler les commentaires de la tool arm/disarm voisine).
+  src <- paste(readLines(file.path(e2e_project_root(), "scripts/mcp_server.R"),
+                         warn = FALSE), collapse = "\n")
+  start <- regexpr("\\.ts_tool_state <- function", src)
+  expect_true(start > 0L)
+  nxt <- regexpr("\\n# --- 7b\\.", substr(src, start, nchar(src)))
+  expect_true(nxt > 1L)
+  body <- substr(src, start, start + nxt - 2L)
+  expect_match(body, "ts_drive_read_state(", fixed = TRUE)
+  expect_false(grepl("arm.json", body, fixed = TRUE))
 })
 
 test_that("F12-4: transcripto_drive_state accurately serializes error buffer in response", {
   if (!is_m2_ready()) skip("M2 MCP tool not yet active")
-  expect_true(TRUE)
+  # M5 : le résumé texte sérialise le TAMPEUR d'erreurs (longueur du champ
+  # errors du state) et le hash — le champ est lu, jamais inventé.
+  src <- paste(readLines(file.path(e2e_project_root(), "scripts/mcp_server.R"),
+                         warn = FALSE), collapse = "\n")
+  start <- regexpr("\\.ts_tool_state <- function", src)
+  body <- substr(src, start, start + 1200L)
+  expect_match(body, "errors=%d", fixed = TRUE)
+  expect_match(body, "state$errors", fixed = TRUE)
+  expect_match(body, "content_hash", fixed = TRUE)
 })
 
 test_that("F12-5: transcripto_drive_state gracefully returns empty state when file absent", {
   if (!is_m2_ready()) skip("M2 MCP tool not yet active")
-  expect_true(TRUE)
+  # M5 : l'absence de state.json est un CAS NORMAL — refus classé NO_SESSION
+  # avec remède, jamais une erreur brute.
+  src <- paste(readLines(file.path(e2e_project_root(), "scripts/mcp_server.R"),
+                         warn = FALSE), collapse = "\n")
+  start <- regexpr("\\.ts_tool_state <- function", src)
+  body <- substr(src, start, start + 1200L)
+  expect_match(body, "NO_SESSION", fixed = TRUE)
+  expect_match(body, "state.json is absent", fixed = TRUE)
 })

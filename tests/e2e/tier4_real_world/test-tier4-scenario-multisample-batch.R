@@ -69,5 +69,18 @@ test_that("T4-MSB-2: multi-sample design invariants guarantee differential expre
 
 test_that("T4-MSB-3: downstream multi-sample batch-aware doublet filtering and correction", {
   if (!is_m4_ready()) skip("M4 batch-aware doublet QC not yet active")
-  expect_true(TRUE)
+  # M5 : le moteur M4 consomme batch_var réel (2 lots orig.ident) — le
+  # paramètre est écho en provenance et l'objet downstream-ready rendu
+  # (F19-5 côté mono ; ici le scénario multi-échantillons de bout en bout).
+  set.seed(13)
+  m <- matrix(rpois(120 * 80, lambda = 3), nrow = 120, ncol = 80)
+  rownames(m) <- paste0("Gene-", seq_len(120))
+  colnames(m) <- paste0("Cell-", seq_len(80))
+  obj <- suppressWarnings(Seurat::CreateSeuratObject(counts = m))
+  obj$orig.ident <- factor(rep(c("SampleA", "SampleB"), length.out = 80))
+  res <- sc_filter_doublets_and_ambient(obj, params = list(batch_var = "orig.ident",
+                                                           seed = 42))
+  expect_identical(res$provenance$parameters$batch_var, "orig.ident")
+  expect_equal(length(as.character(res$provenance$cells_used)), 80L)
+  expect_s4_class(res$obj, "Seurat")
 })

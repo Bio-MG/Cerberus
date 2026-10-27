@@ -65,5 +65,19 @@ test_that("T4-PBMC-2: PBMC dataset sparse matrix loads with intact dimensions an
 
 test_that("T4-PBMC-3: PBMC single-cell workflow executes doublet QC and async pipeline", {
   if (!is_m3_ready() || !is_m4_ready()) skip("M3 and/or M4 pipeline execution not yet active")
-  expect_true(TRUE)
+  # M5 : le scénario complet — le cœur async ENCHAÎNE le QC doublet opt-in
+  # (Step 1c) ET le pipeline (PCA/UMAP) sur la même fixture, sans crash : le
+  # timing du step doublet existe et l'objet final est rendu.
+  set.seed(17)
+  m <- matrix(rpois(120 * 70, lambda = 3), nrow = 120, ncol = 70)
+  rownames(m) <- paste0("Gene-", seq_len(120))
+  colnames(m) <- paste0("Cell-", seq_len(70))
+  obj <- suppressWarnings(Seurat::CreateSeuratObject(counts = m))
+  res <- run_sc_auto_pipeline_core(obj, params = list(sc_ap_doublets = TRUE,
+                                                      sc_ap_res = 0.5))
+  expect_s4_class(res$obj, "Seurat")
+  expect_true(is.numeric(res$timings$doublets_s))
+  expect_false(is.null(res$doublets_provenance))
+  emb <- tryCatch(Seurat::Embeddings(res$obj, "umap"), error = function(e) NULL)
+  expect_false(is.null(emb))
 })
