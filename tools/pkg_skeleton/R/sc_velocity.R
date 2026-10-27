@@ -126,7 +126,11 @@ velocity_public_api <- function() {
         "plot_velocity_alignment_qc",
         # Exports
         "build_velocity_provenance_export",
-        "build_velocity_cell_vectors_export", "velocity_export_filename"
+        "build_velocity_cell_vectors_export", "velocity_export_filename",
+        # O13 (2026-10-27) — voie opt-in scVelo (SEULE voie d'inférence ;
+        # consommée par mod_sc_velocity.R, jamais l'autopipeline)
+        "sc_velocity_optin_banner_label", "sc_velocity_scvelo_available",
+        "sc_velocity_scvelo_optin_infer"
     )
 }
 

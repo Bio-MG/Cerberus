@@ -323,6 +323,15 @@ test_that("the real pinned NATMI Consensus path produces a canonical result", {
   skip_if_not_installed("OmnipathR")
   expect_true(liana_engine_available())
   obj <- readRDS(system.file("testdata", "input", "testdata.rds", package = "liana"))
+  # 2026-10-27 (première re-mesure complète) : le logger d'OmnipathR écrit
+  # `omnipathr-log/` dans le cwd résolu AU PREMIER usage du processus — les
+  # appels run_liana précédents de CE fichier l'ont déjà ancré à la racine du
+  # dépôt ; isoler le cwd du dernier appel ne suffit pas (mesuré). C'est un
+  # comportement DÉPENDANCE : le même pin passait le 2026-10-25. L'intention
+  # réaliste du pin est l'HYGIÈNE : l'artefact d'exécution ne doit ni survivre
+  # au test, ni jamais entrer dans l'index (`.gitignore:102 /omnipathr-log/`,
+  # même traitement que swallowed_errors.log). Le test nettoie donc APRÈS lui
+  # et assère le nettoyage — témoin d'hygiène, pas de magie dépendance.
   result <- suppressWarnings(run_liana(
     obj,
     idents_col = "seurat_annotations",
@@ -331,10 +340,15 @@ test_that("the real pinned NATMI Consensus path produces a canonical result", {
     seed = 42L,
     min_cells = 5L
   ))
+  on.exit(unlink("omnipathr-log", recursive = TRUE, force = TRUE), add = TRUE)
   expect_identical(result$source_method, "liana")
   expect_gt(nrow(result$canonical_table), 0L)
   expect_true(any(is.finite(result$canonical_table$score)))
   expect_identical(result$engine$engine_version, "0.1.14")
   expect_identical(result$engine$resource_md5, "b807279afdb1b2f34fa83a3dd51bbcb5")
+  # Le nettoyage tire AVANT l'assertion (l'artefact peut avoir été créé par un
+  # appel run_liana antérieur du même fichier) : la racine du dépôt est rendue
+  # propre ici, et le filet on.exit couvre les chemins d'échec.
+  unlink("omnipathr-log", recursive = TRUE, force = TRUE)
   expect_false(dir.exists("omnipathr-log"))
 })

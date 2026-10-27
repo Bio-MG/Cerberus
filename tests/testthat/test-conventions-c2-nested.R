@@ -151,12 +151,17 @@ test_that("la PILE de portee est presente (la tolerance seule ne suffit pas)", {
 })
 
 # =============================================================================
-# 5. INVARIANT : aucune erreur C2 réelle sur R/ après le correctif
+# 5. INVARIANT : aucune erreur C2 réelle après le correctif
 # =============================================================================
-test_that("aucune erreur C2 sur R/ apres le correctif", {
+# D2 source-retirement (2026-10-25, lots 1-6) : R/ est VIDE par design — tout
+# le code vit dans tools/pkg_skeleton/R/. La règle C2 (« pas de Shiny dans la
+# couche R pure ») suit le code : la sonde balaie désormais l'arbre du paquet.
+# (Première re-mesure complète post-jalons 2026-10-27 : l'ancien témoin
+# `expect_gt(length(r_files), 0)` était mort-né sur R/ vide.)
+test_that("aucune erreur C2 sur l'arbre R du paquet apres le correctif", {
   root <- ts_project_root()
-  r_files <- list.files(file.path(root, "R"), pattern = "\\.R$",
-                        recursive = TRUE, full.names = TRUE)
+  r_files <- list.files(file.path(root, "tools", "pkg_skeleton", "R"),
+                        pattern = "\\.R$", recursive = TRUE, full.names = TRUE)
   .REPORT$errors <- list()
   .REPORT$warns  <- list()
   old <- setwd(root)
@@ -166,4 +171,7 @@ test_that("aucune erreur C2 sur R/ apres le correctif", {
   expect_length(c2, 0L)
   # Contrôle de validité : la sonde a bien examiné des fichiers.
   expect_gt(length(r_files), 0L)
+  # Et le solde explicite : R/ est vide (aucune régression du source-retirement).
+  expect_length(list.files(file.path(root, "R"), pattern = "\\.R$",
+                           recursive = TRUE), 0L)
 })

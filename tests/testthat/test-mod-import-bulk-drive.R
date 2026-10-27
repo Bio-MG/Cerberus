@@ -87,6 +87,11 @@ source_project_file("modules/import/mod_import_bulk.R")
   # Also a closure of `server()`, called by the importer on success. Extracted,
   # not stubbed: multi-dataset registration is part of the path the importer walks.
   e$.register_multi_dataset <- ts_ast_assignment(.TMIB_FILE, ".register_multi_dataset", e)
+  # O16 (2026-10-27) : the importer now also walks `.warn_if_transformed_bulk()`
+  # (TPM/FPKM upload banner). Extracted like its siblings — nothing on the DATA
+  # path is stubbed — and its own free variables (`add_log`, `showNotification`)
+  # are already provided below.
+  e$.warn_if_transformed_bulk <- ts_ast_assignment(.TMIB_FILE, ".warn_if_transformed_bulk", e)
   # The importer's other free variables: a session flag it sets, and the UI
   # notification it fires. `showNotification` is the ONE stub here, and it is
   # legitimate: it is a Shiny UI side effect with no bearing on the probe, and

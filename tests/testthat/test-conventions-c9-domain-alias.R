@@ -161,17 +161,18 @@ test_that("C9 : l'alias de domaine ne DEBORDE pas (temoin de traversee)", {
   # Solde lot 5 : R/core ne contient plus que cerberus_handoff.R (etranger,
   # hors lot) et les 9 fichiers vivent bien dans le paquet.
   core_left <- sort(list.files(file.path(ts_project_root(), "R", "core"), pattern = "[.]R$"))
-  # ⚠️ +1 ÉTRANGER EN VOL (post-lot, mesuré 17:5x) : `drive_watcher.R` — fichier
-  # NON SUIVI recréé par la session CERBERUS (lot câblage app.R/drive) — vit
-  # dans R/core aux côtés de cerberus_handoff.R. Solde lot 6 : R/sc disparaît,
-  # R/core = les 2 fichiers étrangers CERBERUS, HORS lot. Le lot CERBERUS
-  # recomposera (il est responsable des 2 fichiers).
-  expect_identical(core_left, c("cerberus_handoff.R", "drive_watcher.R"),
-                   info = "R/core ne doit contenir que les fichiers etrangers CERBERUS")
+  # J1 (2026-10-26, commit d2fdac8) : les 2 fichiers étrangers CERBERUS ont
+  # rejoint le paquet — copie byte-identique drive_watcher.R supprimée,
+  # moteur CLI cerberus_handoff.R déménagé au squelette (sha256 inchangé).
+  # R/core est désormais VIDE par design ; le pin suit l'état réel et le
+  # témoin de présence des 2 fichiers au paquet est ajouté.
+  expect_length(core_left, 0L)
+  # Le témoin de NON-VACUITÉ inversé : les 2 étrangers sont bien au paquet.
   pkg <- file.path(ts_project_root(), "tools", "pkg_skeleton", "R")
   for (f in c("caching.R", "drive_allowlist.R", "drive_watcher.R",
               "error_state.R", "jobs.R", "memory.R", "pathway_helpers.R",
-              "rdata_io.R", "validation.R", "defaults.R", "thresholds.R")) {
+              "rdata_io.R", "validation.R", "defaults.R", "thresholds.R",
+              "cerberus_handoff.R")) {
     expect_true(file.exists(file.path(pkg, f)),
                 info = paste(f, "absent du paquet apres extraction M5 lot 5"))
   }

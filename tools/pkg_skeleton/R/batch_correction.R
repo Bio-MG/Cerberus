@@ -45,6 +45,9 @@
 bulk_batch_correction_public_api <- function() {
   c("bulk_batch_correction_public_api",
     "bulk_assert_raw_counts",
+    # O16 (2026-10-27) — détection TPM/FPKM à l'upload (non bloquante,
+    # complète le garde bulk_assert_raw_counts)
+    "bulk_counts_transformed_signature",
     "bulk_batch_correction_design",
     "bulk_batch_correction_label",
     "run_combat_seq",

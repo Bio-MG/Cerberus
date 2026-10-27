@@ -637,13 +637,15 @@ test_that("the export tool refuses a module outside the app's route table", {
   on.exit(unlink(e$ts_drive_root(), recursive = TRUE, force = TRUE), add = TRUE)
   expect <- list(session_id = fx$session_id, pid = Sys.getpid(),
                  started_at = fx$started)
-  # `sc_annotation` has no route (and gets none without its own product
+  # `sc_communication` has no route (and gets none without its own product
   # call — Slice 4 decides, never a side effect). Modules kept LEAVING the
   # refusal role as routes arrived: bulk_pathways (S2c),
   # bulk_filter/bulk_signatures (Slice 2.3), bulk_wgcna (Slice 4, whose
   # product call GRANTED the gene->module route — the leaver loop below
-  # proves it end-to-end).
-  r <- e$.ts_tool_export(9L, "sc_annotation", expect)
+  # proves it end-to-end), and sc_annotation (legs fe47823 — the 3 SC export
+  # routes granted it `sc_cell_metadata_csv`; first full re-measure
+  # 2026-10-27 caught the stale refusal pin, cascade included).
+  r <- e$.ts_tool_export(9L, "sc_communication", expect)
   expect_true(r$isError)
   expect_identical(r$structuredContent$code, "MODULE_NOT_ALLOWED")
   expect_false(file.exists(e$ts_drive_path("scenario.json")))

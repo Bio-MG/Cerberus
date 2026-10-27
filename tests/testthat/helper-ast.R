@@ -73,11 +73,23 @@ ts_ast_find <- function(x, fn) {
 }
 
 
-#' Est-ce un appel a `name` NON qualifie (`stop(...)`, jamais `pkg::stop(...)`) ?
+#' Est-ce un appel a `name` — forme nue (`stop(...)`) OU qualifiee
+#' (`pkg::name(...)` / `pkg:::name(...)`) ?
+#'
+#' ⚠️ M3 (032eba4) qualifie explicitement `Seurat::FindNeighbors` dans le cœur
+#' async du pipeline (retarget annoncé par le legs, première mesure complète
+#' 2026-10-27) : l'épingle suit la FONCTION, pas son namespace. Les usages sur
+#' des primitives (`<-`, `if`, `{`) ne voient jamais de forme qualifiée —
+#' extension sans effet sur eux.
 ts_ast_is_call_to <- function(x, name) {
   if (!is.call(x)) return(FALSE)
   h <- tryCatch(x[[1]], error = function(e) NULL)
-  is.symbol(h) && identical(as.character(h), name)
+  if (is.symbol(h)) return(identical(as.character(h), name))
+  if (is.call(h) && length(h) == 3L && is.symbol(h[[1]]) &&
+      as.character(h[[1]]) %in% c("::", ":::") && is.symbol(h[[3]])) {
+    return(identical(as.character(h[[3]]), name))
+  }
+  FALSE
 }
 
 

@@ -245,12 +245,15 @@ test_that("C6 : les library() imbriques du depot ne sont plus signales", {
                                     rel, paste(intersect(sites$line, flagged), collapse = ", ")))
     total <- total + nrow(sites)
   }
-  # Anti-affaiblissement : 11 sites mesures le 2026-10-18 (8 + 2 + 1). Ce
-  # plancher est la seule chose qui distingue « tous imbriques » de « plus rien
-  # a mesurer ». S'il baisse, c'est une decision a prendre explicitement, pas un
-  # ajustement de constante en passant.
-  expect_identical(total, 11L,
-                   info = sprintf("attendu 11 sites library()/require() dans les fichiers temoins ; mesure : %d", total))
+  # Anti-affaiblissement : 11 sites mesures le 2026-10-18 (8 + 2 + 1) ;
+  # re-baseliné 15 le 2026-10-27 (première re-mesure complète post-jalons) :
+  # +4 sites imbriques arrives avec le legs M3 async (032eba4, préchargement
+  # daemon). Tous les sites restent a profondeur > 0 (garde par fichier
+  # ci-dessus) — le plancher suit la mesure, jamais l'inverse. S'il baisse,
+  # c'est une decision a prendre explicitement, pas un ajustement de constante
+  # en passant.
+  expect_identical(total, 15L,
+                   info = sprintf("attendu 15 sites library()/require() dans les fichiers temoins ; mesure : %d", total))
 })
 
 #' Rejoue la SEULE règle C10 sur un fichier et rend les lignes signalées.

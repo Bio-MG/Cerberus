@@ -190,8 +190,14 @@ test_that("frontiere : le paquet contient EXACTEMENT 6 plotting + 4 fournisseurs
                           "sc_abundance_cross_views.R",
                           "sc_population_rarity.R", "sc_pipeline.R",
                           "sc_export.R", "sc_metadata.R", "sc_batch_metrics.R",
-                          "sc_multi.R", "sc_state.R")),
-                   info = "le perimetre du paquet doit etre exactement 6 plotting + 4 fournisseurs R/core + 4 reports + 18 bulk + 11 spatial + 9 core restants + 2 config + 26 sc (M5 lot 6)")
+                          "sc_multi.R", "sc_state.R",
+                          # J1 (2026-10-26, d2fdac8) : le moteur CLI du legs
+                          # cerberus_handoff.R quitte R/core (vidé) pour le
+                          # paquet (sha256 inchangé, 7 consommateurs
+                          # retargetés) ; M4 (2026-10-27, a987f48) : le moteur
+                          # doublets & RNA ambiant sc_qc_doublets.R.
+                          "cerberus_handoff.R", "sc_qc_doublets.R")),
+                   info = "le perimetre du paquet doit etre exactement 6 plotting + 4 fournisseurs R/core + 4 reports + 18 bulk + 11 spatial + 10 core (J1 : +cerberus_handoff) + 2 config + 27 sc (M4 : +sc_qc_doublets)")
 })
 
 # ─── M4 suite (2026-10-25) : les 4 autres fichiers du domaine ────────────────
