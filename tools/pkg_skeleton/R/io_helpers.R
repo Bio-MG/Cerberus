@@ -1311,3 +1311,21 @@ build_object_identity_v2 <- function(obj) {
                     seurat_cells = as.integer(ncol(obj)))
   )
 }
+
+#' Formatage compact des grands nombres KPI (O15, 2026-10-27 — correctif B2-A)
+#'
+#' Les value_box bulk affichaient « 1308 » sur deux lignes (enveloppement) ;
+#' le formatage compact les tient sur une ligne : >= 1e6 -> « 1.3M »,
+#' >= 1e4 -> « 13.1k », sinon format avec espace fine de milliers.
+#'
+#' @param n Nombre (scalaire) ou NULL.
+#' @return Chaîne de caractères ("-" pour NULL/NA).
+#' @export
+format_kpi_number <- function(n) {
+  if (is.null(n) || is.na(n)) return("-")
+  if (!is.numeric(n)) n <- suppressWarnings(as.numeric(n))
+  if (is.na(n)) return("-")
+  if (n >= 1e6) sprintf("%.1fM", n / 1e6)
+  else if (n >= 1e4) sprintf("%.1fk", n / 1e3)
+  else format(n, big.mark = " ", scientific = FALSE)
+}

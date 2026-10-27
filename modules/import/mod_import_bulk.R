@@ -276,7 +276,10 @@ mod_import_bulk_ui <- function(id) {
       
       card(
         card_header("Résumé des Données Bulk"),
-        layout_columns(
+        # O15 (2026-10-27) : grille fluide .bulk-kpi-grid (règle injectée sur
+        # my_theme via bs_add_rules) remplace layout_columns — les 4 KPI ne
+        # s'enveloppent plus en colonnes rigides sur 1080p (correctif B2-A).
+        div(class = "bulk-kpi-grid",
           value_box(title = "Échantillons",
                     value   = textOutput(ns("nb_samples")),
                     showcase = bsicons::bs_icon("grid-3x3"),
@@ -294,9 +297,13 @@ mod_import_bulk_ui <- function(id) {
                     showcase = bsicons::bs_icon("check-circle"),
                     theme   = "light")
         ),
+        # O15 : confinement vertical conservateur de la console (max-height
+        # défini sur my_theme ; IMPORT-05 reste NON VÉRIFIÉ navigateur).
         card_body(
-          h5("Console de Log", class = "text-muted"),
-          verbatimTextOutput(ns("console_log"), placeholder = TRUE)
+          div(class = "bulk-console-scroll",
+            h5("Console de Log", class = "text-muted"),
+            verbatimTextOutput(ns("console_log"), placeholder = TRUE)
+          )
         )
       )
     )
@@ -1436,17 +1443,19 @@ mod_import_bulk_server <- function(id, global_data) {
     })
     
     # ── Outputs info (inchangés) ───────────────────────────────────────────
+    # O15 (2026-10-27) — correctif B2-A (formatage compact, pure R) : les
+    # grands nombres KPI ne s'enveloppent plus sur deux lignes (« 1308 » / « 6 »).
     output$nb_samples <- renderText({
       if (is.null(global_data$bulk_obj) || is.null(global_data$bulk_obj$counts)) "-"
-      else ncol(global_data$bulk_obj$counts)
+      else format_kpi_number(ncol(global_data$bulk_obj$counts))
     })
     output$nb_genes <- renderText({
       if (is.null(global_data$bulk_obj) || is.null(global_data$bulk_obj$counts)) "-"
-      else nrow(global_data$bulk_obj$counts)
+      else format_kpi_number(nrow(global_data$bulk_obj$counts))
     })
     output$nb_metadata_vars <- renderText({
       if (is.null(global_data$bulk_obj) || is.null(global_data$bulk_obj$metadata)) "-"
-      else ncol(global_data$bulk_obj$metadata)
+      else format_kpi_number(ncol(global_data$bulk_obj$metadata))
     })
     output$status_obj <- renderText({
       if (is.null(global_data$bulk_obj)) "⚪ Inactif"

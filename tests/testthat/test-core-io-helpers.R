@@ -459,3 +459,18 @@ test_that("io_helpers.R ne contribue aucun signalement C10", {
   }
   expect_equal(n, 0L)
 })
+
+# ---------------------------------------------------------------------------
+# O15 (2026-10-27) : format_kpi_number — formatage compact des KPI bulk
+# ---------------------------------------------------------------------------
+test_that("format_kpi_number formate compact (M/k) et tient le temoin B2-A", {
+  expect_identical(format_kpi_number(NULL), "-")
+  expect_identical(format_kpi_number(NA_real_), "-")
+  expect_identical(format_kpi_number(13086), "13.1k")
+  expect_identical(format_kpi_number(33694), "33.7k")
+  expect_identical(format_kpi_number(1308612), "1.3M")
+  # Petits nombres : format lisible avec séparateur de milliers, sans
+  # notation scientifique.
+  expect_identical(format_kpi_number(8), "8")
+  expect_identical(format_kpi_number(1234), "1 234")
+})

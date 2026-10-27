@@ -380,18 +380,45 @@ i18n_plain <- function(key) .tr_plain(key)
 }
 
 my_theme <- bs_theme(
-  
+
   version = 5,
-  
+
   bootswatch = "flatly",
-  
+
   primary = "#2C3E50",
-  
+
   secondary = "#18BC9C",
-  
+
   "enable-gradients" = TRUE
-  
+
 )
+
+# O15 (décision opérateur 2026-10-27) : les correctifs CSS passent par le
+# THÈME (bs_add_rules) — une seule source de vérité de style, 0 fichier www/
+# (la voie www/custom.css est écartée ; IMPORT-10 : ce fichier n'a jamais existé).
+# Règles du legs V1X (V1X_BULK_IMPORT_QA_AUDIT_FIXES_PROPOSAL.md §2.4/§2.5) :
+#   .bslib-value-box .showcase — l'icône décorative ne chevauche plus le texte
+#     des value_box (défaut mesuré « Statut ») ;
+#   .bulk-kpi-grid — grille fluide auto-ajustable des 4 KPI (hook posé dans
+#     mod_import_bulk.R) ;
+#   .bulk-console-scroll — confinement vertical conservateur de la console de
+#     logs (max-height, jamais height) ; le confinement complet du viewport
+#     reste différé (IMPORT-05 NON VÉRIFIÉ navigateur).
+my_theme <- bslib::bs_add_rules(my_theme, '
+  .bslib-value-box .showcase {
+    opacity: 0.15 !important;
+    pointer-events: none;
+  }
+  .bulk-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+  }
+  .bulk-console-scroll {
+    max-height: calc(100vh - 280px);
+    overflow-y: auto;
+  }
+')
 
 
 
