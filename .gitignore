@@ -41,6 +41,9 @@ app.tex
 app.log
 .posit/
 AGENTS.md
+.Renviron
+.Rprofile
+PROJECT.md
 
 # Toute la documentation (agents, audits, preuves, etc.)
 # Par défaut : ignorée.

@@ -10896,6 +10896,18 @@
     {
       "fr": "scDblFinder non installé — étape doublets ignorée.",
       "en": "scDblFinder not installed — doublet step skipped."
+    },
+    {
+      "fr": "ID de session (donnez-le à l'agent) :",
+      "en": "Session ID (give it to the agent):"
+    },
+    {
+      "fr": "Votre connexion (non armée) :",
+      "en": "Your connection (not armed):"
+    },
+    {
+      "fr": "Votre connexion (sans handshake) :",
+      "en": "Your connection (no handshake):"
     }
   ]
 }
