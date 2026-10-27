@@ -10908,6 +10908,30 @@
     {
       "fr": "Votre connexion (sans handshake) :",
       "en": "Your connection (no handshake):"
+    },
+    {
+      "fr": "Calculer les vecteurs (scVelo — opt-in)",
+      "en": "Compute vectors (scVelo — opt-in)"
+    },
+    {
+      "fr": "Vecteurs calculés dans l'app (scVelo, opt-in) — jamais dans l'autopipeline.",
+      "en": "Vectors computed in-app (scVelo, opt-in) — never in the auto-pipeline."
+    },
+    {
+      "fr": "Validez d'abord les matrices velocity (aucun résultat canonique à inférer).",
+      "en": "Validate the velocity matrices first (no canonical result to infer from)."
+    },
+    {
+      "fr": "Vecteurs inférés (scVelo opt-in) — affichage mis à jour.",
+      "en": "Vectors inferred (scVelo opt-in) — display updated."
+    },
+    {
+      "fr": "Vecteurs calculés via scVelo (opt-in).",
+      "en": "Vectors computed via scVelo (opt-in)."
+    },
+    {
+      "fr": "Inférence scVelo (opt-in) refusée :",
+      "en": "scVelo inference (opt-in) refused:"
     }
   ]
 }

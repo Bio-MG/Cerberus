@@ -106,6 +106,13 @@ mod_sc_velocity_ui <- function(id) {
                  class = "btn-primary w-100", icon = icon("check")),
     div(class = "small text-muted mt-1", textOutput(ns("velocity_status"))),
     hr(),
+    # O13 (2026-10-27) : inférence scVelo OPT-IN — bouton dédié, SEULE voie
+    # d'inférence du domaine, JAMAIS l'autopipeline ; bannière dédiée sur le
+    # résultat produit (uiOutput conditionnel ci-dessous).
+    actionButton(ns("velocity_scvelo_run"), i18n$t("Calculer les vecteurs (scVelo — opt-in)"),
+                 class = "btn-warning w-100", icon = icon("paper-plane")),
+    uiOutput(ns("velocity_scvelo_banner")),
+    hr(),
     selectInput(ns("velocity_gene"), i18n$t("Gene pour phase portrait"), choices = character(0)),
     selectInput(ns("velocity_reduction"), i18n$t("Reduction pour vecteurs"), choices = c("umap", "pca")),
     downloadButton(ns("dl_velocity_provenance"), i18n$t("Exporter provenance (CSV)"), class = "btn-sm btn-info w-100 mt-1"),
@@ -354,6 +361,65 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       }
       invisible(TRUE)
     }
+
+    # ── O13 (2026-10-27) : inférence scVelo OPT-IN — voie unique, explicite ──
+    # Bouton dédié (JAMAIS l'autopipeline) ; bannière dédiée sur le résultat ;
+    # moteur absent/échec ⇒ notification d'erreur classée, aucun repli silencieux.
+    velocity_optin_banner_rv <- reactiveVal(NULL)
+    output$velocity_scvelo_banner <- renderUI({
+      lab <- velocity_optin_banner_rv()
+      if (is.null(lab)) return(NULL)
+      tags$div(class = "alert alert-warning", style = "font-size:0.82rem; margin-top:6px;", lab)
+    })
+    observeEvent(input$velocity_scvelo_run, {
+      canon <- velocity_state$result
+      if (is.null(canon)) {
+        showNotification(
+          .tr("Validez d'abord les matrices velocity (aucun résultat canonique à inférer)."),
+          type = "warning", duration = 8)
+        return()
+      }
+      sel_red <- input$velocity_reduction %||% "umap"
+      tryCatch({
+        emb_all <- Seurat::Embeddings(global_data$sc_obj, reduction = sel_red)
+        emb <- emb_all[canon$cell_names, seq_len(min(2L, ncol(emb_all))), drop = FALSE]
+        inferred <- sc_velocity_scvelo_optin_infer(
+          canon,
+          embedding = emb,
+          params = list(seed = 1L, n_pcs = 30L, n_neighbors = 30L, mode = "stochastic")
+        )
+        uv <- validate_precomputed_velocity_vectors(
+          vectors = inferred$embedding_vectors,
+          cell_names = velocity_state$validated$cell_names,
+          selected_reduction = sel_red,
+          stored_reduction = sel_red
+        )
+        velocity_state$umap_vectors <- uv
+        velocity_state$vector_validation <- list(field = "scvelo_optin", ok = TRUE)
+        canonical2 <- finalize_velocity_result(
+          validated = velocity_state$validated,
+          input_mode = canon$input_summary$input_mode %||% "rds",
+          input_files = canon$input_summary$files,
+          seurat_obj = global_data$sc_obj,
+          assay_used = NULL,
+          requested_reduction = sel_red,
+          embedding_alignment = velocity_state$embedding_alignment,
+          velocity_vectors = uv,
+          vector_validation = velocity_state$vector_validation,
+          extra_warnings = c("O13 opt-in : vecteurs inférés dans l'app (scVelo) — jamais l'autopipeline."),
+          analysis_id = "sc-velocity"
+        )
+        velocity_state$result <- canonical2
+        shared_rv$velocity_result <- canonical2
+        provenance_append(shared_rv, inferred$provenance)
+        velocity_optin_banner_rv(.tr(inferred$banner))
+        velocity_status_rv(.tr("Vecteurs inférés (scVelo opt-in) — affichage mis à jour."))
+        showNotification(.tr("Vecteurs calculés via scVelo (opt-in)."), type = "message", duration = 6)
+      }, error = function(e) {
+        showNotification(paste(.tr("Inférence scVelo (opt-in) refusée :"), conditionMessage(e)),
+                         type = "error", duration = 12)
+      })
+    })
 
     # Validation button (BUG 1-8, 10)
     observeEvent(input$velocity_validate, {

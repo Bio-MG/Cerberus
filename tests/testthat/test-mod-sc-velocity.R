@@ -180,6 +180,27 @@ test_that("le gestionnaire englobant notifie SANS stop( (falsifiable)", {
 
 
 # ---------------------------------------------------------------------------
+# O13 (2026-10-27) : bouton + bannière opt-in scVelo (verrou source)
+# ---------------------------------------------------------------------------
+test_that("O13 : le module porte le bouton dédié et la bannière opt-in", {
+  src <- paste(readLines(file.path(ts_project_root(), .MSV_FILE), warn = FALSE),
+               collapse = "\n")
+  expect_true(grepl('ns("velocity_scvelo_run")', src, fixed = TRUE))
+  expect_true(grepl('ns("velocity_scvelo_banner")', src, fixed = TRUE))
+  # La voie opt-in appelle le moteur documenté (sc_velocity_scvelo_optin_infer).
+  expect_true(grepl("sc_velocity_scvelo_optin_infer(", src, fixed = TRUE))
+  # La bannière dédiée est rendue depuis le libellé canonique du moteur.
+  expect_true(grepl("inferred$banner", src, fixed = TRUE))
+})
+
+test_that("O13 : le module n'embarque AUCUN appel d'autopipeline", {
+  src <- paste(readLines(file.path(ts_project_root(), .MSV_FILE), warn = FALSE),
+               collapse = "\n")
+  expect_false(grepl("run_sc_auto_pipeline_core", src))
+})
+
+
+# ---------------------------------------------------------------------------
 # VERROU SOURCE : mod_sc_velocity.R ne doit plus contribuer aucun C10
 # ---------------------------------------------------------------------------
 test_that("mod_sc_velocity.R ne contribue aucun signalement C10", {

@@ -69,6 +69,10 @@ TS_MAX_SVG_HEATMAP         <- 60L     # max SVGs in grid display
 # --- Velocity ----------------------------------------------------------------
 TS_VELOCITY_MAX_PORTRAIT_CELLS <- 50000L  # phase portrait subsample cap
 TS_VELOCITY_MAX_EMBED_CELLS    <- 5000L   # embedding plot subsample cap
+# O13 (2026-10-27) — inférence scVelo opt-in : cap de sous-échantillonnage
+# cellulaire du moteur (RAM budget 32 Go ; tirage à graine fixe, tracé en
+# provenance cells_used). Jamais utilisé par l'autopipeline.
+TS_VELOCITY_OPTIN_MAX_CELLS    <- 10000L  # scVelo opt-in engine cell cap
 
 # --- Differential abundance design (4E-0) ------------------------------------
 # Principe central : les cellules ne sont PAS des replicats biologiques

@@ -1337,10 +1337,13 @@ read_velocity_mtx <- function(
 
 # ── Loom / H5AD (roadmap SC FUNCTION_TEST M0) ────────────────────────────────
 # Lecteurs hdf5r des formats velocity PRE-COMPUTES natifs (velocyto .loom,
-# scVelo .h5ad). Aucune inference : les couches spliced/unspliced sont lues
+# scVelo .h5ad). Aucune inference ICI : les couches spliced/unspliced sont lues
 # telles quelles et rendues dans la MÊME structure que read_velocity_rds()
 # (liste nommée au format whitelisté, validée par la même métavalidation),
 # puis passent par validate_velocity_matrices() comme les deux autres modes.
+# (O13, 2026-10-27 : la SEULE voie d'inférence du domaine est l'opt-in explicite
+# sc_velocity_scvelo_optin_infer(), en fin de fichier — bouton dédié, jamais
+# l'autopipeline.)
 # Lecture CHUNCKÉE : les couches loom sont denses mais compressées (ex:
 # WB_Lysis_3p_Introns_8kCells.loom = 8000 x 36601, 68 Mo) — on ne densifie
 # jamais le fichier entier en mémoire, on sparsifie bloc de gènes par bloc.
@@ -1700,6 +1703,8 @@ read_velocity_h5ad <- function(path) {
 #' trend line of any kind is drawn: no geom_smooth(), no lm, no loess, no
 #' induction/repression curve. Consomme EXCLUSIVEMENT un resultat canonique
 #' valide (assert_velocity_result) — aucune creation, inference ni reparation.
+#' (O13, 2026-10-27 : ce plot reste en lecture stricte ; l'exception opt-in
+#' documentee — sc_velocity_scvelo_optin_infer() — ne le concerne pas.)
 #'
 #' Portee des donnees declaree dans le sous-titre :
 #'   - data_scope = "preview" : sous-echantillonnage au cap declare
@@ -2919,5 +2924,195 @@ plot_velocity_vector_field <- function(
         data_scope = data_scope,
         max_cells = max_cells,
         seurat_obj = seurat_obj
+    )
+}
+
+# ═════════════════════════════════════════════════════════════════════════════
+# O13 (2026-10-27) — INFÉRENCE scVELO OPT-IN : LA SEULE VOIE D'INFÉRENCE
+# ═════════════════════════════════════════════════════════════════════════════
+# Décision O13 (docs/agent/DECISIONS.md, 2026-10-27) : la politique « aucune
+# inference » portée par ce fichier est AMENDÉE pour UNE voie unique, explicite
+# et documentée :
+#   1. bouton dédié du module velocity (modules/sc/mod_sc_velocity.R,
+#      id "velocity_scvelo_run") — JAMAIS l'autopipeline
+#      (run_sc_auto_pipeline_core ne référence pas cette fonction ; pin
+#      garanti par test-sc-velocity.R) ;
+#   2. le résultat porte la bannière dédiée « vecteurs calculés dans l'app »
+#      et une entrée de provenance analysis_id = "sc-velocity-optin" ;
+#   3. moteur absent ou en échec ⇒ erreur classée, JAMAIS de repli silencieux
+#      (même doctrine que la garde F20 du moteur doublets).
+# Tout le reste du fichier reste en LECTURE STRICTE.
+
+#' Libellé canonique de la bannière opt-in O13
+#'
+#' Chaîne FR constante, partagée par le module (bannière rendue) et les tests
+#' (pin de non-régression du libellé). L'affichage passe par i18n côté module.
+#'
+#' @return Chaîne de caractères non vide.
+#' @keywords internal
+sc_velocity_optin_banner_label <- function() {
+    "Vecteurs calculés dans l'app (scVelo, opt-in) — jamais dans l'autopipeline."
+}
+
+#' Disponibilité du moteur scVelo (Python) pour la voie opt-in O13
+#'
+#' @return TRUE seulement si reticulate est installé ET le module python
+#'   "scvelo" est découvrable ; FALSE sinon (jamais d'erreur).
+#' @keywords internal
+sc_velocity_scvelo_available <- function() {
+    if (!requireNamespace("reticulate", quietly = TRUE)) return(FALSE)
+    tryCatch(isTRUE(reticulate::py_module_available("scvelo")),
+             error = function(e) FALSE)
+}
+
+#' Inférence scVelo OPT-IN (décision O13, 2026-10-27) — voie unique documentée
+#'
+#' Consomme un résultat canonique velocity VALIDÉ (finalize_velocity_result(),
+#' couches spliced/unspliced alignées) et calcule, via le moteur python scVelo
+#' (reticulate) : (a) une matrice de vitesse gènes x cellules et (b) des
+#' vecteurs dx/dy dans l'espace de l'embedding fourni
+#' (scv.tl.velocity_embedding, base = embedding passé en paramètre) — le
+#' format exact que le module affiche via validate_precomputed_velocity_vectors().
+#' Aucun repli silencieux :
+#'   - moteur absent ⇒ stop classé c("sc_velocity_engine_missing",
+#'     "sc_velocity_error") citant le remède ;
+#'   - échec du moteur ⇒ stop classé c("sc_velocity_engine_error",
+#'     "sc_velocity_error") ;
+#'   - entrées invalides ⇒ stop classé c("sc_velocity_error_invalid_param",
+#'     "sc_velocity_error").
+#' Déterminisme : graine python posée avant le pipeline ; le sous-échantillonnage
+#' cellulaire (cap TS_VELOCITY_OPTIN_MAX_CELLS) est tiré à graine fixe
+#' (withr::with_seed) et tracé dans la provenance (cells_used). Le calcul des
+#' dx/dy reste AU COMPLET dans scVelo (transition + coordonnées) — R ne fabrique
+#' jamais les vecteurs à partir des coordonnées (politique du contrat).
+#'
+#' @param result Résultat canonique velocity (assert_velocity_result).
+#' @param embedding Matrice cellules x >=2 des coordonnées de l'embedding
+#'   courant (umap/pca), rownames = barcodes couvrant result$cell_names.
+#' @param params list nommée : seed (défaut 1L), n_pcs (30L), n_neighbors
+#'   (30L), mode ("stochastic"|"deterministic"|"dynamical").
+#' @return list(embedding_vectors = cellules x 2 (rownames = barcodes),
+#'   gene_vectors = gènes x cellules, params, banner, provenance).
+#' @keywords internal
+sc_velocity_scvelo_optin_infer <- function(result, embedding, params = list()) {
+    if (!is.list(result) || is.null(result$spliced) ||
+        is.null(result$unspliced) || is.null(result$cell_names)) {
+        stop(errorCondition(
+            paste0("sc_velocity_scvelo_optin_infer() : résultat canonique velocity requis ",
+                   "(couches spliced/unspliced alignées) — validez d'abord les matrices."),
+            class = c("sc_velocity_error_invalid_param", "sc_velocity_error")))
+    }
+    if (!is.matrix(embedding) || is.null(rownames(embedding)) ||
+        !all(result$cell_names %in% rownames(embedding))) {
+        stop(errorCondition(
+            paste0("sc_velocity_scvelo_optin_infer() : embedding cellules x 2 requis, avec des ",
+                   "rownames couvrant les barcodes du résultat (aucune projection fabriquée ",
+                   "à partir des coordonnées)."),
+            class = c("sc_velocity_error_invalid_param", "sc_velocity_error")))
+    }
+    p <- list(seed = 1L, n_pcs = 30L, n_neighbors = 30L, mode = "stochastic")
+    p[names(params)] <- params
+    if (!is.numeric(p$seed) || length(p$seed) != 1L || is.na(p$seed) || p$seed < 0) {
+        stop(errorCondition(
+            "sc_velocity_scvelo_optin_infer() : 'seed' doit être un numérique unique >= 0.",
+            class = c("sc_velocity_error_invalid_param", "sc_velocity_error")))
+    }
+    for (nm in c("n_pcs", "n_neighbors")) {
+        if (!is.numeric(p[[nm]]) || length(p[[nm]]) != 1L ||
+            is.na(p[[nm]]) || p[[nm]] < 2L || p[[nm]] != round(p[[nm]])) {
+            stop(errorCondition(
+                paste0("sc_velocity_scvelo_optin_infer() : '", nm,
+                       "' doit être un entier unique >= 2."),
+                class = c("sc_velocity_error_invalid_param", "sc_velocity_error")))
+        }
+    }
+    if (!p$mode %in% c("stochastic", "deterministic", "dynamical")) {
+        stop(errorCondition(
+            paste0("sc_velocity_scvelo_optin_infer() : 'mode' doit être 'stochastic', ",
+                   "'deterministic' ou 'dynamical' (reçu : '", p$mode, "')."),
+            class = c("sc_velocity_error_invalid_param", "sc_velocity_error")))
+    }
+
+    cells_all <- result$cell_names
+    cap <- if (exists("TS_VELOCITY_OPTIN_MAX_CELLS")) TS_VELOCITY_OPTIN_MAX_CELLS else 10000L
+    if (length(cells_all) > cap) {
+        keep <- withr::with_seed(p$seed, sort(sample(length(cells_all), cap)))
+    } else {
+        keep <- seq_along(cells_all)
+    }
+    cells_used <- cells_all[keep]
+
+    if (!sc_velocity_scvelo_available()) {
+        stop(errorCondition(
+            paste0("sc_velocity_scvelo_optin_infer() : le moteur scVelo (Python) n'est pas ",
+                   "disponible (reticulate et/ou module python 'scvelo' introuvable). ",
+                   "Installez scvelo dans l'environnement Python de reticulate ",
+                   "(ex. python_env_sccoda) — la voie opt-in O13 n'infère JAMAIS sans ",
+                   "moteur explicite (aucun repli silencieux)."),
+            class = c("sc_velocity_engine_missing", "sc_velocity_error")))
+    }
+
+    spliced <- as.matrix(result$spliced[, cells_used, drop = FALSE])
+    unspl <- as.matrix(result$unspliced[, cells_used, drop = FALSE])
+    emb <- embedding[cells_used, seq_len(min(2L, ncol(embedding))), drop = FALSE]
+
+    res_py <- tryCatch({
+        np <- reticulate::import("numpy", convert = FALSE)
+        ad <- reticulate::import("anndata", convert = FALSE)
+        scv <- reticulate::import("scvelo", convert = FALSE)
+        reticulate::py_set_seed(as.integer(p$seed))
+        adata <- ad$AnnData(X = np$array(t(spliced)))
+        adata$layers["unspliced"] <- np$array(t(unspl))
+        adata$obs_names <- reticulate::r_to_py(cells_used)
+        adata$var_names <- reticulate::r_to_py(rownames(spliced))
+        adata$obsm["X_optin"] <- np$array(emb)
+        scv$pp$normalize_per_cell(adata)
+        scv$pp$log1p(adata)
+        scv$pp$neighbors(adata, n_pcs = as.integer(p$n_pcs),
+                         n_neighbors = as.integer(p$n_neighbors))
+        scv$pp$moments(adata)
+        scv$tl$velocity(adata, mode = p$mode)
+        scv$tl$velocity_graph(adata)
+        scv$tl$velocity_embedding(adata, basis = "optin")
+        list(
+            vel_emb = reticulate::py_to_r(np$array(adata$obsm["velocity_optin"])),
+            vel_g = reticulate::py_to_r(np$array(adata$layers["velocity"]))
+        )
+    }, error = function(e) {
+        stop(errorCondition(
+            paste0("sc_velocity_scvelo_optin_infer() : échec du moteur scVelo : ",
+                   conditionMessage(e)),
+            class = c("sc_velocity_engine_error", "sc_velocity_error")))
+    })
+
+    vel_emb <- res_py$vel_emb
+    if (!is.matrix(vel_emb) || nrow(vel_emb) != length(cells_used) || ncol(vel_emb) < 2L) {
+        stop(errorCondition(
+            paste0("sc_velocity_scvelo_optin_infer() : sortie moteur inattendue — vecteurs ",
+                   "d'embedding absents ou de dimension incompatible (cellules attendues : ",
+                   length(cells_used), ")."),
+            class = c("sc_velocity_engine_error", "sc_velocity_error")))
+    }
+    embedding_vectors <- vel_emb[, seq_len(2L), drop = FALSE]
+    rownames(embedding_vectors) <- cells_used
+
+    gene_vectors <- t(res_py$vel_g)
+    rownames(gene_vectors) <- rownames(spliced)
+    colnames(gene_vectors) <- cells_used
+
+    provenance <- new_provenance_entry(
+        analysis_id = "sc-velocity-optin",
+        method = "scvelo (opt-in O13)",
+        parameters = p,
+        cells_used = cells_used,
+        seed = p$seed
+    )
+
+    list(
+        embedding_vectors = embedding_vectors,
+        gene_vectors = gene_vectors,
+        params = p,
+        banner = sc_velocity_optin_banner_label(),
+        provenance = provenance
     )
 }
