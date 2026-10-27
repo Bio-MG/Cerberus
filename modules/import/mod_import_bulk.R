@@ -80,7 +80,11 @@ mod_import_bulk_ui <- function(id) {
             i18n$t("Identifiants non-symboles (Ensembl, Entrez, sondes Affymetrix) ? Le mapping d'IDs est disponible à l'étape 0 de l'analyse.")),
         actionButton(ns("goto_mapping"), i18n$t("Aller au mapping des IDs"),
                      class = "btn-outline-secondary btn-sm w-100 mb-2", icon = icon("arrow-right")),
-        
+        # O14 (2026-10-27) : second CTA « Configurer design & QC » — AJOUTÉ à
+        # côté du CTA LOT 4A (les deux usages coexistent, pas de remplacement).
+        # Apparaît dès le statut Chargé (bulk_obj présent), via uiOutput.
+        uiOutput(ns("cta_design_qc")),
+
         # ── Mode selector ──────────────────────────────────────────────────
         radioButtons(
           ns("bulk_import_mode"),
@@ -405,6 +409,25 @@ mod_import_bulk_server <- function(id, global_data) {
       req(!is.null(sess))
       nav_select(id = "main_nav", selected = "tab_bulk", session = sess)
       try(accordion_panel_open(id = "bulk-acc_bulk", values = "panel_mapping", session = sess), silent = TRUE)
+    })
+
+    # ── O14 (2026-10-27) : second CTA « Configurer design & QC » ────────────
+    # AJOUTÉ (pas de remplacement) à côté du CTA LOT 4A : apparaît dès le
+    # statut Chargé (bulk_obj présent) et ouvre LES DEUX panneaux visés
+    # (« 1. Contrôle qualité & filtrage » + « 2. Design & Contrastes »).
+    # Le libellé suit global_data$language (re-rendu i18n).
+    output$cta_design_qc <- renderUI({
+      l <- global_data$language
+      obj <- global_data$bulk_obj
+      if (is.null(obj)) return(NULL)
+      actionButton(ns("goto_design_qc"), i18n$t("Configurer design & QC"),
+                   class = "btn-primary btn-sm w-100 mb-2", icon = icon("sliders-h"))
+    })
+    observeEvent(input$goto_design_qc, {
+      sess <- global_data$session
+      req(!is.null(sess))
+      nav_select(id = "main_nav", selected = "tab_bulk", session = sess)
+      try(accordion_panel_open(id = "bulk-acc_bulk", values = c("panel_filter", "panel_de"), session = sess), silent = TRUE)
     })
 
     observeEvent(global_data$language, {

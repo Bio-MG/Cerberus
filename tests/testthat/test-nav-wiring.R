@@ -99,3 +99,16 @@ test_that("l'invariant est ATTEIGNABLE : le motif correct existe (témoin)", {
   expect_true("tab_bulk" %in% .nav_declared_values("app.R"))
   expect_true("tab_sc"   %in% .nav_declared_values("app.R"))
 })
+
+# ---------------------------------------------------------------------------
+# O14 (2026-10-27) : second CTA « Configurer design & QC » — coexistence
+# ---------------------------------------------------------------------------
+test_that("O14 : le CTA design & QC coexiste avec le CTA LOT 4A (ajout, pas remplacement)", {
+  src <- paste(readLines(file.path(ts_project_root(), "modules/import/mod_import_bulk.R"),
+                         warn = FALSE), collapse = "\n")
+  expect_true(grepl('ns("goto_mapping")', src, fixed = TRUE))
+  expect_true(grepl('ns("goto_design_qc")', src, fixed = TRUE))
+  # Le CTA O14 ouvre LES DEUX panneaux visés (QC + design) — valeurs réelles
+  # de l'accordéon bulk (mod_bulk.R:24-68).
+  expect_true(grepl('values = c("panel_filter", "panel_de")', src, fixed = TRUE))
+})

@@ -10932,6 +10932,10 @@
     {
       "fr": "Inférence scVelo (opt-in) refusée :",
       "en": "scVelo inference (opt-in) refused:"
+    },
+    {
+      "fr": "Configurer design & QC",
+      "en": "Configure design & QC"
     }
   ]
 }
