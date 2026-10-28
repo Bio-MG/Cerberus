@@ -84,7 +84,7 @@
 # Windows ; le re-quoter produit un nom de fichier litteral et un echec
 # « not found ». Mesure du 2026-10-24 :
 #   system2(shQuote(exe), args = shQuote(p))
-#   -> Error: '"\"D:/Data_science/R-4.4.2/bin/x64/Rscript.exe\""' not found
+#   -> Error: '"\"D:/.../Rscript.exe\""' not found
 # La bonne forme est `system2(exe, args = shQuote(p))`. La lecon « tout passer
 # par shQuote() » est donc VRAIE pour `args` et FAUSSE pour `command`.
 # =============================================================================

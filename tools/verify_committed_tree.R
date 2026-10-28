@@ -349,7 +349,9 @@ vct_archive <- function(ref, dest) {
 vct_rscript <- function() {
   # The project's R, not whatever is on PATH: an Rscript from another
   # installation would activate another renv and measure the wrong library.
-  cand <- c("D:/Data_science/R-4.4.2/bin/Rscript.exe",
+  # TRANSCRIPTO_RSCRIPT (when set) wins; the file.exists() loop below discards
+  # any unset or missing candidate, so an empty override falls through.
+  cand <- c(Sys.getenv("TRANSCRIPTO_RSCRIPT", unset = ""),
             file.path(R.home("bin"), "Rscript.exe"),
             file.path(R.home("bin"), "Rscript"))
   for (p in cand) if (file.exists(p)) return(p)
