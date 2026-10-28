@@ -375,7 +375,7 @@ test_that("vct_run_cmd rend un VRAI code de sortie, pas un NA deguise en 0", {
   # execution manuelle ne l'aurait vu : le resultat reel etait bien 0, donc le
   # mensonge coincidait avec la verite par chance.
   e <- .vct_env()
-  rs <- "D:/Data_science/R-4.4.2/bin/Rscript.exe"
+  rs <- Sys.getenv("TRANSCRIPTO_RSCRIPT", file.path(R.home("bin"), "Rscript.exe"))
   if (!is.environment(e) || !file.exists(rs)) return()
 
   # 🔴 A SCRIPT FILE, not `-e "quit(status=3)"`. The first version used `-e` and

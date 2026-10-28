@@ -135,7 +135,7 @@ is_m4_ready <- function() {
 e2e_rscript_bin <- function() {
   rscript <- file.path(R.home("bin"), if (.Platform$OS.type == "windows") "Rscript.exe" else "Rscript")
   if (file.exists(rscript)) return(rscript)
-  explicit_bin <- "D:/Data_science/R-4.4.2/bin/Rscript.exe"
+  explicit_bin <- Sys.getenv("TRANSCRIPTO_RSCRIPT", unset = "")
   if (file.exists(explicit_bin)) return(explicit_bin)
   "Rscript"
 }

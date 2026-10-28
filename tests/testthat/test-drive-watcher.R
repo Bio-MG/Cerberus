@@ -2794,8 +2794,9 @@ test_that("a token-ownable Spatial module still cannot publish an importer", {
 })
 
 test_that("only an OPERATOR can widen the import roots — never the scenario", {
-  # The G3 dataset lives outside the project (`D:/Data_science/Données/bulk/…`),
-  # so a data directory has to be allowlistable. It must be widened from the
+  # The G3 dataset lives outside the project (import roots widened via
+  # TRANSCRIPTO_DRIVE_DATA_DIR — set by the OPERATOR only, see below), so a
+  # data directory has to be allowlistable. It must be widened from the
   # ENVIRONMENT, which requires control of the launching process — the agent
   # driving a session a human opened cannot set it. If the scenario could name
   # its own root, spec S11 would be decoration.
