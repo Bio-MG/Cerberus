@@ -112,3 +112,16 @@ test_that("O14 : le CTA design & QC coexiste avec le CTA LOT 4A (ajout, pas remp
   # de l'accordéon bulk (mod_bulk.R:24-68).
   expect_true(grepl('values = c("panel_filter", "panel_de")', src, fixed = TRUE))
 })
+
+# ── B1-D (O21, 2026-10-28) : ordre de la sidebar bulk ────────────────────────
+# La proposition V1.x (§2.2) demande la progression 3e → 3f → 3g → « 4.
+# Livrables » ; l'arbre mesuré (dossier round 5) montre 3g APRÈS « 4.
+# Livrables » et après les blocs Multi-jeux. Épingle l'ORDRE par le source.
+test_that("B1-D: le panneau 3g. Réseau PCSF précède « 4. Livrables » dans la sidebar bulk", {
+  lines <- readLines(file.path(ts_project_root(), "modules", "bulk", "mod_bulk.R"), warn = FALSE)
+  pos_net <- grep('value = "panel_network"', lines)
+  pos_rep <- grep('value = "panel_report"', lines)
+  testthat::expect_length(pos_net, 1L)
+  testthat::expect_length(pos_rep, 1L)
+  testthat::expect_lt(pos_net, pos_rep)
+})

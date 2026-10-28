@@ -51,8 +51,15 @@ mod_bulk_ui <- function(id) {
           # NEW-1 : dose-réponse / time-course (drc, descriptif).
           accordion_panel(i18n$t("3f. Dose–réponse / time-course"), value = "panel_dose",
                           icon = icon("chart-area"), mod_bulk_dose_response_ui(ns("dose"))),
-          # LOT 3A (V1.x UX): last panel = deliverables (report + reproducible
-          # R script already live together in mod_bulk_report.R — renamed only).
+          # NEW-3 : réseau PCSF / interactome dérivé des voies Reactome
+          # (heuristique, hors ligne ; N'EST PAS un PPI).
+          # B1-D (O21, 2026-10-28) : 3g REMONTE avant « 4. Livrables » — la
+          # progression redevient 3e → 3f → 3g → 4 → Multi-jeux.
+          accordion_panel(i18n$t("3g. Réseau PCSF (interactome)"), value = "panel_network",
+                          icon = icon("share-nodes"), mod_bulk_network_ui(ns("network"))),
+          # LOT 3A (V1.x UX): deliverables come after the analysis steps
+          # (B1-D : report + reproducible R script already live together in
+          # mod_bulk_report.R — renamed only).
           accordion_panel(i18n$t("4. Livrables — Rapport & Script R"), value = "panel_report",
                           icon = icon("file-export"), mod_bulk_report_ui(ns("report"))),
           # MD-1 : conteneur bulk_datasets — enregistrement/gestion des jeux
@@ -60,13 +67,9 @@ mod_bulk_ui <- function(id) {
           accordion_panel(i18n$t("Multi-jeux — Datasets enregistr\u00e9s"), value = "panel_datasets",
                           icon = icon("layer-group"), mod_bulk_datasets_ui(ns("datasets"))),
           # NEW-2 : fusion de jeux enregistrés (gènes communs + ComBat-seq
-          # optionnel, produit chargé comme jeu actif).
+          # optionnel, produit chargé comme jeu actif). DERNIER panneau.
           accordion_panel(i18n$t("Multi-jeux — Fusion de jeux"), value = "panel_merge",
-                          icon = icon("object-group"), mod_bulk_merge_ui(ns("merge"))),
-          # NEW-3 : réseau PCSF / interactome dérivé des voies Reactome
-          # (heuristique, hors ligne ; N'EST PAS un PPI).
-          accordion_panel(i18n$t("3g. Réseau PCSF (interactome)"), value = "panel_network",
-                          icon = icon("share-nodes"), mod_bulk_network_ui(ns("network")))
+                          icon = icon("object-group"), mod_bulk_merge_ui(ns("merge")))
         )
       ),
       navset_card_underline(
