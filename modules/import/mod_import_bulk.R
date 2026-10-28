@@ -297,6 +297,13 @@ mod_import_bulk_ui <- function(id) {
                     showcase = bsicons::bs_icon("check-circle"),
                     theme   = "light")
         ),
+        # B3-A (round 5, 2026-10-28) : badge PERSISTANT de concordance
+        # counts ↔ métadonnées. La garde historique (.validate_design,
+        # bulk_import_engine.R:184-186) est une notification ÉPHÉMÈRE à
+        # l'import, et le fallback :567 remplace silencieusement la
+        # métadonnée — ce badge laisse une trace durable, re-rendue à chaque
+        # invalidation de global_data$bulk_obj.
+        uiOutput(ns("concordance_badge")),
         # O15 : confinement vertical conservateur de la console (max-height
         # défini sur my_theme ; IMPORT-05 reste NON VÉRIFIÉ navigateur).
         card_body(
@@ -1485,5 +1492,27 @@ mod_import_bulk_server <- function(id, global_data) {
       else paste("🟢 Chargé (", format(global_data$bulk_obj$timestamp, "%H:%M:%S"), ")")
     })
     output$console_log <- renderText({ logs() })
+
+    # B3-A (round 5, 2026-10-28) — badge PERSISTANT de concordance
+    # counts ↔ métadonnées : résumé PUR de bulk_import_engine.R re-rendu à
+    # chaque invalidation de global_data$bulk_obj (l'inverse de la garde
+    # éphémère de .validate_design, qui ne parle qu'une fois à l'import).
+    # Rien avant le chargement (bulk_obj NULL) : la carte reste vierge.
+    output$concordance_badge <- renderUI({
+      obj <- global_data$bulk_obj
+      req(!is.null(obj), !is.null(obj$counts))
+      count_ids <- colnames(obj$counts)
+      meta_ids  <- if (is.null(obj$metadata)) character(0) else rownames(obj$metadata)
+      conc <- bulk_concordance_summary(count_ids, meta_ids)
+      if (isTRUE(conc$ok)) {
+        div(class = "text-success",
+            sprintf("✓ Concordance counts ↔ métadonnées : %d/%d échantillons",
+                    conc$n_common, length(count_ids)))
+      } else {
+        div(class = "text-danger",
+            sprintf("✗ Concordance counts ↔ métadonnées : %d commun(s), %d échantillon(s) sans métadonnée, %d métadonnée(s) orpheline(s)",
+                    conc$n_common, length(conc$counts_only), length(conc$meta_only)))
+      }
+    })
   })
 }

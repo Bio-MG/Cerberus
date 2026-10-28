@@ -147,6 +147,97 @@ test_that(".merge_per_sample_tables : colonnes homonymes ⇒ erreur CLASSÉE", {
 })
 
 # ---------------------------------------------------------------------------
+# B3-A (round 5, 2026-10-28) — bulk_concordance_summary() : badge PERSISTANT
+# de concordance counts ↔ métadonnées
+# ---------------------------------------------------------------------------
+# MESURÉ au HEAD a931ed7 : 0 badge (`grep -in -E 'concordance|badge'
+# modules/import/mod_import_bulk.R` → 0 hit) ; le SEUL contrôle counts ↔
+# sample_id est la garde ÉPHÉMÈRE de `.validate_design()`
+# (bulk_import_engine.R:184-186) — une notification à l'import, aucune trace
+# durable — tandis que le fallback mod_import_bulk.R:567 remplace
+# SILENCIEUSEMENT la métadonnée par des défauts. Le badge de la carte
+# « Résumé des Données Bulk » a besoin d'un résumé PUR, sans réactivité, qu'il
+# peut re-rendre à tout instant depuis `global_data$bulk_obj`.
+#
+# Contrat (dossier d'arbitrage round 5, item B3-A) :
+#   `list(ok, n_common, counts_only, meta_only, reason)` avec
+#   `ok` ssi intersection NON VIDE **ET** aucun orphelin des deux côtés ;
+#   NULL/vide d'un côté ⇒ ok=FALSE, reason="empty".
+# ---------------------------------------------------------------------------
+test_that("bulk_concordance_summary : concordance parfaite ⇒ ok=TRUE", {
+  res <- bulk_concordance_summary(c("S1", "S2", "S3"), c("S1", "S2", "S3"))
+  expect_true(res$ok)
+  expect_identical(res$n_common, 3L)
+  expect_identical(res$counts_only, character(0))
+  expect_identical(res$meta_only, character(0))
+  expect_identical(res$reason, "ok")
+})
+
+test_that("bulk_concordance_summary : orphelins des deux côtés ⇒ ok=FALSE", {
+  # S2 sans métadonnée, M4 sans counts — l'intersection {S1,S3} reste non vide,
+  # donc ok=FALSE à cause des orphelins, PAS de l'intersection vide.
+  res <- bulk_concordance_summary(c("S1", "S2", "S3"), c("S1", "S3", "M4"))
+  expect_false(res$ok)
+  expect_identical(res$n_common, 2L)
+  expect_identical(res$counts_only, "S2")   # échantillon sans métadonnée
+  expect_identical(res$meta_only, "M4")     # métadonnée orpheline
+  expect_identical(res$reason, "orphelins")
+})
+
+test_that("bulk_concordance_summary : aucun chevauchement ⇒ ok=FALSE", {
+  res <- bulk_concordance_summary(c("S1", "S2"), c("M1", "M2"))
+  expect_false(res$ok)
+  expect_identical(res$n_common, 0L)
+  expect_identical(res$reason, "aucun_chevauchement")
+})
+
+test_that("bulk_concordance_summary : NULL/vide d'un côté ⇒ ok=FALSE, empty", {
+  cases <- list(
+    counts_null   = list(NULL, "S1"),          # bulk_obj$counts absent
+    meta_null     = list("S1", NULL),          # metadata NULL (caller ⇒ character(0))
+    counts_empty  = list(character(0), "S1"),
+    meta_empty    = list("S1", character(0)),  # metadata NULL passée par le badge
+    both_empty    = list(character(0), character(0)),
+    both_null     = list(NULL, NULL)           # bulk_obj absent
+  )
+  for (nm in names(cases)) {
+    res <- do.call(bulk_concordance_summary, cases[[nm]])
+    expect_false(res$ok, info = nm)
+    expect_identical(res$reason, "empty", info = nm)
+    expect_identical(res$n_common, 0L, info = nm)
+    expect_identical(res$counts_only, character(0), info = nm)
+    expect_identical(res$meta_only, character(0), info = nm)
+  }
+})
+
+# ---------------------------------------------------------------------------
+# B3-A — ÉPINGLE de câblage : le badge est DANS la carte « Résumé des Données
+# Bulk », pas ailleurs (assertion sur le SOURCE du module, cf. motif §2cc.1)
+# ---------------------------------------------------------------------------
+test_that("B3-A épingle : badge concordance câblé dans la carte Résumé du module", {
+  src <- paste(readLines(file.path(ts_project_root(), "modules/import/mod_import_bulk.R"),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  # (1) la sortie serveur existe et consomme le helper PUR du moteur
+  expect_match(src, "output$concordance_badge <- renderUI", fixed = TRUE)
+  expect_match(src, "bulk_concordance_summary(", fixed = TRUE)
+  # (2) les identifiants viennent bien de bulk_obj, comme spécifié (l'alias
+  # `obj <- global_data$bulk_obj` puis colnames/rownames sur ses champs)
+  expect_match(src, "obj <- global_data$bulk_obj", fixed = TRUE)
+  expect_match(src, "colnames(obj$counts)", fixed = TRUE)
+  expect_match(src, "rownames(obj$metadata)", fixed = TRUE)
+  # (3) le uiOutput est DANS la carte Résumé : APRÈS la grille KPI, AVANT la console
+  expect_match(src, 'uiOutput(ns("concordance_badge"))', fixed = TRUE)
+  pos_kpi    <- regexpr('class = "bulk-kpi-grid"', src, fixed = TRUE)
+  pos_badge  <- regexpr('uiOutput(ns("concordance_badge"))', src, fixed = TRUE)
+  pos_consol <- regexpr('bulk-console-scroll', src, fixed = TRUE)
+  expect_gt(pos_kpi, 0L)      # les 3 ancres existent (sinon ordering trivial)
+  expect_gt(pos_badge, 0L)
+  expect_gt(pos_consol, 0L)
+  expect_gt(pos_badge, pos_kpi)
+  expect_gt(pos_consol, pos_badge)
+})
+
+# ---------------------------------------------------------------------------
 # Verrou source : bulk_import_engine.R ne doit plus contribuer aucun C10
 # ---------------------------------------------------------------------------
 test_that("bulk_import_engine.R ne contribue aucun signalement C10", {

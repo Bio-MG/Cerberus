@@ -203,3 +203,45 @@
   
   list(ok = ok, de_ok = de_ok, messages = unique(msgs), metadata = metadata)
 }
+
+#' Summarize counts <-> metadata concordance (pure, for the persistent badge)
+#'
+#' WHY THIS EXISTS (B3-A, round 5, 2026-10-28): the ONLY counts <-> sample_id
+#' check was the EPHEMERAL one in `.validate_design()` (this file, :184-186) —
+#' a notification at import time, then gone — while the fallback path
+#' (mod_import_bulk.R:567) silently substitutes default metadata. The
+#' "Résumé des Données Bulk" card needs a pure summary it can re-render at any
+#' time from `global_data$bulk_obj`, so a mismatch leaves a DURABLE trace.
+#'
+#' @param count_ids Character vector, `colnames(bulk_obj$counts)`.
+#' @param meta_ids  Character vector, `rownames(bulk_obj$metadata)`
+#'   (the badge passes `character(0)` when metadata is NULL).
+#' @return `list(ok, n_common, counts_only, meta_only, reason)` where `ok` is
+#'   TRUE iff the intersection is non-empty AND no id is orphaned on either
+#'   side; `counts_only` are samples without metadata, `meta_only` orphan
+#'   metadata rows; `reason` is "empty" (NULL/zero-length input), "ok",
+#'   "aucun_chevauchement" or "orphelins".
+bulk_concordance_summary <- function(count_ids, meta_ids) {
+  # NULL ou vide d'un côté : rien à comparer (badge : bulk_obj absent, counts
+  # sans métadonnée, ou métadonnée NULL) — ok=FALSE, raison "empty".
+  if (is.null(count_ids) || !length(count_ids) ||
+      is.null(meta_ids) || !length(meta_ids)) {
+    return(list(ok = FALSE, n_common = 0L,
+                counts_only = character(0), meta_only = character(0),
+                reason = "empty"))
+  }
+
+  count_ids   <- as.character(count_ids)
+  meta_ids    <- as.character(meta_ids)
+  counts_only <- setdiff(count_ids, meta_ids)  # échantillons sans métadonnée
+  meta_only   <- setdiff(meta_ids, count_ids)  # métadonnées orphelines
+  n_common    <- length(intersect(count_ids, meta_ids))
+
+  ok <- n_common > 0L && !length(counts_only) && !length(meta_only)
+  reason <- if (ok) "ok"
+            else if (n_common == 0L) "aucun_chevauchement"
+            else "orphelins"
+
+  list(ok = ok, n_common = n_common,
+       counts_only = counts_only, meta_only = meta_only, reason = reason)
+}
