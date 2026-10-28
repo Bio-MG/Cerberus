@@ -191,7 +191,38 @@ mod_bulk_server <- function(id, global_data) {
                 else if (!is.null(shared_rv$filtered_counts)) "🟡"
                 else "⚪"
       row <- function(label, value) tags$tr(tags$td(strong(label)), tags$td(value))
-      tags$table(class = "table table-sm table-striped m-3",
+      # B1-E (round 5, §2.3) : trois lectures de PLUS, toutes dans des champs
+      # DÉJÀ calculés — le contrat affiché ci-dessus reste vrai mot pour mot :
+      #  • WGCNA — power choisi + nb de modules (champs écrits par
+      #    mod_bulk_wgcna.R ~L273 / ~L327, jamais recalculés ici) ;
+      #  • Signatures — banque ($resource), méthode ($method) et nrow($scores)
+      #    = sets scorés (record écrit par .bulk_signatures_store,
+      #    mod_bulk_signatures.R) ;
+      #  • contrastes — n_up/n_down ne sont PAS portés par shared_rv$contrasts :
+      #    la mini-matrice réutilise la source unique EXISTANTE
+      #    summarize_contrasts_updown() (bulk_helpers.R, déjà consommée par
+      #    l'onglet Résumé Up/Down et le rapport) sur les champs existants
+      #    (contrasts, seuils lfc/padj, active_contrast). Aucun nouveau bloc
+      #    réactif, aucun champ écrit, aucune computation stockée.
+      wgcna_pw <- shared_rv$wgcna_power
+      wgcna_md <- shared_rv$wgcna_modules
+      wgcna_txt <- if (is.null(wgcna_pw) && is.null(wgcna_md)) "⚪" else
+        paste(c(
+          if (!is.null(wgcna_pw)) paste0("✅ power ", format(wgcna_pw$chosen$power),
+                                         " (R2 ", round(wgcna_pw$chosen$r2, 2), ")"),
+          if (!is.null(wgcna_md)) paste0(wgcna_md$n_modules, " modules")),
+          collapse = " · ")
+      sig_rec <- shared_rv$signature_scores
+      sig_txt <- if (is.null(sig_rec)) "⚪"
+        else paste0("✅ ", sig_rec$resource %||% "?", " (", sig_rec$method %||% "?",
+                    ") · ", nrow(sig_rec$scores), " sets")
+      cons <- if (length(shared_rv$contrasts) > 0)
+        summarize_contrasts_updown(shared_rv$contrasts,
+                                   lfc_thresh      = shared_rv$lfc_thresh,
+                                   padj_thresh     = shared_rv$padj_thresh,
+                                   active_contrast = shared_rv$active_contrast)
+      else NULL
+      tbl <- tags$table(class = "table table-sm table-striped m-3",
         row(.tr("Statut pipeline"), status),
         row(.tr("Échantillons"), if (!is.null(obj)) as.character(ncol(counts)) else .tr("aucun")),
         row(.tr("Mapping IDs appliqué"),
@@ -209,7 +240,29 @@ mod_bulk_server <- function(id, global_data) {
         row(.tr("Pathway Enrichment"),
             if (!is.null(shared_rv$pathway_results))
               paste0(nrow(shared_rv$pathway_results), " (", shared_rv$pathway_mode %||% "ora", ")")
-            else .tr("aucun"))
+            else .tr("aucun")),
+        # B1-E : deux lignes supplémentaires, lues depuis les champs
+        # WGCNA / Signatures déjà calculés (⚪ tant que l'étape correspondante
+        # n'a pas tourné — aucune valeur inventée).
+        row(.tr("WGCNA (power / modules)"), wgcna_txt),
+        row(.tr("Signatures cellulaires"), sig_txt))
+      # Mini-matrice des contrastes pairwise calculés (B1-E) — le contraste
+      # actif est marqué d'un ▶ ; sans contraste calculé, la section est
+      # omise (honnêteté d'affichage : aucune ligne inventée).
+      if (is.null(cons)) tbl else tagList(
+        tbl,
+        tags$h6(class = "m-3 mb-1", .tr("Contrastes calculés:")),
+        tags$table(class = "table table-sm table-bordered m-3",
+          tags$thead(tags$tr(
+            tags$th(.tr("Contraste")), tags$th(.tr("Testés")),
+            tags$th("Up"), tags$th("Down"))),
+          tags$tbody(lapply(seq_len(nrow(cons)), function(i) tags$tr(
+            tags$td(if (isTRUE(cons$actif[i])) paste0("▶ ", cons$Contraste[i])
+                    else cons$Contraste[i]),
+            tags$td(format(cons$n_testes[i])),
+            tags$td(format(cons$n_up[i]),   style = "color:#b02a37;font-weight:600;"),
+            tags$td(format(cons$n_down[i]), style = "color:#0d6efd;font-weight:600;")
+          ))))
       )
     })
 

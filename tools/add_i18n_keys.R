@@ -663,7 +663,11 @@ new_entries <- list(
   c("\u2713 Pipeline Single-Cell termin\u00e9 avec succ\u00e8s.",
     "\u2713 Single-Cell pipeline finished successfully."),
   c("Erreur Pipeline SC:",
-    "SC Pipeline Error:")
+    "SC Pipeline Error:"),
+  # --- B1-E (round 5) : libellé de ligne WGCNA + en-tête de colonne de la
+  # mini-matrice des contrastes, panneau « Résumé Pipeline Bulk » (mod_bulk.R) ---
+  c("WGCNA (power / modules)", "WGCNA (power / modules)"),
+  c("Test\u00e9s", "Tested")
 )
 
 fr_existing <- vapply(j$translation, function(x) x$fr %||% "", character(1))

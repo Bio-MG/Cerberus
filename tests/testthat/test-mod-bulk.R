@@ -293,3 +293,87 @@ test_that("mod_bulk.R ne contribue aucun signalement C10", {
   }
   expect_equal(n, 0L)
 })
+
+# ---------------------------------------------------------------------------
+# B1-E (round 5, §2.3) — Enrichissement du panneau « Résumé Pipeline Bulk »
+# ---------------------------------------------------------------------------
+# Le bloc `output$bulk_resume_panel` vit sous contrat affiché en tête :
+# « Reads EXISTING shared_rv fields only — zero new computation ». Les pins
+# ci-dessous sont des verrous SOURCE (readLines, aucun execution context) :
+#   (1) les nouvelles sections (WGCNA, Signatures cellulaires, mini-matrice
+#       des contrastes) sont bien présentes dans le bloc du panneau ;
+#   (2) le contrat tient TOUJOURS — le bloc n'ajoute aucun appel réactif
+#       calculant et n'écrit JAMAIS dans shared_rv (lecture seule) ;
+#   (3) la position de l'onglet Résumé ne bouge pas (le réordonnancement
+#       3g/4 de la sidebar relève de B1-D, déjà livré — hors périmètre).
+# Honnêteté mesurée : n_up/n_down ne sont PAS portés comme champs stockés
+# dans shared_rv$contrasts (liste nommée de data.frames DE, mod_bulk.R) ;
+# la mini-matrice doit donc réutiliser la source unique EXISTANTE
+# `summarize_contrasts_updown()` (bulk_helpers.R, déjà consommée par l'onglet
+# Résumé Up/Down et le rapport) sur les champs déjà calculés.
+.MBK_RESUME_BLOCK <- function() {
+  # encoding = "UTF-8" : les libellés FR du panneau portent des accents
+  # LITTÉRAUX (pas des \u00xx) — sans ce re-encodage, readLines décode les
+  # octets UTF-8 via la locale C du harnais Rscript et le pin à accent rate
+  # (mesuré : match FALSE sans, TRUE avec — même pattern que C8 de
+  # tools/check_conventions.R).
+  ln <- readLines(file.path(ts_project_root(), .MBK_FILE), warn = FALSE,
+                  encoding = "UTF-8")
+  i0 <- grep("Reads EXISTING shared_rv fields only", ln, fixed = TRUE)
+  stopifnot(length(i0) == 1L)
+  i1 <- grep("Auto-pipeline modal", ln, fixed = TRUE)
+  i1 <- i1[i1 > i0][1L]
+  paste(ln[i0:i1], collapse = "\n")
+}
+
+test_that("B1-E : le panneau Résumé affiche WGCNA + Signatures cellulaires (champs existants)", {
+  blk <- .MBK_RESUME_BLOCK()
+  # WGCNA — power choisi + nb de modules : champs DÉJÀ écrits par
+  # mod_bulk_wgcna.R (wgcna_power ~L273, wgcna_modules ~L327) — le panneau
+  # ne doit les lire que là, jamais les recalculer.
+  expect_true(grepl("shared_rv$wgcna_power",   blk, fixed = TRUE))
+  expect_true(grepl("shared_rv$wgcna_modules", blk, fixed = TRUE))
+  # Signatures / ssGSEA — banque ($resource) + sets scorés : champ écrit par
+  # .bulk_signatures_store (mod_bulk_signatures.R), $scores nrow = sets scorés.
+  expect_true(grepl("shared_rv$signature_scores", blk, fixed = TRUE))
+  # Les deux nouvelles LIGNES de la table portent des libellés .tr().
+  expect_true(grepl('tr("WGCNA (power / modules)")', blk, fixed = TRUE))
+  expect_true(grepl('tr("Signatures cellulaires")',  blk, fixed = TRUE))
+})
+
+test_that("B1-E : mini-matrice des contrastes pairwise dans le panneau Résumé", {
+  blk <- .MBK_RESUME_BLOCK()
+  # n_up/n_down dérivés par la source unique EXISTANTE (zéro nouvelle
+  # computation stockée) — pas de ré-implémentation locale du comptage.
+  expect_true(grepl("summarize_contrasts_updown(", blk, fixed = TRUE))
+  # Section titrée en français (clé i18n existante, réutilisée du rapport).
+  expect_true(grepl("Contrastes calcul\u00e9s:", blk, fixed = TRUE))
+  # Colonnes n_up/n_down affichées depuis le data.frame du helper.
+  expect_true(grepl("n_up",   blk, fixed = TRUE))
+  expect_true(grepl("n_down", blk, fixed = TRUE))
+})
+
+test_that("B1-E : le contrat du panneau tient — zéro appel réactif, zéro écriture shared_rv", {
+  blk <- .MBK_RESUME_BLOCK()
+  # Le commentaire de contrat d'origine reste affiché, INTACT.
+  expect_true(grepl("Reads EXISTING shared_rv fields only", blk, fixed = TRUE))
+  expect_true(grepl("zero new computation", blk, fixed = TRUE))
+  # Aucun appel réactif dans le bloc : le renderUI reste la SEULE expression
+  # réactive du panneau (un enrichissement qui calculerait cacherait un
+  # `reactive(` ici).
+  expect_equal(lengths(regmatches(blk, gregexpr("reactive(", blk, fixed = TRUE))), 0L)
+  # Le panneau est en LECTURE SEULE sur l'état partagé : aucune affectation.
+  expect_equal(lengths(regmatches(blk, gregexpr("shared_rv$[a-z_]+ *<-", blk))), 0L)
+})
+
+test_that("B1-E : la position de l'onglet Résumé est inchangée (3g/4 relève de B1-D)", {
+  ln <- readLines(file.path(ts_project_root(), .MBK_FILE), warn = FALSE,
+                  encoding = "UTF-8")
+  i_res   <- grep('value = "tab_resume"',      ln, fixed = TRUE)
+  i_multi <- grep('value = "tab_bulk_multi"',  ln, fixed = TRUE)
+  i_merge <- grep('value = "tab_bulk_merge"',  ln, fixed = TRUE)
+  i_net   <- grep('value = "tab_bulk_network"', ln, fixed = TRUE)
+  expect_length(i_res, 1L)
+  # Résumé suivi de Multi-jeux, Fusion, Réseau PCSF — ordre inchangé.
+  expect_true(i_res < i_multi && i_multi < i_merge && i_merge < i_net)
+})
