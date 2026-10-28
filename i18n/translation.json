@@ -10936,6 +10936,10 @@
     {
       "fr": "Configurer design & QC",
       "en": "Configure design & QC"
+    },
+    {
+      "fr": "Lancez l'analyse WGCNA (Étape 3c) pour alimenter ces graphiques.",
+      "en": "Run the WGCNA analysis (Step 3c) to feed these plots."
     }
   ]
 }

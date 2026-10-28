@@ -125,3 +125,78 @@ test_that("B1-D: le panneau 3g. Réseau PCSF précède « 4. Livrables » dans l
   testthat::expect_length(pos_rep, 1L)
   testthat::expect_lt(pos_net, pos_rep)
 })
+
+# ── B3-C (round 5, 2026-10-28) : couche présentation du verrouillage ─────────
+# La moitié FONCTIONNELLE est déjà livrée côté calcul (gardes bulk_wgcna.R,
+# bulk_survival.R, dose_response.R, bulk_batch_qc.R — hors périmètre ici, ZÉRO
+# changement comportemental). Ces épingles portent la PRÉSENTATION :
+#   (1) badge 🔒 sur les TITRES des trois accordion_panel GARDÉS de la sidebar
+#       bulk, concaténé APRÈS l'appel i18n$t() — la clé de traduction elle-même
+#       doit rester intacte (garde C7 exige l'existence des clés utilisées) ;
+#   (2) empty state réactif sur l'onglet Power WGCNA : les 2 plotOutput
+#       statiques rendaient une zone blanche silencieuse tant qu'aucune
+#       analyse n'avait tourné (renderPlot req() sans message).
+# NB : le caractère emoji est écrit dans CE garde via son échappement R
+# "\U0001F512" pour rester ASCII pur (leçon C7 : un garde ne doit pas dépendre
+# de la locale) ; il matche le caractère littéral 🔒 que readLines() rend
+# depuis le fichier module (encodage UTF-8 natif depuis R 4.2).
+.test_lock <- "\U0001F512"
+
+test_that("B3-C: badge 🔒 sur les titres des panneaux gardés (wgcna, survie, dose)", {
+  lines <- readLines(file.path(ts_project_root(), "modules", "bulk", "mod_bulk.R"),
+                     warn = FALSE)
+  locked <- c("panel_wgcna", "panel_survival", "panel_dose")
+  n_checked <- 0L
+  offenders <- character(0)
+  for (v in locked) {
+    pos <- grep(paste0('value = "', v, '"'), lines, fixed = TRUE)
+    if (length(pos) != 1L) {
+      offenders <- c(offenders,
+                     sprintf("%s : %d occurrence(s) de value= (attendu 1)", v, length(pos)))
+      next
+    }
+    n_checked <- n_checked + 1L
+    ln <- lines[pos]
+    key <- regmatches(ln, regexpr('i18n\\$t\\("[^"]*"\\)', ln))
+    ok <- grepl("i18n$t(", ln, fixed = TRUE) &&
+      grepl(.test_lock, ln, fixed = TRUE) &&
+      length(key) == 1L &&
+      !grepl(.test_lock, key, fixed = TRUE) &&   # la clé i18n reste INTACTE
+      regexpr(.test_lock, ln, fixed = TRUE) >
+        regexpr("i18n\\$t\\(", ln)               # badge APRÈS l'appel i18n$t()
+    if (!isTRUE(ok)) offenders <- c(offenders, v)
+  }
+  # Témoin de non-vacuité : les 3 panneaux gardés doivent exister, sinon le
+  # test passerait pour la mauvaise raison (rien regardé).
+  testthat::expect_identical(n_checked, 3L)
+  testthat::expect_identical(offenders, character(0),
+                             info = paste("panneaux sans badge \U0001F512 concaténé après i18n$t() :",
+                                          paste(offenders, collapse = " | ")))
+})
+
+test_that("B3-C: empty state réactif sur l'onglet Power WGCNA (renderUI, plus de blanc silencieux)", {
+  src <- paste(readLines(file.path(ts_project_root(), "modules", "bulk", "mod_bulk_wgcna.R"),
+                         warn = FALSE), collapse = "\n")
+  # (1) les 2 plotOutput statiques cèdent la place à un conteneur conditionnel
+  #     (l'identifiant wgcna_power_ui est celui nommé par le dossier round 5)
+  testthat::expect_true(grepl('uiOutput(ns("wgcna_power_ui"))', src, fixed = TRUE),
+                        info = "l'onglet Power doit porter uiOutput(ns(\"wgcna_power_ui\"))")
+  # (2) le renderUI existe dans le serveur et DISTINGUE l'état vide
+  testthat::expect_true(grepl("output$wgcna_power_ui <- renderUI(", src, fixed = TRUE),
+                        info = "renderUI wgcna_power_ui absent du serveur du module")
+  testthat::expect_true(grepl("is.null(shared_rv$wgcna_power)", src, fixed = TRUE),
+                        info = "le renderUI ne teste pas l'état vide shared_rv$wgcna_power")
+  # (3) la carte info guide vers l'étape 3c (message prescrit par le dossier)
+  testthat::expect_true(grepl("pour alimenter ces graphiques", src, fixed = TRUE),
+                        info = "message d'empty state absent")
+  # (4) NON-RÉGRESSION : les renderPlot existants et leur garde req() restent
+  #     inchangés — occurrences comptées sur la source COLLAPSÉE (length(grep())
+  #     sur une chaîne unique ne compte pas les occurrences multiples).
+  .count_occ <- function(needle) {
+    lengths(regmatches(src, gregexpr(needle, src, fixed = TRUE)))
+  }
+  testthat::expect_identical(.count_occ("req(shared_rv$wgcna_power)"), 2L,
+                             info = "req(shared_rv$wgcna_power) doit rester présent 2x (renderPlot)")
+  testthat::expect_identical(.count_occ("output$wgcna_power_fit <- renderPlot"), 1L)
+  testthat::expect_identical(.count_occ("output$wgcna_power_conn <- renderPlot"), 1L)
+})

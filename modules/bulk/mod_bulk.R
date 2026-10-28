@@ -40,16 +40,20 @@ mod_bulk_ui <- function(id) {
           accordion_panel(i18n$t("3b. Signatures cellulaires"), value = "panel_signatures",
                           icon = icon("fingerprint"), mod_bulk_signatures_ui(ns("signatures"))),
           # Bulk V2 M4 : réseaux de co-expression WGCNA (safe-mode).
-          accordion_panel(i18n$t("3c. R\u00e9seau de co-expression (WGCNA)"), value = "panel_wgcna",
+          # B3-C (round 5) : les trois panneaux GARDÉS du verrouillage
+          # intelligent portent un badge 🔒 — concaténation UI APRÈS i18n$t()
+          # (clé de traduction intacte, garde C7) ; la garde fonctionnelle
+          # vit côté calcul (bulk_wgcna.R:169-176), présentation seule ici.
+          accordion_panel(paste0(i18n$t("3c. R\u00e9seau de co-expression (WGCNA)"), " 🔒"), value = "panel_wgcna",
                           icon = icon("project-diagram"), mod_bulk_wgcna_ui(ns("wgcna"))),
           # Bulk V2 M5 : survie & associations cliniques (KM + Cox).
-          accordion_panel(i18n$t("3d. Survie & association clinique"), value = "panel_survival",
+          accordion_panel(paste0(i18n$t("3d. Survie & association clinique"), " 🔒"), value = "panel_survival",
                           icon = icon("heart-pulse"), mod_bulk_survival_ui(ns("survival"))),
           # STAT-S3 : clustering de profils d'expression (kmeans MVP, descriptif).
           accordion_panel(i18n$t("3e. Clustering de profils"), value = "panel_pattern",
                           icon = icon("chart-line"), mod_bulk_pattern_ui(ns("pattern"))),
           # NEW-1 : dose-réponse / time-course (drc, descriptif).
-          accordion_panel(i18n$t("3f. Dose–réponse / time-course"), value = "panel_dose",
+          accordion_panel(paste0(i18n$t("3f. Dose–réponse / time-course"), " 🔒"), value = "panel_dose",
                           icon = icon("chart-area"), mod_bulk_dose_response_ui(ns("dose"))),
           # NEW-3 : réseau PCSF / interactome dérivé des voies Reactome
           # (heuristique, hors ligne ; N'EST PAS un PPI).

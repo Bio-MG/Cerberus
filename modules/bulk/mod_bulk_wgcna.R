@@ -51,8 +51,7 @@ mod_bulk_wgcna_output_ui <- function(id) {
     navset_tab(
       id = ns("wgcna_tabs"),
       nav_panel(i18n$t("Power"), value = "wgcna_power_tab",
-                plotOutput(ns("wgcna_power_fit"), height = "380px"),
-                plotOutput(ns("wgcna_power_conn"), height = "380px")),
+                uiOutput(ns("wgcna_power_ui"))),
       nav_panel(i18n$t("Dendrogramme"), uiOutput(ns("wgcna_dendro_ui"))),
       nav_panel(i18n$t("Modules <-> Traits"), value = "wgcna_trait_tab",
                 plotOutput(ns("wgcna_trait_plot"), height = "520px")),
@@ -365,6 +364,25 @@ mod_bulk_wgcna_output_ui <- function(id) {
     }) %>% shiny::debounce(500)
 
     # ── Outputs ──────────────────────────────────────────────────────────
+    # ── B2-A/B3-C (round 5) : empty state réactif sur l'onglet Power ─────
+    # Les 2 plotOutput étaient statiques : tant que shared_rv$wgcna_power
+    # restait NULL, les renderPlot req() ci-dessous masquaient les graphiques
+    # sans rien dire (blanc silencieux). Ce renderUI affiche une carte info
+    # tant que l'analyse (Étape 3c) n'a pas tourné, puis branche les MÊMES
+    # plotOutput — les renderPlot et leur garde req() restent inchangés
+    # (couche présentation seule ; même motif que wgcna_dendro_ui).
+    output$wgcna_power_ui <- renderUI({
+      global_data$language
+      if (is.null(shared_rv$wgcna_power)) {
+        return(div(class = "alert alert-light", style = "font-size:0.85em;margin:15px;",
+                   icon("info-circle"), " ",
+                   .tr("Lancez l'analyse WGCNA (Étape 3c) pour alimenter ces graphiques.")))
+      }
+      tagList(
+        plotOutput(ns("wgcna_power_fit"), height = "380px"),
+        plotOutput(ns("wgcna_power_conn"), height = "380px")
+      )
+    })
     output$wgcna_power_fit <- renderPlot({
       global_data$language
       req(shared_rv$wgcna_power)
