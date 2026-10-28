@@ -571,3 +571,16 @@ test_that("the state probe and the view are closed and five-state", {
   expect_identical(.bulk_signatures_drive_state(rv2, gd, function() "done")$status,
                    "not_ready")
 })
+
+# ── B2-B (O21, 2026-10-28) : Progress lié à la session ──────────────────────
+# Dossier round 5 : mod_bulk_signatures.R:384 et :396 construisent
+# shiny::Progress$new() SANS session — le gabarit correct est
+# Progress$new(session = session) (le moduleServer fournit session).
+# Épingle source : 0 appel nu, ≥ 2 appels liés.
+test_that("B2-B: aucun shiny::Progress$new() nu dans mod_bulk_signatures.R", {
+  lines <- readLines(file.path(ts_project_root(), "modules", "bulk", "mod_bulk_signatures.R"), warn = FALSE)
+  bare <- grep("Progress$new()", lines, value = TRUE, fixed = TRUE)
+  wired <- grep("Progress$new(session", lines, value = TRUE, fixed = TRUE)
+  expect_length(bare, 0L)
+  expect_gte(length(wired), 2L)
+})

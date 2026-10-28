@@ -381,7 +381,7 @@ mod_bulk_signatures_server <- function(id, global_data, shared_rv) {
         # a bare call REPLACES the registered expressions and would discard the job
         # declaration. It was already `add = TRUE` on the second registration; the
         # first one now matches.
-        p <- shiny::Progress$new(); on.exit(p$close(), add = TRUE)
+        p <- shiny::Progress$new(session = session); on.exit(p$close(), add = TRUE)
         p$set(message = .tr("Chargement de la ressource..."), value = 0.1)
         sets <- tryCatch(
           bulk_load_signatures(resource, organism = input$sig_organism %||% "human"),
@@ -393,7 +393,7 @@ mod_bulk_signatures_server <- function(id, global_data, shared_rv) {
         return()
       }
 
-      p <- shiny::Progress$new(); on.exit(p$close(), add = TRUE)
+      p <- shiny::Progress$new(session = session); on.exit(p$close(), add = TRUE)
       p$set(message = .tr("Scores de signatures..."), value = 0.4)
       tryCatch({
         res <- bulk_score_signatures(
