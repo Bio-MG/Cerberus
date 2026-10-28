@@ -327,7 +327,22 @@ mod_bulk_server <- function(id, global_data) {
                 column(6, selectInput(ns_m("ap_pathway_org"), .tr("Organisme"),
                            stats::setNames(c("human","mouse"), c(.tr("Humain"), .tr("Souris")))))
               )
-            )
+            ),
+            # B1-F (§2.4, round 5) : élargissement OPT-IN du pipeline — tout
+            # reste DÉCOCHÉ par défaut (jamais d'élargissement silencieux).
+            # L'itération multi-contrastes du bloc pathway, elle, est
+            # automatique dès que des contrastes pairwise existent.
+            checkboxInput(ns_m("ap_run_pca"),
+                          .tr("PCA en fin de pipeline (projection des \u00e9chantillons sur la matrice VST)"),
+                          value = FALSE),
+            checkboxInput(ns_m("ap_run_ssgsea"),
+                          .tr("Signatures cellulaires ssGSEA (Hallmark) sur la matrice VST"),
+                          value = FALSE),
+            checkboxInput(ns_m("ap_run_report"),
+                          .tr("G\u00e9n\u00e9rer le rapport HTML automatique"),
+                          value = FALSE),
+            helpText(style="font-size:0.78em;",
+                     .tr("Le rapport HTML est \u00e9crit dans le dossier temporaire de la session ; le chemin complet est affich\u00e9 dans les notifications et le journal."))
           )
         ),
         helpText(.tr("Par d\u00e9faut, seuls les 2 groupes les plus repr\u00e9sent\u00e9s sont compar\u00e9s (case pairwise ci-dessus d\u00e9coch\u00e9e). Le Venn/UpSet multi-contrastes reste disponible manuellement (onglet d\u00e9di\u00e9) d\u00e8s que \u2265 2 contrastes existent.")),
@@ -525,15 +540,11 @@ mod_bulk_server <- function(id, global_data) {
                      a = grp_target, b = grp_ref))
         }
 
-        # BULK-06 (§2.10 V1X_BULK_QA_AUDIT_FIXES_PROPOSAL.md) : `res` n'est
-        # assigné QUE dans la branche non-pairwise ci-dessus ; en pairwise les
-        # résultats vivent dans `res_i` -> shared_rv$contrasts. Les blocs
-        # pathway du tronc commun ci-dessous lisent un résultat DE unique :
-        # contrat — l'auto-run pathway suit le CONTRASTE ACTIF, aligné sur le
-        # dispatch d'affichage des onglets DE (shared_rv$active_contrast,
-        # fixé dans les deux branches). Extension future B1-F (§2.4) : itérer
-        # sur l'ensemble des contrastes pairwise.
-        res_ap <- if (pairwise_mode) shared_rv$contrasts[[shared_rv$active_contrast]] else res
+        # B1-F (§2.4, round 5) : le bloc pathway ci-dessous itère sur TOUS les
+        # contrastes calculés de shared_rv$contrasts — exactement 1 en mode
+        # non-pairwise (comportement ancien préservé), N en pairwise. Mêmes
+        # appels run_gsea_enrichment / run_pathway_enrichment par contraste :
+        # zéro méthode statistique nouvelle, on ENCHAÎNE des étapes existantes.
 
         # Traçabilité du contournement — voyage avec le résultat (rapport,
         # export, provenance) pour qu'il ne puisse pas être lu comme une DE
@@ -561,35 +572,129 @@ mod_bulk_server <- function(id, global_data) {
           }
         }
 
+        # B1-F : itération multi-contrastes. Un seul contraste productif =>
+        # table stockée TELLE QUE (chemin 1-contraste inchangé, attribut
+        # gsea_obj préservé) ; plusieurs => tables agrégées avec une colonne
+        # `contraste` (l'attribut gsea_obj, ambigu sur un agrégat, est omis —
+        # l'onglet GSEA affiche alors son alerte « résultats GSEA uniquement »,
+        # déjà prévue pour un attribut absent).
+        pw_par_contraste <- list()
         if (isTRUE(input$ap_run_pathway) && identical(input$ap_pathway_mode, "gsea")) {
           p$set(0.85, .tr("GSEA...")); log(.tr("GSEA (tous les g\u00e8nes class\u00e9s)..."))
-          pw <- tryCatch(
-            run_gsea_enrichment(res_ap, organism=input$ap_pathway_org,
-                                database=input$ap_pathway_db, pval_cutoff=0.05),
-            error=function(e) { log(paste("\u26a0\ufe0f GSEA:", e$message)); NULL }
-          )
-          if (!is.null(pw) && nrow(pw) > 0) {
-            shared_rv$pathway_results <- pw; shared_rv$pathway_db <- input$ap_pathway_db
-            shared_rv$pathway_mode    <- "gsea"
-            log(.t_fmt(.tr("\u2713 {n} pathways enrichis (GSEA)"), n = nrow(pw)))
-          } else log(.tr("\u26a0\ufe0f GSEA : aucun pathway enrichi."))
+          for (c_ap in names(shared_rv$contrasts)) {
+            pw_c <- tryCatch(
+              run_gsea_enrichment(shared_rv$contrasts[[c_ap]],
+                                  organism=input$ap_pathway_org,
+                                  database=input$ap_pathway_db, pval_cutoff=0.05),
+              error=function(e) { log(paste("\u26a0\ufe0f GSEA (", c_ap, "):", e$message)); NULL }
+            )
+            if (!is.null(pw_c) && nrow(pw_c) > 0) pw_par_contraste[[c_ap]] <- pw_c
+            else log(paste("\u26a0\ufe0f GSEA :", c_ap, "\u2014 aucun pathway enrichi."))
+          }
         } else if (isTRUE(input$ap_run_pathway)) {
           p$set(0.85, .tr("Pathway ORA...")); log(.tr("Pathway ORA..."))
-          sig_g <- res_ap$gene[!is.na(res_ap$padj) & res_ap$padj < input$ap_padj &
-                              abs(res_ap$log2FoldChange) > input$ap_lfc]
-          if (length(sig_g) >= 10) {
-            pw <- tryCatch(
-              run_pathway_enrichment(sig_g, organism=input$ap_pathway_org,
-                                     database=input$ap_pathway_db, pval_cutoff=0.05,
-                                     universe = rownames(filtered)),
-              error=function(e) { log(paste("\u26a0\ufe0f", .tr("Pathway:"), e$message)); NULL }
-            )
-            if (!is.null(pw) && nrow(pw) > 0) {
-              shared_rv$pathway_results <- pw; shared_rv$pathway_db <- input$ap_pathway_db
-              shared_rv$pathway_mode    <- "ora"
-              log(.t_fmt(.tr("\u2713 {n} pathways enrichis"), n = nrow(pw)))
-            }
-          } else log(paste("\u26a0\ufe0f", .tr("Pathway ignor\u00e9:"), length(sig_g), .tr("g\u00e8nes")))
+          for (c_ap in names(shared_rv$contrasts)) {
+            res_c <- shared_rv$contrasts[[c_ap]]
+            sig_g <- res_c$gene[!is.na(res_c$padj) & res_c$padj < input$ap_padj &
+                                abs(res_c$log2FoldChange) > input$ap_lfc]
+            if (length(sig_g) >= 10) {
+              pw_c <- tryCatch(
+                run_pathway_enrichment(sig_g, organism=input$ap_pathway_org,
+                                       database=input$ap_pathway_db, pval_cutoff=0.05,
+                                       universe = rownames(filtered)),
+                error=function(e) { log(paste("\u26a0\ufe0f", .tr("Pathway:"), c_ap, ":", e$message)); NULL }
+              )
+              if (!is.null(pw_c) && nrow(pw_c) > 0) pw_par_contraste[[c_ap]] <- pw_c
+            } else log(paste("\u26a0\ufe0f", .tr("Pathway ignor\u00e9:"), length(sig_g),
+                             .tr("g\u00e8nes"), "\u2014", c_ap))
+          }
+        }
+        n_pw_contr <- length(pw_par_contraste)
+        if (n_pw_contr == 1L) {
+          # Chemin 1-contraste : stockage ANCIEN préservé à l'identique.
+          pw <- pw_par_contraste[[1]]
+          shared_rv$pathway_results <- pw; shared_rv$pathway_db <- input$ap_pathway_db
+          shared_rv$pathway_mode    <- if (identical(input$ap_pathway_mode, "gsea")) "gsea" else "ora"
+          log(.t_fmt(.tr("\u2713 {n} pathways enrichis{s}"),
+                     n = nrow(pw), s = if (identical(input$ap_pathway_mode, "gsea")) " (GSEA)" else ""))
+        } else if (n_pw_contr > 1L) {
+          agg_pw <- do.call(rbind, lapply(names(pw_par_contraste), function(cn) {
+            df_c <- pw_par_contraste[[cn]]; df_c$contraste <- cn; df_c }))
+          shared_rv$pathway_results <- agg_pw; shared_rv$pathway_db <- input$ap_pathway_db
+          shared_rv$pathway_mode    <- if (identical(input$ap_pathway_mode, "gsea")) "gsea" else "ora"
+          log(.t_fmt(.tr("\u2713 {n} pathways enrichis sur {m} contrastes{s}"),
+                     n = nrow(agg_pw), m = n_pw_contr,
+                     s = if (identical(input$ap_pathway_mode, "gsea")) " (GSEA)" else ""))
+        } else if (isTRUE(input$ap_run_pathway)) {
+          log(.tr("\u26a0\ufe0f Pathway : aucun pathway enrichi sur l'ensemble des contrastes."))
+        }
+
+        # ── B1-F : étapes optionnelles OPT-IN (défaut FALSE dans la modal) ───
+        # Chaque étape est tryCatch-ée INDIVIDUELLEMENT et journalisée
+        # (log_fn + showNotification) : un échec optionnel n'annule JAMAIS le
+        # pipeline (seules les étapes obligatoires relèvent du tryCatch
+        # externe, en bas de ce bloc). Ordre : PCA -> ssGSEA -> rapport.
+        if (isTRUE(input$ap_run_pca)) {
+          p$set(0.90, .tr("PCA...")); log(.tr("PCA (auto)..."))
+          tryCatch({
+            # L'étape PCA existante (même plot_bulk_pca que l'onglet dédié).
+            plot_bulk_pca(shared_rv$vst_mat, global_data$bulk_obj$metadata,
+                          color_by = cond_col, tr = .tr_fn(global_data))
+            log(.t_fmt(.tr("\u2713 PCA \u2014 {n} \u00e9chantillons projet\u00e9s"),
+                       n = ncol(shared_rv$vst_mat)))
+          }, error = function(e) {
+            log(paste("\u26a0\ufe0f", .tr("PCA ignor\u00e9e:"), e$message))
+            showNotification(paste(.tr("PCA ignor\u00e9e:"), e$message),
+                             type = "warning", duration = 8)
+          })
+        }
+        if (isTRUE(input$ap_run_ssgsea)) {
+          p$set(0.93, .tr("Signatures (ssGSEA Hallmark)..."))
+          log(.tr("Signatures cellulaires ssGSEA (Hallmark, auto)..."))
+          tryCatch({
+            # Même wrapper que la voie humaine ET la voie drive MCP
+            # (run_signatures, ressource GELÉE hallmark/human/ssgsea)...
+            sig_res <- run_signatures(shared_rv$vst_mat)
+            # ...puis LE même écrivain unique du slot signature_scores.
+            .bulk_signatures_store(sig_res$record, global_data, shared_rv)
+            log(.t_fmt(.tr("\u2713 {n} signatures scor\u00e9es (Hallmark)"),
+                       n = sig_res$n_results %||% 0L))
+          }, error = function(e) {
+            log(paste("\u26a0\ufe0f", .tr("Signatures ignor\u00e9es:"), e$message))
+            showNotification(paste(.tr("Signatures ignor\u00e9es:"), e$message),
+                             type = "warning", duration = 8)
+          })
+        }
+        if (isTRUE(input$ap_run_report)) {
+          p$set(0.96, .tr("Rapport HTML...")); log(.tr("Rapport HTML (auto)..."))
+          tryCatch({
+            # La FONCTION du module rapport (bulk_render_report_file,
+            # mod_bulk_report.R) est réutilisée — jamais dupliquée. Défauts du
+            # widget rapport : toutes les sections, HTML.
+            out_files <- bulk_render_report_file(
+              global_data, shared_rv,
+              sections        = c("pca", "qc", "volcano", "heatmap", "table", "pathway"),
+              report_format   = "html",
+              interactive     = TRUE,
+              pairwise_layout = "grid",
+              tr              = .tr, tr_fn = .tr_fn,
+              show_notification = showNotification,
+              with_progress   = withProgress,
+              find_template   = .find_bulk_report_template,
+              file_copy       = file.copy)
+            if (length(out_files) == 0)
+              stop(errorCondition(.tr("Aucun format g\u00e9n\u00e9r\u00e9."), class = "bulk_report_error"))
+            rep_path <- file.path(tempdir(), paste0("rapport_bulk_auto_",
+                                                    format(Sys.time(), "%Y%m%d_%H%M%S"), ".html"))
+            file.copy(out_files[1], rep_path, overwrite = TRUE)
+            log(.t_fmt(.tr("\u2713 Rapport : {f}"), f = rep_path))
+            showNotification(.t_fmt(.tr("\u2713 Rapport g\u00e9n\u00e9r\u00e9 : {f}"), f = rep_path),
+                             type = "message", duration = 12)
+          }, error = function(e) {
+            log(paste("\u26a0\ufe0f", .tr("Rapport ignor\u00e9:"), e$message))
+            showNotification(paste(.tr("Rapport ignor\u00e9:"), e$message),
+                             type = "warning", duration = 8)
+          })
         }
 
         shared_rv$active_tab <- if (pairwise_mode) "tab_updown" else "tab_pca"

@@ -10948,6 +10948,82 @@
     {
       "fr": "Testés",
       "en": "Tested"
+    },
+    {
+      "fr": "PCA en fin de pipeline (projection des échantillons sur la matrice VST)",
+      "en": "PCA at the end of the pipeline (project samples onto the VST matrix)"
+    },
+    {
+      "fr": "Signatures cellulaires ssGSEA (Hallmark) sur la matrice VST",
+      "en": "Cell signatures ssGSEA (Hallmark) on the VST matrix"
+    },
+    {
+      "fr": "Générer le rapport HTML automatique",
+      "en": "Generate the automatic HTML report"
+    },
+    {
+      "fr": "Le rapport HTML est écrit dans le dossier temporaire de la session ; le chemin complet est affiché dans les notifications et le journal.",
+      "en": "The HTML report is written to the session's temp folder; the full path is shown in notifications and the log."
+    },
+    {
+      "fr": "✓ {n} pathways enrichis{s}",
+      "en": "✓ {n} enriched pathways{s}"
+    },
+    {
+      "fr": "✓ {n} pathways enrichis sur {m} contrastes{s}",
+      "en": "✓ {n} enriched pathways across {m} contrasts{s}"
+    },
+    {
+      "fr": "⚠️ Pathway : aucun pathway enrichi sur l'ensemble des contrastes.",
+      "en": "⚠️ Pathway: no enriched pathway across all contrasts."
+    },
+    {
+      "fr": "PCA (auto)...",
+      "en": "PCA (auto)..."
+    },
+    {
+      "fr": "✓ PCA — {n} échantillons projetés",
+      "en": "✓ PCA — {n} samples projected"
+    },
+    {
+      "fr": "PCA ignorée:",
+      "en": "PCA skipped:"
+    },
+    {
+      "fr": "Signatures (ssGSEA Hallmark)...",
+      "en": "Signatures (ssGSEA Hallmark)..."
+    },
+    {
+      "fr": "Signatures cellulaires ssGSEA (Hallmark, auto)...",
+      "en": "Cell signatures ssGSEA (Hallmark, auto)..."
+    },
+    {
+      "fr": "Signatures ignorées:",
+      "en": "Signatures skipped:"
+    },
+    {
+      "fr": "Rapport HTML...",
+      "en": "HTML report..."
+    },
+    {
+      "fr": "Rapport HTML (auto)...",
+      "en": "HTML report (auto)..."
+    },
+    {
+      "fr": "✓ Rapport : {f}",
+      "en": "✓ Report: {f}"
+    },
+    {
+      "fr": "✓ Rapport généré : {f}",
+      "en": "✓ Report generated: {f}"
+    },
+    {
+      "fr": "Rapport ignoré:",
+      "en": "Report skipped:"
+    },
+    {
+      "fr": "✓ {n} signatures scorées (Hallmark)",
+      "en": "✓ {n} signatures scored (Hallmark)"
     }
   ]
 }

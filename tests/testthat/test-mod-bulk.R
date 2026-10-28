@@ -377,3 +377,163 @@ test_that("B1-E : la position de l'onglet Résumé est inchangée (3g/4 relève 
   # Résumé suivi de Multi-jeux, Fusion, Réseau PCSF — ordre inchangé.
   expect_true(i_res < i_multi && i_multi < i_merge && i_merge < i_net)
 })
+
+# =============================================================================
+# B1-F (§2.4, round 5) — élargissement du périmètre du Pipeline Auto (1 clic)
+# =============================================================================
+# ÉTAT MESURÉ AVANT (packet d'arbitrage, §B1-F) : la modal ap_* ne porte AUCUNE
+# option PCA/ssGSEA/rapport, et le bloc pathway tourne sur le SEUL contraste
+# actif (commentaire de report explicite « Extension future B1-F »).
+#
+# ROUGE D'ABORD — épingles demandées par l'item (readLines/grep) :
+#   (1) les 3 checkboxInput ap_run_pca / ap_run_ssgsea / ap_run_report dans la
+#       modal, DÉFAUT FALSE (jamais d'élargissement silencieux) ;
+#   (2) la boucle pathway itère sur TOUS les contrastes de shared_rv$contrasts
+#       (chaque contraste consommé, plus de résultat unique res_ap) ;
+#   (3) exécution : agrégation multi-contrastes avec colonne `contraste` ;
+#   (4) exécution : les 3 étapes opt-in tournent, et un échec optionnel
+#       tryCatch-é n'annule JAMAIS le pipeline.
+# Le test hérité BULK-06 ci-dessus doit rester VERT : le chemin 1-contraste
+# préserve son comportement par défaut (les étapes opt-in sont LAZY — aucune
+# recherche de stub tant que la case n'est pas cochée).
+# =============================================================================
+
+test_that("B1-F : la modal porte les 3 cases opt-in, défaut FALSE (élargissement jamais silencieux)", {
+  ln <- readLines(file.path(ts_project_root(), .MBK_FILE), warn = FALSE,
+                  encoding = "UTF-8")
+  for (opt in c("ap_run_pca", "ap_run_ssgsea", "ap_run_report")) {
+    hits <- grep(sprintf('ns_m("%s")', opt), ln, fixed = TRUE)
+    # La case existe, exactement une fois (seule la modal référence ns_m(...)).
+    expect_equal(length(hits), 1L,
+                 info = paste(opt, ": input absent de la modal"))
+    # ...et c'est une checkboxInput à défaut FALSE : l'appel peut être rabattu
+    # sur deux lignes, on regarde la ligne de l'input et les deux suivantes.
+    zone <- paste(ln[max(1, hits[1] - 1):min(length(ln), hits[1] + 2)], collapse = " ")
+    expect_true(grepl("checkboxInput", zone, fixed = TRUE),
+                info = paste(opt, ": pas une checkboxInput"))
+    expect_true(grepl("value = FALSE", zone, fixed = TRUE),
+                info = paste(opt, ": défaut opt-in FALSE exigé"))
+  }
+})
+
+test_that("B1-F : le bloc pathway itère sur TOUS les contrastes (multi-contrastes), report disparu", {
+  handler <- paste(deparse(.mbk_handler_expr()), collapse = "\n")
+  # (a) boucle sur l'ensemble des contrastes calculés...
+  expect_true(grepl("c_ap in names(shared_rv$contrasts)", handler, fixed = TRUE),
+              info = "boucle pathway multi-contrastes absente du handler ap_confirm")
+  # ...qui consomme CHAQUE contraste (et non plus un résultat unique)...
+  expect_true(grepl("shared_rv$contrasts[[c_ap]]", handler, fixed = TRUE),
+              info = "consommation par contraste absente")
+  # ...l'ancien résultat unique res_ap a disparu du handler (code + commentaire).
+  expect_false(grepl("res_ap", handler, fixed = TRUE),
+               info = "l'ancien résultat unique res_ap doit disparaître du handler")
+  # (b) le commentaire de report explicite a disparu du fichier.
+  src <- paste(readLines(file.path(ts_project_root(), .MBK_FILE), warn = FALSE,
+                         encoding = "UTF-8"), collapse = "\n")
+  expect_false(grepl("Extension future B1-F", src, fixed = TRUE),
+               info = "commentaire de report B1-F encore présent")
+})
+
+# --- Harnais B1-F : ORA réellement appelé sur CHAQUE contraste ---------------
+# .mbk_env bouchonne déjà le dispatch (1 gène) ; ici chaque contraste rend
+# 12 gènes significatifs (seuil >= 10 franchi) pour que run_pathway_enrichment
+# soit appelé par contraste, pas seulement sur le contraste actif.
+.mbk_ora_env <- function(rec, input_extra = list()) {
+  env <- .mbk_env(rec, dispatch_ok = TRUE, input_extra = input_extra)
+  env$run_bulk_de_dispatch <- function(...) {
+    data.frame(gene = paste0("g", 1:12), log2FoldChange = 2, padj = 0.001,
+               stringsAsFactors = FALSE)
+  }
+  env$run_pathway_enrichment <- function(genes, organism = "human",
+                                         database = "GOBP", pval_cutoff = 0.05,
+                                         universe = NULL, ...) {
+    data.frame(ID = paste0("PW_", database %||% "GOBP"),
+               Description = "pathway t\u00e9moin", p.adjust = 0.01,
+               Count = length(genes), stringsAsFactors = FALSE)
+  }
+  env
+}
+
+test_that("B1-F : pathway ORA multi-contrastes => table agrégée avec colonne contraste (3 paires)", {
+  skip_if_not(exists("MockShinySession", envir = asNamespace("shiny")),
+              "shiny::MockShinySession indisponible")
+
+  steps <- character(0)
+  env <- .mbk_ora_env(function(s) steps <<- c(steps, s),
+                      input_extra = list(ap_run_pathway = TRUE,
+                                         ap_pathway_mode = "ora"))
+  err <- .mbk_run(env)
+
+  pw <- env$shared_rv$pathway_results
+  expect_false(is.null(pw), info = "aucune table pathway stockée")
+  # 3 paires (A/B, A/C, B/C) — l'ancien code ne stockait que le contraste actif.
+  expect_equal(nrow(pw), 3L, info = "une seule ligne = contraste actif seul")
+  expect_true("contraste" %in% colnames(pw), info = "colonne contraste absente")
+  expect_setequal(pw$contraste, c("B_vs_A", "C_vs_A", "C_vs_B"))
+  expect_false(any(grepl("Erreur pipeline:", steps, fixed = TRUE)))
+  expect_true(any(grepl("Pipeline termin", steps, fixed = TRUE)))
+})
+
+test_that("B1-F : les 3 étapes opt-in tournent (témoins) — PCA, ssGSEA Hallmark, rapport", {
+  skip_if_not(exists("MockShinySession", envir = asNamespace("shiny")),
+              "shiny::MockShinySession indisponible")
+
+  steps <- character(0)
+  rec <- function(s) steps <<- c(steps, s)
+  env <- .mbk_env(rec, dispatch_ok = TRUE,
+                  input_extra = list(ap_run_pca = TRUE, ap_run_ssgsea = TRUE,
+                                     ap_run_report = TRUE))
+  env$.tr_fn <- function(gd) function(s, ...) s
+  env$plot_bulk_pca <- function(...) { rec("pca"); "PCA_PLOT" }
+  env$run_signatures <- function(...) {
+    rec("ssgsea")
+    list(ok = TRUE, n_results = 2L,
+         record = list(scores = data.frame(a = 1:2), resource = "hallmark",
+                       method = "ssgsea"))
+  }
+  env$.bulk_signatures_store <- function(...) { rec("store_sig"); invisible(NULL) }
+  env$bulk_render_report_file <- function(...) { rec("report"); "out.html" }
+  env$file.copy <- function(...) { rec("copy_report"); TRUE }
+  env$withProgress <- function(expr, ...) expr
+  env$.find_bulk_report_template <- function() "T.Rmd"
+  err <- .mbk_run(env)
+
+  expect_null(err)
+  # Témoins de traverée des 3 étapes, dans l'ordre PCA -> ssGSEA -> rapport.
+  expect_true("pca" %in% steps, info = "étape PCA opt-in non exécutée")
+  expect_true("ssgsea" %in% steps, info = "étape ssGSEA opt-in non exécutée")
+  expect_true("store_sig" %in% steps, info = "écriture signature_scores absente")
+  expect_true("report" %in% steps, info = "étape rapport opt-in non exécutée")
+  expect_true("copy_report" %in% steps, info = "copie du rapport absent")
+  # Le pipeline reste COMPLET et sans erreur.
+  expect_false(any(grepl("Erreur pipeline:", steps, fixed = TRUE)))
+  expect_true(any(grepl("Pipeline termin", steps, fixed = TRUE)))
+})
+
+test_that("B1-F : une étape optionnelle en échec n'annule JAMAIS le pipeline", {
+  skip_if_not(exists("MockShinySession", envir = asNamespace("shiny")),
+              "shiny::MockShinySession indisponible")
+
+  steps <- character(0)
+  env <- .mbk_env(function(s) steps <<- c(steps, s), dispatch_ok = TRUE,
+                  input_extra = list(ap_run_pca = TRUE, ap_run_ssgsea = TRUE,
+                                     ap_run_report = TRUE))
+  env$.tr_fn <- function(gd) function(s, ...) s
+  env$plot_bulk_pca <- function(...) stop("pca_ko")
+  env$run_signatures <- function(...) stop("ssgsea_ko")
+  env$bulk_render_report_file <- function(...) stop("report_ko")
+  err <- .mbk_run(env)
+
+  # Aucune erreur ne s'échappe : les échecs optionnels sont tryCatch-és.
+  expect_null(err)
+  # Le pipeline reste COMPLET — le tryCatch externe n'a PAS tiré.
+  expect_false(any(grepl("Erreur pipeline:", steps, fixed = TRUE)))
+  expect_true(any(grepl("Pipeline termin", steps, fixed = TRUE)))
+  # ...et chaque échec est journalisé (log_fn) — témoin message par message.
+  expect_true(any(grepl("pca_ko", steps, fixed = TRUE)),
+              info = "échec PCA non journalisé")
+  expect_true(any(grepl("ssgsea_ko", steps, fixed = TRUE)),
+              info = "échec ssGSEA non journalisé")
+  expect_true(any(grepl("report_ko", steps, fixed = TRUE)),
+              info = "échec rapport non journalisé")
+})

@@ -667,7 +667,38 @@ new_entries <- list(
   # --- B1-E (round 5) : libellé de ligne WGCNA + en-tête de colonne de la
   # mini-matrice des contrastes, panneau « Résumé Pipeline Bulk » (mod_bulk.R) ---
   c("WGCNA (power / modules)", "WGCNA (power / modules)"),
-  c("Test\u00e9s", "Tested")
+  c("Test\u00e9s", "Tested"),
+  # --- B1-F (§2.4, round 5) : élargissement du Pipeline Auto — 3 cases opt-in
+  # (PCA / ssGSEA Hallmark / rapport), itération pathway multi-contrastes et
+  # étapes optionnelles journalisées (mod_bulk.R) ---
+  c("PCA en fin de pipeline (projection des \u00e9chantillons sur la matrice VST)",
+    "PCA at the end of the pipeline (project samples onto the VST matrix)"),
+  c("Signatures cellulaires ssGSEA (Hallmark) sur la matrice VST",
+    "Cell signatures ssGSEA (Hallmark) on the VST matrix"),
+  c("G\u00e9n\u00e9rer le rapport HTML automatique",
+    "Generate the automatic HTML report"),
+  c("Le rapport HTML est \u00e9crit dans le dossier temporaire de la session ; le chemin complet est affich\u00e9 dans les notifications et le journal.",
+    "The HTML report is written to the session's temp folder; the full path is shown in notifications and the log."),
+  c("\u2713 {n} pathways enrichis{s}", "\u2713 {n} enriched pathways{s}"),
+  c("\u2713 {n} pathways enrichis sur {m} contrastes{s}",
+    "\u2713 {n} enriched pathways across {m} contrasts{s}"),
+  c("\u26a0\ufe0f Pathway : aucun pathway enrichi sur l'ensemble des contrastes.",
+    "\u26a0\ufe0f Pathway: no enriched pathway across all contrasts."),
+  c("PCA (auto)...", "PCA (auto)..."),
+  c("\u2713 PCA \u2014 {n} \u00e9chantillons projet\u00e9s",
+    "\u2713 PCA \u2014 {n} samples projected"),
+  c("PCA ignor\u00e9e:", "PCA skipped:"),
+  c("Signatures (ssGSEA Hallmark)...", "Signatures (ssGSEA Hallmark)..."),
+  c("Signatures cellulaires ssGSEA (Hallmark, auto)...",
+    "Cell signatures ssGSEA (Hallmark, auto)..."),
+  c("Signatures ignor\u00e9es:", "Signatures skipped:"),
+  c("\u2713 {n} signatures scor\u00e9es (Hallmark)",
+    "\u2713 {n} signatures scored (Hallmark)"),
+  c("Rapport HTML...", "HTML report..."),
+  c("Rapport HTML (auto)...", "HTML report (auto)..."),
+  c("\u2713 Rapport : {f}", "\u2713 Report: {f}"),
+  c("\u2713 Rapport g\u00e9n\u00e9r\u00e9 : {f}", "\u2713 Report generated: {f}"),
+  c("Rapport ignor\u00e9:", "Report skipped:")
 )
 
 fr_existing <- vapply(j$translation, function(x) x$fr %||% "", character(1))

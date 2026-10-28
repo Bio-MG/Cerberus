@@ -10,6 +10,154 @@
 # =============================================================================
 
 
+# =============================================================================
+# B1-F (§2.4, round 5) — UNE SEULE implémentation du rendu du rapport, deux
+# déclencheurs : le bouton « Générer le Rapport » du module (inputs du widget)
+# et l'étape opt-in `ap_run_report` du Pipeline Auto (mod_bulk.R). Le
+# downloadHandler DÉLÈGUE à cette fonction — jamais de duplication.
+#
+# Les liaisons dépendantes de la session/module (.tr, .tr_fn, showNotification,
+# withProgress, localisation du template, file.copy) sont passées en
+# PARAMÈTRES : le harnais test-mod-bulk-report.R évalue le bloc `content` dans
+# un environnement enfant bouchonné et les bouchons restent vus (ils arrivent
+# en arguments), tandis qu'à l'exécution le module passe ses liaisons vivantes.
+# Rend les fichiers temporaires générés (character(0) si rien n'a pu être
+# rendu) — la COPIE vers le fichier final reste à l'appelant.
+# =============================================================================
+bulk_render_report_file <- function(global_data, shared_rv,
+                                    sections = character(0),
+                                    report_format = "html",
+                                    interactive = FALSE,
+                                    title = NULL, subtitle = NULL, notes = NULL,
+                                    pairwise_layout = "grid",
+                                    tr = function(key, ...) key,
+                                    tr_fn = function(gd) function(key, ...) key,
+                                    show_notification = function(msg, ...) invisible(NULL),
+                                    with_progress = function(expr, ...) expr,
+                                    find_template = .find_bulk_report_template,
+                                    file_copy = file.copy) {
+  ac        <- shared_rv$active_contrast
+  de_results <- if (!is.null(ac) && ac %in% names(shared_rv$contrasts))
+                  shared_rv$contrasts[[ac]] else NULL
+  padj_now  <- shared_rv$padj_thresh %||% 0.05
+  lfc_now   <- shared_rv$lfc_thresh  %||% 1
+  all_c     <- shared_rv$contrasts %||% list()
+  all_c_sum <- if (length(all_c) == 0) NULL else
+                 summarize_contrasts_updown(all_c, lfc_now, padj_now, ac)
+
+  template_path <- tryCatch(find_template(), error = function(e) {
+    show_notification(conditionMessage(e), type = "error", duration = 15)
+    NULL
+  })
+  # (l'ancien code faisait req(template_path) dans le content : hors module, la
+  # cancellation silencieuse n'a pas de sens — on rend character(0) et l'appelant
+  # décide ; le downloadHandler déclenchera son garde « Aucun format généré. ».)
+  if (is.null(template_path)) return(character(0))
+  tmp_rmd <- file.path(tempdir(), "bulk_report_template.Rmd")
+  file_copy(template_path, tmp_rmd, overwrite = TRUE)
+
+  # ── Phase 4: resolve ALL report strings for the CURRENT language ────
+  # The Rmd is decoupled from shiny.i18n — it receives a plain named
+  # list, never the Translator. Missing keys fall back to French (the key).
+  local_tr <- tr_fn(global_data)
+  report_keys <- c(
+    "Résumé", "Aucune analyse différentielle disponible au moment de l'export.",
+    "Tous les contrastes calculés", "Seuils appliqués : |Log2FC| > {lfc}, P-adj < {padj}.",
+    "Contraste", "Gènes testés",
+    "Résumé de TOUS les contrastes calculés dans cette session (pas seulement le contraste actif détaillé plus bas).",
+    "Comparaison des gènes significatifs entre contrastes (UpSet)", "Diagramme non disponible :",
+    "PCA — Échantillons", "QC — Corrélation Inter-Échantillons",
+    "Détecte les échantillons mal étiquetés ou les outliers avant interprétation du contraste.",
+    "Volcano Plot & MA-Plot", "Heatmap — Top Gènes Différentiels",
+    "Pas assez de gènes communs pour générer la heatmap.",
+    "Toutes les paires — Volcano & MA-Plot", "grille compacte", "grand format (1 par contraste)",
+    "Package 'patchwork' manquant — grille ignorée.", "Heatmap top gènes — par paire",
+    "Table Complète — Expression Différentielle",
+    "Top 100 gènes (table complète disponible en export CSV depuis l'application)",
+    "Pathway Enrichment", "Multi-méthodes — DESeq2 / edgeR / limma-voom",
+    "Table consensus (top 20 par rang moyen)",
+    "Consensus de rang — table complète disponible en export CSV depuis l'app.",
+    "Aucune comparaison multi-méthodes disponible — cliquez \"Comparer\" avant l'export.",
+    "Rapport généré automatiquement par Cerberus — module Bulk RNA-seq.",
+    "Contraste actif : {c} | Échantillons : {n} | Gènes testés : {g} | Gènes significatifs : {s}",
+    "Petits multiples pour chacun des {n} contrastes calculés — mise en page : {layout}.",
+    "Heatmaps par paire non affichées ({n} contrastes > 6) — changez le contraste actif dans l'onglet Heatmap.",
+    "Comparaison du même contraste avec {n} méthodes : {m}.",
+    # shared plot helpers used by the report
+    "Volcano Plot — Analyse Différentielle", "Log2 Fold Change", "-Log10(P-adj)", "Statut",
+    "MA-Plot", "Log10(Expression Moyenne + 1)", "Heatmap — Gènes Différentiels", "Z-score",
+    "Corrélation Inter-Échantillons (QC)", "PCA — Échantillons Bulk RNA-seq",
+    "Top", "Pathways", "Nombre de gènes", "Dotplot Pathways", "Ratio de gènes", "Nb Gènes"
+  )
+  i18n_strings <- stats::setNames(vapply(report_keys, local_tr, character(1)), report_keys)
+
+  render_params <- list(
+    vst_mat               = shared_rv$vst_mat,
+    metadata              = global_data$bulk_obj$metadata,
+    de_results            = de_results,
+    contrast_name         = ac,
+    all_contrasts_summary = all_c_sum,
+    all_contrasts         = all_c,
+    pathway_results       = shared_rv$pathway_results,
+    pathway_db            = shared_rv$pathway_db %||% "GOBP",
+    sections              = sections,
+    pca_color_by          = if (nzchar(shared_rv$pca_color_by %||% "")) shared_rv$pca_color_by else NULL,
+    pca_palette           = shared_rv$bulk_palette %||% "default",
+    pca_manual_colors     = shared_rv$pca_manual_colors,
+    role_colors           = shared_rv$volcano_role_colors,
+    heatmap_top_n         = shared_rv$heatmap_top_n %||% 30,
+    lfc_thresh            = lfc_now,
+    padj_thresh           = padj_now,
+    # Step-3.5: Multi-méthodes (consensus DESeq2/edgeR/limma) — miroir
+    # écrit par mod_bulk_de.R après un run "🔬 Comparer".
+    multimethod_de        = shared_rv$multimethod_de,
+    multimethod_consensus = shared_rv$multimethod_consensus,
+    # Step-3.5: choix de mise en page pour "Toutes les paires".
+    pairwise_layout       = pairwise_layout,
+    report_title          = if (is.null(title) || nchar(title) == 0) tr("Analyse RNA-seq Bulk") else title,
+    report_subtitle       = if (is.null(subtitle) || nchar(subtitle) == 0) "" else subtitle,
+    report_notes          = if (is.null(notes) || nchar(notes) == 0) "" else notes,
+    i18n_strings          = i18n_strings,          # NEW (Phase 4)
+    report_language       = global_data$language,  # NEW (for date/number formatting if needed)
+    interactive           = isTRUE(interactive) && !identical(report_format, "pdf"),
+    # Mode exploratoire sans réplicat (dispersion imposée) : doit figurer
+    # dans le rapport, sinon des p-values non inférentielles y seraient
+    # présentées comme une DE ordinaire.
+    no_rep_bypass         = shared_rv$de_bypass
+  )
+
+  with_progress(message = tr("G\u00e9n\u00e9ration du rapport..."), value = 0.2, {
+    formats_needed <- switch(report_format,
+      html = "html_document", pdf = "pdf_document",
+      both = c("html_document", "pdf_document"))
+    out_files <- character(0)
+    for (fmt in formats_needed) {
+      incProgress(0.3, detail = paste("Rendu", fmt))
+      # Step-3.5 FIX: tempfile() avec fileext explicite -- l'ancienne
+      # version encodait les secondes fractionnaires (%OS3) DANS le nom
+      # de base, qui contient donc un "." (ex: "..._143022.456").
+      # rmarkdown interprete CE point comme l'extension du fichier et
+      # n'ajoute PAS le vrai ".html"/".pdf" -- inoffensif pour un export
+      # simple (Shiny renomme via downloadHandler$filename), mais casse
+      # le mode "Les deux (.zip)" : les 2 fichiers dans l'archive
+      # n'avaient plus d'extension reconnaissable et n'etaient plus
+      # ouvrables directement une fois decompresses.
+      ext_i    <- if (fmt == "html_document") "html" else "pdf"
+      out_path <- tempfile(pattern = paste0("bulk_report_", ext_i, "_"), fileext = paste0(".", ext_i))
+      res <- tryCatch(
+        rmarkdown::render(input = tmp_rmd, output_format = fmt, output_file = out_path,
+                          params = render_params, envir = new.env(parent = globalenv()), quiet = TRUE),
+        error = function(e) {
+          show_notification(paste0("\u274c ", fmt, ": ", conditionMessage(e)), type = "error", duration = 12)
+          NULL
+        })
+      if (!is.null(res)) out_files <- c(out_files, res)
+    }
+    out_files
+  })
+}
+
+
 mod_bulk_report_ui <- function(id) {
   ns <- NS(id)
   tagList(
@@ -109,125 +257,31 @@ mod_bulk_report_server <- function(id, global_data, shared_rv) {
         paste0("rapport_bulk_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".", ext)
       },
       content = function(file) {
+        # B1-F (§2.4, round 5) : le corps du rendu vit DANS bulk_render_report_file
+        # (haut de fichier) — un seul emplacement, partagé avec l'étape opt-in
+        # ap_run_report du Pipeline Auto. Les liaisons de session/module sont
+        # passées en paramètres (le harnais test-mod-bulk-report.R évalue ce
+        # bloc dans un env enfant bouchonné). Le garde « Aucun format généré. »
+        # et la copie/archive vers `file` restent ICI (contrat de classe
+        # bulk_report_error préservé — test falsifiable).
         req(shared_rv$vst_mat)
-        ac        <- shared_rv$active_contrast
-        de_results <- if (!is.null(ac) && ac %in% names(shared_rv$contrasts))
-                        shared_rv$contrasts[[ac]] else NULL
-        padj_now  <- shared_rv$padj_thresh %||% 0.05
-        lfc_now   <- shared_rv$lfc_thresh  %||% 1
-        all_c     <- shared_rv$contrasts %||% list()
-        all_c_sum <- if (length(all_c) == 0) NULL else
-                       summarize_contrasts_updown(all_c, lfc_now, padj_now, ac)
-
-        template_path <- tryCatch(.find_bulk_report_template(), error = function(e) {
-          showNotification(conditionMessage(e), type = "error", duration = 15)
-          NULL
-        })
-        req(template_path)
-        tmp_rmd <- file.path(tempdir(), "bulk_report_template.Rmd")
-        file.copy(template_path, tmp_rmd, overwrite = TRUE)
-
-        # ── Phase 4: resolve ALL report strings for the CURRENT language ────
-        # The Rmd is decoupled from shiny.i18n — it receives a plain named
-        # list, never the Translator. Missing keys fall back to French (the key).
-        local_tr <- .tr_fn(global_data)
-        report_keys <- c(
-          "Résumé", "Aucune analyse différentielle disponible au moment de l'export.",
-          "Tous les contrastes calculés", "Seuils appliqués : |Log2FC| > {lfc}, P-adj < {padj}.",
-          "Contraste", "Gènes testés",
-          "Résumé de TOUS les contrastes calculés dans cette session (pas seulement le contraste actif détaillé plus bas).",
-          "Comparaison des gènes significatifs entre contrastes (UpSet)", "Diagramme non disponible :",
-          "PCA — Échantillons", "QC — Corrélation Inter-Échantillons",
-          "Détecte les échantillons mal étiquetés ou les outliers avant interprétation du contraste.",
-          "Volcano Plot & MA-Plot", "Heatmap — Top Gènes Différentiels",
-          "Pas assez de gènes communs pour générer la heatmap.",
-          "Toutes les paires — Volcano & MA-Plot", "grille compacte", "grand format (1 par contraste)",
-          "Package 'patchwork' manquant — grille ignorée.", "Heatmap top gènes — par paire",
-          "Table Complète — Expression Différentielle",
-          "Top 100 gènes (table complète disponible en export CSV depuis l'application)",
-          "Pathway Enrichment", "Multi-méthodes — DESeq2 / edgeR / limma-voom",
-          "Table consensus (top 20 par rang moyen)",
-          "Consensus de rang — table complète disponible en export CSV depuis l'app.",
-          "Aucune comparaison multi-méthodes disponible — cliquez \"Comparer\" avant l'export.",
-          "Rapport généré automatiquement par Cerberus — module Bulk RNA-seq.",
-          "Contraste actif : {c} | Échantillons : {n} | Gènes testés : {g} | Gènes significatifs : {s}",
-          "Petits multiples pour chacun des {n} contrastes calculés — mise en page : {layout}.",
-          "Heatmaps par paire non affichées ({n} contrastes > 6) — changez le contraste actif dans l'onglet Heatmap.",
-          "Comparaison du même contraste avec {n} méthodes : {m}.",
-          # shared plot helpers used by the report
-          "Volcano Plot — Analyse Différentielle", "Log2 Fold Change", "-Log10(P-adj)", "Statut",
-          "MA-Plot", "Log10(Expression Moyenne + 1)", "Heatmap — Gènes Différentiels", "Z-score",
-          "Corrélation Inter-Échantillons (QC)", "PCA — Échantillons Bulk RNA-seq",
-          "Top", "Pathways", "Nombre de gènes", "Dotplot Pathways", "Ratio de gènes", "Nb Gènes"
-        )
-        i18n_strings <- stats::setNames(vapply(report_keys, local_tr, character(1)), report_keys)
-
-        render_params <- list(
-          vst_mat               = shared_rv$vst_mat,
-          metadata              = global_data$bulk_obj$metadata,
-          de_results            = de_results,
-          contrast_name         = ac,
-          all_contrasts_summary = all_c_sum,
-          all_contrasts         = all_c,
-          pathway_results       = shared_rv$pathway_results,
-          pathway_db            = shared_rv$pathway_db %||% "GOBP",
-          sections              = input$report_sections %||% character(0),
-          pca_color_by          = if (nzchar(shared_rv$pca_color_by %||% "")) shared_rv$pca_color_by else NULL,
-          pca_palette           = shared_rv$bulk_palette %||% "default",
-          pca_manual_colors     = shared_rv$pca_manual_colors,
-          role_colors           = shared_rv$volcano_role_colors,
-          heatmap_top_n         = shared_rv$heatmap_top_n %||% 30,
-          lfc_thresh            = lfc_now,
-          padj_thresh           = padj_now,
-          # Step-3.5: Multi-méthodes (consensus DESeq2/edgeR/limma) — miroir
-          # écrit par mod_bulk_de.R après un run "🔬 Comparer".
-          multimethod_de        = shared_rv$multimethod_de,
-          multimethod_consensus = shared_rv$multimethod_consensus,
-          # Step-3.5: choix de mise en page pour "Toutes les paires".
-          pairwise_layout       = input$pairwise_layout %||% "grid",
-          report_title          = if (is.null(input$report_title) || nchar(input$report_title) == 0) .tr("Analyse RNA-seq Bulk") else input$report_title,
-          report_subtitle       = if (is.null(input$report_subtitle) || nchar(input$report_subtitle) == 0) "" else input$report_subtitle,
-          report_notes          = if (is.null(input$report_notes) || nchar(input$report_notes) == 0) "" else input$report_notes,
-          i18n_strings          = i18n_strings,          # NEW (Phase 4)
-          report_language       = global_data$language,  # NEW (for date/number formatting if needed)
-          interactive           = isTRUE(input$report_interactive) && input$report_format != "pdf",
-          # Mode exploratoire sans réplicat (dispersion imposée) : doit figurer
-          # dans le rapport, sinon des p-values non inférentielles y seraient
-          # présentées comme une DE ordinaire.
-          no_rep_bypass         = shared_rv$de_bypass
-        )
-
-        withProgress(message = .tr("G\u00e9n\u00e9ration du rapport..."), value = 0.2, {
-          formats_needed <- switch(input$report_format,
-            html = "html_document", pdf = "pdf_document",
-            both = c("html_document", "pdf_document"))
-          out_files <- character(0)
-          for (fmt in formats_needed) {
-            incProgress(0.3, detail = paste("Rendu", fmt))
-            # Step-3.5 FIX: tempfile() avec fileext explicite -- l'ancienne
-            # version encodait les secondes fractionnaires (%OS3) DANS le nom
-            # de base, qui contient donc un "." (ex: "..._143022.456").
-            # rmarkdown interprete CE point comme l'extension du fichier et
-            # n'ajoute PAS le vrai ".html"/".pdf" -- inoffensif pour un export
-            # simple (Shiny renomme via downloadHandler$filename), mais casse
-            # le mode "Les deux (.zip)" : les 2 fichiers dans l'archive
-            # n'avaient plus d'extension reconnaissable et n'etaient plus
-            # ouvrables directement une fois decompresses.
-            ext_i    <- if (fmt == "html_document") "html" else "pdf"
-            out_path <- tempfile(pattern = paste0("bulk_report_", ext_i, "_"), fileext = paste0(".", ext_i))
-            res <- tryCatch(
-              rmarkdown::render(input = tmp_rmd, output_format = fmt, output_file = out_path,
-                                params = render_params, envir = new.env(parent = globalenv()), quiet = TRUE),
-              error = function(e) {
-                showNotification(paste0("\u274c ", fmt, ": ", conditionMessage(e)), type = "error", duration = 12)
-                NULL
-              })
-            if (!is.null(res)) out_files <- c(out_files, res)
-          }
-          if (length(out_files) == 0) stop(errorCondition(.tr("Aucun format g\u00e9n\u00e9r\u00e9."), class = "bulk_report_error"))
-          else if (length(out_files) == 1) file.copy(out_files[1], file, overwrite = TRUE)
-          else zip::zip(file, files = out_files, mode = "cherry-pick")
-        })
+        out_files <- bulk_render_report_file(
+          global_data, shared_rv,
+          sections        = input$report_sections %||% character(0),
+          report_format   = input$report_format,
+          interactive     = isTRUE(input$report_interactive),
+          title           = input$report_title,
+          subtitle        = input$report_subtitle,
+          notes           = input$report_notes,
+          pairwise_layout = input$pairwise_layout %||% "grid",
+          tr              = .tr, tr_fn = .tr_fn,
+          show_notification = showNotification,
+          with_progress   = withProgress,
+          find_template   = .find_bulk_report_template,
+          file_copy       = file.copy)
+        if (length(out_files) == 0) stop(errorCondition(.tr("Aucun format g\u00e9n\u00e9r\u00e9."), class = "bulk_report_error"))
+        else if (length(out_files) == 1) file.copy(out_files[1], file, overwrite = TRUE)
+        else zip::zip(file, files = out_files, mode = "cherry-pick")
       }
     )
 
