@@ -101,3 +101,15 @@ tools/_drive/*.tmp
 # -------------------------------------------------
 /omnipathr-log/
 tests/testthat/tools/
+
+# -------------------------------------------------
+# Docs de travail agents (local only — jamais sur GitHub)
+# Indexés par erreur dans 1e92edf puis désindexés ; restent sur le disque.
+# -------------------------------------------------
+TEST_INFRA.md
+TEST_READY.md
+
+# -------------------------------------------------
+# Données locales (non sources)
+# -------------------------------------------------
+/data_sc/
