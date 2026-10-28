@@ -260,3 +260,106 @@ test_that("B2-D: la synchro bidirectionnelle sticky <-> sidebar existe dans le s
   testthat::expect_identical(.b2d_count_occ("!identical(input$active_contrast_", src), 2L,
                              info = "la garde !identical doit exister dans les deux sens")
 })
+
+# ── B2-A (round 5, 2026-10-28) : épinglage — COUVERT par l'implémentation B3-C ─
+# Dossier round 5 §2.5 : l'onglet Power WGCNA portait 2 plotOutput statiques
+# (wgcna_power_fit / wgcna_power_conn, height=380px) dont les renderPlot
+# req(shared_rv$wgcna_power) laissaient un blanc silencieux tant que l'Étape 3c
+# n'avait pas tourné. L'implémentation B3-C (461a231) a remplacé ces 2
+# plotOutput par l'UI conditionnelle wgcna_power_ui (carte d'état vide
+# réactive) : B2-A est donc couvert — ce test l'ÉPINGLE (commit d'épinglage,
+# pas de doublon d'implémentation).
+#
+# Angle distinct du pin statique B3-C ci-dessus : on ÉVALUE réellement le
+# corps du renderUI (extrait par AST) dans les deux états —
+#   · shared_rv$wgcna_power NULL      → la carte d'état (alert info) est rendue ;
+#   · shared_rv$wgcna_power renseigné → les 2 plotOutput 380px reviennent.
+# Lecture `$.reactivevalues` : shiny exige un consommateur réactif, d'où
+# l'encapsulation isolate() autour de l'appel (sonde mesurée shiny 1.14.0).
+.b2a_eval_power_ui <- function(body_ui, wgcna_power) {
+  e <- new.env(parent = asNamespace("shiny"))   # div, icon, plotOutput, tagList
+  e$global_data <- list(language = function(...) "fr")
+  e$shared_rv <- shiny::reactiveValues(wgcna_power = wgcna_power)
+  e$.tr <- function(key) key
+  e$ns <- function(x) paste0("bw_", x)
+  f <- function() NULL
+  body(f) <- body_ui
+  environment(f) <- e
+  shiny::isolate(f())
+}
+
+test_that("B2-A (épinglage, couvert par B3-C): la carte d'état vide de l'onglet Power WGCNA est réellement rendue", {
+  ast <- ts_ast_parse("modules/bulk/mod_bulk_wgcna.R")
+  # (1) témoin de non-vacuité : le conteneur conditionnel nommé par le dossier
+  #     est bien monté dans l'arbre (sinon la couverture B2-A est perdue)
+  src <- paste(readLines(file.path(ts_project_root(), "modules", "bulk",
+                                   "mod_bulk_wgcna.R"), warn = FALSE), collapse = "\n")
+  testthat::expect_true(grepl('uiOutput(ns("wgcna_power_ui"))', src, fixed = TRUE),
+                        info = "uiOutput(ns(\"wgcna_power_ui\")) absent : la couverture B2-A est perdue")
+  # (2) le corps du renderUI est extrait par AST pour être évalué tel quel
+  body_ui <- NULL
+  for (i in seq_along(ast)) {
+    ts_ast_walk(ast[[i]], function(node) {
+      if (!is.call(node) || !identical(node[[1]], as.name("<-"))) return(FALSE)
+      lhs <- tryCatch(ts_ast_deparse(node[[2]]), error = function(e) "")
+      if (identical(lhs, "output$wgcna_power_ui")) {
+        body_ui <<- tryCatch(node[[3]][[2]], error = function(e) NULL)
+        return(TRUE)
+      }
+      FALSE
+    })
+    if (!is.null(body_ui)) break
+  }
+  testthat::expect_false(is.null(body_ui),
+                         info = "output$wgcna_power_ui <- renderUI(...) introuvable dans mod_bulk_wgcna.R")
+  if (!is.null(body_ui)) {
+    # (3) état VIDE : la carte d'état (alert info) EST la valeur rendue
+    card <- .b2a_eval_power_ui(body_ui, NULL)
+    card_txt <- tryCatch(as.character(card), error = function(e) "")
+    testthat::expect_s3_class(card, "shiny.tag")
+    testthat::expect_true(grepl("alert alert-light", card_txt, fixed = TRUE),
+                          info = "l'état vide ne rend pas la carte alert alert-light")
+    testthat::expect_true(grepl("pour alimenter ces graphiques", card_txt, fixed = TRUE),
+                          info = "la carte d'état ne guide pas vers l'Étape 3c")
+    # (4) état RENSEIGNÉ : les 2 graphiques 380px reviennent dans le rendu
+    plots <- .b2a_eval_power_ui(body_ui, list(chosen = list(power = 6)))
+    plots_txt <- tryCatch(as.character(plots), error = function(e) "")
+    testthat::expect_true(grepl("wgcna_power_fit", plots_txt, fixed = TRUE) &&
+                            grepl("wgcna_power_conn", plots_txt, fixed = TRUE),
+                          info = "l'état renseigné ne rend pas les 2 plotOutput")
+    testthat::expect_true(grepl("380px", plots_txt, fixed = TRUE),
+                          info = "les plotOutput ne portent plus height=380px")
+  }
+  # (5) NON-RÉGRESSION ARBRE : le nav_panel « Power » ne monte QUE l'uiOutput
+  #     conditionnel — les 2 plotOutput statiques ne doivent pas revenir à
+  #     côté (sinon la carte d'état serait doublée d'un blanc permanent).
+  power_panels <- list()
+  for (i in seq_along(ast)) {
+    ts_ast_walk(ast[[i]], function(node) {
+      if (is.call(node) && identical(node[[1]], as.name("nav_panel"))) {
+        title <- tryCatch(ts_ast_deparse(node[[2]]), error = function(e) "")
+        if (identical(title, 'i18n$t("Power")')) {
+          power_panels[[length(power_panels) + 1L]] <<- node
+        }
+      }
+      FALSE
+    })
+  }
+  testthat::expect_identical(length(power_panels), 1L,
+                             info = "nav_panel i18n$t(\"Power\") introuvable ou dupliqué")
+  if (length(power_panels) == 1L) {
+    n_uiout <- 0L; n_plot <- 0L
+    ts_ast_walk(power_panels[[1]], function(node) {
+      if (is.call(node)) {
+        fn <- tryCatch(as.character(node[[1]])[1], error = function(e) "")
+        if (identical(fn, "uiOutput")) n_uiout <<- n_uiout + 1L
+        if (identical(fn, "plotOutput")) n_plot <<- n_plot + 1L
+      }
+      FALSE
+    })
+    testthat::expect_identical(n_uiout, 1L,
+                               info = "l'onglet Power doit montrer exactement 1 uiOutput conditionnel")
+    testthat::expect_identical(n_plot, 0L,
+                               info = "les 2 plotOutput statiques sont revenus dans l'onglet Power (régression B2-A)")
+  }
+})
