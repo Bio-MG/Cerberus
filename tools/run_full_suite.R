@@ -16,7 +16,9 @@ if (!nzchar(.localectl)) {
 files <- sort(list.files("tests/testthat", pattern = "^test-.*\\.R$",
                          full.names = TRUE))
 cat(sprintf("files: %d\n", length(files)))
-results_file <- "full_suite_results.txt"
+# ROOT_HYGIENE item 2 (2026-10-28) : le bilan vit dans QC/ (plus la racine).
+dir.create("QC", showWarnings = FALSE)
+results_file <- "QC/full_suite_results.txt"
 con <- file(results_file, open = "wt")
 writeLines(sprintf("start %s | %d files", format(Sys.time(), "%H:%M:%S"), length(files)), con)
 flush(con)

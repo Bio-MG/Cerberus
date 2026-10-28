@@ -7,7 +7,7 @@
 # Ce qu'il fait : extrait de `docs/STATUS.md` §0 la(les) baseline(s) chiffrée(s)
 # revendiquée(s) — `failed=… passed=… error=… skipped=…` et `N fichiers` — et
 # les compare aux FAITS mesurés quand ils existent :
-#   * `full_suite_results.txt` (BILAN + CENSUS: total) ;
+#   * `QC/full_suite_results.txt` (BILAN + CENSUS: total) ;
 #   * `docs/audits/census.txt` (CENSUS: total).
 # Règles :
 #   * plusieurs baselines dans §0 ⇒ elles doivent être IDENTIQUES entre elles
@@ -24,7 +24,7 @@ if (!nzchar(.localectl)) {
 }
 args <- commandArgs(trailingOnly = TRUE)
 status_path   <- if (length(args) >= 1L) args[1] else "docs/STATUS.md"
-results_path  <- if (length(args) >= 2L) args[2] else "full_suite_results.txt"
+results_path  <- if (length(args) >= 2L) args[2] else "QC/full_suite_results.txt"
 census_path   <- if (length(args) >= 3L) args[3] else "docs/audits/census.txt"
 
 fail <- function(msg) {

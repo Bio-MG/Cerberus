@@ -28,7 +28,7 @@ if (!requireNamespace("shinyjs", quietly = TRUE)) {
     "Cerberus : cette session R a été démarrée en dehors du projet ",
     "(renv du projet inactif — renv/library/ absent de .libPaths()).\n",
     "Corrections possibles :\n",
-    "  1. Ouvrez le projet via 'Cerberus.Rproj' (renv s'active au ",
+    "  1. Ouvrez le projet via 'SHINYAPP test.Rproj' (renv s'active au ",
     "démarrage), puis relancez runApp() ;\n",
     "  2. ou dans la session courante : setwd('",
     getwd(), "') ; source('renv/activate.R') ; runApp().",

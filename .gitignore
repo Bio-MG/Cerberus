@@ -9,7 +9,8 @@
 # -------------------------------------------------
 # RStudio (utilisateur et projet)
 # -------------------------------------------------
-*.Rproj
+# (*.Rproj suivi depuis le 2026-10-28 — ROOT_HYGIENE item 5 : le projet
+# s'appelle « SHINYAPP test.Rproj », il décrit l'environnement, il voyage)
 .Rproj.user/
 
 # -------------------------------------------------
@@ -31,7 +32,10 @@ Thumbs.db
 # -------------------------------------------------
 .gitignore
 .Rproj.user
-Tests/
+# (règle « Tests/ » RETIRÉE le 2026-10-28 — ROOT_HYGIENE item 4 : avec
+# core.ignorecase elle avalait les NOUVEAUX fichiers non suivis de tests/
+# (piège de casse Windows) ; les exclusions volontaires vivent dans leurs
+# propres règles : /Tests save/, QC, /omnipathr-log/, tests/testthat/tools/)
 conversation-export.md
 
 # -------------------------------------------------
