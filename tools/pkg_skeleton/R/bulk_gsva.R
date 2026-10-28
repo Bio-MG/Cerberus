@@ -57,6 +57,9 @@ bulk_gsva_methods <- function() {
 bulk_clean_gene_ids <- function(ids) {
   out <- as.character(ids)
   out <- gsub("\\.[0-9]+$", "", out)
+  # B1-C (O21, 2026-10-28) : les composites ENSG…_SYMBOL qui survivent au
+  # strip de version sont ramenés à l'accession (même règle que le mapping).
+  out <- strip_composite_gene_ids(out)
   out
 }
 

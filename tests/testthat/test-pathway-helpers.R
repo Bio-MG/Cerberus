@@ -396,3 +396,14 @@ test_that("M12: un univers vide avertit ET laisse une trace sur le resultat", {
   expect_true(!is.null(attr(res, "universe_fallback")))
   expect_true(nzchar(attr(res, "universe_fallback")))
 })
+
+# ── B1-C (O21, 2026-10-28) : les deux funnels d'enrichissement strippent ─────
+test_that("B1-C câblage: run_pathway_enrichment et run_gsea_enrichment strippent les composites", {
+  src <- paste(readLines(file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "pathway_helpers.R"), warn = FALSE), collapse = "\n")
+  expect_true(grepl("genes <- strip_composite_gene_ids(genes)", src, fixed = TRUE),
+              info = "funnel ORA : strip des genes")
+  expect_true(grepl("universe <- strip_composite_gene_ids(universe)", src, fixed = TRUE),
+              info = "funnel ORA : strip de l'univers")
+  expect_true(grepl("de_results$gene <- strip_composite_gene_ids(de_results$gene)", src, fixed = TRUE),
+              info = "funnel GSEA : strip de la colonne gene")
+})

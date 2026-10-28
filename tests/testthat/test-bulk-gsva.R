@@ -172,3 +172,10 @@ test_that("plots : PCA ggplot, heatmap ComplexHeatmap ou repli ggplot", {
   r2 <- compute_pathway_scores(.vst_m2(80, 2, seed = 4), .sets_m2(), method = "ssgsea")
   expect_error(plot_pathway_scores_pca(r2), class = "bulk_gsva_error")
 })
+
+# ── B1-C (O21, 2026-10-28) : bulk_clean_gene_ids couvre aussi les composites ─
+test_that("B1-C câblage: bulk_clean_gene_ids passe par strip_composite_gene_ids", {
+  src <- paste(readLines(file.path(ts_project_root(), "tools", "pkg_skeleton", "R", "bulk_gsva.R"), warn = FALSE), collapse = "\n")
+  expect_true(grepl("out <- strip_composite_gene_ids(out)", src, fixed = TRUE))
+  expect_true(is.function(strip_composite_gene_ids))
+})

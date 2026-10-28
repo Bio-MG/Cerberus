@@ -136,6 +136,12 @@ run_pathway_enrichment <- function(genes, organism = "human",
   # appelant programmatique reste libre d'utiliser "none" ou "hommel".
   p_adjust_method <- match.arg(p_adjust_method, stats::p.adjust.methods)
 
+  # B1-C (O21, 2026-10-28) : identifiants composites ENSG…_SYMBOL / ENSG….N
+  # acceptés — même règle que le chemin de mapping, sinon bitr rend un df
+  # vide en silence et l'univers désaligne les gènes (dossier round 5).
+  genes <- strip_composite_gene_ids(genes)
+  if (!is.null(universe)) universe <- strip_composite_gene_ids(universe)
+
   # M12 : le q-filtre était une CONSTANTE CACHÉE (0.2, écrite en dur sur le seul
   # site GOBP) alors que `pvalueCutoff` est exposé. Il devient un argument, validé
   # AVANT tout chargement de paquet : le refus est immédiat et testable sans
@@ -447,6 +453,12 @@ run_gsea_enrichment <- function(de_results, organism = "human",
 
   # STAT-Q1 : cf. run_pathway_enrichment() — même validation, même défaut.
   p_adjust_method <- match.arg(p_adjust_method, stats::p.adjust.methods)
+
+  # B1-C (O21, 2026-10-28) : même strip composite que le funnel ORA — les
+  # composites ENSG…_SYMBOL de la colonne gene écourtaient le rangement GSEA.
+  if (!is.null(de_results) && "gene" %in% names(de_results)) {
+    de_results$gene <- strip_composite_gene_ids(de_results$gene)
+  }
 
 
 

@@ -1348,3 +1348,23 @@ log_msg_is_repeat <- function(last_msg, new_msg) {
   if (is.null(new_msg) || length(new_msg) == 0L || is.na(new_msg[1])) return(FALSE)
   identical(as.character(last_msg)[1], as.character(new_msg)[1])
 }
+
+#' Retire les suffixes composites des identifiants Ensembl (jalon B1-C, O21).
+#'
+#' Le chemin de MAPPING accepte déjà les composites `ENSG…_SYMBOL` et
+#' `ENSG….N` (règle `sub("[_.].*", "", ids_clean)`). Ce helper applique la
+#' MÊME règle aux chemins d'ENRICHISSEMENT, sinon `bitr(fromType = "SYMBOL")`
+#' rend un df vide en silence et l'univers désaligne les gènes. Un token
+#' préfixé ENS portant un suffixe `_<qqch>` ou `.<qqch>` est ramené à son
+#' accession nue ; tout autre token (vrais symboles, Entrez…) passe
+#' INCHANGÉ — jamais d'autre retouche (casse, espaces). Idempotent.
+#'
+#' @param ids Vecteur character d'identifiants.
+#' @return Vecteur character nettoyé (mêmes positions, NA préservés).
+#' @export
+strip_composite_gene_ids <- function(ids) {
+  out <- as.character(ids)
+  ens <- grepl("^ENS", out) & grepl("[._]", out)
+  out[ens] <- sub("[_.].*$", "", out[ens])
+  out
+}

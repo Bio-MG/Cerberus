@@ -492,3 +492,19 @@ test_that("B2-G câblage: add_log de mod_import_bulk consulte log_msg_is_repeat"
   src <- paste(readLines(file.path(ts_project_root(), "modules", "import", "mod_import_bulk.R"), warn = FALSE), collapse = "\n")
   expect_true(grepl("log_msg_is_repeat(.last_log_msg, msg)", src, fixed = TRUE))
 })
+
+# ── B1-C (O21, 2026-10-28) : strip composite sur les chemins d'enrichissement ─
+# Dossier round 5 : le chemin de MAPPING accepte déjà les composites
+# ENSG…_SYMBOL / ENSG….N (io_helpers.R:1178-1180) mais l'enrichissement direct
+# échouait en silence (bitr fromType="SYMBOL" sans strip → df vide ; univers
+# rownames bruts ; bulk_clean_gene_ids ne retirait que \.[0-9]+$).
+test_that("strip_composite_gene_ids: composites ENS ramenés à l'accession, autres inchangés", {
+  expect_identical(strip_composite_gene_ids("ENSG00000141510_TSPAN6"), "ENSG00000141510")
+  expect_identical(strip_composite_gene_ids("ENSG00000141510.17"), "ENSG00000141510")
+  expect_identical(strip_composite_gene_ids("ENSG00000141510"), "ENSG00000141510")
+  expect_identical(strip_composite_gene_ids("TP53"), "TP53")
+  expect_identical(strip_composite_gene_ids("ENSMUSG00000012345_feat_1"), "ENSMUSG00000012345")
+  expect_identical(strip_composite_gene_ids(c("TP53", "ENSG1_X", NA_character_)),
+                   c("TP53", "ENSG1", NA_character_))
+  expect_identical(strip_composite_gene_ids(NULL), character(0))
+})
