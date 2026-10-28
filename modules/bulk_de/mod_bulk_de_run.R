@@ -605,6 +605,37 @@
     }
   })
 
+  # ── B2-D (round 5) : sélecteur persistant — synchro bidirectionnelle ──────
+  # La barre collante des onglets de visualisation (`active_contrast_sticky`,
+  # montée par mod_bulk_de_contrast_bar_ui dans le `header` du navset
+  # « Résultats Bulk RNA-seq ») est un MIROIR du sélecteur de la sidebar
+  # Étape 2 (`active_contrast_view`, SOURCE DE VÉRITÉ — son observeEvent dans
+  # mod_bulk_de_engine.R écrit shared_rv$active_contrast côté état). Deux
+  # observers : chacun met à jour l'AUTRE contrôle via updateSelectInput,
+  # UNIQUEMENT si la valeur diffère de l'état courant — garde
+  # `!identical(..., shiny::isolate(...))` sans laquelle chaque update
+  # re-déclencherait l'observateur voisin en boucle infinie. Les choix portent
+  # sur la même reactive shared_rv$contrasts (contrastes calculés) que la
+  # synchro sidebar du moteur. ZÉRO changement statistique : seuls des
+  # updateSelectInput sont émis — l'aller-retour sidebar disparaît.
+  observeEvent(input$active_contrast_sticky, {
+    sel <- shiny::isolate(input$active_contrast_view)
+    if (!identical(input$active_contrast_sticky, sel)) {
+      updateSelectInput(session, "active_contrast_view",
+                        choices = names(shared_rv$contrasts),
+                        selected = input$active_contrast_sticky)
+    }
+  })
+
+  observeEvent(input$active_contrast_view, {
+    sel <- shiny::isolate(input$active_contrast_sticky)
+    if (!identical(input$active_contrast_view, sel)) {
+      updateSelectInput(session, "active_contrast_sticky",
+                        choices = names(shared_rv$contrasts),
+                        selected = input$active_contrast_view)
+    }
+  })
+
   # =========================================================================
   # CONTRASTE AD-HOC (BingleSeq pattern) — manual Group A/B sample selection
   # =========================================================================

@@ -78,6 +78,11 @@ mod_bulk_ui <- function(id) {
       ),
       navset_card_underline(
         id = ns("main_tabs"), title = i18n$t("R\u00e9sultats Bulk RNA-seq"),
+        # B2-D (round 5) : sélecteur persistant du contraste actif — la barre
+        # sticky se monte EN TÊTE des onglets de visualisation DE (slot header
+        # du navset). Miroir bidirectionnel de `active_contrast_view` (sidebar
+        # Étape 2, source de vérité) — synchro dans mod_bulk_de_run.R.
+        header = mod_bulk_de_contrast_bar_ui(ns("de")),
         nav_panel("PCA",             value = "tab_pca",         mod_bulk_filter_pca_ui(ns("filter"))),
         nav_panel(i18n$t("QC \u00c9chantillons"), value = "tab_qc",  mod_bulk_filter_qc_ui(ns("filter"))),
         nav_panel(i18n$t("QC Batch"), value = "tab_batch_qc", mod_bulk_filter_batch_ui(ns("filter"))),
