@@ -456,9 +456,15 @@ mod_import_bulk_server <- function(id, global_data) {
       )
     }, ignoreInit = TRUE)
 
-    # ── Logger (inchangé) ──────────────────────────────────────────────────
+    # ── Logger (B2-G : garde anti-spam ajoutée, le reste inchangé) ─────────
     logs <- reactiveVal("En attente d'import...")
+    .last_log_msg <- ""
     add_log <- function(msg) {
+      # B2-G (O21, 2026-10-28) : une réactive qui ré-invalide ne rejoue plus
+      # la même ligne horodatée à chaque beat (dossier round 5 : add_log
+      # prepend brut, 0 debounce dans l'arbre).
+      if (log_msg_is_repeat(.last_log_msg, msg)) return(invisible(NULL))
+      .last_log_msg <<- msg
       timestamp <- format(Sys.time(), "%H:%M:%S")
       logs(paste0("[", timestamp, "] ", msg, "\n", isolate(logs())))
     }

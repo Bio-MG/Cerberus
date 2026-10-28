@@ -474,3 +474,21 @@ test_that("format_kpi_number formate compact (M/k) et tient le temoin B2-A", {
   expect_identical(format_kpi_number(8), "8")
   expect_identical(format_kpi_number(1234), "1 234")
 })
+
+# ── B2-G (O21, 2026-10-28) : garde anti-spam des logs d'import ──────────────
+# Dossier round 5 : add_log (mod_import_bulk.R:461-464) rejoue la même ligne
+# horodatée à chaque invalidation de counts_reactive (0 debounce dans l'arbre).
+# Le guard PUR ci-dessous décide du saut ; add_log le consulte (épingle câblage).
+test_that("log_msg_is_repeat: identique consécutif = TRUE, sinon FALSE", {
+  expect_true(log_msg_is_repeat("Aperçu .RData actif", "Aperçu .RData actif"))
+  expect_false(log_msg_is_repeat("Aperçu .RData actif", "Lecture du fichier..."))
+  expect_false(log_msg_is_repeat("", "première ligne"))
+  expect_false(log_msg_is_repeat(NULL, "première ligne"))
+  expect_false(log_msg_is_repeat(character(0), "x"))
+  expect_false(log_msg_is_repeat("a", NULL))
+})
+
+test_that("B2-G câblage: add_log de mod_import_bulk consulte log_msg_is_repeat", {
+  src <- paste(readLines(file.path(ts_project_root(), "modules", "import", "mod_import_bulk.R"), warn = FALSE), collapse = "\n")
+  expect_true(grepl("log_msg_is_repeat(.last_log_msg, msg)", src, fixed = TRUE))
+})

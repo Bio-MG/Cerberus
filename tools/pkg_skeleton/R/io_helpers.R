@@ -1329,3 +1329,22 @@ format_kpi_number <- function(n) {
   else if (n >= 1e4) sprintf("%.1fk", n / 1e3)
   else format(n, big.mark = " ", scientific = FALSE)
 }
+
+#' Garde anti-spam des logs d'interface (jalon B2-G, O21 — 2026-10-28).
+#'
+#' TRUE quand le nouveau message est IDENTIQUE au précédent : l'appelant
+#' (add_log de mod_import_bulk) saute alors l'ajout, et une réactive qui
+#' ré-invalide ne rejoue plus la même ligne horodatée à chaque beat. Un
+#' message différent journalise toujours. PUR : pas d'horloge, pas d'état —
+#' l'appelant possède la mémoire du « message précédent ».
+#'
+#' @param last_msg Message précédent (character(1) ou NULL/vide).
+#' @param new_msg Nouveau message (character(1)).
+#' @return Logical scalar.
+#' @export
+log_msg_is_repeat <- function(last_msg, new_msg) {
+  if (is.null(last_msg) || length(last_msg) == 0L || is.na(last_msg[1]) ||
+      !nzchar(as.character(last_msg)[1])) return(FALSE)
+  if (is.null(new_msg) || length(new_msg) == 0L || is.na(new_msg[1])) return(FALSE)
+  identical(as.character(last_msg)[1], as.character(new_msg)[1])
+}
