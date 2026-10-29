@@ -10,3 +10,7 @@
 renv.lock  text eol=lf
 *.json text eol=lf
 *.sha256 text eol=lf
+
+# Bash scripts must stay LF: a CRLF checkout breaks the shebang/lines under bash
+# (tools/backup_docs.sh is tracked since 683be5e and runs from schtasks + sessions).
+*.sh text eol=lf
