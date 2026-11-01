@@ -418,8 +418,12 @@ test_that("ASR-3 introduces no CSS in www/ and no style injection", {
   www <- file.path(ts_project_root(), "www")
   if (dir.exists(www)) {
     css <- list.files(www, pattern = "css$", recursive = TRUE, ignore.case = TRUE, full.names = FALSE)
-    expect_length(css[grep("asr3|checkpoint|session_ckpt", css, ignore.case = TRUE)], 0L,
-                  info = "un fichier CSS ASR-3 est apparu dans www/ — interdit (règle post-O13)")
+    # Passe de fix (2026-11-01) : expect_length() n'a PAS d'argument info= —
+    # ce garde aurait levé « unused argument » s'il avait déjà tourné (www/
+    # absent du dépôt : jamais évalué, bug latent signalé par la vérification
+    # ASR-4). expect_equal(length(.), 0L, info=) = même verdict + le message.
+    expect_equal(length(css[grep("asr3|checkpoint|session_ckpt", css, ignore.case = TRUE)]), 0L,
+                 info = "un fichier CSS ASR-3 est apparu dans www/ — interdit (règle post-O13)")
   }
 })
 
