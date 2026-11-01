@@ -365,8 +365,14 @@ test_that("the FULL spatial cycle: arm, import, run, export, read", {
   expect_true(rr$structuredContent$status_terminal)
   expect_identical(as.integer(rr$structuredContent$ack_seq), 1L)
 
-  # ── step (b): NO set_inputs surface for spatial — asserted, not invented ──
-  expect_false(any(grepl("^(spatial|import_spatial)", names(e$TS_MCP_INPUT_SCHEMA))))
+  # ── step (b): the spatial set_inputs surface — asserted, not invented ─────
+  # ALIGNEMENT B1-DSTV2 (2026-10-31, ba786cf, O31) : le parent `spatial` est
+  # DEVENU settable (5 widgets `spatial-viz-*` honnêtes, scripts/mcp_server.R
+  # TS_MCP_SET_INPUT_MODULES) ; spatial_pipeline/spatial_qc RESTENT exclus et
+  # import_spatial n'a toujours que son bouton. (Passe de fix frontière
+  # 2026-11-01 : les 3 épingles « NO set_inputs surface » dataient d'avant B1.)
+  expect_false(any(grepl("^spatial_(pipeline|qc)", names(e$TS_MCP_INPUT_SCHEMA))))
+  expect_true(any(grepl("^spatial-viz", names(e$TS_MCP_INPUT_SCHEMA))))
   expect_false("spatial_qc" %in% e$TS_MCP_SET_INPUT_MODULES)
   expect_false("spatial_pipeline" %in% e$TS_MCP_SET_INPUT_MODULES)
   r <- .mcp_sp_e2e_call(e, 5L, "transcripto_drive_set_inputs",
@@ -578,21 +584,30 @@ test_that("refusals: no scenario write on refusal, one read per export, stateles
 # no schema ids, no module enum entry, no allowlisted id, and the watcher
 # refuses independently of the server.
 # =============================================================================
-test_that("step (b): spatial exposes NO set_inputs surface, on both sides", {
+test_that("step (b): the spatial set_inputs surface matches the B1-DSTV2 allowlist", {
   e <- .mcp_sp_e2e_env()
   on.exit(unlink(e$ts_drive_root(), recursive = TRUE, force = TRUE), add = TRUE)
   fx <- .mcp_sp_e2e_session(e, armed = TRUE)
 
-  # the server's value schema names no spatial input; the two spatial RUN
-  # modules are excluded from the M3b module set. `import_spatial` stays in
-  # the enum (its button is bound) but owns NO settable input: the only
-  # allowlisted entry it has is the button itself.
-  expect_false(any(grepl("^(spatial|import_spatial)", names(e$TS_MCP_INPUT_SCHEMA))))
+  # ALIGNEMENT B1-DSTV2 (2026-10-31, ba786cf, O31 ; passe de fix frontière
+  # 2026-11-01 — les épingles « NO set_inputs » dataient d'avant B1) : le
+  # parent `spatial` est settable (5 widgets `spatial-viz-*`, kind
+  # select/numeric) ; les deux modules d'ACTION `spatial_pipeline`/`spatial_qc`
+  # restent exclus du set M3b ; `import_spatial` ne possède toujours que son
+  # bouton (aucune entrée settable).
+  expect_false(any(grepl("^spatial_(pipeline|qc)", names(e$TS_MCP_INPUT_SCHEMA))))
+  expect_true(any(grepl("^spatial-viz", names(e$TS_MCP_INPUT_SCHEMA))))
   expect_false("spatial_qc" %in% e$TS_MCP_SET_INPUT_MODULES)
   expect_false("spatial_pipeline" %in% e$TS_MCP_SET_INPUT_MODULES)
   sp_allow <- e$TS_DRIVE_ALLOWLIST[grepl("^(spatial|import_spatial)",
                                          names(e$TS_DRIVE_ALLOWLIST))]
-  expect_true(all(vapply(sp_allow, function(x) identical(x$kind, "button"),
+  viz <- sp_allow[grepl("^spatial-viz", names(sp_allow))]
+  expect_true(length(viz) >= 5L)
+  expect_true(all(vapply(viz, function(x) x$kind %in% c("select", "numeric"),
+                         logical(1))))
+  imp_allow <- sp_allow[grepl("^import_spatial", names(sp_allow))]
+  expect_true(length(imp_allow) >= 1L)
+  expect_true(all(vapply(imp_allow, function(x) identical(x$kind, "button"),
                          logical(1))))
 
   # the tool's own schema agrees

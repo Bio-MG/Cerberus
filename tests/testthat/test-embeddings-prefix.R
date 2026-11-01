@@ -97,7 +97,11 @@ test_that("les 4 sites mesures sont prefixes en Seurat::", {
   sites <- c(
     "tools/pkg_skeleton/R/sc_export.R"                  = "min(ncol(Seurat::Embeddings(obj,\"pca\")), 50)",
     "tools/pkg_skeleton/R/sc_helpers.R"                 = "nrow(Seurat::Embeddings(obj[[cand]]))",
-    "modules/sc/mod_sc_pipeline.R"      = "t(Seurat::Embeddings(obj,\"pca\")",
+    # Passe de fix frontière (2026-11-01) : le site pipeline a été refactoré
+    # par le jalon DM (23c429c) en `.dm_from_pca(Seurat::Embeddings(obj, "pca"), ...)`
+    # — le préfixe Seurat:: EST présent ; l'épingle de forme `t(Embeddings(...`
+    # (pré-DM) suit la forme actuelle, l'INTENTION (préfixe) est inchangée.
+    "modules/sc/mod_sc_pipeline.R"      = "Seurat::Embeddings(obj, \"pca\")",
     "modules/sc/mod_sc_viz.R"           = "ncol(Seurat::Embeddings(obj, r))"
   )
   for (rel in names(sites)) {

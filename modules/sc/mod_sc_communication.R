@@ -436,6 +436,11 @@ mod_sc_communication_output_ui <- function(id) {
 
 mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
   moduleServer(id, function(input, output, session) {
+    # Passe de fix frontière (2026-11-01) — liaison C15 : le serveur appelle
+    # ns() (notification comm_apply_confirm) ; sans cette liaison, l'erreur
+    # « impossible de trouver la fonction "ns" » ne levait QU'À L'AFFICHAGE
+    # (garde statique test-release-hardening.R C15, héritage round 7).
+    ns <- session$ns
     # ── i18n proxy ──────────────────────────────────────────────────────────
     .tr <- function(key) {
       tr <- isolate(global_data$i18n)

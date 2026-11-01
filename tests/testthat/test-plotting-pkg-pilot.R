@@ -195,9 +195,14 @@ test_that("frontiere : le paquet contient EXACTEMENT 6 plotting + 4 fournisseurs
                           # cerberus_handoff.R quitte R/core (vidé) pour le
                           # paquet (sha256 inchangé, 7 consommateurs
                           # retargetés) ; M4 (2026-10-27, a987f48) : le moteur
-                          # doublets & RNA ambiant sc_qc_doublets.R.
-                          "cerberus_handoff.R", "sc_qc_doublets.R")),
-                   info = "le perimetre du paquet doit etre exactement 6 plotting + 4 fournisseurs R/core + 4 reports + 18 bulk + 11 spatial + 10 core (J1 : +cerberus_handoff) + 2 config + 27 sc (M4 : +sc_qc_doublets)")
+                          # doublets & RNA ambiant sc_qc_doublets.R ;
+                          # ASR-1 (2026-10-31, 6d35ef2, O29) : le moteur des
+                          # checkpoints de session session_checkpoint.R
+                          # (source() app.R posé par la passe câblage
+                          # 2026-11-01, 88f72d1).
+                          "cerberus_handoff.R", "sc_qc_doublets.R",
+                          "session_checkpoint.R")),
+                   info = "le perimetre du paquet doit etre exactement 6 plotting + 4 fournisseurs R/core + 4 reports + 18 bulk + 11 spatial + 10 core (J1 : +cerberus_handoff) + 2 config + 27 sc (M4 : +sc_qc_doublets) + 1 resilience (ASR-1 : +session_checkpoint) = 83")
 })
 
 # ─── M4 suite (2026-10-25) : les 4 autres fichiers du domaine ────────────────

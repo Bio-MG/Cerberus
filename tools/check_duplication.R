@@ -134,8 +134,9 @@ MIN_BLOCK_DEFAULT <- 15L
 }
 
 #' Read a file's lines and return a data.frame(line_no, raw, trimmed, depth)
-#' where `depth` is the brace nesting depth *before* that line is evaluated
-#' (0 = top level, i.e. what actually lands in the sourcing environment).
+#' where `depth` is the brace+paren nesting depth *before* that line is
+#' evaluated (0 = top level, i.e. what actually lands in the sourcing
+#' environment).
 .read_annotated_lines <- function(path) {
   raw <- tryCatch(readLines(path, warn = FALSE, encoding = "UTF-8"),
                   error = function(e) character(0))
@@ -144,8 +145,8 @@ MIN_BLOCK_DEFAULT <- 15L
   for (i in seq_along(raw)) {
     depths[i] <- depth
     clean <- .strip_strings_and_comments(raw[i])
-    opens  <- lengths(regmatches(clean, gregexpr("\\{", clean)))
-    closes <- lengths(regmatches(clean, gregexpr("\\}", clean)))
+    opens  <- lengths(regmatches(clean, gregexpr("\\{|\\(", clean)))
+    closes <- lengths(regmatches(clean, gregexpr("\\}|\\)", clean)))
     # closing braces on THIS line reduce the depth attributed to THIS line
     # itself only if they close before any open earlier on the same line —
     # approximated by just netting per-line (good enough: function-def
@@ -391,6 +392,27 @@ run_check <- function(roots, min_block = MIN_BLOCK_DEFAULT, ext = "R", fail_on_w
 
   cat(sprintf("\n== 4) Blocs de >= %d lignes identiques (meme fichier ou entre fichiers) ==\n", min_block))
   blocks <- find_duplicate_blocks(files, min_block)
+  # Passe de fix frontière (2026-11-01) — exemption CONTRACTUELLE épinglée au
+  # BLOC (première ligne), jamais au fichier : les jumeaux .comm_drawer_groups
+  # de mod_sc_communication.R (copie UI + copie serveur) sont EXIGÉS par le gel
+  # test-communication-contract-freeze.R (« exactement 3 fonctions top-level » —
+  # aucune constante partagée possible) ; l'égalité des copies est verrouillée
+  # par test-mod-sc-communication-ui.R. Tout AUTRE doublon dans ce fichier
+  # reste signalé.
+  .DUP_BLOCK_EXEMPT_MARKERS <- c(".comm_drawer_groups <- list(")
+  if (nrow(blocks) > 0L) {
+    keep <- logical(nrow(blocks))
+    for (i in seq_len(nrow(blocks))) {
+      b <- blocks[i, ]
+      a_lines <- tryCatch(readLines(b$fileA, warn = FALSE, encoding = "UTF-8"),
+                          error = function(e) character(0))
+      lo <- as.integer(b$lineA_start); hi <- as.integer(b$lineA_end)
+      seg <- if (length(a_lines) >= hi && hi >= lo) a_lines[lo:hi] else character(0)
+      keep[i] <- !any(vapply(.DUP_BLOCK_EXEMPT_MARKERS, function(mk)
+        any(grepl(mk, seg, fixed = TRUE)), logical(1)))
+    }
+    blocks <- blocks[keep, , drop = FALSE]
+  }
   if (nrow(blocks) == 0) {
     cat("  OK — aucun bloc duplique detecte.\n")
   } else {
