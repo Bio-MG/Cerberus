@@ -34,11 +34,21 @@
 # Post-V1.0 (mandat utilisateur) : pseudobulk + correlation ajoutes (sections
 # tables pures, meme esprit compilateur). 4F-EXT (2026-09-13, parking V1.x
 # consomme — rapport MD-2 §5.2) : bulk_multi_comparison ajoute.
+# 4F-ext (2026-11-01, UPGRADE_AND_COMPATIBILITY.md §3c — collecteur
+# TRI-DOMAINE) : sections additives "bulk" (etat bulk : conteneur
+# global_data$bulk_datasets — contrat BULK_MULTI, 12 champs gelés — +
+# pattern_result/dose_result SI présents, chacun SANS fusion, listés comme
+# sources distinctes) et "spatial" (etat spatial : global_data$spatial_datasets
+# + résultat de déconvolution retenu shared_rv$deconv_props avec SA
+# PROVENANCE shared_rv$deconv_params). Aucun domaine existant renommé ni
+# réordonné ; AUCUN merge de significations entre domaines (contrat
+# CONSOLIDATED_REPORT_CONTRACT.md §4).
 .report_analysis_domains <- c(
   "markers", "pseudobulk", "correlation", "pathways", "trajectory",
   "velocity", "communication",
   "da_design", "da_milo", "da_sccoda", "da_cross",
-  "bulk_multi_comparison"
+  "bulk_multi_comparison",
+  "bulk", "spatial"
 )
 
 # Domaines "contrat" : resultats canoniques a identite verifiee (empreinte v2)
@@ -485,6 +495,120 @@
     }
     return(out)
   }
+  # ── 4F-ext : domaines "bulk"/"spatial" (UPGRADE §3c — tri-domaine) ─────────
+  # Expositions ADDITIVES (pattern Stage 17 : mod_sc_velocity.R:544-549) :
+  # lecture seule des états passés en arguments, AUCUN recalcul, AUCUNE
+  # écriture, AUCUN merge de significations entre domaines — des sources
+  # DISTINCTES, chacune avec sa traçabilité (contrat
+  # CONSOLIDATED_REPORT_CONTRACT.md §4).
+  if (domain == "bulk") {
+    ds_container <- if (!is.null(global_data)) state_get(global_data, "bulk_datasets") else NULL
+    prov_complete <- TRUE
+    if (is.list(ds_container) && length(ds_container) > 0L) {
+      # Chaque entrée du conteneur est une source DISTINCTE, listée telle
+      # quelle (pipeline capturé = contrat BULK_MULTI : exactement les 12
+      # champs gelés bulk_multi_pipeline_fields()) — traçabilité par
+      # registered_at/updated_at (motif du domaine global auto-daté).
+      out$present <- TRUE
+      out$extras$datasets <- ds_container
+      out$summary <- .report_kv_df(c(
+        n_datasets = length(ds_container),
+        datasets = paste(names(ds_container), collapse = "; "),
+        producteurs = paste(vapply(ds_container, function(e) {
+          as.character(e$producer %||% NA_character_)
+        }, character(1)), collapse = "; "),
+        enregistré_le = paste(vapply(ds_container, function(e) {
+          tryCatch(format(e$registered_at, "%Y-%m-%d %H:%M:%S"),
+                   error = function(e2) { ts_log_swallow("report_collector.rank_value", e2); NA_character_ })
+        }, character(1)), collapse = "; ")
+      ))
+      # Une entrée sans horodatage d'enregistrement n'est pas traçable.
+      if (any(vapply(ds_container, function(e) {
+        is.null(e$registered_at) || is.null(e$updated_at)
+      }, logical(1)))) prov_complete <- FALSE
+    }
+    # Résultats à contrat du domaine bulk — SI présents, comme sources
+    # distinctes à côté du conteneur (jamais fondus dedans).
+    pattern <- if (!is.null(shared_rv)) state_get(shared_rv, "pattern_result") else NULL
+    if (!is.null(pattern) && identical(pattern$type, "bulk_pattern_clusters")) {
+      out$present <- TRUE
+      out$extras$pattern_result <- pattern
+      out$analysis_ids <- unique(c(out$analysis_ids,
+                                   as.character(pattern$analysis_id %||% character(0))))
+      out$summary <- rbind(out$summary, .report_kv_df(c(
+        pattern_statut = as.character(pattern$status %||% NA_character_),
+        pattern_k = tryCatch(as.character(pattern$k), error = function(e) { ts_log_swallow("report_collector.rank_value", e); NA_character_ }),
+        pattern_n_genes = tryCatch(as.character(pattern$summary$n_genes), error = function(e) { ts_log_swallow("report_collector.rank_value", e); NA_character_ })
+      )))
+      if (is.null(pattern$provenance) || is.null(pattern$provenance$analysis_id)) {
+        prov_complete <- FALSE  # motif existant : une source à contrat sans
+      }                         # provenance -> section REFUSÉE (validateur)
+    }
+    dose <- if (!is.null(shared_rv)) state_get(shared_rv, "dose_result") else NULL
+    if (!is.null(dose) && identical(dose$type, "bulk_dose_response")) {
+      out$present <- TRUE
+      out$extras$dose_result <- dose
+      out$analysis_ids <- unique(c(out$analysis_ids,
+                                   as.character(dose$analysis_id %||% character(0))))
+      out$summary <- rbind(out$summary, .report_kv_df(c(
+        dose_statut = as.character(dose$status %||% NA_character_),
+        dose_modele = as.character(dose$model %||% NA_character_),
+        dose_n_genes = tryCatch(as.character(dose$summary$n_genes_used), error = function(e) { ts_log_swallow("report_collector.rank_value", e); NA_character_ })
+      )))
+      if (is.null(dose$provenance) || is.null(dose$provenance$analysis_id)) {
+        prov_complete <- FALSE
+      }
+    }
+    out$provenance_complete <- prov_complete
+    return(out)
+  }
+  if (domain == "spatial") {
+    sp_container <- if (!is.null(global_data)) state_get(global_data, "spatial_datasets") else NULL
+    params <- if (!is.null(shared_rv)) state_get(shared_rv, "deconv_params") else NULL
+    props <- if (!is.null(shared_rv)) state_get(shared_rv, "deconv_props") else NULL
+    has_ds <- is.list(sp_container) && length(sp_container) > 0L
+    has_props <- is.data.frame(props) && nrow(props) > 0L
+    if (has_ds || has_props) {
+      out$present <- TRUE
+      if (has_ds) {
+        out$extras$datasets <- sp_container
+        out$summary <- .report_kv_df(c(
+          n_datasets = length(sp_container),
+          datasets = paste(names(sp_container), collapse = "; "),
+          technologies = paste(vapply(sp_container, function(e) {
+            as.character(e$technology %||% NA_character_)
+          }, character(1)), collapse = "; ")
+        ))
+      }
+      if (has_props) {
+        # Résultat de déconvolution retenu (mod_spatial_deconv.R:199) — copie
+        # fidèle, SA PROVENANCE = deconv_params (mod_spatial_deconv.R:169).
+        out$extras$deconv_props <- props
+        out$has_deconv <- TRUE
+        if (!is.null(params)) {
+          out$provenance_available <- TRUE
+          out$identity_note <- paste(
+            "Résultat de déconvolution retenu, tracé par deconv_params (mode,",
+            "source de référence, paramètres) — lecture additive, aucun recalcul.")
+          out$summary <- rbind(out$summary, .report_kv_df(c(
+            mode_deconv = as.character(params$mode %||% NA_character_),
+            ref_deconv = as.character(params$ref_source_label %||% NA_character_)
+          )))
+        } else {
+          out$provenance_available <- FALSE
+          out$identity_note <- paste(
+            "Résultat de déconvolution SANS deconv_params — provenance absente,",
+            "section refusée (aucune reconstruction, règle 7).")
+        }
+      } else {
+        out$identity_note <- paste(
+          "Aucun résultat de déconvolution retenu (deconv_props absent) —",
+          "état spatial descriptif uniquement, rien n'est fabriqué.")
+      }
+      out$deconv_traced <- !has_props || !is.null(params)
+    }
+    return(out)
+  }
   out
 }
 
@@ -498,20 +622,37 @@
 #' @param options Liste nommee : \code{title}, \code{subtitle}, \code{notes},
 #'   \code{language} ("fr"/"en"), \code{include_tables} (logical).
 #' @param global_data Etat global applicatif (ou NULL — defaut) : lu pour les
-#'   domaines "global" uniquement (4F-EXT : bulk_multi_comparison), jamais
-#'   ecrit. NULL = comportement d'origine strictement conserve.
+#'   domaines "global" (4F-EXT : bulk_multi_comparison) et 4F-ext (bulk :
+#'   bulk_datasets ; spatial : spatial_datasets), jamais ecrit. NULL =
+#'   comportement d'origine strictement conserve.
 #' @return Liste canonique \code{type = "consolidated_report_input"} (champs
 #'   figes, voir docs/contracts/CONSOLIDATED_REPORT_CONTRACT.md).
-#' @errors \code{report_error} (\code{invalid_input}) si \code{sc_obj} est
-#'   absent — le rapport compile un projet EXISTANT, il n'en fabrique pas.
+#' @errors \code{report_error} (\code{invalid_input}) si AUCUN domaine
+#'   porteur (4F-ext : objet SC absent ET conteneur bulk_datasets vide/absent
+#'   ET etat spatial vide/absent) — le rapport compile un projet EXISTANT, il
+#'   n'en fabrique pas. Objet SC absent mais un etat bulk/spatial porteur :
+#'   rapport bulk-seul/spatial-seul — les sections SC restent ABSENTES,
+#'   JAMAIS fabriquées.
 collect_consolidated_report_input <- function(sc_obj, shared_rv = NULL,
                                               options = list(),
                                               global_data = NULL) {
-  if (is.null(sc_obj) || is.null(tryCatch(dim(sc_obj), error = function(e) { ts_log_swallow("report_collector.collect_consolidated_report_input", e); NULL }))) {
+  # ── Garde TRI-DOMAINE (4F-ext — remplace l'ancien refus sc-only :510) ──────
+  # Le rapport part tant qu'AU MOINS UN domaine porte l'état ; un rapport peut
+  # être sc-seul, bulk-seul, spatial-seul ou mixte.
+  sc_ok <- !is.null(sc_obj) && !is.null(tryCatch(dim(sc_obj), error = function(e) { ts_log_swallow("report_collector.collect_consolidated_report_input", e); NULL }))
+  bulk_state <- if (!is.null(global_data)) state_get(global_data, "bulk_datasets") else NULL
+  spatial_state <- if (!is.null(global_data)) state_get(global_data, "spatial_datasets") else NULL
+  deconv_props_state <- if (!is.null(shared_rv)) state_get(shared_rv, "deconv_props") else NULL
+  carry_bulk <- is.list(bulk_state) && length(bulk_state) > 0L
+  carry_spatial <- (is.list(spatial_state) && length(spatial_state) > 0L) ||
+    (is.data.frame(deconv_props_state) && nrow(deconv_props_state) > 0L)
+  if (!sc_ok && !carry_bulk && !carry_spatial) {
     .rep_stop(paste0(
-      "collect_consolidated_report_input() : aucun objet Single-Cell charge — ",
-      "le rapport consolide compile un projet existant, il ne fabrique pas de ",
-      "contenu. Importez et traitez un objet SC d'abord."
+      "collect_consolidated_report_input() : aucun domaine porteur — aucun ",
+      "objet Single-Cell chargé, aucun état bulk ni spatial. Le rapport ",
+      "consolidé compile un projet existant, il ne fabrique pas de contenu. ",
+      "Importez et traitez un objet SC d'abord (ou enregistrez un état ",
+      "bulk/spatial)."
     ))
   }
   opts <- list(
@@ -523,7 +664,11 @@ collect_consolidated_report_input <- function(sc_obj, shared_rv = NULL,
   )
   warns <- character(0)
 
-  # ── Jeu de donnees ──────────────────────────────────────────────────────────
+  # ── Jeu de donnees (SC) ─────────────────────────────────────────────────────
+  # 4F-ext : sans objet SC (rapport bulk-seul/spatial-seul), les sections SC
+  # restent ABSENTES/NULL — JAMAIS fabriquées (honnêteté : la garde ci-dessus
+  # a déjà établi qu'AU MOINS UN autre domaine porte l'état).
+  if (sc_ok) {
   is_seurat <- inherits(sc_obj, "Seurat")
   meta <- tryCatch(sc_obj@meta.data, error = function(e) { ts_log_swallow("report_collector.collect_consolidated_report_input", e); NULL })
   ds_idents <- tryCatch({
@@ -548,8 +693,18 @@ collect_consolidated_report_input <- function(sc_obj, shared_rv = NULL,
     backend = tryCatch(as.character(sc_backend_status(sc_obj)), error = function(e) "inconnu"),
     fingerprint = fingerprint
   )
+  } else {
+    dataset <- list(
+      n_cells = NA_integer_, n_genes = NA_integer_, is_seurat = FALSE,
+      assays = character(0), default_assay = NA_character_,
+      reductions = character(0), identities = NULL,
+      metadata_columns = character(0), backend = "sans objet (SC absent)",
+      fingerprint = NULL
+    )
+  }
 
   # ── Pipeline (snapshot deja produit — aucune relance) ─────────────────────
+  if (sc_ok) {
   qc_snapshot <- state_get(shared_rv, "qc_snapshot")
   vfeatures <- tryCatch(length(SeuratObject::VariableFeatures(sc_obj)),
                         error = function(e) { ts_log_swallow("report_collector.collect_consolidated_report_input", e); NA_integer_ })
@@ -570,6 +725,10 @@ collect_consolidated_report_input <- function(sc_obj, shared_rv = NULL,
       plafond_marqueurs_corr = state_get(shared_rv, "max_cells_heavy") %||% NA
     ))
   )
+  } else {
+    pipeline <- list(qc_present = FALSE, qc_snapshot = NULL,
+                     summary = .report_kv_df(NULL))
+  }
 
   # ── Analyses (resumes descriptifs par domaine fige) ────────────────────────
   analyses <- setNames(lapply(.report_analysis_domains, function(dm) {
@@ -592,9 +751,15 @@ collect_consolidated_report_input <- function(sc_obj, shared_rv = NULL,
   provenance_df <- provenance_to_dataframe(shared_rv)
 
   # ── Script R reproductible (capture a la collection — bundle) ─────────────
-  r_script_text <- tryCatch(sc_r_script_text(sc_obj, shared_rv), error = function(e) { ts_log_swallow("report_collector.collect_consolidated_report_input", e); NULL })
-  if (is.null(r_script_text)) {
-    warns <- c(warns, "Script R reproductible indisponible pour cet objet (il ne figurera pas dans le bundle).")
+  # 4F-ext : sans objet SC, aucun script SC à capturer (NULL honnête, sans
+  # avertissement — il ne peut pas exister).
+  if (sc_ok) {
+    r_script_text <- tryCatch(sc_r_script_text(sc_obj, shared_rv), error = function(e) { ts_log_swallow("report_collector.collect_consolidated_report_input", e); NULL })
+    if (is.null(r_script_text)) {
+      warns <- c(warns, "Script R reproductible indisponible pour cet objet (il ne figurera pas dans le bundle).")
+    }
+  } else {
+    r_script_text <- NULL
   }
 
   # ── Session info ────────────────────────────────────────────────────────────

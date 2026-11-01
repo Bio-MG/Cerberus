@@ -90,11 +90,15 @@ test_that("the four report files define exactly their frozen symbols", {
 })
 
 test_that("the frozen domain list and validation states are stable", {
+  # 4F-ext (UPGRADE §3c, contrat §4) : sections additives "bulk"/"spatial" en
+  # FIN de liste (collecteur tri-domaine) — domaines historiques inchangés et
+  # non réordonnés ; 7 états de validation inchangés.
+  expect_identical(tail(consolidated_report_analyses(), 2L), c("bulk", "spatial"))
   expect_setequal(consolidated_report_analyses(), c(
     "markers", "pseudobulk", "correlation", "pathways", "trajectory",
     "velocity", "communication",
     "da_design", "da_milo", "da_sccoda", "da_cross",
-    "bulk_multi_comparison"))
+    "bulk_multi_comparison", "bulk", "spatial"))
   expect_setequal(consolidated_report_validation_states(), c(
     "absent", "valid", "valid_legacy", "stale", "invalid", "unknown",
     "blocked"))
@@ -266,7 +270,7 @@ test_that("the contract document stays in sync with the frozen surface", {
   # 4F-EXT : domaine global documenté (code <-> doc simultanés).
   expect_match(doc, "bulk_multi_comparison", fixed = TRUE)
   expect_match(doc, "global_data$bulk_multi_comparison", fixed = TRUE)
-  expect_match(doc, "12 domaines figés", fixed = TRUE)
+  expect_match(doc, "14 domaines figés", fixed = TRUE)
   expect_match(doc, "communication_collection", fixed = TRUE)
   expect_match(doc, "active_communication_sample", fixed = TRUE)
   expect_match(doc, "communication_sample_manifest.csv", fixed = TRUE)

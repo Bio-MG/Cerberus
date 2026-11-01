@@ -254,7 +254,8 @@ test_that("empty project renders every section as gracefully absent", {
   expect_true(val$ok_overall)
   expect_identical(nrow(val$counts), 1L)
   expect_identical(val$counts$etat, "absent")
-  expect_identical(val$counts$n_sections, 12L)
+  # 4F-ext : 12 domaines historiques + 2 sections additives (bulk, spatial).
+  expect_identical(val$counts$n_sections, 14L)
 
   html_path <- file.path(tempdir(), "rep_empty.html")
   write_consolidated_report_html(ri, val, html_path)

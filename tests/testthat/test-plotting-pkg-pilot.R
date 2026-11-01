@@ -413,7 +413,8 @@ test_that("M5 lot 2 : chaine validator -> render -> bundle resolu DANS le namesp
   )
   validation <- get("validate_consolidated_report_input", envir = ns)(ri)
   expect_true(validation$ok_overall)
-  expect_identical(validation$counts$n_sections, 12L)
+  # 4F-ext : 12 domaines historiques + 2 sections additives (bulk, spatial).
+  expect_identical(validation$counts$n_sections, 14L)
   # Rendu depuis le namespace : les tables plafonnées par .ts_report_const().
   html_path <- tempfile(fileext = ".html")
   on.exit(unlink(html_path), add = TRUE)

@@ -57,7 +57,9 @@
   da_milo       = "Abondance différentielle — Milo (voisinages)",
   da_sccoda     = "Abondance différentielle — scCODA (composition)",
   da_cross      = "Vues croisées Milo × scCODA",
-  bulk_multi_comparison = "Comparaison multi-jeux Bulk (DEGs)"
+  bulk_multi_comparison = "Comparaison multi-jeux Bulk (DEGs)",
+  bulk          = "État Bulk (DE multi-jeux, profils, dose-réponse)",
+  spatial       = "État Spatial (datasets & déconvolution)"
 )
 
 .report_banner_colors <- c(

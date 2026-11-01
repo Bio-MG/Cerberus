@@ -98,6 +98,39 @@ validate_consolidated_report_input <- function(report_input) {
             reason <- unname(.report_state_labels[["unknown"]])
           }
         }
+      } else if (dm == "bulk") {
+        # 4F-ext (UPGRADE §3c) : état bulk — sources DISTINCTES tracées par
+        # l'horodatage d'enregistrement (motif du domaine global auto-daté)
+        # et, pour les résultats à contrat (pattern/dose), par leur
+        # provenance. Une source à contrat présente SANS provenance ->
+        # section REFUSÉE (motif règle 7, aucune reconstruction).
+        if (!isTRUE(entry$provenance_complete)) {
+          state <- "blocked"
+          reason <- unname(.report_state_labels[["blocked"]])
+        } else {
+          state <- "valid_legacy"
+          reason <- paste("État bulk présent — sources distinctes tracées",
+                          "(horodatage d'enregistrement + provenance des",
+                          "résultats à contrat), compilées sans re-analyse.")
+        }
+      } else if (dm == "spatial") {
+        # 4F-ext (UPGRADE §3c) : état spatial — datasets importés descriptifs,
+        # résultat de déconvolution retenu TRACÉ par deconv_params. Résultat
+        # présent sans sa provenance -> REFUS ; sans résultat de déconvolution
+        # -> état descriptif honnête (rien n'est fabriqué).
+        if (isFALSE(entry$deconv_traced)) {
+          state <- "blocked"
+          reason <- paste("Section refusée : résultat de déconvolution sans",
+                          "deconv_params (provenance absente) — aucune",
+                          "reconstruction.")
+        } else if (isTRUE(entry$has_deconv)) {
+          state <- "valid"
+          reason <- unname(.report_state_labels[["valid"]])
+        } else {
+          state <- "valid_legacy"
+          reason <- paste("État spatial présent (datasets importés) — aucun",
+                          "résultat de déconvolution retenu.")
+        }
       } else if (dm %in% .report_global_domains) {
         # 4F-EXT : résultat global auto-daté (global_data) — même état
         # valid_legacy (jamais bloqué), libellé dédié (la traçabilité
