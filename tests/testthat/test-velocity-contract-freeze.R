@@ -139,11 +139,19 @@ test_that("public API surface of sc_velocity.R is frozen", {
 })
 
 test_that("velocity module defines exactly its three orchestration functions", {
-  expect_setequal(
-    .top_level_names("modules/sc/mod_sc_velocity.R"),
-    c("mod_sc_velocity_ui", "mod_sc_velocity_output_ui",
-      "mod_sc_velocity_server")
-  )
+  # Passe de fix frontière (2026-11-01) : le jalon O28 « 10. Populate gene
+  # selector — 2D » a ajouté le helper PRIVÉ .velocity_phase_default_gene
+  # (fonction pure, testable headless — test-mod-sc-velocity.R) au niveau
+  # top-level du module. Le pin suit le split public/interne du test moteur
+  # ci-dessus (précédent communication-contract-freeze) : les 3 fonctions
+  # d'orchestration PUBLIQUES restent l'épingle ; les helpers préfixés d'un
+  # point sont internes, jamais publics.
+  defined <- .top_level_names("modules/sc/mod_sc_velocity.R")
+  internal <- grep("^\\.", defined, value = TRUE)
+  public <- setdiff(defined, internal)
+  expect_setequal(public, c("mod_sc_velocity_ui", "mod_sc_velocity_output_ui",
+                            "mod_sc_velocity_server"))
+  expect_true(".velocity_phase_default_gene" %in% internal)
   # Le module consomme les accesseurs documentes (contrat Stage 8/9) —
   # aucune reimplementation locale de logique velocity.
   src <- paste(readLines(file.path(ts_project_root(),

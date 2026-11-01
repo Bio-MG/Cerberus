@@ -174,18 +174,6 @@ mod_sc_velocity_output_ui <- function(id) {
 #      variance calculée par blocs de lignes pour borner la mémoire) ;
 #   4. fallback : gene_choices[1] (comportement d'antan).
 # Fonction pure, testable headless (test-mod-sc-velocity.R).
-
-mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
-  moduleServer(id, function(input, output, session) {
-    # ── i18n proxy ──────────────────────────────────────────────────────────
-    .tr <- function(key) {
-      tr <- isolate(global_data$i18n)
-      if (is.null(tr)) return(key)
-      tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
-    }
-    # ASR-frontière fix (2026-11-01) : helper NESTÉ dans le serveur — le gel
-    # test-velocity-contract-freeze.R épingle le module à EXACTEMENT ses 3
-    # fonctions d'orchestration top-level ; usage unique (:739->716) inchangé.
 .velocity_phase_default_gene <- function(gene_choices,
                                          markers_df = NULL,
                                          var_features = NULL,
@@ -233,6 +221,14 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
   gene_choices[1]
 }
 
+mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
+  moduleServer(id, function(input, output, session) {
+    # ── i18n proxy ──────────────────────────────────────────────────────────
+    .tr <- function(key) {
+      tr <- isolate(global_data$i18n)
+      if (is.null(tr)) return(key)
+      tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+    }
 
     # ── helpers contrat Stage 8 ────────────────────────────────────────────
     # Libelle francais d'un etat de validite (fallback = code d'etat).
