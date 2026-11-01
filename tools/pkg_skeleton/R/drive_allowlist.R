@@ -149,6 +149,17 @@ TS_DRIVE_SPATIAL_QC_SUB_TAB      <- "hotspots"
 # tabular form without a second builder — none of the three is a human
 # download today, and a route without a human download would be a second
 # builder by another name.
+#
+# B2 DSTV — DÉSIGNATION (arbitrage opérateur 2026-11-02, option B) : les trois
+# résultats spatiaux proportions-RCTD / clusters / niches n'ont AUCUN
+# downloadHandler dédié (mesuré 2026-10-31 : mod_spatial_export.R n'a que
+# dl_bundle/dl_script, mod_spatial_report.R que dl_report) ⇒ AUCUNE route
+# d'export ne les couvre, VOLONTAIREMENT : leur satisfaction « human download »
+# est DÉSIGNÉE être les téléchargements existants dl_bundle (zip, contient les
+# tables) et dl_report. Si une route ciblée pour ces résultats est un jour
+# voulue (option A), un downloadHandler humain dédié devra atterrir D'ABORD —
+# la règle ci-dessus ne se négocie pas. Précédent : DECISIONS 2026-10-31
+# (best-judgment), clôture 2026-11-02.
 TS_DRIVE_EXPORT_ROUTES <- list(
   spatial_qc      = "spatial_qc_hotspot_csv",
   bulk_de         = "bulk_de_results_csv",
