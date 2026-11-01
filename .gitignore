@@ -117,3 +117,6 @@ TEST_READY.md
 # Données locales (non sources)
 # -------------------------------------------------
 /data_sc/
+
+# Debris de tests (regenere par test-sc-communication-liana-engine.R) — passe 2026-11-01
+tests/testthat/omnipathr-log/
