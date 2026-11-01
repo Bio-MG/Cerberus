@@ -169,12 +169,18 @@ test_that("M2 semantics: 159 explicit sources, zero hidden sourcing loop", {
   # drive_watcher.R — la voie ON du module était inerte au runtime sans ce
   # source() ; gap préexistant ASR-1..3, signalé par la vérification
   # indépendante de la passe points de pose ; arbitrage T7 coordonnateur).
+  # M2 BIOSTAT O27 (2026-11-01) : re-basage 161 -> 162 (+1 moteur
+  # tools/pkg_skeleton/R/biostat_tree.R, bloc 02 après thresholds.R — logique
+  # pure de l'arbre de décision biostatistique, feuilles = ORIENTATIONS ;
+  # contrat docs/contracts/BIOSTAT_DECISION_CONTRACT.md §8 row M2 ;
+  # freeze test test-biostat-tree.R, RED mesuré avant implémentation).
   expect_identical(
-    length(.app_explicit(.app_src)), 161L,
-    info = paste("app.R doit porter exactement 161 source() explicites",
+    length(.app_explicit(.app_src)), 162L,
+    info = paste("app.R doit porter exactement 162 source() explicites",
                  "(M2 : 145 + 10 bulk_de deplies, + 3 export drive M3,",
                  "+ 1 moteur sc_qc_doublets M4, + 1 module session ASR-3 O29,",
-                 "+ 1 moteur session_checkpoint ASR câblage O29)",
+                 "+ 1 moteur session_checkpoint ASR câblage O29,",
+                 "+ 1 moteur biostat_tree M2 BIOSTAT O27)",
                  "-- le compte observe differe")
   )
   # et plus AUCUNE boucle list.files() de sourcing : M2 a deplie la derniere,

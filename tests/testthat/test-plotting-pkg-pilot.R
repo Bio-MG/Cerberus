@@ -70,6 +70,17 @@ test_that("sous-processus qui ne charge QUE le paquet (renv auto-actif)", {
                    if (.Platform$OS.type == "windows") "Rscript.exe" else "Rscript")
   skip_if(!file.exists(rex), "binaire Rscript introuvable")
   code <- c(
+    # M2 BIOSTAT (2026-11-02) : locale UTF-8 AVANT tout parse() — meme mesure
+    # que l'en-tete de tools/run_tests.R:9-12. L'env Git Bash exporte
+    # LC_CTYPE=C.UTF-8, nom que R Windows ne reconnait pas -> repli "C" -> le
+    # parse des sources UTF-8 du paquet echoue des qu'un IDENTIFIANT non-ASCII
+    # existe : MESURE, report_collector.R:520 `enregistre_le` (introduit par
+    # 4F-ext 126fca9 du 2026-11-01, POSTERIEUR a la baseline v1.1.0 55f8b76 —
+    # latence: le bloc sous-processus n'avait jamais re-parse ce fichier sous
+    # "C") : « unexpected '>' » sur load_all. Sys.setlocale() reussit dans le
+    # fils (mesure : SETLOCALE TRUE, PROBE LOADED) — le sous-processus mesure
+    # de nouveau CE QU'IL MESURAIT (anti-double-definition), pas la locale.
+    "Sys.setlocale('LC_CTYPE', 'fr_FR.UTF-8')",
     "pkgload::load_all(file.path('tools', 'pkg_skeleton'), quiet = TRUE)",
     "ns <- asNamespace('TranscriptoShiny')",
     "cat(paste0('PPP:',",
@@ -200,9 +211,15 @@ test_that("frontiere : le paquet contient EXACTEMENT 6 plotting + 4 fournisseurs
                           # checkpoints de session session_checkpoint.R
                           # (source() app.R posé par la passe câblage
                           # 2026-11-01, 88f72d1).
+                          # M2 BIOSTAT (2026-11-01, O27) : le moteur de l'arbre
+                          # de décision biostatistique biostat_tree.R — logique
+                          # pure, feuilles = ORIENTATIONS ; contrat
+                          # BIOSTAT_DECISION_CONTRACT.md §8 row M2 ; source()
+                          # app.R bloc 02 après thresholds.R ; freeze test
+                          # test-biostat-tree.R (RED mesuré avant code).
                           "cerberus_handoff.R", "sc_qc_doublets.R",
-                          "session_checkpoint.R")),
-                   info = "le perimetre du paquet doit etre exactement 6 plotting + 4 fournisseurs R/core + 4 reports + 18 bulk + 11 spatial + 10 core (J1 : +cerberus_handoff) + 2 config + 27 sc (M4 : +sc_qc_doublets) + 1 resilience (ASR-1 : +session_checkpoint) = 83")
+                          "session_checkpoint.R", "biostat_tree.R")),
+                   info = "le perimetre du paquet doit etre exactement 6 plotting + 4 fournisseurs R/core + 4 reports + 18 bulk + 11 spatial + 10 core (J1 : +cerberus_handoff) + 2 config + 27 sc (M4 : +sc_qc_doublets) + 1 resilience (ASR-1 : +session_checkpoint) + 1 biostat M2 (O27 : +biostat_tree) = 84")
 })
 
 # ─── M4 suite (2026-10-25) : les 4 autres fichiers du domaine ────────────────

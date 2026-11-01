@@ -55,6 +55,13 @@ source("global.R")
 # chemins). Le répertoire config/ est vide : l'endgame TS_* est atteint.
 source("tools/pkg_skeleton/R/defaults.R")
 source("tools/pkg_skeleton/R/thresholds.R")
+# M2 BIOSTAT (O27 2026-11-01) : moteur de l'arbre de décision biostatistique —
+# LOGIQUE PURE (aucun appel Shiny ; feuilles = ORIENTATIONS, jamais un
+# lancement de test ; contrat docs/contracts/BIOSTAT_DECISION_CONTRACT.md §8
+# row M2 ; freeze test tests/testthat/test-biostat-tree.R). Position figée :
+# après thresholds.R, bloc 02 — le manifeste R/.sources_manifest.txt suit
+# (régénéré par tools/sources_manifest.R --build, jamais à la main).
+source("tools/pkg_skeleton/R/biostat_tree.R")
 
 # ── Bloc 03 : R/core (infrastructure transverse) ─────────────────────────────
 # Contrat d'etat transversal source EN PREMIER (TREE CERBERUS step 3 :
