@@ -27,9 +27,12 @@
 #
 # I1 — conseiller, jamais sélectionner : ce module N'ÉCRIT JAMAIS vers
 # input$de_engine ni aucun champ du run Bulk (le run reste lancé par
-# l'utilisateur sur le chemin existant). Le `engine` du record est un argument
-# injectable (défaut "") — le câblage lecture seule vers la déclaration du
-# panneau Étape 2 est M4.
+# l'utilisateur sur le chemin existant). Le `engine` effectif d'une feuille
+# bulk_* est la DÉCLARATION de l'utilisateur lue EN LECTURE SEULE de
+# shared_rv$declared_de_engine au moment du clic (couture 1 ligne posée dans
+# l'observe des miroirs de mod_bulk_de_engine.R — jalon M4), avec repli sur
+# l'argument injectable (défaut "") si la déclaration est absente/vide ; pour
+# toute feuille non bulk_*, chaîne vide (contrat §2 — le record M2 normalise).
 #
 # MIROIR LECTURE SC (O27 : « miroir lecture SC ») : mod_biostat_mirror_ui/
 # _server rend la recommandation VALIDÉE par l'instance Bulk verbatim depuis
@@ -38,10 +41,18 @@
 # structurelle T5 du test) ; à vide, uiOutput NULL = conteneur vide, empreinte
 # nulle (motif mod_session_checkpoint.R) ; lecture seule — aucun bouton.
 #
-# PREFILL (contrat §2) : valeurs par défaut list(groups = "two", paired =
-# FALSE) — la déduction depuis les métadonnées du jeu actif est M4 (proposition
-# §3 : rv$tree_prefill) ; aucune lecture de metadata ici (aucune hypothèse sur
-# le nom des colonnes).
+# PREFILL (contrat §2) — M4 : quand shared_rv est fourni, un observe de
+# pré-remplissage lit UNIQUEMENT les métadonnées du jeu actif via le moteur
+# PUR biostat_prefill_from_metadata() (biostat_tree.R, câblage 2 args :
+# colonne de condition PUBLIÉE shared_rv$active_condition_col — aucune
+# hypothèse sur le nom des colonnes subject, donc paired n'est pas déduit
+# côté module aujourd'hui) et alimente rv$prefill ; la déduction devient la
+# `selected` du radioButtons quand la question la porte (proposition §3),
+# l'utilisateur reste maître : la réponse contredite est TRACÉE (warnings
+# ASCII contrat §1 — prefill_groups_overridden / prefill_paired_overridden —
+# passés à new_provenance_entry(warnings =), signature mesurée), jamais
+# bloquée. shared_rv omis (défaut NULL) : comportement M3 byte-pour-byte,
+# record aux défauts list(groups = "two", paired = FALSE).
 #
 # 0 CSS www/ (règle post-O13) : primitives bslib/shiny + classes Bootstrap
 # existantes et styles inline seulement — aucun fichier CSS, aucune injection
@@ -76,6 +87,30 @@
   }
   if (is.null(tr)) return(key)
   tryCatch(tr$t(key), error = function(e) key)
+}
+
+# M4 — présélection déduite pour la question courante (PURE, hors Shiny).
+# La déduction ne pré-sélectionne QUE les questions qui la portent : celles
+# dont les réponses portent la signature two/three_plus (mêmes clés ASCII sur
+# les branches bulk et continue — même question « combien de groupes »), et
+# la question paired seulement si la déduction vaut TRUE (une déduction FALSE
+# est une non-déduction : rien n'est présélectionné, l'utilisateur répond
+# librement). prefill NULL (shared_rv omis, M3) ou noeud sans correspondance :
+# character(0) — byte-pour-byte M3.
+.biostat_m4_selected <- function(nd, prefill) {
+  if (is.null(prefill) || is.null(nd) || is.null(nd$answers)) {
+    return(character(0))
+  }
+  ans <- names(nd$answers)
+  g <- prefill$groups
+  if (!is.null(g) && length(g) == 1L && !is.na(g) &&
+      all(c("two", "three_plus") %in% ans) && g %in% ans) {
+    return(g)
+  }
+  if (isTRUE(prefill$paired) && "paired" %in% ans) {
+    return("paired")
+  }
+  character(0)
 }
 
 # ── UI — accordéon latéral de l'onglet Bulk DE ────────────────────────────────
@@ -114,8 +149,12 @@ mod_biostat_mirror_ui <- function(id) {
 }
 
 # ── SERVER — parcours de l'arbre + confirmation + provenance (couche module) ──
+# M4 : shared_rv = NULL (défaut) préservé M3 byte-pour-byte ; fourni, il porte
+# la colonne de condition publiée (active_condition_col) et la déclaration du
+# moteur (declared_de_engine) — le module ne les LIT jamais autrement (I1).
 
-mod_biostat_tree_server <- function(id, global_data, engine = "") {
+mod_biostat_tree_server <- function(id, global_data, shared_rv = NULL,
+                                    engine = "") {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     .tr <- function(key) .biostat_m3_tr(global_data, key)
@@ -125,13 +164,37 @@ mod_biostat_tree_server <- function(id, global_data, engine = "") {
       node    = tree,   # noeud courant (question)
       leaf    = NULL,   # feuille atteinte (orientation)
       answers = list(), # carte id de question -> clé de réponse (consumée)
-      status  = NULL    # ligne d'état (confirmation)
+      status  = NULL,   # ligne d'état (confirmation)
+      prefill = NULL    # M4 : list(groups =, paired =) déduite (shared_rv fourni)
     )
 
-    # Question courante : radioButtons SANS présélection (selected =
+    # M4 — PREFILL (proposition §3) : lecture UNIQUEMENT (I1/I2 — aucune
+    # écriture au montage), depuis les métadonnées du jeu actif et la colonne
+    # de condition publiée par le panneau Bulk DE (couture M4 :
+    # shared_rv$active_condition_col). Observateur instancié SEULEMENT quand
+    # shared_rv est fourni : omis, rv$prefill reste NULL et le comportement
+    # M3 est préservé byte-pour-byte. Le re-rendu sur global_data$language
+    # est porté par les renderUI (déjà dépendants) ; la déduction, elle, ne
+    # dépend pas de la langue.
+    if (!is.null(shared_rv)) {
+      observe({
+        req(shared_rv, global_data$bulk_obj, shared_rv$active_condition_col)
+        rv$prefill <- biostat_prefill_from_metadata(
+          global_data$bulk_obj$metadata, shared_rv$active_condition_col)
+      })
+    }
+
+    # Question courante : radioButtons SANS présélection (M3, selected =
     # character(0) mesuré : aucun "checked" — l'avance ne se déclenche que sur
-    # un clic explicite) ; valeurs = clés de réponse ASCII stables (convention
+    # un clic explicite) ; M4 : présélection déduite quand la question la
+    # porte (.biostat_m4_selected — reste MODIFIABLE, conseiller jamais
+    # imposer) ; valeurs = clés de réponse ASCII stables (convention
     # mod_bulk_de_ui.R), libellés = clés biostat.a.* via tr.
+    # REPARIÉ M4 (bug latent M3, mesuré 2026-11-02) : vapply préserve les noms
+    # de nd$answers_i18n — choiceNames NOMMÉ = radioButtons() refusait de
+    # rendre (shiny 1.14.0 normalizeChoicesArgs « must not be named », MESURÉ
+    # : aucun test M3 ne lisait biostat_walk_ui, l'accordéon live était cassé
+    # au premier rendu de question). unname() ne change AUCUN libellé.
     output$biostat_walk_ui <- renderUI({
       global_data$language  # re-render sur changement de langue (motif app.R)
       nd <- rv$node
@@ -139,8 +202,8 @@ mod_biostat_tree_server <- function(id, global_data, engine = "") {
       radioButtons(ns("biostat_choice"),
                    label   = .tr(nd$i18n_key),
                    choiceValues = names(nd$answers),
-                   choiceNames  = vapply(as.character(nd$answers_i18n), .tr, character(1)),
-                   selected     = character(0))
+                   choiceNames  = unname(vapply(as.character(nd$answers_i18n), .tr, character(1))),
+                   selected     = .biostat_m4_selected(nd, rv$prefill))
     })
 
     # Avance d'UN pas par clic : garde `val %in% names(answers)` — une valeur
@@ -192,13 +255,64 @@ mod_biostat_tree_server <- function(id, global_data, engine = "") {
       req(!is.null(rv$leaf))
       leaf <- rv$leaf
       res  <- biostat_resolve(tree, rv$answers)
+      # M4 — engine effectif (contrat §2) : pour une feuille bulk_*, la
+      # DÉCLARATION de l'utilisateur lue EN LECTURE SEULE de shared_rv AU
+      # MOMENT DU CLIC ; repli sur l'argument `engine` (M3) si absente/vide ;
+      # chaîne vide pour toute feuille non bulk_* (« chaîne vide sinon » —
+      # le record M2 normalise aussi, garde gelée inchangée).
+      eng <- engine
+      if (!is.null(shared_rv)) {
+        dec <- shared_rv$declared_de_engine
+        if (is.character(dec) && length(dec) == 1L && !is.na(dec) &&
+            nzchar(dec)) {
+          eng <- dec
+        }
+      }
+      eng_eff <- if (startsWith(res$method_id, "bulk_")) eng else ""
+      # M4 — prefilled (contrat §2 : le record porte TOUJOURS groups+paired) :
+      # valeurs déduites si disponibles, sinon défauts M3 (groups = NA n'est
+      # pas une valeur du contrat §2 — repli "two").
+      pf        <- rv$prefill
+      prefilled <- list(groups = "two", paired = FALSE)
+      warns     <- character(0)
+      if (!is.null(pf)) {
+        pg <- pf$groups
+        if (is.character(pg) && length(pg) == 1L && !is.na(pg)) {
+          prefilled$groups <- pg
+        }
+        if (isTRUE(pf$paired)) prefilled$paired <- TRUE
+        # Warnings contrat §1 (« pré-remplissage contredit par l'utilisateur »)
+        # : vecteur character ASCII stable, passés à new_provenance_entry()
+        # (signature mesurée : warnings = character(0) en défaut). Un warning
+        # ne vise qu'une valeur RÉELLEMENT pré-remplie : la déduction paired
+        # (FALSE = non-déduction avec le câblage 2 args, cf. en-tête) n'est
+        # jamais « contredite » — prefill_paired_overridden ne peut naître
+        # que d'un futur câblage subject_col, la branche est déjà câblée.
+        ug <- NA_character_   # réponse utilisateur aux questions two/three_plus
+        up <- NULL            # réponse utilisateur à la question paired
+        for (qid in names(res$answers)) {
+          a <- res$answers[[qid]]
+          if (is.character(a) && length(a) == 1L) {
+            if (identical(a, "two") || identical(a, "three_plus")) ug <- a
+            if (identical(a, "paired"))      up <- TRUE
+            if (identical(a, "independent")) up <- FALSE
+          }
+        }
+        if (is.character(pg) && length(pg) == 1L && !is.na(pg) &&
+            !is.na(ug) && !identical(ug, pg)) {
+          warns <- c(warns, "prefill_groups_overridden")
+        }
+        if (isTRUE(pf$paired) && identical(up, FALSE)) {
+          warns <- c(warns, "prefill_paired_overridden")
+        }
+      }
       rec  <- biostat_decision_record(
         node_path      = res$node_path,
         method_id      = res$method_id,
-        engine         = engine,               # déclaré par l'utilisateur (M4)
+        engine         = eng_eff,             # déclaré par l'utilisateur (M4, I1)
         rationale_keys = leaf$rationale_key,
         diagnostics    = list(),               # §5-I4 : vide pour bulk_*
-        prefilled      = list(groups = "two", paired = FALSE),
+        prefilled      = prefilled,           # déduit (M4) sinon défauts M3
         user_confirmed = TRUE
       )
       # Canal 4F EXISTANT (contrat §1) — PRODUIT ici, jamais reconstruit :
@@ -213,7 +327,8 @@ mod_biostat_tree_server <- function(id, global_data, engine = "") {
           diagnostics = rec$diagnostics,
           prefilled   = rec$prefilled
         ),
-        dataset = global_data$bulk_obj
+        dataset  = global_data$bulk_obj,
+        warnings = warns
       )
       provenance_append(global_data, entry)
       # Publication pour le miroir lecture SC (MÊME source, jamais re-dérivée).

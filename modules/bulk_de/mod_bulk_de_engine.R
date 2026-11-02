@@ -200,6 +200,7 @@
     shared_rv$heatmap_top_n        <- input$heatmap_top_n
     shared_rv$heatmap_annot        <- input$heatmap_annot
     shared_rv$active_condition_col <- input$condition_col  # Step-3.0: used by R script export
+    shared_rv$declared_de_engine   <- input$de_engine       # M4 BIOSTAT (O27): déclaration lue par l'assistant biostat au clic (I1 : lecture seule, couture 1 ligne)
   })
 
   # ── Design formula preview ───────────────────────────────────────────────

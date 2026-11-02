@@ -142,6 +142,12 @@ mod_bulk_server <- function(id, global_data) {
 
     shared_rv <- create_bulk_shared_state()
 
+    # Pont global_data (2026-11-02, décision coordination jalon M4 BIOSTAT) :
+    # consommateur lecture-seule : mod_biostat_tree_server (app.R) — I1 : le
+    # module assistant n'écrit JAMAIS dans ce handle (patron
+    # global_data$biostat_decision, M3).
+    global_data$bulk_shared_rv <- shared_rv
+
     # ── Invalidation des résultats quand le JEU DE DONNÉES est remplacé ──────
     # (parité SC, audit 2026-09-27 §1.5 — handoff §4 : sans purge, un jeu B
     # héritait des contrastes/voies/mapping du jeu A). L'epoch n'est

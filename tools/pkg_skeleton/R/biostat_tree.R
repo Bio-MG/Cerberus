@@ -602,3 +602,80 @@ biostat_decision_record <- function(node_path, method_id, engine = "",
     timestamp      = timestamp
   )
 }
+
+# =============================================================================
+# biostat_prefill_from_metadata() — PRÉ-REMPLISSAGE depuis les métadonnées
+# (M4, O27 2026-10-29 ; proposition §3 — « Contrat d'entrée », champ lu
+# global_data$bulk_obj ; orchestration côté module = modules/bulk_de/
+# mod_biostat_tree.R qui appelle CETTE fonction, jamais de re-dérivation)
+#
+# PURE (C2/C17, même discipline que le reste du fichier) : zéro I/O, zéro
+# dépendance (R base), zéro lecture d'état global — testée hors Shiny par
+# tests/testthat/test-biostat-m4-prefill.R (RED d'abord, 2026-11-02).
+#
+# @param meta          métadonnées du jeu actif (data.frame : n lignes =
+#                      échantillons). Toute autre forme se dégrade honnêtement
+#                      (NA/FALSE), jamais d'exception brute (C10).
+# @param condition_col nom de la colonne de condition (ou NULL).
+# @param subject_col   nom de la colonne d'identifiants d'échantillons/sujets
+#                      (ou NULL) — non câblée par le module M4 (aucune
+#                      hypothèse sur le nom des colonnes, motif M3) ; le
+#                      paramètre existe pour un câblage futur sans bump.
+# @return list(groups =, paired =) NOMMÉE (le module alimente le champ
+#   `prefilled` du record §2 avec ces valeurs) :
+#   groups : "three_plus" si >= 3 niveaux distincts non-NA de
+#            meta[[condition_col]] ; "two" sinon ; NA_character_ si
+#            condition_col est NULL, absente de meta, ou si la colonne est
+#            vide (aucune valeur non-NA) — PAS de déduction magique : le
+#            module retombe alors sur les défauts M3 (contrat §2).
+#   paired : TRUE seulement si subject_col est fournie, présente, ET des
+#            valeurs non-NA de cette colonne se répètent à travers PLUSIEURS
+#            niveaux de condition (appariement = un sujet traverse >= 2
+#            conditions) ; FALSE sinon (duplication DANS un seul niveau,
+#            colonnes absentes, NAs) — FALSE couvre aussi le cas « impossible
+#            de déduire » : le module n'émet un warning de contredit que sur
+#            une valeur réellement pré-remplie.
+#
+# AUCUNE modification des pièces gelées : biostat_tree_version(), l'enum §3
+# et les feuilles de l'arbre restent intouchés (contrat gelé, pas de bump).
+# =============================================================================
+biostat_prefill_from_metadata <- function(meta, condition_col = NULL,
+                                          subject_col = NULL) {
+  groups <- NA_character_
+  paired <- FALSE
+  # Garde d'entrée : condition_col doit être un nom de colonne non vide.
+  cc <- NULL
+  if (is.character(condition_col) && length(condition_col) == 1L &&
+      !is.na(condition_col) && nzchar(condition_col)) {
+    cc <- condition_col
+  }
+  sc <- NULL
+  if (is.character(subject_col) && length(subject_col) == 1L &&
+      !is.na(subject_col) && nzchar(subject_col)) {
+    sc <- subject_col
+  }
+  if (!is.null(meta) && is.data.frame(meta) && !is.null(cc) &&
+      cc %in% colnames(meta)) {
+    raw_c <- as.character(meta[[cc]])
+    # groups : niveaux DISTINCTS non-NA ("three_plus" si >= 3, "two" sinon ;
+    # colonne vide = zéro valeur non-NA -> NA_character_, pas de déduction).
+    lvls <- unique(raw_c[!is.na(raw_c)])
+    if (length(lvls) >= 1L) {
+      groups <- if (length(lvls) >= 3L) "three_plus" else "two"
+    }
+    # paired : une valeur non-NA de subject_col traversant >= 2 niveaux de
+    # condition distincts (paires (condition, sujet) uniques, lignes NA
+    # ignorées des deux côtés).
+    if (!is.null(sc) && sc %in% colnames(meta)) {
+      raw_s <- as.character(meta[[sc]])
+      keep  <- !is.na(raw_c) & !is.na(raw_s)
+      if (any(keep)) {
+        pairs <- unique(data.frame(cond = raw_c[keep], subj = raw_s[keep],
+                                   stringsAsFactors = FALSE))
+        n_cond_per_subj <- table(pairs$subj)
+        paired <- any(n_cond_per_subj >= 2L)
+      }
+    }
+  }
+  list(groups = groups, paired = paired)
+}

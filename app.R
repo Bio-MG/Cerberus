@@ -1099,7 +1099,16 @@ server <- function(input, output, session) {
   # M3 BIOSTAT O27 : assistant biostatistique — parcours de l'arbre (moteur
   # M2, orientation seule) + confirmation -> provenance I2/I3 (couche module) ;
   # miroir lecture SC = rendu de la MÊME publication (aucune re-dérivation).
-  mod_biostat_tree_server("biostat_bulk", global_data)
+  # M4 : pont bulk_shared_rv (publié par mod_bulk_server, lecture seule I1) —
+  # prefill des questions + moteur déclaré lu au clic ; NULL-safe (M3 si bulk
+  # n'a pas tourné). isolate() OBLIGATOIRE : lecture d'un reactiveValues hors
+  # consommateur au montage — dans une session RÉELLE, la lecture nue fait
+  # mourir la session (shiny 1.14.0, reproduit 2026-11-02 sur app minimale :
+  # shinytest2 « 404 for values URL .../dataobj/shinytest ») ; testServer
+  # masquait le problème. La valeur est stable : le handle publié par
+  # mod_bulk_server n'est jamais remplacé (la purge mute ses champs en place).
+  mod_biostat_tree_server("biostat_bulk", global_data,
+                          shared_rv = isolate(global_data$bulk_shared_rv))
 
   mod_biostat_mirror_server("biostat_sc", global_data)
 

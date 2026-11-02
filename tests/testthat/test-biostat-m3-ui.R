@@ -470,7 +470,13 @@ test_that("T6 pins : app.R source et monte le module/miroir ; manifeste régén�
               info = "app.R doit sourcer modules/bulk_de/mod_biostat_tree.R (pin d'arbre, leçon frontière M2)")
   expect_true(grepl('mod_biostat_tree_ui\\("biostat_bulk"\\)', app_src),
               info = "l'accordéon biostat n'est pas monté dans l'onglet Bulk DE (nav_panel 'Analyse Bulk RNA')")
-  expect_true(grepl('mod_biostat_tree_server\\("biostat_bulk", global_data\\)', app_src),
+  # RE-BASAGE MÉCANIQUE M4 (2026-11-02, décision coordination) : le montage
+  # gagne shared_rv = isolate(global_data$bulk_shared_rv) (pont bulk_shared_rv
+  # publié par mod_bulk_server, lecture seule I1 — jalon M4 ; isolate()
+  # obligatoire, la lecture nue au montage tue la session réelle, mesuré) ;
+  # épingle mise à jour sur la ligne réelle.
+  expect_true(grepl(paste0('mod_biostat_tree_server\\("biostat_bulk", global_data,\\s*',
+                           'shared_rv = isolate\\(global_data\\$bulk_shared_rv\\)\\)'), app_src),
               info = "le serveur du module biostat n'est pas monté dans server()")
   expect_true(grepl('mod_biostat_mirror_ui\\("biostat_sc"\\)', app_src),
               info = "le miroir lecture SC n'est pas monté dans l'onglet Single-Cell")
@@ -485,8 +491,12 @@ test_that("T6 pins : app.R source et monte le module/miroir ; manifeste régén�
 
   asr_path <- file.path(ts_project_root(), "tests", "testthat", "test-app-sourcing.R")
   asr_src <- paste(readLines(asr_path, warn = FALSE), collapse = "\n")
-  expect_true(grepl("163L", asr_src, fixed = TRUE),
-              info = "test-app-sourcing.R doit être re-basé 162 -> 163 (+1 module biostat M3)")
+  # RE-BASAGE MÉCANIQUE (2026-11-02) : épingle laissée PÉRIMÉE par le
+  # re-basage SPMV-1 163 -> 164 (commit 715438e a déplacé le compte sans
+  # re-baser cette ligne — dette ROUGE mesurée à HEAD avant le jalon M4,
+  # leçon frontière) ; valeur MESURÉE au HEAD : 164L (test-app-sourcing.R:190).
+  expect_true(grepl("164L", asr_src, fixed = TRUE),
+              info = "test-app-sourcing.R doit porter le compte 164L (re-basage SPMV-1 mesuré)")
   expect_true(grepl("162 -> 163", asr_src, fixed = TRUE),
               info = "le re-basage 162 -> 163 doit être documenté dans test-app-sourcing.R (motif M2)")
   expect_true(grepl("2026-11", asr_src),
