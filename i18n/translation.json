@@ -11680,6 +11680,22 @@
     {
       "fr": "Colonnes triees : compatibles en premier (vert), a verifier (orange), incompatibles (rouge) — chaque colonne est evaluee par le composant de validation des metadonnees.",
       "en": "Columns sorted: compatible first (green), to verify (orange), incompatible (red) — each column is assessed by the metadata validation component."
+    },
+    {
+      "fr": "Je confirme : je veux utiliser cette colonne malgre l'avertissement",
+      "en": "I confirm: I want to use this column despite the warning"
+    },
+    {
+      "fr": "Colonnes evaluees : {n_ok} compatibles, {n_warn} a verifier, {n_danger} incompatibles.",
+      "en": "Columns assessed: {n_ok} compatible, {n_warn} to verify, {n_danger} incompatible."
+    },
+    {
+      "fr": "Preparation bloquee : cochez la case de confirmation pour utiliser cette colonne.",
+      "en": "Preparation blocked: tick the confirmation box to use this column."
+    },
+    {
+      "fr": "{n} classes",
+      "en": "{n} classes"
     }
   ]
 }
