@@ -923,17 +923,77 @@ mod_import_spatial_server <- function(id, global_data) {
       )
     })
 
+    # SPMV-3 (fiche SPATIAL_META_COL_VALIDATION_PROPOSAL.md §4c/§6 :141) — le
+    # second sélecteur « Colonne 'type cellulaire' » (référence partagée)
+    # applique la MÊME doctrine que le site SPMV-1/SPMV-2 livré
+    # (mod_spatial_deconv_reference.R:248-348, composant consommé TEL QUEL) :
+    # la fenêtre muette [2, 200] et son fallback silencieux « else cols »
+    # (ancien :931-934, découvert par la vérification SPMV-1) sont SUPPRIMÉS.
+    # TOUTES les colonnes sont proposées, évaluées par le composant unique
+    # spatial_meta_col_validation (zéro copie, §6 :141), triées ok -> warn ->
+    # danger de façon STABLE (l'ordre meta.data fait foi) ; chaque option
+    # porte son badge + raison traduite ; un bandeau récapitule au-dessus du
+    # sélecteur et une ligne explique le tri (§7-4 : aucun comportement
+    # silencieux nouveau).
+    # PAS de case « Je confirme » ni de blocage ici : la fiche les réserve au
+    # câblage SPMV-2 (§6 :140) — la préparation reste possible mais éclairée.
+    # Rendu : tags$select manuel car selectInput ÉCHAPPE ses labels d'options
+    # (shiny:::selectOptions, motif mesuré SPMV-2 :242-247) ; classe
+    # « shiny-input-select » = binding shiny conservé ; primitives
+    # bslib/shiny uniquement, 0 CSS www/ ; aucune donnée transformée (§5).
     output$shared_ref_celltype_col_ui <- renderUI({
       global_data$language  # i18n: re-render on language switch
       req(shared_ref_state$obj, length(shared_ref_meta_cols()) > 0)
       ref_obj <- shared_ref_state$obj
       cols <- shared_ref_meta_cols()
-      n_levels <- vapply(cols, function(cn) length(unique(ref_obj@meta.data[[cn]])), integer(1))
-      useful <- cols[n_levels >= 2 & n_levels <= 200]
-      useful <- useful[order(-n_levels[useful])]
-      choices <- if (length(useful) > 0) useful else cols
+      verdicts <- lapply(cols, function(cn) {
+        spatial_meta_col_validation(ref_obj@meta.data, cn)
+      })
+      names(verdicts) <- cols
+      verdict_levels <- vapply(verdicts, function(v) v$level, character(1))
+      choices <- cols[order(match(verdict_levels, c("ok", "warn", "danger")), method = "radix")]
+
+      # Badge par option (§4b) — pictogramme + raison traduite (données et
+      # clés i18n échappées via htmltools::htmlEscape, motif SPMV-2 :261-262).
+      .opt_label <- function(cn) {
+        v <- verdicts[[cn]]
+        if (identical(v$level, "ok")) {
+          paste0('<span class="badge bg-success">',
+                 .t_fmt(.tr("{n} classes"), n = v$detail$n_levels %||% ""),
+                 '</span> ', htmltools::htmlEscape(cn))
+        } else {
+          sym <- if (identical(v$level, "danger")) "\u26d4" else "\u26a0"
+          cls <- if (identical(v$level, "danger")) "bg-danger text-white" else "bg-warning text-dark"
+          paste0('<span class="badge ', cls, '">', sym, '</span> ', htmltools::htmlEscape(cn),
+                 " — ", htmltools::htmlEscape(.tr(v$reason_key)))
+        }
+      }
+
+      sel <- input$shared_ref_celltype_col
+      if (is.null(sel) || !sel %in% choices) sel <- choices[1]
+
+      n_ok     <- sum(verdict_levels == "ok")
+      n_warn   <- sum(verdict_levels == "warn")
+      n_danger <- sum(verdict_levels == "danger")
+
       tagList(
-        selectInput(ns("shared_ref_celltype_col"), .tr("Colonne 'type cellulaire'"), choices = choices),
+        # Bandeau récapitulatif — AU-DESSUS du sélecteur (§4c, motif SPMV-2).
+        div(class = "alert alert-light", style = "font-size:0.72rem; margin-bottom:4px;",
+            bsicons::bs_icon("info-circle"), " ",
+            .t_fmt(.tr("Colonnes evaluees : {n_ok} compatibles, {n_warn} a verifier, {n_danger} incompatibles."),
+                   n_ok = n_ok, n_warn = n_warn, n_danger = n_danger)),
+        tags$div(class = "form-group shiny-input-container",
+                 tags$label(class = "control-label", id = ns("shared_ref_celltype_col-label"),
+                            `for` = ns("shared_ref_celltype_col"), .tr("Colonne 'type cellulaire'")),
+                 tags$select(id = ns("shared_ref_celltype_col"), class = "shiny-input-select form-select",
+                             lapply(choices, function(cn) {
+                               tags$option(value = cn,
+                                           selected = if (identical(cn, sel)) NA,
+                                           HTML(.opt_label(cn)))
+                             }))),
+        # Ligne d'explication du tri (§4c : ordre visible et expliqué, §7-4).
+        div(class = "text-muted", style = "font-size:0.68rem;",
+            .tr("Colonnes triees : compatibles en premier (vert), a verifier (orange), incompatibles (rouge) — chaque colonne est evaluee par le composant de validation des metadonnees.")),
         checkboxInput(ns("shared_merge_rare_types"),
                       .tr("Fusionner/exclure les types rares (< 25 cellules)"), value = TRUE),
         checkboxInput(ns("shared_cap_ref_cells"),
