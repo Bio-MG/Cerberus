@@ -174,3 +174,24 @@ test_that("erreurs d'entrée : messages français et états structurés", {
   expect_identical(e$state, "invalid_input")
   expect_true(grepl("NA", conditionMessage(e), fixed = TRUE))
 })
+
+# CQF-1 — fiche SC_COMM_QUICKFIXES_PROPOSAL_2026-11-02 §3 : la table
+# « contexte spatial » (output$spc_table) doit passer l'option DT native
+# scrollY/scrollCollapse via extra_options (canal existant du helper,
+# datatable.R:118/163), pour défiler DANS son conteneur 320px au lieu de
+# déborder sur le fluidRow des plots. Assertion structurelle légère
+# (présence dans l'appel) — le rendu réel reste couvert par la vérification
+# manuelle 1920x1080 (fiche §5).
+test_that("spc_table : scrollY/scrollCollapse passés via extra_options (CQF-1)", {
+  src <- paste(readLines(
+    file.path(ts_project_root(), "modules/sc/mod_sc_communication_spatial.R"),
+    warn = FALSE
+  ), collapse = "\n")
+  block_start <- gregexpr("output$spc_table <- DT::renderDataTable({", src,
+                          fixed = TRUE)[[1L]]
+  expect_true(block_start > 0L)
+  tail_src <- substr(src, block_start, nchar(src))
+  expect_true(grepl(
+    'extra_options = list(scrollY = "260px", scrollCollapse = TRUE)',
+    tail_src, fixed = TRUE))
+})

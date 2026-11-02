@@ -200,8 +200,13 @@ mod_sc_communication_spatial_server <- function(id, comm_state, global_data, sha
     output$spc_table <- DT::renderDataTable({
       ctx <- spc_ctx()
       req(ctx)
+      # CQF-1 (fiche SC_COMM_QUICKFIXES_PROPOSAL_2026-11-02 §3) : scrollY
+      # natif DT via extra_options — la table défile DANS son conteneur
+      # 320px (UI, ligne 45) au lieu de déborder sur le fluidRow des plots.
+      # scrollX reste hors défaut (2H/O28).
       ts_datatable(ctx$pair_table, page_length = 15L,
-                   filename_base = "sc_comm_spatial_pair_table", filter = "none")
+                   filename_base = "sc_comm_spatial_pair_table", filter = "none",
+                   extra_options = list(scrollY = "260px", scrollCollapse = TRUE))
     })
 
     .selected_pair <- function() {
