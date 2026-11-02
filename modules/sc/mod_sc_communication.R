@@ -155,6 +155,10 @@ mod_sc_communication_ui <- function(id) {
     selectInput(ns("comm_identity_column"),
                 i18n$t("Colonne d'identites cellulaires (Seurat)"),
                 choices = character(0), width = "100%"),
+    # CQF-2 (fiche SC_COMM_QUICKFIXES_PROPOSAL_2026-11-02 §3) : indice passif
+    # sous le sélecteur — purement informatif, jamais bloquant (aucun validate).
+    div(class = "small text-muted mb-2",
+        textOutput(ns("comm_identity_hint"))),
     div(class = "small text-muted mb-2",
         i18n$t("Harmonisation par exact match uniquement : aucun renommage de populations, labels sans correspondance listes integralement.")),
     # 3E (O28, spéc §2.17) : pointeur VISIBLE vers la surface propose/valide —
@@ -557,14 +561,44 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       obj <- global_data$sc_obj
       if (is.null(obj)) return()
       meta_cols <- colnames(obj@meta.data)
+      # CQF-2 (fiche SC_COMM_QUICKFIXES_PROPOSAL_2026-11-02 §3) : choix GROUPÉS
+      # (optgroups natifs) — annotation SingleR EN TÊTE, puis seurat_clusters,
+      # puis le reste. AUCUNE colonne retirée (principe LIANA : proposées,
+      # jamais imposées) ; le défaut reste seurat_clusters (zéro changement de
+      # choix). Motif d'annotation : point unique sc_communication_input.R.
+      # Libellés via .tr() en variables d'appel : aucune valeur de choices
+      # n'est un appel traduit (convention C13).
       updateSelectInput(session, "comm_identity_column",
-                        choices = meta_cols,
+                        choices = .comm_identity_choice_groups(
+                          meta_cols,
+                          label_annot = .tr("Annotation (SingleR)"),
+                          label_clusters = .tr("Clusters"),
+                          label_rest = .tr("Autres colonnes")),
                         selected = if ("seurat_clusters" %in% meta_cols) "seurat_clusters" else meta_cols[1])
       updateSelectInput(session, "comm_liana_sample_col", choices = meta_cols,
                         selected = character(0))
       updateSelectInput(session, "comm_liana_condition_col", choices = meta_cols,
                         selected = character(0))
     }, ignoreInit = TRUE)
+
+    # ── CQF-2 : indice passif sous le sélecteur d'identités ─────────────────
+    # Si la colonne sélectionnée est numérique ou préfixée cluster, les paires
+    # CellChat restent numérotées : pointer vers l'annotation SingleR. Jamais
+    # bloquant (aucun validate/need — purement informatif) ; chaîne vide sinon.
+    output$comm_identity_hint <- renderText({
+      col <- input$comm_identity_column
+      obj <- global_data$sc_obj
+      if (is.null(obj) || is.null(col) || length(col) != 1L || !nzchar(col)) {
+        return("")
+      }
+      meta <- tryCatch(obj@meta.data, error = function(e) NULL)
+      if (is.null(meta) || !col %in% colnames(meta)) return("")
+      if (.comm_identity_is_cluster_like(col, is.numeric(meta[[col]]))) {
+        .tr(paste0(
+          "Colonne de clusters \u2014 les paires seront num\u00e9rot\u00e9es. ",
+          "Lancez l'annotation (SingleR) pour des types cellulaires nomm\u00e9s."))
+      } else ""
+    })
 
     # ── Colonnes de rang LIANA : proposees depuis l'en-tete du fichier ─────
     # La liste est PROPOSEE, jamais imposee : comme le mode d'agregation, le

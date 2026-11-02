@@ -11696,6 +11696,18 @@
     {
       "fr": "{n} classes",
       "en": "{n} classes"
+    },
+    {
+      "fr": "Annotation (SingleR)",
+      "en": "Annotation (SingleR)"
+    },
+    {
+      "fr": "Autres colonnes",
+      "en": "Other columns"
+    },
+    {
+      "fr": "Colonne de clusters — les paires seront numérotées. Lancez l'annotation (SingleR) pour des types cellulaires nommés.",
+      "en": "Cluster column — pairs will be numbered. Run annotation (SingleR) for named cell types."
     }
   ]
 }

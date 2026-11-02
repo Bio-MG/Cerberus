@@ -166,7 +166,7 @@
        else if ("tsne" %in% reds) "ran"
        else if (n_cells > tsne_max) "ignored" else "error")
   mark("singler", if (!isTRUE(selection[["singler"]])) "skipped"
-       else if (any(grepl("^SingleR_", colnames(meta)))) "ran" else "error")
+       else if (any(grepl(.singler_annotation_column_pattern(), colnames(meta)))) "ran" else "error")  # CQF-2 : motif en un point unique
   mark("markers", if (!isTRUE(selection[["markers"]])) "skipped"
        else if (isTRUE(produced$markers)) "ran" else "error")
   mark("pathway", if (!isTRUE(selection[["pathway"]])) "skipped"
@@ -358,7 +358,7 @@ run_annot <- function(input, global_data, shared_rv, session) {
   n_results <- 0L
   annot_col <- NULL
   if (inherits(obj, "Seurat")) {
-    cols <- grep("^SingleR_", colnames(obj@meta.data), value = TRUE)
+    cols <- grep(.singler_annotation_column_pattern(), colnames(obj@meta.data), value = TRUE)  # CQF-2 : motif en un point unique
     if (length(cols)) {
       annot_col <- tail(cols, 1L)
       n_results <- length(unique(obj@meta.data[[annot_col]]))
@@ -1278,7 +1278,7 @@ mod_sc_server <- function(id, global_data) {
       s_norm    <- if (length(tryCatch(VariableFeatures(obj),error=function(e) character(0))) > 0) "\u2705" else "\u26aa"
       s_cluster <- if ("seurat_clusters" %in% colnames(meta))                     "\u2705" else "\u26aa"
       s_umap    <- if ("umap"            %in% names(obj@reductions))              "\u2705" else "\u26aa"
-      s_annot   <- if (any(grepl("^SingleR_", colnames(meta))))                   "\u2705" else "\u26aa"
+      s_annot   <- if (any(grepl(.singler_annotation_column_pattern(), colnames(meta))))          "\u2705" else "\u26aa"  # CQF-2 : motif unique
       s_markers <- if (!is.null(state_get(shared_rv, "markers_data")))                          "\u2705" else "\u26aa"
       div(style=paste0("display:flex;justify-content:space-around;font-size:0.72em;",
                        "background:#f8f9fa;border:1px solid #e3e6e8;border-radius:6px;",
@@ -1346,7 +1346,7 @@ mod_sc_server <- function(id, global_data) {
       if (is.null(obj))
         return(div(class="alert alert-info m-3", .tr("Aucun objet Single-Cell chargé.")))
       meta         <- obj@meta.data
-      singler_cols <- grep("^SingleR_", colnames(meta), value=TRUE)
+      singler_cols <- grep(.singler_annotation_column_pattern(), colnames(meta), value=TRUE)  # CQF-2 : motif en un point unique
       reductions   <- names(obj@reductions)
       n_clusters   <- if ("seurat_clusters" %in% colnames(meta))
                         length(levels(factor(meta$seurat_clusters))) else NA

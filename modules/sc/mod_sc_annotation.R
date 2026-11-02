@@ -315,7 +315,7 @@ mod_sc_annotation_server <- function(id, global_data, shared_rv) {
       req(global_data$sc_obj)
       obj  <- global_data$sc_obj
       meta <- obj@meta.data
-      singler_cols <- grep("^SingleR_", colnames(meta), value=TRUE)
+      singler_cols <- grep(.singler_annotation_column_pattern(), colnames(meta), value=TRUE)  # CQF-2 : motif en un point unique (sc_communication_input.R)
       validate(need(length(singler_cols)>0, .tr("Aucune annotation. Lancez 'Annoter avec SingleR'.")))
       col_use <- tail(singler_cols, 1)
       validate(need("umap" %in% names(obj@reductions), .tr("UMAP non calculé.")))
@@ -332,7 +332,7 @@ mod_sc_annotation_server <- function(id, global_data, shared_rv) {
       req(global_data$sc_obj)
       obj  <- global_data$sc_obj
       meta <- obj@meta.data
-      singler_cols <- grep("^SingleR_", colnames(meta), value=TRUE)
+      singler_cols <- grep(.singler_annotation_column_pattern(), colnames(meta), value=TRUE)  # CQF-2 : motif en un point unique (sc_communication_input.R)
       validate(need(length(singler_cols)>0, "Aucune annotation."))
       col_use <- tail(singler_cols, 1)
       tbl <- as.data.frame(table(Cluster=meta$seurat_clusters, CellType=meta[[col_use]]))
@@ -350,7 +350,7 @@ mod_sc_annotation_server <- function(id, global_data, shared_rv) {
       content  = function(file) {
         req(global_data$sc_obj)
         meta         <- global_data$sc_obj@meta.data
-        singler_cols <- grep("^SingleR_", colnames(meta), value=TRUE)
+        singler_cols <- grep(.singler_annotation_column_pattern(), colnames(meta), value=TRUE)  # CQF-2 : motif en un point unique (sc_communication_input.R)
         validate(need(length(singler_cols)>0, "Aucune annotation."))
         write.csv(data.frame(cell_barcode=rownames(meta),
                              seurat_clusters=meta$seurat_clusters,

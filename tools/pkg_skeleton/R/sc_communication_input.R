@@ -670,6 +670,55 @@ cellchat_input_summary <- function(x) {
   )
 }
 
+# ── CQF-2 (fiche SC_COMM_QUICKFIXES_PROPOSAL_2026-11-02 §3) ──────────────────
+# POINT UNIQUE du motif de nommage des colonnes d'annotation SingleR.
+# Producteur du nom : modules/sc/mod_sc_annotation.R (~ligne 287,
+# paste0("SingleR_", refcode, "_", lv)) ; consommateurs : les 3 grep du
+# module annotation ET le groupement des choix du sélecteur d'identités CCC
+# (modules/sc/mod_sc_communication.R). Toute dérive du préfixe doit passer
+# ICI — un littéral "^SingleR_" dans modules/ est un verrou de test brisé.
+# Helper interne (point-préfixé) : hors surface gelée
+# cellchat_input_public_api() (test-cellchat-input-contract-freeze.R).
+.singler_annotation_column_pattern <- function() "^SingleR_"
+
+# Groupement PUR des choix du sélecteur « Colonne d'identités cellulaires »
+# (principe LIANA : les colonnes sont PROPOSÉES, jamais imposées — aucune
+# colonne retirée, aucun tri du reste). Ordre : annotation SingleR EN TÊTE,
+# puis seurat_clusters, puis le reste (ordre des métadonnées conservé).
+# Retour : liste nommée de vecteurs — forme native des optgroups de
+# selectInput()/updateSelectInput() (mesuré : <optgroup label=...>).
+# Les libellés d'optgroup sont passés par l'appelant : l'i18n (.tr) reste au
+# site d'appel, le helper reste pur (convention C13 respectée — aucune
+# valeur de choices n'est un appel traduit).
+.comm_identity_choice_groups <- function(meta_cols,
+                                         label_annot = "Annotation (SingleR)",
+                                         label_clusters = "Clusters",
+                                         label_rest = "Autres colonnes") {
+  meta_cols <- as.character(meta_cols)
+  annot <- grep(.singler_annotation_column_pattern(), meta_cols, value = TRUE)
+  clusters <- intersect(meta_cols, "seurat_clusters")
+  rest <- setdiff(meta_cols, c(annot, clusters))
+  groups <- list()
+  if (length(annot))    groups[[label_annot]] <- annot
+  if (length(clusters)) groups[[label_clusters]] <- clusters
+  if (length(rest))     groups[[label_rest]] <- rest
+  groups
+}
+
+# Indice passif CQF-2 : la colonne sélectionnée est-elle « cluster-like » ?
+# (numérique — les paires seraient numérotées — ou préfixée cluster Seurat :
+# seurat_clusters exact, *_snn_res.*/ wsnn_res.*). Purement informatif :
+# la décision d'appel (afficher l'indice) reste au module.
+.comm_identity_is_cluster_like <- function(col_name, col_is_numeric) {
+  col_name <- as.character(col_name)
+  if (length(col_name) != 1L || is.na(col_name) || !nzchar(col_name)) {
+    return(FALSE)
+  }
+  isTRUE(col_is_numeric) ||
+    identical(col_name, "seurat_clusters") ||
+    grepl("(snn|wsnn)_res\\.", col_name)
+}
+
 #' Surface publique du contrat d'entree CellChat
 #'
 #' Gelee par tests/testthat/test-cellchat-input-contract-freeze.R : toute
