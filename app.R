@@ -284,6 +284,7 @@ source("modules/bulk_de/mod_bulk_de_summary.R")
 source("modules/bulk_de/mod_bulk_de_ui.R")
 source("modules/bulk_de/mod_bulk_de_venn.R")
 source("modules/bulk_de/mod_bulk_de_viz.R")
+source("modules/bulk_de/mod_biostat_tree.R")  # M3 BIOSTAT O27 : accordéon latéral Bulk DE + miroir lecture SC (contrat BIOSTAT_DECISION_CONTRACT.md §8 row M3)
 source("modules/bulk/mod_bulk_pathways_export.R")  # S2c : route d'export drive (table d'enrichissement)
 source("modules/bulk/mod_bulk_pathways.R")
 source("modules/bulk/mod_bulk_signatures_export.R")  # Slice 2.3 : route d'export drive (scores de signatures)
@@ -571,18 +572,25 @@ ui <- page_navbar(
   # NB: titles are French-by-default as required; English on switch via the
   # shiny.i18n JS shim (usei18n above + update_lang in the server observer).
   nav_panel(tagList("🔬 ", i18n$t("Analyse Single-Cell")), value = "tab_sc",
-            
+
             icon = icon("microscope"),
-            
-            mod_sc_ui("sc")),
-  
-  
-  
+
+            # M3 BIOSTAT O27 : miroir LECTURE SEULE de la recommandation
+            # validée côté Bulk (même source global_data$biostat_decision,
+            # aucune re-dérivation ; uiOutput NULL = empreinte nulle à vide).
+            tagList(mod_sc_ui("sc"), mod_biostat_mirror_ui("biostat_sc"))),
+
+
+
   nav_panel(tagList("📊 ", i18n$t("Analyse Bulk RNA")), value = "tab_bulk",
-            
+
             icon = icon("chart-line"),
-            
-            mod_bulk_ui("bulk")),
+
+            # M3 BIOSTAT O27 : accordéon latéral de l'assistant biostatistique
+            # (orientation seule — O27 §12.2 ; monté au niveau du nav_panel,
+            # surface minimale, l'accordéon interne de mod_bulk.R reste
+            # inchangé).
+            tagList(mod_bulk_ui("bulk"), mod_biostat_tree_ui("biostat_bulk"))),
   
   
   
@@ -1081,7 +1089,14 @@ server <- function(input, output, session) {
   # namespace "mapping" nu, seulement de la reactivite morte. Retire.
   
   mod_bulk_server("bulk", global_data)
-  
+
+  # M3 BIOSTAT O27 : assistant biostatistique — parcours de l'arbre (moteur
+  # M2, orientation seule) + confirmation -> provenance I2/I3 (couche module) ;
+  # miroir lecture SC = rendu de la MÊME publication (aucune re-dérivation).
+  mod_biostat_tree_server("biostat_bulk", global_data)
+
+  mod_biostat_mirror_server("biostat_sc", global_data)
+
   mod_spatial_server("spatial", global_data)
   
   

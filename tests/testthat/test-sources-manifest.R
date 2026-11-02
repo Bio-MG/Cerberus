@@ -132,10 +132,14 @@ test_that("the ordered extractor itself works (negative case)", {
     'source("R/b.R")'
   ), collapse = "\n")
   got <- .sm_ordered(fake, .sm_root)
-  # la boucle est developpee a SA POSITION : a, puis les 10 bulk_de, puis b
+  # la boucle est developpee a SA POSITION : a, puis les bulk_de, puis b.
+  # M3 BIOSTAT O27 (2026-11-02) : re-basage 10 -> 11 (+1 module
+  # modules/bulk_de/mod_biostat_tree.R — accordéon latéral Bulk DE + miroir
+  # lecture SC) : ce cas synthetique compte le CONTENU REEL du repertoire
+  # modules/bulk_de/, l'epingle suit le disque (motif des re-basages).
   expect_identical(got[1L], "R/a.R")
   expect_identical(got[length(got)], "R/b.R")
-  expect_identical(length(got) - 2L, 10L)
+  expect_identical(length(got) - 2L, 11L)
   expect_true(all(grepl("^modules/bulk_de/", got[-c(1L, length(got))]))
               && !anyDuplicated(got))
   # un texte sans directive rend vide -- pas une erreur silencieuse

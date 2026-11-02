@@ -174,13 +174,20 @@ test_that("M2 semantics: 159 explicit sources, zero hidden sourcing loop", {
   # pure de l'arbre de décision biostatistique, feuilles = ORIENTATIONS ;
   # contrat docs/contracts/BIOSTAT_DECISION_CONTRACT.md §8 row M2 ;
   # freeze test test-biostat-tree.R, RED mesuré avant implémentation).
+  # M3 BIOSTAT O27 (2026-11-02) : re-basage 162 -> 163 (+1 module
+  # modules/bulk_de/mod_biostat_tree.R, bloc 11 — accordéon latéral Bulk DE +
+  # miroir lecture SC ; contrat docs/contracts/BIOSTAT_DECISION_CONTRACT.md
+  # §8 row M3 ; freeze test test-biostat-m3-ui.R, RED mesuré avant
+  # implémentation ; population pilot tools/pkg_skeleton/ NON touchée :
+  # module ≠ paquet).
   expect_identical(
-    length(.app_explicit(.app_src)), 162L,
-    info = paste("app.R doit porter exactement 162 source() explicites",
+    length(.app_explicit(.app_src)), 163L,
+    info = paste("app.R doit porter exactement 163 source() explicites",
                  "(M2 : 145 + 10 bulk_de deplies, + 3 export drive M3,",
                  "+ 1 moteur sc_qc_doublets M4, + 1 module session ASR-3 O29,",
                  "+ 1 moteur session_checkpoint ASR câblage O29,",
-                 "+ 1 moteur biostat_tree M2 BIOSTAT O27)",
+                 "+ 1 moteur biostat_tree M2 BIOSTAT O27,",
+                 "+ 1 module biostat_tree M3 BIOSTAT O27)",
                  "-- le compte observe differe")
   )
   # et plus AUCUNE boucle list.files() de sourcing : M2 a deplie la derniere,

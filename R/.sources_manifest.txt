@@ -128,6 +128,7 @@ modules/bulk_de/mod_bulk_de_summary.R
 modules/bulk_de/mod_bulk_de_ui.R
 modules/bulk_de/mod_bulk_de_venn.R
 modules/bulk_de/mod_bulk_de_viz.R
+modules/bulk_de/mod_biostat_tree.R
 modules/bulk/mod_bulk_pathways_export.R
 modules/bulk/mod_bulk_pathways.R
 modules/bulk/mod_bulk_signatures_export.R

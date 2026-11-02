@@ -11444,6 +11444,206 @@
     {
       "fr": "Checkpoint : %s",
       "en": "Checkpoint: %s"
+    },
+    {
+      "fr": "Assistant biostatistique — orientation",
+      "en": "Biostatistics assistant — orientation"
+    },
+    {
+      "fr": "Parcourez les questions ; l'orientation seule est affichée — aucun test n'est lancé.",
+      "en": "Walk the questions; orientation only is shown — no test is run."
+    },
+    {
+      "fr": "Orientation recommandée",
+      "en": "Recommended orientation"
+    },
+    {
+      "fr": "Valider ce choix",
+      "en": "Validate this choice"
+    },
+    {
+      "fr": "Recommencer",
+      "en": "Start over"
+    },
+    {
+      "fr": "Choix enregistré dans la provenance.",
+      "en": "Choice recorded in the provenance."
+    },
+    {
+      "fr": "Recommandation de l'assistant biostatistique (lecture seule)",
+      "en": "Biostatistics assistant recommendation (read-only)"
+    },
+    {
+      "fr": "La recommandation validée côté « Analyse Bulk RNA » apparaît ici (lecture seule).",
+      "en": "The recommendation validated in the 'Bulk RNA analysis' tab appears here (read-only)."
+    },
+    {
+      "fr": "biostat.q.data_family",
+      "en": "What kind of data do you want to analyze?"
+    },
+    {
+      "fr": "biostat.q.bulk_replicates",
+      "en": "Do the bulk samples include biological replicates?"
+    },
+    {
+      "fr": "biostat.q.groups_n",
+      "en": "How many groups does the condition of interest have?"
+    },
+    {
+      "fr": "biostat.q.bulk_lrt_confirm",
+      "en": "Three or more levels: confirm the DESeq2 likelihood-ratio test (LRT) orientation?"
+    },
+    {
+      "fr": "biostat.q.bulk_covariates",
+      "en": "Does the bulk model need continuous covariates or a complex design?"
+    },
+    {
+      "fr": "biostat.q.engine_pref",
+      "en": "Which count-based engine do you prefer for the bulk differential analysis?"
+    },
+    {
+      "fr": "biostat.q.parametric",
+      "en": "Are the parametric assumptions (normality, homoscedasticity) acceptable for this branch?"
+    },
+    {
+      "fr": "biostat.q.paired",
+      "en": "Are the two groups paired (same samples measured twice)?"
+    },
+    {
+      "fr": "biostat.q.variances",
+      "en": "Are the variances of the two groups comparable?"
+    },
+    {
+      "fr": "biostat.q.sc_delegate",
+      "en": "Delegate the abundance analysis to the differential-abundance design (Milo / scCODA)?"
+    },
+    {
+      "fr": "biostat.a.data_bulk_counts",
+      "en": "Bulk counts (sequencing)"
+    },
+    {
+      "fr": "biostat.a.data_continuous_scores",
+      "en": "Continuous data (signature scores, phenotypes, per-batch metrics)"
+    },
+    {
+      "fr": "biostat.a.data_compositions",
+      "en": "Cell compositions (single-cell)"
+    },
+    {
+      "fr": "biostat.a.replicates_ok",
+      "en": "Yes — biological replicates present"
+    },
+    {
+      "fr": "biostat.a.replicates_none",
+      "en": "No — no replicate (exploratory mode)"
+    },
+    {
+      "fr": "biostat.a.groups_two",
+      "en": "Two groups"
+    },
+    {
+      "fr": "biostat.a.groups_three_plus",
+      "en": "Three or more groups"
+    },
+    {
+      "fr": "biostat.a.confirm",
+      "en": "Confirm"
+    },
+    {
+      "fr": "biostat.a.cov_none",
+      "en": "No — simple two-group design"
+    },
+    {
+      "fr": "biostat.a.cov_continuous",
+      "en": "Yes — continuous covariates / complex design"
+    },
+    {
+      "fr": "biostat.a.engine_deseq2",
+      "en": "DESeq2"
+    },
+    {
+      "fr": "biostat.a.engine_edger",
+      "en": "edgeR"
+    },
+    {
+      "fr": "biostat.a.parametric_ok",
+      "en": "Yes — parametric acceptable"
+    },
+    {
+      "fr": "biostat.a.parametric_ko",
+      "en": "No — prefer a non-parametric orientation"
+    },
+    {
+      "fr": "biostat.a.paired",
+      "en": "Paired"
+    },
+    {
+      "fr": "biostat.a.independent",
+      "en": "Independent"
+    },
+    {
+      "fr": "biostat.a.variances_equal",
+      "en": "Equal variances (Student)"
+    },
+    {
+      "fr": "biostat.a.variances_unequal",
+      "en": "Unequal variances (Welch)"
+    },
+    {
+      "fr": "biostat.a.sc_delegate_confirm",
+      "en": "Confirm the delegation"
+    },
+    {
+      "fr": "biostat.r.wald",
+      "en": "DESeq2 Wald test — bulk counts, two-level condition (negative binomial)."
+    },
+    {
+      "fr": "biostat.r.lrt",
+      "en": "DESeq2 likelihood-ratio test — bulk counts, condition with three or more levels."
+    },
+    {
+      "fr": "biostat.r.edger",
+      "en": "edgeR — bulk counts with biological replicates."
+    },
+    {
+      "fr": "biostat.r.edger_norep",
+      "en": "edgeR with imposed dispersion — no-replicate bulk design, exploratory only (p-values are NOT inferential)."
+    },
+    {
+      "fr": "biostat.r.voom",
+      "en": "limma-voom — complex bulk design or continuous covariates."
+    },
+    {
+      "fr": "biostat.r.ttest",
+      "en": "Student t-test — two independent groups, equal variances."
+    },
+    {
+      "fr": "biostat.r.welch",
+      "en": "Welch t-test — two independent groups, unequal variances."
+    },
+    {
+      "fr": "biostat.r.paired_ttest",
+      "en": "Paired t-test — two paired groups, parametric assumptions acceptable."
+    },
+    {
+      "fr": "biostat.r.wilcoxon",
+      "en": "Mann-Whitney (Wilcoxon rank-sum) — two independent groups, non-parametric."
+    },
+    {
+      "fr": "biostat.r.signed_rank",
+      "en": "Wilcoxon signed-rank — two paired groups, non-parametric."
+    },
+    {
+      "fr": "biostat.r.anova",
+      "en": "One-way ANOVA with rstatix post-hoc — three or more groups, parametric."
+    },
+    {
+      "fr": "biostat.r.kruskal",
+      "en": "Kruskal-Wallis — three or more groups, non-parametric."
+    },
+    {
+      "fr": "biostat.r.sc_delegate",
+      "en": "Delegation to the differential-abundance design (Milo / scCODA) — no added logic."
     }
   ]
 }
