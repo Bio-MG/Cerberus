@@ -171,7 +171,12 @@ test_that("frontiere : le paquet contient EXACTEMENT 6 plotting + 4 fournisseurs
                           "dose_response.R",
                           "spatial_async.R", "spatial_deconv_prep.R",
                           "spatial_deconv_tasks.R", "spatial_export.R",
-                          "spatial_io.R", "spatial_multi.R", "spatial_niche.R",
+                          "spatial_io.R",
+                          # SPMV-1 (2026-11-02) : composant unique de validation
+                          # des colonnes de métadonnées Spatial (fiche
+                          # SPATIAL_META_COL_VALIDATION_PROPOSAL.md §4a).
+                          "spatial_meta_col_validation.R",
+                          "spatial_multi.R", "spatial_niche.R",
                           "spatial_plotting.R", "spatial_reference.R",
                           "spatial_report.R", "spatial_stats.R",
                           "caching.R", "drive_allowlist.R", "drive_watcher.R",

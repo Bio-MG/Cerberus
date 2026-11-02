@@ -67,6 +67,7 @@ tools/pkg_skeleton/R/bulk_network.R
 tools/pkg_skeleton/R/sc_multi.R
 tools/pkg_skeleton/R/bulk_report_engine.R
 tools/pkg_skeleton/R/bulk_import_engine.R
+tools/pkg_skeleton/R/spatial_meta_col_validation.R
 tools/pkg_skeleton/R/spatial_async.R
 tools/pkg_skeleton/R/spatial_io.R
 tools/pkg_skeleton/R/spatial_multi.R

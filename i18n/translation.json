@@ -11644,6 +11644,42 @@
     {
       "fr": "biostat.r.sc_delegate",
       "en": "Delegation to the differential-abundance design (Milo / scCODA) — no added logic."
+    },
+    {
+      "fr": "Colonne absente des metadonnees : la validation ne peut pas porter sur cette selection.",
+      "en": "Column missing from metadata: validation cannot apply to this selection."
+    },
+    {
+      "fr": "Colonne a un seul niveau : aucune categorie exploitable pour une reference.",
+      "en": "Single-level column: no usable category for a reference."
+    },
+    {
+      "fr": "Identifiant par cellule (toutes les valeurs sont uniques) : colonne de type barcode/ID, pas un type cellulaire.",
+      "en": "Per-cell identifier (all values unique): barcode/ID column, not a cell type."
+    },
+    {
+      "fr": "Colonne numerique continue (plus de 20 valeurs distinctes) : ce n'est pas une categorie.",
+      "en": "Continuous numeric column (more than 20 distinct values): not a category."
+    },
+    {
+      "fr": "Colonne numerique a peu de modalites : si c'est une categorie, preferez un factor/character.",
+      "en": "Numeric column with few levels: if it is a category, prefer a factor/character."
+    },
+    {
+      "fr": "Colonne a plus de 100 niveaux : au-dela des types cellulaires usuels — plausible pour un atlas a types fins, a verifier.",
+      "en": "Column with more than 100 levels: beyond usual cell types — plausible for a fine-grained atlas, please verify."
+    },
+    {
+      "fr": "Nom de colonne suspect (donneur / echantillon / lot / barcode...) : probablement pas un type cellulaire.",
+      "en": "Suspicious column name (donor / sample / batch / barcode...): probably not a cell type."
+    },
+    {
+      "fr": "Un seul niveau couvre au moins 99 % des cellules : la colonne ne discrimine presque rien.",
+      "en": "A single level covers at least 99% of cells: the column barely discriminates."
+    },
+    {
+      "fr": "Colonnes triees : compatibles en premier (vert), a verifier (orange), incompatibles (rouge) — chaque colonne est evaluee par le composant de validation des metadonnees.",
+      "en": "Columns sorted: compatible first (green), to verify (orange), incompatible (red) — each column is assessed by the metadata validation component."
     }
   ]
 }

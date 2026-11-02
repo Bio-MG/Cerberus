@@ -180,14 +180,21 @@ test_that("M2 semantics: 159 explicit sources, zero hidden sourcing loop", {
   # §8 row M3 ; freeze test test-biostat-m3-ui.R, RED mesuré avant
   # implémentation ; population pilot tools/pkg_skeleton/ NON touchée :
   # module ≠ paquet).
+  # SPMV-1 O-SPMV (2026-11-02) : re-basage 163 -> 164 (+1 moteur
+  # tools/pkg_skeleton/R/spatial_meta_col_validation.R, bloc 07 — composant
+  # unique de validation des colonnes de métadonnées Spatial ; fiche
+  # docs/proposals/SPATIAL_META_COL_VALIDATION_PROPOSAL.md §4a/§4d ; freeze
+  # test test-spmv1-meta-col-validation.R, RED mesuré avant implémentation
+  # : failed=14).
   expect_identical(
-    length(.app_explicit(.app_src)), 163L,
-    info = paste("app.R doit porter exactement 163 source() explicites",
+    length(.app_explicit(.app_src)), 164L,
+    info = paste("app.R doit porter exactement 164 source() explicites",
                  "(M2 : 145 + 10 bulk_de deplies, + 3 export drive M3,",
                  "+ 1 moteur sc_qc_doublets M4, + 1 module session ASR-3 O29,",
                  "+ 1 moteur session_checkpoint ASR câblage O29,",
                  "+ 1 moteur biostat_tree M2 BIOSTAT O27,",
-                 "+ 1 module biostat_tree M3 BIOSTAT O27)",
+                 "+ 1 module biostat_tree M3 BIOSTAT O27,",
+                 "+ 1 moteur spatial_meta_col_validation SPMV-1 O-SPMV)",
                  "-- le compte observe differe")
   )
   # et plus AUCUNE boucle list.files() de sourcing : M2 a deplie la derniere,

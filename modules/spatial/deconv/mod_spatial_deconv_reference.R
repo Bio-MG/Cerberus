@@ -222,12 +222,23 @@
     req(ref_state$obj, length(ref_meta_cols()) > 0)
     ref_obj <- ref_state$obj
     cols <- ref_meta_cols()
-    n_levels <- vapply(cols, function(cn) length(unique(ref_obj@meta.data[[cn]])), integer(1))
-    useful <- cols[n_levels >= 2 & n_levels <= 200]
-    useful <- useful[order(-n_levels[useful])]
-    choices <- if (length(useful) > 0) useful else cols
+    # SPMV-1 (fiche SPATIAL_META_COL_VALIDATION_PROPOSAL.md §4c) : la fenêtre
+    # muette 2-200 et son fallback silencieux « else cols » (§2d-1, ancien
+    # l.225-228) sont supprimés — TOUTES les colonnes sont proposées, triées
+    # par le verdict du composant unique : compatibles (ok) d'abord, puis à
+    # vérifier (warn), puis incompatibles (danger). Tri STABLE au sein d'un
+    # niveau (l'ordre meta.data fait foi) ; plus aucun tri silencieux par
+    # cardinalité décroissante. Le composant VALIDE et EXPLIQUE, il ne
+    # transforme aucune donnée (§5) ; badges par colonne + case « Je confirme »
+    # = jalon SPMV-2 (§6).
+    verdicts <- vapply(cols, function(cn) {
+      spatial_meta_col_validation(ref_obj@meta.data, cn)$level
+    }, character(1))
+    choices <- cols[order(match(verdicts, c("ok", "warn", "danger")), method = "radix")]
     tagList(
       selectInput(ns("ref_celltype_col"), .tr("Colonne 'type cellulaire'"), choices = choices),
+      div(class = "text-muted", style = "font-size:0.68rem;",
+          .tr("Colonnes triees : compatibles en premier (vert), a verifier (orange), incompatibles (rouge) — chaque colonne est evaluee par le composant de validation des metadonnees.")),
       checkboxInput(ns("merge_rare_types"),
                     .tr("Fusionner/exclure les types rares (< 25 cellules)"),
                     value = TRUE),

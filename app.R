@@ -206,6 +206,12 @@ source("tools/pkg_skeleton/R/bulk_import_engine.R")
 # globalement par les tests (pattern dual-load,
 # docs/audits/d2_spatial_cartography.md). spatial_plotting.R est source au
 # Bloc 04, sa position historique.
+# SPMV-1 (2026-11-02) : composant unique de validation des colonnes de
+# métadonnées Spatial — fiche docs/proposals/SPATIAL_META_COL_VALIDATION_PROPOSAL.md
+# §4a/§4d ; consommé par mod_spatial_deconv_reference.R (fenêtre muette 2-200 +
+# fallback silencieux « else cols » supprimés, §4c). Le composant VALIDE et
+# EXPLIQUE, il ne transforme aucune donnée. (+1, pin test-app-sourcing 163 -> 164.)
+source("tools/pkg_skeleton/R/spatial_meta_col_validation.R")
 source("tools/pkg_skeleton/R/spatial_async.R")
 source("tools/pkg_skeleton/R/spatial_io.R")
 source("tools/pkg_skeleton/R/spatial_multi.R")
