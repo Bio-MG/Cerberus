@@ -1,10 +1,10 @@
 # Rapport doc-prover — docs/mcp/DRIVE_SESSION_RUNBOOK.md
 
-Généré : 2026-11-03T22:46:28Z · --live : non · moteur : prover_lib (base R)
+Généré : 2026-11-03T22:52:31Z · --live : oui · moteur : prover_lib (base R)
 
-**Verdict global : 6 findings de drift filés**
+**Verdict global : 7 findings de drift filés**
 
-Comptes : ✅ pass = 8 · ❌ fail = 6 · UNTESTED = 6 — total 20 claims (14 static / 6 live)
+Comptes : ✅ pass = 11 · ❌ fail = 7 · UNTESTED = 2 — total 20 claims (14 static / 6 live)
 
 ## ❌ Findings de drift (filés, pas réparés par ce jalon)
 
@@ -38,12 +38,13 @@ Comptes : ✅ pass = 8 · ❌ fail = 6 · UNTESTED = 6 — total 20 claims (14 s
 - **Attendu** : 4/4 motifs dans leurs fenêtres citées
 - **Mesuré** : ancres fines dérivées (4/4) : l.185 : cadence ~3 s à README:38 ; l.115 : hb_n « 0 at boot » à README:39 ; l.182 : étape 7 « Disarm by removing arm.json » à README:143-144 ; l.190 : « not evidence of a lost write » à README:527-556 — positions réelles mesurées : ~3 s -> ligne réelle 39 ; 0 at boot -> ligne réelle 40 ; 7. Disarm by removing -> ligne réelle 145 ; not evidence of a lost write -> ligne réelle 558
 
+### live-rearm-keeps — docs/mcp/DRIVE_SESSION_RUNBOOK.md l.183
+- **Assertion (runbook)** : §4.2 : le re-arm conserve la MÊME session — session_token inchangé, armed:true, hb_n repart sans redémarrer au milieu de session
+- **Attendu** : après écriture arm.json {même token, armed:true} : token identique, armed=true, hb_n avancé
+- **Mesuré** : re-arm mesuré incomplet : token_same=TRUE armed=FALSE hb_advance=FALSE
+
 ## UNTESTED (honnêteté — jamais inventés)
 
-- **live-hb-advance** (l.67) : gate live non satisfait — pas de sonde (--live absent ou session non détectée)
-- **live-hb-age** (l.54) : gate live non satisfait — âge du heartbeat non mesuré
-- **live-launch-arms** (l.147) : gate live non satisfait — pas de sonde (launch_dev_drive.R n'est PAS relancé par le prover : invasif)
-- **live-rearm-keeps** (l.183) : re-arm non exécuté (exige --live ; écriture limitée au drop-box gitigné tools/_drive/*.json, .gitignore:100)
 - **live-stale-tool** (l.20) : aucun handshake PÉRIMÉ observé pendant la sonde (la session détectée est vivante) — l'expérience exige un ready.json stale + l'outil read-only ; jamais fabriquée
 - **live-job-inflight** (l.224) : état « ready.json périmé + result.json:running » non observé pendant la sonde — la fenêtre de job en vol n'est pas fabricable sans job long réel ; jamais inventée
 
@@ -65,10 +66,10 @@ Comptes : ✅ pass = 8 · ❌ fail = 6 · UNTESTED = 6 — total 20 claims (14 s
 | static-drive-readme-anchors | static | 262 | ✅ | 11/11 ancres majeures mesurées : chaque fenêtre citée porte la substance citée |
 | static-drive-readme-minor | static | 185 | ❌ | ancres fines dérivées (4/4) : l.185 : cadence ~3 s à README:38 ; l.115 : hb_n « 0 at boot » à README:39 ; l.182 : étape 7 « Disarm by removing arm.json » à README:143-144 ; l.190 : « not evidence of a lost write » à README:527-556 — positions réelles mesurées : ~3 s -> ligne réelle 39 ; 0 at boot -> ligne réelle 40 ; 7. Disarm by removing -> ligne réelle 145 ; not evidence of a lost write -> ligne réelle 558 |
 | static-audit-anchors | static | 22 | ✅ | 5/5 ancres de l'audit mesurées : chaque fenêtre citée porte la substance citée (§1, l.22/88-89/33 du runbook) |
-| live-hb-advance | live | 67 | UNTESTED | gate live non satisfait — pas de sonde (--live absent ou session non détectée) |
-| live-hb-age | live | 54 | UNTESTED | gate live non satisfait — âge du heartbeat non mesuré |
-| live-launch-arms | live | 147 | UNTESTED | gate live non satisfait — pas de sonde (launch_dev_drive.R n'est PAS relancé par le prover : invasif) |
-| live-rearm-keeps | live | 183 | UNTESTED | re-arm non exécuté (exige --live ; écriture limitée au drop-box gitigné tools/_drive/*.json, .gitignore:100) |
+| live-hb-advance | live | 67 | ✅ | mesuré : hb_n 3442 -> 3444 (2 lectures espacées ~4 s) — session vivante |
+| live-hb-age | live | 54 | ✅ | âge heartbeat mesuré 3.9 s ≤ hb_timeout_s (15 s) |
+| live-launch-arms | live | 147 | ✅ | session armée mesurée : pid 41780 vivant, armed=true, hb_n avance — signes du lancement supporté (§4.1) |
+| live-rearm-keeps | live | 183 | ❌ | re-arm mesuré incomplet : token_same=TRUE armed=FALSE hb_advance=FALSE |
 | live-stale-tool | live | 20 | UNTESTED | aucun handshake PÉRIMÉ observé pendant la sonde (la session détectée est vivante) — l'expérience exige un ready.json stale + l'outil read-only ; jamais fabriquée |
 | live-job-inflight | live | 224 | UNTESTED | état « ready.json périmé + result.json:running » non observé pendant la sonde — la fenêtre de job en vol n'est pas fabricable sans job long réel ; jamais inventée |
 

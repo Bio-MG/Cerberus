@@ -2,8 +2,8 @@
   "meta": {
     "engine": "prover_lib (base R)",
     "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
-    "live": false,
-    "generated_at": "2026-11-03T22:46:28Z",
+    "live": true,
+    "generated_at": "2026-11-03T22:52:31Z",
     "repo_root": "D:\\Data_science\\SHINYAPP test (git work)\\SHINYAPP test"
   },
   "rows": [
@@ -154,8 +154,8 @@
       "line": 67,
       "assertion": "§2 commande 2 : hb_n avance entre deux lectures de ready.json espacées d'environ 4 s (= session vivante) ; figé ou reculant = handshake mort",
       "expected": "hb_n(2e lecture) > hb_n(1re lecture), les deux lectures réussies",
-      "verdict": "untested",
-      "evidence": "gate live non satisfait — pas de sonde (--live absent ou session non détectée)"
+      "verdict": "pass",
+      "evidence": "mesuré : hb_n 3442 -> 3444 (2 lectures espacées ~4 s) — session vivante"
     },
     {
       "id": "live-hb-age",
@@ -164,8 +164,8 @@
       "line": 54,
       "assertion": "§2 commande 1 : l'âge du heartbeat (now − hb_at) est mesurable et reste ≤ hb_timeout_s sur une session armée vivante",
       "expected": "age_s fini, ≥ −5 s (tolérance d'horloge documentée) et ≤ hb_timeout_s",
-      "verdict": "untested",
-      "evidence": "gate live non satisfait — âge du heartbeat non mesuré"
+      "verdict": "pass",
+      "evidence": "âge heartbeat mesuré 3.9 s ≤ hb_timeout_s (15 s)"
     },
     {
       "id": "live-launch-arms",
@@ -174,8 +174,8 @@
       "line": 147,
       "assertion": "§4.1 : une session lancée par tools/launch_dev_drive.R présente les signes mesurés de l'armement supporté — PID du handshake vivant, armed:true, hb_n qui avance",
       "expected": "pid_alive=TRUE ET armed=TRUE ET hb_advance=TRUE sur la session détectée",
-      "verdict": "untested",
-      "evidence": "gate live non satisfait — pas de sonde (launch_dev_drive.R n'est PAS relancé par le prover : invasif)"
+      "verdict": "pass",
+      "evidence": "session armée mesurée : pid 41780 vivant, armed=true, hb_n avance — signes du lancement supporté (§4.1)"
     },
     {
       "id": "live-rearm-keeps",
@@ -184,8 +184,8 @@
       "line": 183,
       "assertion": "§4.2 : le re-arm conserve la MÊME session — session_token inchangé, armed:true, hb_n repart sans redémarrer au milieu de session",
       "expected": "après écriture arm.json {même token, armed:true} : token identique, armed=true, hb_n avancé",
-      "verdict": "untested",
-      "evidence": "re-arm non exécuté (exige --live ; écriture limitée au drop-box gitigné tools/_drive/*.json, .gitignore:100)"
+      "verdict": "fail",
+      "evidence": "re-arm mesuré incomplet : token_same=TRUE armed=FALSE hb_advance=FALSE"
     },
     {
       "id": "live-stale-tool",
@@ -209,9 +209,9 @@
     }
   ],
   "counts": {
-    "pass": 8,
-    "fail": 6,
-    "untested": 6
+    "pass": 11,
+    "fail": 7,
+    "untested": 2
   },
   "findings": [
     {
@@ -273,7 +273,17 @@
       "expected": "4/4 motifs dans leurs fenêtres citées",
       "verdict": "fail",
       "evidence": "ancres fines dérivées (4/4) : l.185 : cadence ~3 s à README:38 ; l.115 : hb_n « 0 at boot » à README:39 ; l.182 : étape 7 « Disarm by removing arm.json » à README:143-144 ; l.190 : « not evidence of a lost write » à README:527-556 — positions réelles mesurées : ~3 s -> ligne réelle 39 ; 0 at boot -> ligne réelle 40 ; 7. Disarm by removing -> ligne réelle 145 ; not evidence of a lost write -> ligne réelle 558"
+    },
+    {
+      "id": "live-rearm-keeps",
+      "type": "live",
+      "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
+      "line": 183,
+      "assertion": "§4.2 : le re-arm conserve la MÊME session — session_token inchangé, armed:true, hb_n repart sans redémarrer au milieu de session",
+      "expected": "après écriture arm.json {même token, armed:true} : token identique, armed=true, hb_n avancé",
+      "verdict": "fail",
+      "evidence": "re-arm mesuré incomplet : token_same=TRUE armed=FALSE hb_advance=FALSE"
     }
   ],
-  "verdict_global": "6 findings de drift filés"
+  "verdict_global": "7 findings de drift filés"
 }
