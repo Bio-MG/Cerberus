@@ -1,0 +1,279 @@
+{
+  "meta": {
+    "engine": "prover_lib (base R)",
+    "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
+    "live": false,
+    "generated_at": "2026-11-03T22:46:28Z",
+    "repo_root": "D:\\Data_science\\SHINYAPP test (git work)\\SHINYAPP test"
+  },
+  "rows": [
+    {
+      "id": "static-launcher",
+      "type": "static",
+      "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
+      "line": 146,
+      "assertion": "§4.1 : le launcher cité « tools/launch_dev_drive.R » existe et sa ligne 4 porte le contrat « The ONLY supported way to start a drive-enabled session »",
+      "expected": "tools/launch_dev_drive.R présent ; ligne 4 contient « The ONLY supported way »",
+      "verdict": "pass",
+      "evidence": "tools/launch_dev_drive.R:4 = « # The ONLY supported way to start a drive-enabled session (spec §4, G4 #16). »"
+    },
+    {
+      "id": "static-tools-exist",
+      "type": "static",
+      "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
+      "line": 18,
+      "assertion": "§1 : les trois outils read-only cités (transcripto_drive_status, transcripto_drive_read_result, transcripto_drive_snapshot) sont enregistrés dans scripts/mcp_server.R",
+      "expected": "3/3 noms trouvés en registration (« list(name = \"...\") ») dans scripts/mcp_server.R",
+      "verdict": "pass",
+      "evidence": "3/3 outils enregistrés dans scripts/mcp_server.R (registrations mesurées aux lignes 3365, 3418, 3475, 3524, 3533, 3542, 3567, 3627)"
+    },
+    {
+      "id": "static-anchor-mcp-banner",
+      "type": "static",
+      "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
+      "line": 19,
+      "assertion": "§1 : l'ancre « scripts/mcp_server.R:104-106 » nomme les trois outils read-only cités",
+      "expected": "les 3 noms présents dans la fenêtre de lignes 104-106",
+      "verdict": "fail",
+      "evidence": "fenêtre 104-106 mesurée :   .ts_stderr(\"  tools        : transcripto_drive_status, transcripto_drive_read_result (read-only)\") |   .ts_stderr(\"                 transcripto_drive_state (M2: passive, read-only)\") |   .ts_stderr(\"                 transcripto_drive_datasets (P2 PoC datasets: passive, read-only, session-free)\") — « transcripto_drive_snapshot » ABSENT de la fenêtre citée (première occurrence réelle : ligne 107) — ancre dérivée (drift)"
+    },
+    {
+      "id": "static-anchor-stale-code",
+      "type": "static",
+      "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
+      "line": 21,
+      "assertion": "§1 : « STALE_SESSION » est un code de domaine porté par « scripts/mcp_server.R:219 » (cité aussi l.38)",
+      "expected": "la ligne 219 contient STALE_SESSION",
+      "verdict": "fail",
+      "evidence": "scripts/mcp_server.R:219 ne porte PAS le code ; mesuré : «        structuredContent = structured, isError = FALSE) ». Le code existe ailleurs (occurrences mesurées : 231, 279, 422, 781, 1815, 2303 ; table .ts_domain_codes à la première d'entre elles) — SUBSTANCE VRAIE, ancre dérivée (drift)"
+    },
+    {
+      "id": "static-commits-exist",
+      "type": "static",
+      "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
+      "line": 193,
+      "assertion": "§4.3/§4.4/l.3 : les commits cités existent — 7cccd6c (reprise de contrôle opérateur), db12712 (session id dérivée) et 59c4888 (HEAD de référence du runbook)",
+      "expected": "git cat-file -t rend « commit » pour les 3 hashes complets",
+      "verdict": "pass",
+      "evidence": "git cat-file -t : 7cccd6c4=commit, db127122=commit, 59c48880=commit — les 3 commits cités existent"
+    },
+    {
+      "id": "static-result-contract",
+      "type": "static",
+      "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
+      "line": 10,
+      "assertion": "contrat IPC : le champ result.json documenté par le runbook (verdict d'un seq — status/applied_at, commande 3 l.75) correspond au contrat réel épinglé par S1 : 13 champs au writer drive_watcher.R:1936-1990",
+      "expected": "les 13 champs (protocol, ack_seq, status, applied_at, active_module, armed, preserve_data, errors, warnings, snapshot, job, descriptor, write_error) présents dans la fenêtre 1936-1990 ; fixture watchtower alive/result.json aux mêmes 13 noms",
+      "verdict": "pass",
+      "evidence": "13/13 champs mesurés au writer (drive_watcher.R:1936-1990) : protocol, ack_seq, status, applied_at, active_module, armed, preserve_data, errors, warnings, snapshot, job, descriptor, write_error ; fixture watchtower conformes (mêmes 13 noms) — la SUBSTANCE du runbook (status/applied_at documentés l.10/l.75) est couverte"
+    },
+    {
+      "id": "static-result-module-field",
+      "type": "static",
+      "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
+      "line": 75,
+      "assertion": "§2 commande 3 : result.json porte un champ top-level « module » lisible par « Select-Object status, module, applied_at »",
+      "expected": "une ligne « module = » existe dans le payload top-level du writer (fenêtre 1936-1990)",
+      "verdict": "fail",
+      "evidence": "PAS de champ top-level « module » dans le contrat mesuré (1936-1990) — le champ top-level est « active_module » ; « module » n'existe que DANS le bloc job (mesuré à 4801-4827 : module = as.character(job$module) ; fixture watchtower : module ABSENT top-level). La commande 3 du runbook (« Select-Object status, module, applied_at », l.75) afficherait une colonne module VIDE — drift SUBSTANTIEL"
+    },
+    {
+      "id": "static-ready-contract",
+      "type": "static",
+      "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
+      "line": 43,
+      "assertion": "§2 : ready.json publie les champs de vivacité cités (hb_at, hb_n, hb_timeout_s) et la fenêtre fraîche par défaut vaut 15 s",
+      "expected": "hb_at/hb_n/hb_timeout_s présents dans le writer ts_drive_write_ready (fenêtre 561-660) ; ts_drive_hb_timeout() retourne 15 par défaut ; fixture watchtower ready.json aux mêmes noms",
+      "verdict": "pass",
+      "evidence": "champs mesurés au writer ready (ts_drive_write_ready, 561-660) : hb_at, hb_n, hb_timeout_s ; ts_drive_hb_timeout() retourne bien 15 par défaut (return(15) mesuré) ; fixture watchtower : les 3 champs présents"
+    },
+    {
+      "id": "static-core-path",
+      "type": "static",
+      "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
+      "line": 47,
+      "assertion": "§2/§4.4/l.265 : le fichier cité « R/core/drive_watcher.R » (ancres :588-589, :688, :806, :4486) existe",
+      "expected": "R/core/drive_watcher.R présent dans l'arbre",
+      "verdict": "fail",
+      "evidence": "R/core/drive_watcher.R ABSENT (contenu de R/core/ mesuré : VIDE) — le fichier vit à tools/pkg_skeleton/R/drive_watcher.R (présent). Les citations l.47/215/217/265 du runbook pointent un chemin déménagé — drift majeur, substance couverte par static-functions-exist"
+    },
+    {
+      "id": "static-functions-exist",
+      "type": "static",
+      "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
+      "line": 216,
+      "assertion": "§4.4 : les symboles cités existent — ts_drive_session_id(pid, started_at, token), ts_drive_ready_fresh() et la publication session_id par transcripto_drive_status",
+      "expected": "3 motifs trouvés dans tools/pkg_skeleton/R/drive_watcher.R (définitions + publication), numéros de ligne réels en evidence",
+      "verdict": "pass",
+      "evidence": "mesuré au nouveau chemin : ts_drive_session_id déf. l.902 ; ts_drive_ready_fresh déf. l.735 ; session_id publié l.4015, 4128, 4188 — substance du §4.4 VRAIE (seul le chemin/numéro cité par le runbook a dérivé, filé ailleurs)"
+    },
+    {
+      "id": "static-agents-rule",
+      "type": "static",
+      "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
+      "line": 226,
+      "assertion": "§5 : la règle opérationnelle 🔴 (« ne JAMAIS conclure session morte de ready_fresh()==FALSE pendant un job en vol ») est écrite à « AGENTS.md:7 », texte cité",
+      "expected": "la ligne 7 de AGENTS.md contient « RÈGLE OPÉRATIONNELLE » et « ready_fresh »",
+      "verdict": "fail",
+      "evidence": "AGENTS.md:7 mesuré = « 🟢 **MODE BOOST — LEVÉ le 2026-11-01 (consigne opérateur « Unset boost mod » ; condition O25/D-D remplie : frontière de v… » (MODE BOOST) — la règle 🔴 « ne JAMAIS conclure “session morte”… » est maintenant à la ligne 11 (cité AGENTS.md:7 aux l.226/236 du runbook) — ancre dérivée (drift)"
+    },
+    {
+      "id": "static-drive-readme-anchors",
+      "type": "static",
+      "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
+      "line": 262,
+      "assertion": "Sources citées : les ancres MAJEURES de tools/_drive/README.md portent la substance citée — :20 (Read this, never stdout), :36-52 (contrat heartbeat), :50-52 (dé-armement), :124-125 (no live client), :150-160 (volet B REFUSED not queued), :188-209 (résidu job long 852,7 s), :197-203 (snapshot frais par poll), :269-283 (rotation de token), :319-322 (session antérieure non armable)",
+      "expected": "11/11 fenêtres contiennent leur motif",
+      "verdict": "pass",
+      "evidence": "11/11 ancres majeures mesurées : chaque fenêtre citée porte la substance citée"
+    },
+    {
+      "id": "static-drive-readme-minor",
+      "type": "static",
+      "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
+      "line": 185,
+      "assertion": "ancres FINES de tools/_drive/README.md exactes — :38 (cadence ~3 s), :39 (hb_n 0 at boot), :143-144 (étape 7 « Disarm by removing arm.json »), :527-556 (citation « not evidence of a lost write »)",
+      "expected": "4/4 motifs dans leurs fenêtres citées",
+      "verdict": "fail",
+      "evidence": "ancres fines dérivées (4/4) : l.185 : cadence ~3 s à README:38 ; l.115 : hb_n « 0 at boot » à README:39 ; l.182 : étape 7 « Disarm by removing arm.json » à README:143-144 ; l.190 : « not evidence of a lost write » à README:527-556 — positions réelles mesurées : ~3 s -> ligne réelle 39 ; 0 at boot -> ligne réelle 40 ; 7. Disarm by removing -> ligne réelle 145 ; not evidence of a lost write -> ligne réelle 558"
+    },
+    {
+      "id": "static-audit-anchors",
+      "type": "static",
+      "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
+      "line": 22,
+      "assertion": "§1/§3/l.261 : l'audit cité docs/audits/COUNTS_NON_INTEGER_2026-10-24.md existe et ses ancres portent la substance — :15-19 (table 3 outils STALE_SESSION), :23-25 (pid 74844 mort), :26-27 (rsession 48220), :28-29 (result.json 20 h), :31-32 (« aucune visibilité »)",
+      "expected": "5/5 fenêtres contiennent leur motif",
+      "verdict": "pass",
+      "evidence": "5/5 ancres de l'audit mesurées : chaque fenêtre citée porte la substance citée (§1, l.22/88-89/33 du runbook)"
+    },
+    {
+      "id": "live-hb-advance",
+      "type": "live",
+      "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
+      "line": 67,
+      "assertion": "§2 commande 2 : hb_n avance entre deux lectures de ready.json espacées d'environ 4 s (= session vivante) ; figé ou reculant = handshake mort",
+      "expected": "hb_n(2e lecture) > hb_n(1re lecture), les deux lectures réussies",
+      "verdict": "untested",
+      "evidence": "gate live non satisfait — pas de sonde (--live absent ou session non détectée)"
+    },
+    {
+      "id": "live-hb-age",
+      "type": "live",
+      "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
+      "line": 54,
+      "assertion": "§2 commande 1 : l'âge du heartbeat (now − hb_at) est mesurable et reste ≤ hb_timeout_s sur une session armée vivante",
+      "expected": "age_s fini, ≥ −5 s (tolérance d'horloge documentée) et ≤ hb_timeout_s",
+      "verdict": "untested",
+      "evidence": "gate live non satisfait — âge du heartbeat non mesuré"
+    },
+    {
+      "id": "live-launch-arms",
+      "type": "live",
+      "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
+      "line": 147,
+      "assertion": "§4.1 : une session lancée par tools/launch_dev_drive.R présente les signes mesurés de l'armement supporté — PID du handshake vivant, armed:true, hb_n qui avance",
+      "expected": "pid_alive=TRUE ET armed=TRUE ET hb_advance=TRUE sur la session détectée",
+      "verdict": "untested",
+      "evidence": "gate live non satisfait — pas de sonde (launch_dev_drive.R n'est PAS relancé par le prover : invasif)"
+    },
+    {
+      "id": "live-rearm-keeps",
+      "type": "live",
+      "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
+      "line": 183,
+      "assertion": "§4.2 : le re-arm conserve la MÊME session — session_token inchangé, armed:true, hb_n repart sans redémarrer au milieu de session",
+      "expected": "après écriture arm.json {même token, armed:true} : token identique, armed=true, hb_n avancé",
+      "verdict": "untested",
+      "evidence": "re-arm non exécuté (exige --live ; écriture limitée au drop-box gitigné tools/_drive/*.json, .gitignore:100)"
+    },
+    {
+      "id": "live-stale-tool",
+      "type": "live",
+      "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
+      "line": 20,
+      "assertion": "§1 : sur un handshake PÉRIMÉ, un outil read-only (transcripto_drive_status) répond le code de domaine STALE_SESSION",
+      "expected": "la réponse du subprocess mcp_server.R contient STALE_SESSION quand ready.json est stale",
+      "verdict": "untested",
+      "evidence": "aucun handshake PÉRIMÉ observé pendant la sonde (la session détectée est vivante) — l'expérience exige un ready.json stale + l'outil read-only ; jamais fabriquée"
+    },
+    {
+      "id": "live-job-inflight",
+      "type": "live",
+      "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
+      "line": 224,
+      "assertion": "§5 🔴 : pendant qu'un job est en vol (ready.json périmé + result.json portant « running »), l'état est classé JOB IN FLIGHT et JAMAIS « session morte »",
+      "expected": "la fenêtre observée est classée JOB IN FLIGHT par le classifieur (le label DEAD n'existe dans aucun chemin)",
+      "verdict": "untested",
+      "evidence": "état « ready.json périmé + result.json:running » non observé pendant la sonde — la fenêtre de job en vol n'est pas fabricable sans job long réel ; jamais inventée"
+    }
+  ],
+  "counts": {
+    "pass": 8,
+    "fail": 6,
+    "untested": 6
+  },
+  "findings": [
+    {
+      "id": "static-anchor-mcp-banner",
+      "type": "static",
+      "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
+      "line": 19,
+      "assertion": "§1 : l'ancre « scripts/mcp_server.R:104-106 » nomme les trois outils read-only cités",
+      "expected": "les 3 noms présents dans la fenêtre de lignes 104-106",
+      "verdict": "fail",
+      "evidence": "fenêtre 104-106 mesurée :   .ts_stderr(\"  tools        : transcripto_drive_status, transcripto_drive_read_result (read-only)\") |   .ts_stderr(\"                 transcripto_drive_state (M2: passive, read-only)\") |   .ts_stderr(\"                 transcripto_drive_datasets (P2 PoC datasets: passive, read-only, session-free)\") — « transcripto_drive_snapshot » ABSENT de la fenêtre citée (première occurrence réelle : ligne 107) — ancre dérivée (drift)"
+    },
+    {
+      "id": "static-anchor-stale-code",
+      "type": "static",
+      "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
+      "line": 21,
+      "assertion": "§1 : « STALE_SESSION » est un code de domaine porté par « scripts/mcp_server.R:219 » (cité aussi l.38)",
+      "expected": "la ligne 219 contient STALE_SESSION",
+      "verdict": "fail",
+      "evidence": "scripts/mcp_server.R:219 ne porte PAS le code ; mesuré : «        structuredContent = structured, isError = FALSE) ». Le code existe ailleurs (occurrences mesurées : 231, 279, 422, 781, 1815, 2303 ; table .ts_domain_codes à la première d'entre elles) — SUBSTANCE VRAIE, ancre dérivée (drift)"
+    },
+    {
+      "id": "static-result-module-field",
+      "type": "static",
+      "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
+      "line": 75,
+      "assertion": "§2 commande 3 : result.json porte un champ top-level « module » lisible par « Select-Object status, module, applied_at »",
+      "expected": "une ligne « module = » existe dans le payload top-level du writer (fenêtre 1936-1990)",
+      "verdict": "fail",
+      "evidence": "PAS de champ top-level « module » dans le contrat mesuré (1936-1990) — le champ top-level est « active_module » ; « module » n'existe que DANS le bloc job (mesuré à 4801-4827 : module = as.character(job$module) ; fixture watchtower : module ABSENT top-level). La commande 3 du runbook (« Select-Object status, module, applied_at », l.75) afficherait une colonne module VIDE — drift SUBSTANTIEL"
+    },
+    {
+      "id": "static-core-path",
+      "type": "static",
+      "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
+      "line": 47,
+      "assertion": "§2/§4.4/l.265 : le fichier cité « R/core/drive_watcher.R » (ancres :588-589, :688, :806, :4486) existe",
+      "expected": "R/core/drive_watcher.R présent dans l'arbre",
+      "verdict": "fail",
+      "evidence": "R/core/drive_watcher.R ABSENT (contenu de R/core/ mesuré : VIDE) — le fichier vit à tools/pkg_skeleton/R/drive_watcher.R (présent). Les citations l.47/215/217/265 du runbook pointent un chemin déménagé — drift majeur, substance couverte par static-functions-exist"
+    },
+    {
+      "id": "static-agents-rule",
+      "type": "static",
+      "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
+      "line": 226,
+      "assertion": "§5 : la règle opérationnelle 🔴 (« ne JAMAIS conclure session morte de ready_fresh()==FALSE pendant un job en vol ») est écrite à « AGENTS.md:7 », texte cité",
+      "expected": "la ligne 7 de AGENTS.md contient « RÈGLE OPÉRATIONNELLE » et « ready_fresh »",
+      "verdict": "fail",
+      "evidence": "AGENTS.md:7 mesuré = « 🟢 **MODE BOOST — LEVÉ le 2026-11-01 (consigne opérateur « Unset boost mod » ; condition O25/D-D remplie : frontière de v… » (MODE BOOST) — la règle 🔴 « ne JAMAIS conclure “session morte”… » est maintenant à la ligne 11 (cité AGENTS.md:7 aux l.226/236 du runbook) — ancre dérivée (drift)"
+    },
+    {
+      "id": "static-drive-readme-minor",
+      "type": "static",
+      "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
+      "line": 185,
+      "assertion": "ancres FINES de tools/_drive/README.md exactes — :38 (cadence ~3 s), :39 (hb_n 0 at boot), :143-144 (étape 7 « Disarm by removing arm.json »), :527-556 (citation « not evidence of a lost write »)",
+      "expected": "4/4 motifs dans leurs fenêtres citées",
+      "verdict": "fail",
+      "evidence": "ancres fines dérivées (4/4) : l.185 : cadence ~3 s à README:38 ; l.115 : hb_n « 0 at boot » à README:39 ; l.182 : étape 7 « Disarm by removing arm.json » à README:143-144 ; l.190 : « not evidence of a lost write » à README:527-556 — positions réelles mesurées : ~3 s -> ligne réelle 39 ; 0 at boot -> ligne réelle 40 ; 7. Disarm by removing -> ligne réelle 145 ; not evidence of a lost write -> ligne réelle 558"
+    }
+  ],
+  "verdict_global": "6 findings de drift filés"
+}
