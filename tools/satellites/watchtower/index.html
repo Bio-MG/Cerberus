@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Watchtower — canal drive TranscriptoShiny (N1)</title>
+<style>
+  /* ============================================================
+     N1 drive-watchtower — page statique 100 % locale.
+     Aucune dépendance, aucun CDN, aucune logique R.
+     La page lit tools/_drive/{ready,result,scenario}.json en
+     lecture seule via fetch polling (file:// est insuffisant :
+     servir avec `python -m http.server 4892` à la racine du dépôt).
+     ============================================================ */
+  :root {
+    --bg: #10141a;
+    --panel: #1a212b;
+    --panel-2: #222b37;
+    --text: #dce3ec;
+    --muted: #8a97a8;
+    --line: #33404f;
+    --green: #2f9e44;
+    --amber: #e8a30c;
+    --blue: #3b82c4;
+    --red: #d64545;
+    --gray: #6b7686;
+    --mono: "Cascadia Mono", Consolas, "Courier New", monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px; line-height: 1.45;
+  }
+  h1 { font-size: 18px; margin: 0 0 2px; }
+  .subtitle { color: var(--muted); margin: 0 0 18px; font-size: 12.5px; }
+  .subtitle code { font-family: var(--mono); color: var(--text); }
+
+  /* --- Bandeau d'état de session (le badge principal) --- */
+  #banner {
+    display: flex; align-items: center; gap: 14px;
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 18px; margin-bottom: 16px; background: var(--panel);
+  }
+  #banner .pill {
+    font-family: var(--mono); font-weight: 700; font-size: 15px;
+    letter-spacing: .4px; padding: 6px 14px; border-radius: 999px;
+    border: 1px solid currentColor; white-space: nowrap;
+  }
+  .pill.alive  { color: #7ddf8f; background: rgba(47,158,68,.12); }
+  .pill.stale  { color: #f2c14e; background: rgba(232,163,12,.12); }
+  .pill.flight { color: #8ec5f0; background: rgba(59,130,196,.15); }
+  .pill.absent { color: #f08c8c; background: rgba(214,69,69,.10); }
+  .pill.err    { color: #f08c8c; background: rgba(214,69,69,.10); }
+  #banner .why { color: var(--muted); font-size: 12.5px; }
+  #banner .why b { color: var(--text); }
+
+  /* --- Grille de panneaux --- */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px;
+  }
+  .card h2 {
+    font-size: 11.5px; text-transform: uppercase; letter-spacing: .8px;
+    color: var(--muted); margin: 0 0 10px; font-weight: 600;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 3px 0; vertical-align: top; }
+  td.k { color: var(--muted); width: 46%; }
+  td.v { font-family: var(--mono); font-size: 13px; word-break: break-all; }
+
+  .tag {
+    display: inline-block; font-family: var(--mono); font-weight: 700;
+    padding: 1px 8px; border-radius: 6px; border: 1px solid currentColor;
+    font-size: 12px;
+  }
+  .tag.done    { color: #7ddf8f; }
+  .tag.error   { color: #f08c8c; }
+  .tag.running { color: #f2c14e; }
+  .tag.applied { color: #8ec5f0; }
+  .tag.invalid, .tag.ignored, .tag.unknown { color: #a8b3c2; }
+  .tag.pending { color: #f2c14e; }
+
+  .note {
+    margin-top: 10px; padding: 8px 10px; border-radius: 8px;
+    background: var(--panel-2); color: var(--muted); font-size: 12px;
+    border-left: 3px solid var(--line);
+  }
+  .note.warn { border-left-color: var(--amber); }
+  .note.info { border-left-color: var(--blue); }
+  .err-list { margin: 6px 0 0; padding-left: 18px; font-family: var(--mono); font-size: 12px; color: #f08c8c; }
+
+  /* --- Pied de page : source des données + horloge --- */
+  footer {
+    margin-top: 18px; color: var(--muted); font-size: 12px;
+    font-family: var(--mono);
+  }
+  footer b { color: var(--text); }
+  #poll-error { color: #f08c8c; }
+</style>
+</head>
+<body>
+  <h1>Watchtower — canal drive (N1)</h1>
+  <p class="subtitle">
+    Vue <b>humaine</b> et <b>lecture seule</b> de <code>tools/_drive/</code> — le même canal que
+    <code>transcripto_drive_state</code> (O11/SW-5c), consommé par un humain au lieu d'un agent.
+    La page n'écrit jamais dans le répertoire.
+  </p>
+
+  <!-- Bandeau : l'état de session, un seul verdict visuel -->
+  <div id="banner">
+    <span class="pill err" id="banner-pill">INITIALISATION…</span>
+    <span class="why" id="banner-why">premier sondage en cours…</span>
+  </div>
+
+  <div class="grid">
+    <!-- Panneau 1 : identité de session + heartbeat -->
+    <div class="card">
+      <h2>Session &amp; heartbeat — ready.json</h2>
+      <table>
+        <tr><td class="k">session_token</td><td class="v" id="s-token">—</td></tr>
+        <tr><td class="k">pid</td><td class="v" id="s-pid">—</td></tr>
+        <tr><td class="k">port</td><td class="v" id="s-port">—</td></tr>
+        <tr><td class="k">armed</td><td class="v" id="s-armed">—</td></tr>
+        <tr><td class="k">viewer</td><td class="v" id="s-viewer">—</td></tr>
+        <tr><td class="k">hb_n (battements)</td><td class="v" id="s-hbn">—</td></tr>
+        <tr><td class="k">hb_at (UTC)</td><td class="v" id="s-hbat">—</td></tr>
+        <tr><td class="k">âge du heartbeat</td><td class="v" id="s-hbage">—</td></tr>
+        <tr><td class="k">hb_timeout_s</td><td class="v" id="s-hbto">—</td></tr>
+        <tr><td class="k">last_seq (consommé)</td><td class="v" id="s-lastseq">—</td></tr>
+        <tr><td class="k">started_at</td><td class="v" id="s-started">—</td></tr>
+      </table>
+    </div>
+
+    <!-- Panneau 2 : le dernier verdict écrit -->
+    <div class="card">
+      <h2>Dernier verdict — result.json</h2>
+      <table>
+        <tr><td class="k">ack_seq</td><td class="v" id="r-seq">—</td></tr>
+        <tr><td class="k">status</td><td class="v" id="r-status">—</td></tr>
+        <tr><td class="k">terminal&nbsp;?</td><td class="v" id="r-terminal">—</td></tr>
+        <tr><td class="k">module</td><td class="v" id="r-module">—</td></tr>
+        <tr><td class="k">action</td><td class="v" id="r-action">—</td></tr>
+        <tr><td class="k">elapsed_s (à l'écriture)</td><td class="v" id="r-elapsed">—</td></tr>
+        <tr><td class="k">job (statut interne)</td><td class="v" id="r-job">—</td></tr>
+        <tr><td class="k">applied_at</td><td class="v" id="r-applied">—</td></tr>
+        <tr><td class="k">errors / warnings</td><td class="v" id="r-errors">—</td></tr>
+      </table>
+      <div class="note info" id="r-note" hidden></div>
+      <ul class="err-list" id="r-errlist" hidden></ul>
+    </div>
+
+    <!-- Panneau 3 : scénario en attente -->
+    <div class="card">
+      <h2>Scénario — scenario.json</h2>
+      <table>
+        <tr><td class="k">état</td><td class="v" id="c-state">—</td></tr>
+        <tr><td class="k">seq</td><td class="v" id="c-seq">—</td></tr>
+        <tr><td class="k">action</td><td class="v" id="c-action">—</td></tr>
+        <tr><td class="k">module</td><td class="v" id="c-module">—</td></tr>
+        <tr><td class="k">button</td><td class="v" id="c-button">—</td></tr>
+        <tr><td class="k">expect</td><td class="v" id="c-expect">—</td></tr>
+      </table>
+      <div class="note" id="c-note" hidden></div>
+    </div>
+  </div>
+
+  <footer>
+    <div>répertoire sondé&nbsp;: <b id="f-dir">—</b> &nbsp;·&nbsp; horloge&nbsp;: <b id="f-clock">—</b> &nbsp;·&nbsp;
+    dernier sondage&nbsp;: <b id="f-poll">—</b> &nbsp;·&nbsp; <span id="poll-error"></span></div>
+    <div>N1 — complément humain d'O11/SW-5c · lecture seule · zéro dépendance (voir README.md)</div>
+  </footer>
+
+  <script src="./app.js"></script>
+</body>
+</html>

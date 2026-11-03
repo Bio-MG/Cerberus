@@ -1,0 +1,14 @@
+{
+  "protocol": "ts-drive/1",
+  "armed": true,
+  "pid": 19532,
+  "port": "7789",
+  "root": "D:/Data_science/SHINYAPP test (git work)/SHINYAPP test",
+  "session_token": "fxalive1",
+  "viewer": "headless",
+  "last_seq": 4,
+  "started_at": "2026-11-03T16:20:00Z",
+  "hb_at": "2026-11-03T16:37:12Z",
+  "hb_n": 341,
+  "hb_timeout_s": 15
+}

@@ -1,0 +1,8 @@
+{
+  "protocol": "ts-drive/1",
+  "session_token": "fxalive1",
+  "seq": 5,
+  "action": "snapshot",
+  "module": "bulk_de",
+  "expect": "modules.bulk_de"
+}

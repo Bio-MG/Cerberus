@@ -1,0 +1,26 @@
+{
+  "protocol": "ts-drive/1",
+  "ack_seq": 6,
+  "status": "done",
+  "applied_at": "2026-11-03T15:58:40Z",
+  "active_module": "import",
+  "armed": false,
+  "preserve_data": true,
+  "errors": [],
+  "warnings": ["stale seq 6 (<= last_seq 6)"],
+  "snapshot": null,
+  "job": {
+    "job_id": "j-0006",
+    "seq": 6,
+    "module": "import",
+    "action": "import_file",
+    "button": "import_bulk-btn_load",
+    "status": "done",
+    "started_at": "2026-11-03T15:58:36Z",
+    "ended_at": "2026-11-03T15:58:40Z",
+    "elapsed_s": 3.1,
+    "timeout_s": null
+  },
+  "descriptor": null,
+  "write_error": null
+}

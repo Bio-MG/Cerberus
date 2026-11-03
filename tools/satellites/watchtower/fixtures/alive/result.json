@@ -1,0 +1,26 @@
+{
+  "protocol": "ts-drive/1",
+  "ack_seq": 4,
+  "status": "done",
+  "applied_at": "2026-11-03T16:36:58Z",
+  "active_module": "bulk_de",
+  "armed": true,
+  "preserve_data": true,
+  "errors": [],
+  "warnings": [],
+  "snapshot": null,
+  "job": {
+    "job_id": "j-0004",
+    "seq": 4,
+    "module": "bulk_de",
+    "action": "run_pipeline",
+    "button": "bulk-de-run_de",
+    "status": "done",
+    "started_at": "2026-11-03T16:36:56Z",
+    "ended_at": "2026-11-03T16:36:58Z",
+    "elapsed_s": 2.1,
+    "timeout_s": null
+  },
+  "descriptor": null,
+  "write_error": null
+}

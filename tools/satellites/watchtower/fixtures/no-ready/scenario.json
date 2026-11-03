@@ -1,0 +1,13 @@
+{
+  "protocol": "ts-drive/1",
+  "session_token": "fxoldses",
+  "seq": 6,
+  "action": "set_inputs",
+  "module": "bulk_de",
+  "inputs": {
+    "bulk-de-condition_col": "condition",
+    "group_ref": "CoV2",
+    "group_target": "mock",
+    "de_engine": "deseq2"
+  }
+}
