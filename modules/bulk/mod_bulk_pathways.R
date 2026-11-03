@@ -217,6 +217,21 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
       } else {
         as.numeric(Sys.time()) - drive_last$started
       }
+      # N7 timebox (satellites slice S3, jalon round8, 2026-11-03) : au site de
+      # FINALISATION du job (durée MESURÉE ci-dessus), un dépassement du budget
+      # déclaré (defaults.R TS_JOB_BUDGET_S_*) est consigné via le canal
+      # provenance EXISTANT (ts_job_overrun_entry → new_provenance_entry /
+      # provenance_append) — une ligne {job, budget, actual, ratio}, jamais
+      # bloquant ; un job dans son budget ne produit AUCUNE ligne.
+      elapsed_tb <- drive_last$elapsed_s
+      budget_tb <- ts_job_budget(paste0("bulk-pathways-", action))
+      if (is.finite(elapsed_tb) && elapsed_tb > as.numeric(budget_tb)) {
+        provenance_append(shared_rv, ts_job_overrun_entry(
+          job = paste0("bulk-pathways-", action),
+          budget_s = as.numeric(budget_tb),
+          actual_s = as.numeric(elapsed_tb)
+        ))
+      }
       invisible(NULL)
     }
 
@@ -779,6 +794,23 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
 
     output$pathway_status <- renderText({
       global_data$language
+      # N7 timebox (satellites slice S3, jalon round8, 2026-11-03) : pendant un
+      # job en vol, la surface EXISTANTE drive_state porte déjà elapsed_s —
+      # le budget déclaré (defaults.R TS_JOB_BUDGET_S_*) est rendu À CÔTÉ
+      # (« en cours — … (typique …) »), zéro spinner nouveau. Le libellé FR
+      # passe par l'injecteur i18n du module (clés append-only dans
+      # translation.json). Hors vol, la logique existante ci-dessous est
+      # INTACTE (additions-only).
+      st_tb <- drive_state()
+      if (isTRUE(st_tb$status == "running") && !is.null(st_tb$elapsed_s) &&
+          !is.na(st_tb$action)) {
+        return(ts_job_budget_label(
+          elapsed_s = as.numeric(st_tb$elapsed_s),
+          budget_s  = as.numeric(ts_job_budget(paste0("bulk-pathways-",
+                                                      st_tb$action))),
+          tr = .tr
+        ))
+      }
       if (is.null(shared_rv$pathway_results)) .tr("Aucune analyse en cours")
       else .t_fmt(.tr("\u2713 {n} pathways trouv\u00e9s [ {db} ]"),
                   n = nrow(shared_rv$pathway_results), db = input$pathway_db)

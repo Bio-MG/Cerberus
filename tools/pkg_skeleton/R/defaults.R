@@ -117,6 +117,29 @@ TS_BULK_TPM_COLSUM_LOW   <- 5e5     # borne basse de la fenêtre de somme média
 TS_BULK_TPM_COLSUM_HIGH  <- 5e6     # borne haute de la fenêtre de somme médiane
 TS_BULK_TPM_UNIT_FRAC    <- 0.01    # fraction minimale de valeurs dans ]0;1[
 
+# --- Timebox des jobs (N7, satellites slice S3, round8 — 2026-11-03) ---------
+# Honnêteté pendant l'attente (fiche N7 : « ne jamais regarder un écran figé ») :
+# chaque job drive déclaré porte un BUDGET de durée — un plafond GÉNÉREUX
+# annoncé à l'utilisateur (« en cours — … (typique …) », helpers
+# job_timebox.R), PAS un kill : les plafonds durs restent les TS_*_TIMEOUT_*.
+# Budgets DÉCLARÉS par l'auteur du module, revus au milestone (défaut D4) —
+# JAMAIS déduits fin. Ancres mesurées : 537 s réels (537.1 s, job
+# sc-pipeline-run_auto_pipeline, PBMC 1k synchrone —
+# docs/ideation/SC_EXTENDED_TASK_ASYNC.md:5,13 ; le brief round8 jalon 3 cite
+# cette ancre comme « job DE réel 537 s », l'autopipeline enchaînant
+# FindAllMarkers/DE) — elle porte sur SA constante ci-dessous (x3.3) ; les
+# autres valeurs n'ont AUCUNE mesure propre : volontairement larges et
+# marquées UNTESTED dans leur commentaire — à revoir à la première mesure.
+# FALLBACK (documenté) : un job sans constante ici reçoit
+# TS_JOB_BUDGET_S_UNDECLARED (1 h, généreux) + flag UNTESTED par
+# ts_job_budget() (tools/pkg_skeleton/R/job_timebox.R) — jamais un budget
+# inventé par module.
+TS_JOB_BUDGET_S_SC_PIPELINE_RUN_AUTO_PIPELINE <- 1800  # 30 min ; ancre mesurée 537 s (x3.3)
+TS_JOB_BUDGET_S_BULK_DE_RUN_DE                <- 1800  # 30 min ; UNTESTED (aucune mesure bulk-DE propre)
+TS_JOB_BUDGET_S_BULK_PATHWAYS_RUN_PATHWAY     <- 900   # 15 min ; UNTESTED (ORA/GSEA, généreux)
+TS_JOB_BUDGET_S_BULK_PATHWAYS_RUN_SCORES      <- 900   # 15 min ; UNTESTED (scores de gènes)
+TS_JOB_BUDGET_S_UNDECLARED                    <- 3600  # 1 h ; FALLBACK job sans constante (UNTESTED)
+
 
 # --- scCODA (4E-2) ------------------------------------------------------------
 # DA compositionnelle au niveau ECHANTILLON via l'environnement Python sccoda

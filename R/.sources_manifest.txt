@@ -19,6 +19,7 @@ tools/pkg_skeleton/R/session_checkpoint.R
 tools/pkg_skeleton/R/cerberus_handoff.R
 tools/pkg_skeleton/R/dataset_directory.R
 tools/pkg_skeleton/R/dataset_health.R
+tools/pkg_skeleton/R/job_timebox.R
 tools/pkg_skeleton/R/palettes.R
 tools/pkg_skeleton/R/theme.R
 tools/pkg_skeleton/R/export.R

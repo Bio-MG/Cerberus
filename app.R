@@ -125,6 +125,13 @@ source("tools/pkg_skeleton/R/dataset_directory.R")
 # DÉLÉGUÉE à l'O16 bulk_counts_transformed_signature, jamais bloquant (AC2.4) ;
 # consommé par mod_import_bulk aux 3 sites .warn_if_transformed_bulk.
 source("tools/pkg_skeleton/R/dataset_health.R")
+# N7 timebox (satellites slice S3, jalon round8, 2026-11-03) : helpers PURS du
+# timebox des jobs — budget déclaré (TS_JOB_BUDGET_S_*, defaults.R) lu par
+# ts_job_budget(), libellé « en cours — … (typique …) » par
+# ts_job_budget_label(), overrun consigné via le canal provenance EXISTANT
+# (ts_job_overrun_entry → new_provenance_entry/provenance_append) ; consommé
+# par mod_bulk_pathways (ligne de statut + finalisation drive_record).
+source("tools/pkg_skeleton/R/job_timebox.R")
 # Racine applicative capturee UNE fois, au chargement (app.R tourne depuis la
 # racine renv). JAMAIS getwd() au moment du tick : RStudio peut deriver.
 ts_drive_boot(getwd())

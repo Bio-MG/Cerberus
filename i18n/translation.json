@@ -11776,6 +11776,18 @@
     {
       "fr": "Santé du dataset : %d anomalie(s) warn — détail dans le panneau « Datasets découverts ».",
       "en": "Dataset health: %d warn issue(s) — details in the 'Discovered datasets' panel."
+    },
+    {
+      "fr": "en cours — {elapsed}",
+      "en": "in progress — {elapsed}"
+    },
+    {
+      "fr": "typique {range}",
+      "en": "typically {range}"
+    },
+    {
+      "fr": "dépassé — typique {range}, ×{ratio}",
+      "en": "over budget — typically {range}, ×{ratio}"
     }
   ]
 }

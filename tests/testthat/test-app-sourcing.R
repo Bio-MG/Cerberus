@@ -204,9 +204,16 @@ test_that("M2 semantics: 159 explicit sources, zero hidden sourcing loop", {
   # S2 ; échelle DÉLÉGUÉE à l'O16 bulk_counts_transformed_signature, jamais
   # bloquant AC2.4 ; freeze test test-dataset-health.R, RED mesuré avant
   # implémentation : FAIL 29 / PASS 20 / 0 erreur).
+  # N7 timebox (2026-11-03) : re-basage 167 -> 168 (+1 helpers purs
+  # tools/pkg_skeleton/R/job_timebox.R, bloc 03 juste après dataset_health.R —
+  # timebox des jobs : budgets TS_JOB_BUDGET_S_* (defaults.R), libellé
+  # « en cours — … (typique …) », overrun via le canal provenance EXISTANT ;
+  # satellites slice S3 ; freeze test test-job-timebox.R, RED mesuré avant
+  # implémentation : FAIL 22 / PASS 0 / SKIP 2 / 0 erreur ; échec de pin
+  # mesuré AVANT re-basage : FAIL 1 « 168 - 167 == 1 »).
   expect_identical(
-    length(.app_explicit(.app_src)), 167L,
-    info = paste("app.R doit porter exactement 167 source() explicites",
+    length(.app_explicit(.app_src)), 168L,
+    info = paste("app.R doit porter exactement 168 source() explicites",
                  "(M2 : 145 + 10 bulk_de deplies, + 3 export drive M3,",
                  "+ 1 moteur sc_qc_doublets M4, + 1 module session ASR-3 O29,",
                  "+ 1 moteur session_checkpoint ASR câblage O29,",
@@ -215,7 +222,8 @@ test_that("M2 semantics: 159 explicit sources, zero hidden sourcing loop", {
                  "+ 1 moteur spatial_meta_col_validation SPMV-1 O-SPMV,",
                  "+ 1 moteur dataset_directory PoC datasets P0,",
                  "+ 1 câblage cerberus_handoff PoC datasets P1,",
-                 "+ 1 moteur dataset_health N5 dataset-doctor S2)",
+                 "+ 1 moteur dataset_health N5 dataset-doctor S2,",
+                 "+ 1 moteur job_timebox N7 timebox S3)",
                  "-- le compte observe differe")
   )
   # et plus AUCUNE boucle list.files() de sourcing : M2 a deplie la derniere,
