@@ -198,9 +198,15 @@ test_that("M2 semantics: 159 explicit sources, zero hidden sourcing loop", {
   # le statut « étranger CERBERUS non câblé » du fichier prend fin, fiche
   # §3.3/AC3 ; section UI testée par test-dataset-dir-ui.R, RED mesuré avant
   # implémentation : failed=6).
+  # N5 dataset-doctor (2026-11-03) : re-basage 166 -> 167 (+1 moteur
+  # tools/pkg_skeleton/R/dataset_health.R, bloc 03 juste après
+  # dataset_directory.R — rapport de santé unifié à l'import, satellites slice
+  # S2 ; échelle DÉLÉGUÉE à l'O16 bulk_counts_transformed_signature, jamais
+  # bloquant AC2.4 ; freeze test test-dataset-health.R, RED mesuré avant
+  # implémentation : FAIL 29 / PASS 20 / 0 erreur).
   expect_identical(
-    length(.app_explicit(.app_src)), 166L,
-    info = paste("app.R doit porter exactement 166 source() explicites",
+    length(.app_explicit(.app_src)), 167L,
+    info = paste("app.R doit porter exactement 167 source() explicites",
                  "(M2 : 145 + 10 bulk_de deplies, + 3 export drive M3,",
                  "+ 1 moteur sc_qc_doublets M4, + 1 module session ASR-3 O29,",
                  "+ 1 moteur session_checkpoint ASR câblage O29,",
@@ -208,7 +214,8 @@ test_that("M2 semantics: 159 explicit sources, zero hidden sourcing loop", {
                  "+ 1 module biostat_tree M3 BIOSTAT O27,",
                  "+ 1 moteur spatial_meta_col_validation SPMV-1 O-SPMV,",
                  "+ 1 moteur dataset_directory PoC datasets P0,",
-                 "+ 1 câblage cerberus_handoff PoC datasets P1)",
+                 "+ 1 câblage cerberus_handoff PoC datasets P1,",
+                 "+ 1 moteur dataset_health N5 dataset-doctor S2)",
                  "-- le compte observe differe")
   )
   # et plus AUCUNE boucle list.files() de sourcing : M2 a deplie la derniere,

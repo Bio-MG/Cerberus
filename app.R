@@ -120,6 +120,11 @@ source("tools/pkg_skeleton/R/session_checkpoint.R")
 # dans le même geste).
 source("tools/pkg_skeleton/R/cerberus_handoff.R")
 source("tools/pkg_skeleton/R/dataset_directory.R")
+# N5 dataset-doctor (satellites slice S2, jalon round8, 2026-11-03) : moteur
+# PUR du rapport de santé unifié à l'import (ts_dataset_health) — échelle
+# DÉLÉGUÉE à l'O16 bulk_counts_transformed_signature, jamais bloquant (AC2.4) ;
+# consommé par mod_import_bulk aux 3 sites .warn_if_transformed_bulk.
+source("tools/pkg_skeleton/R/dataset_health.R")
 # Racine applicative capturee UNE fois, au chargement (app.R tourne depuis la
 # racine renv). JAMAIS getwd() au moment du tick : RStudio peut deriver.
 ts_drive_boot(getwd())

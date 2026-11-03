@@ -11768,6 +11768,14 @@
     {
       "fr": "Chargement du dataset « %s » depuis le répertoire...",
       "en": "Loading dataset '%s' from the directory..."
+    },
+    {
+      "fr": "Santé du dataset — anomalies détectées :",
+      "en": "Dataset health — issues detected:"
+    },
+    {
+      "fr": "Santé du dataset : %d anomalie(s) warn — détail dans le panneau « Datasets découverts ».",
+      "en": "Dataset health: %d warn issue(s) — details in the 'Discovered datasets' panel."
     }
   ]
 }

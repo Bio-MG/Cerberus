@@ -109,6 +109,42 @@
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# N5 DATASET-DOCTOR (satellites slice S2, jalon round8, 2026-11-03) : rendu
+# PUR du rapport de santé unifié (ts_dataset_health, moteur pkg tree)
+# ─────────────────────────────────────────────────────────────────────────────
+#' Render the dataset health report as a small bootstrap warning block.
+#'
+#' PURE (no session symbol) — motif `.bulk_datasets_table_rows()` ci-dessus :
+#'
+#' top-level FILE function so tests assert the structure directly (leçon
+#' CQF-2 : MockShinySession n'observe pas update* — fonctions pures + verrous
+#' structurels). Warn-only (AC2.4) : un rapport sans finding warn ne rend
+#' RIEN (pas de bruit sur un import propre) ; les findings « ok » restent
+#' visibles dans le log opérateur. Les libellés/messages des findings sont
+#' les données du moteur (FR actionnable, même convention que le message O16
+#' de `.warn_if_transformed_bulk()` et les raisons v1 du scan P0) ; les
+#' chaînes POSÉES ici passent par le traducteur.
+#'
+#' @param health Résultat de `ts_dataset_health()` (ou NULL).
+#' @param tr Traducteur (server `.tr` / identité en tests).
+#' @return Un tag shiny::div (bloc alert-warning) ou NULL si rien à montrer.
+.dataset_health_html <- function(health, tr = function(x) x) {
+  fd <- if (is.null(health)) NULL else health$findings
+  if (is.null(fd) || !is.data.frame(fd) || nrow(fd) == 0L) return(NULL)
+  warns <- fd[fd$severity == "warn", , drop = FALSE]
+  if (nrow(warns) == 0L) return(NULL)
+  items <- lapply(seq_len(nrow(warns)), function(i) {
+    shiny::tags$li(shiny::tags$strong(warns$label[i]), " — ", warns$message[i])
+  })
+  shiny::div(
+    class = "alert alert-warning",
+    style = "font-size:0.82rem;",
+    shiny::tags$strong(tr("Santé du dataset — anomalies détectées :")),
+    shiny::tags$ul(.list = items)
+  )
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # UI
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -339,7 +375,11 @@ mod_import_bulk_ui <- function(id) {
                              class = "btn-outline-secondary btn-sm"),
                 uiOutput(ns("datasets_dir_txt"))
             ),
-            uiOutput(ns("datasets_table_ui"))
+            uiOutput(ns("datasets_table_ui")),
+            # N5 dataset-doctor (2026-11-03) : rapport de santé unifié —
+            # bloc additif warn-only (AC2.4 : jamais bloquant), alimenté par
+            # .dataset_health_report() aux sites d'import O16.
+            uiOutput(ns("dataset_health_ui"))
           )
         ),
 
@@ -683,6 +723,32 @@ mod_import_bulk_server <- function(id, global_data) {
       invisible(NULL)
     }
 
+    # ── N5 DATASET-DOCTOR (satellites slice S2, jalon round8, 2026-11-03) ──
+    # ADDITIF au signal O16 (qui reste TEL QUEL ci-dessus) : le doctor
+    # ts_dataset_health() délègue l'échelle à la MÊME signature O16 et ajoute
+    # doublons de rownames / gènes MT. Rendu : log opérateur + notification
+    # warn PERSISTANTE + petit bloc UI additif à côté du panneau
+    # « Datasets découverts » (.dataset_health_html, warn-only).
+    # AC2.4 : JAMAIS bloquant — aucun stop()/validate() ici ; un échec du
+    # doctor est absorbé (tryCatch) et ne casse jamais le chemin d'import ;
+    # proceed immédiat (l'import reste utilisable après le warn).
+    ds_health_rv <- shiny::reactiveVal(NULL)
+    .dataset_health_report <- function(obj) {
+      health <- tryCatch(
+        ts_dataset_health(mat = if (is.null(obj)) NULL else obj$counts),
+        error = function(e) NULL)
+      if (is.null(health)) return(invisible(NULL))
+      ds_health_rv(health)
+      warns <- health$findings[health$findings$severity == "warn", , drop = FALSE]
+      if (nrow(warns) == 0L) return(invisible(NULL))
+      for (i in seq_len(nrow(warns))) add_log(paste(" ⚠️", warns$message[i]))
+      showNotification(
+        sprintf(.tr("Santé du dataset : %d anomalie(s) warn — détail dans le panneau « Datasets découverts »."),
+                nrow(warns)),
+        type = "warning", duration = NULL)
+      invisible(NULL)
+    }
+
     # =========================================================================
     # MODE MERGED_MATRIX — inchangé
     # =========================================================================
@@ -878,6 +944,7 @@ mod_import_bulk_server <- function(id, global_data) {
       temp_data$is_loaded  <- TRUE
       .register_multi_dataset(global_data$bulk_obj)
       .warn_if_transformed_bulk(global_data$bulk_obj)  # O16 : bannière TPM/FPKM avant analyse
+      .dataset_health_report(global_data$bulk_obj)  # N5 dataset-doctor : rapport unifié (warn, jamais bloquant — AC2.4)
       add_log(paste("✅ Import (drive) réussi :", nrow(bulk_obj$counts), "gènes ×",
                     ncol(bulk_obj$counts), "échantillons"))
       showNotification(paste("✅ Import piloté réussi :", ncol(bulk_obj$counts),
@@ -982,6 +1049,13 @@ mod_import_bulk_server <- function(id, global_data) {
         )),
         tags$tbody(lapply(rows, function(r) r$row))
       )
+    })
+
+    # N5 dataset-doctor (2026-11-03) : rendu du rapport de santé unifié —
+    # bloc additif warn-only à côté de la table « Datasets découverts ».
+    # NULL tant qu'aucun rapport n'existe et sur un rapport propre (pas de bruit).
+    output$dataset_health_ui <- renderUI({
+      .dataset_health_html(ds_health_rv(), tr = .tr)
     })
 
     observe({
@@ -1494,6 +1568,7 @@ mod_import_bulk_server <- function(id, global_data) {
           global_data$bulk_obj_epoch <- (global_data$bulk_obj_epoch %||% 0L) + 1L  # purge résultats partagés (jeu remplacé)
           temp_data$is_loaded  <- TRUE
           .warn_if_transformed_bulk(global_data$bulk_obj)  # O16 : bannière TPM/FPKM avant analyse
+          .dataset_health_report(global_data$bulk_obj)  # N5 dataset-doctor : rapport unifié (warn, jamais bloquant — AC2.4)
           add_log(paste("✅ Import réussi!", nrow(bulk_obj$counts), "gènes ×",
                         ncol(bulk_obj$counts), "échantillons"))
           .register_multi_dataset(global_data$bulk_obj)  # MD-1 (label optionnel)
@@ -1654,6 +1729,7 @@ mod_import_bulk_server <- function(id, global_data) {
         temp_data$is_loaded <- TRUE
         removeNotification(id = ns("progress"))
         .warn_if_transformed_bulk(global_data$bulk_obj)  # O16 : bannière TPM/FPKM avant analyse
+        .dataset_health_report(global_data$bulk_obj)  # N5 dataset-doctor : rapport unifié (warn, jamais bloquant — AC2.4)
         add_log(paste("✅ Import multi-fichiers réussi —",
                       nrow(result$counts_mat), "gènes ×",
                       ncol(result$counts_mat), "échantillons"))
