@@ -186,15 +186,29 @@ test_that("M2 semantics: 159 explicit sources, zero hidden sourcing loop", {
   # docs/proposals/SPATIAL_META_COL_VALIDATION_PROPOSAL.md §4a/§4d ; freeze
   # test test-spmv1-meta-col-validation.R, RED mesuré avant implémentation
   # : failed=14).
+  # PoC DATASET DIRECTORY (2026-11-03) : re-basage 164 -> 165 (+1 moteur
+  # tools/pkg_skeleton/R/dataset_directory.R, bloc 03 après
+  # session_checkpoint.R — moteur pur du scanner passif du répertoire de
+  # datasets ; fiche docs/proposals/PROPOSAL_DATASET_DIRECTORY_POC_2026-11-02.md
+  # §3.1-3.2 ; freeze test test-dataset-dir-scan.R, RED mesuré avant
+  # implémentation : failed=7 ; jamais appelé au cold-boot, AC2).
+  # PoC DATASET DIRECTORY P1 (2026-11-03) : re-basage 165 -> 166 (+1 câblage
+  # tools/pkg_skeleton/R/cerberus_handoff.R, bloc 03 juste avant
+  # dataset_directory.R — dépendance runtime du scan, arbitrage opérateur ;
+  # le statut « étranger CERBERUS non câblé » du fichier prend fin, fiche
+  # §3.3/AC3 ; section UI testée par test-dataset-dir-ui.R, RED mesuré avant
+  # implémentation : failed=6).
   expect_identical(
-    length(.app_explicit(.app_src)), 164L,
-    info = paste("app.R doit porter exactement 164 source() explicites",
+    length(.app_explicit(.app_src)), 166L,
+    info = paste("app.R doit porter exactement 166 source() explicites",
                  "(M2 : 145 + 10 bulk_de deplies, + 3 export drive M3,",
                  "+ 1 moteur sc_qc_doublets M4, + 1 module session ASR-3 O29,",
                  "+ 1 moteur session_checkpoint ASR câblage O29,",
                  "+ 1 moteur biostat_tree M2 BIOSTAT O27,",
                  "+ 1 module biostat_tree M3 BIOSTAT O27,",
-                 "+ 1 moteur spatial_meta_col_validation SPMV-1 O-SPMV)",
+                 "+ 1 moteur spatial_meta_col_validation SPMV-1 O-SPMV,",
+                 "+ 1 moteur dataset_directory PoC datasets P0,",
+                 "+ 1 câblage cerberus_handoff PoC datasets P1)",
                  "-- le compte observe differe")
   )
   # et plus AUCUNE boucle list.files() de sourcing : M2 a deplie la derniere,

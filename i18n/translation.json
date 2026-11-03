@@ -11708,6 +11708,66 @@
     {
       "fr": "Colonne de clusters — les paires seront numérotées. Lancez l'annotation (SingleR) pour des types cellulaires nommés.",
       "en": "Cluster column — pairs will be numbered. Run annotation (SingleR) for named cell types."
+    },
+    {
+      "fr": "Datasets découverts",
+      "en": "Discovered datasets"
+    },
+    {
+      "fr": "Scanner le répertoire",
+      "en": "Scan the directory"
+    },
+    {
+      "fr": "Identifiant",
+      "en": "Identifier"
+    },
+    {
+      "fr": "Espèce",
+      "en": "Species"
+    },
+    {
+      "fr": "Raison",
+      "en": "Reason"
+    },
+    {
+      "fr": "Aucun dataset découvert — cliquez sur « Scanner le répertoire ».",
+      "en": "No dataset discovered — click 'Scan the directory'."
+    },
+    {
+      "fr": "Déposez des datasets conformes cerberus-exchange/v1 dans le répertoire, puis scannez : rien n'est lu au démarrage et rien n'est chargé sans votre clic.",
+      "en": "Drop cerberus-exchange/v1 compliant datasets into the directory, then scan: nothing is read at startup and nothing is loaded without your click."
+    },
+    {
+      "fr": "Répertoire : %s",
+      "en": "Directory: %s"
+    },
+    {
+      "fr": "Scan du répertoire des datasets : %d dataset(s).",
+      "en": "Dataset directory scan: %d dataset(s)."
+    },
+    {
+      "fr": "Refusé : dataset « %s » non valide (raison : %s).",
+      "en": "Refused: dataset '%s' is not valid (reason: %s)."
+    },
+    {
+      "fr": "✓ Dataset « %s » chargé.",
+      "en": "✓ Dataset '%s' loaded."
+    },
+    {
+      "fr": "Erreur chargement dataset : %s",
+      "en": "Dataset load error: %s"
+    },
+    {
+      "fr": "Erreur scan du répertoire : %s",
+      "en": "Directory scan error: %s"
+    },
+    {
+      "fr": "Importeur bulk indisponible — relancez l'application.",
+      "en": "Bulk importer unavailable — restart the application."
+    },
+    {
+      "fr": "Chargement du dataset « %s » depuis le répertoire...",
+      "en": "Loading dataset '%s' from the directory..."
     }
   ]
 }

@@ -56,6 +56,59 @@
 #' @return list(ok, de_ok, messages, metadata)
 
 # ─────────────────────────────────────────────────────────────────────────────
+# PoC DATASET DIRECTORY (jalon P1, fiche §3.3) : constructeur PUR de lignes
+# ─────────────────────────────────────────────────────────────────────────────
+#' Build the « Datasets découverts » table rows from the P0 scan table.
+#'
+#' PURE (no session symbol): takes the scan table returned by
+#' `ts_dataset_dir_scan()`, the module `ns` and a translator, and returns ONE
+#' named entry per dataset: `row` (the <tr> tag), `button` (the per-dataset
+#' « Charger » actionButton — DISABLED unless status == "valid", AC3) and
+#' `loadable` (logical, headless-assertable). Top-level FILE function (not a
+#' server closure) so tests assert the structure directly, without HTML
+#' serialisation. Zero CSS: bootstrap utility classes only.
+#'
+#' @param scan Named list as returned by `ts_dataset_dir_scan()`.
+#' @param ns Module namespace function.
+#' @param tr Translator (server `.tr` / identity in tests).
+#' @return Named list of list(row =, button =, loadable =).
+.bulk_datasets_table_rows <- function(scan, ns, tr) {
+  out <- list()
+  for (id in names(scan)) {
+    e <- scan[[id]]
+    btn <- shiny::actionButton(ns(paste0("btn_load_ds_", id)),
+                               label = tr("Charger"),
+                               class = "btn-outline-primary btn-sm")
+    loadable <- identical(e$status, "valid")
+    if (!loadable) {
+      # AC3 : désactivation RÉELLE au markup — attribut HTML `disabled` nu,
+      # effectif sans JS. MESURÉ (jalon P1) : shinyjs::disabled() ne pose
+      # qu'une classe "shinyjs-disabled" activée par le JS shinyjs — le
+      # bouton resterait actif sans JS et l'état n'est pas assertable
+      # headless (tagGetAttribute -> NULL).
+      btn <- shiny::tagAppendAttributes(btn, disabled = NA)
+    }
+    raison <- if (is.null(e$raison) || is.na(e$raison)) "" else e$raison
+    espece <- if (is.null(e$manifest$species) || is.na(e$manifest$species)) "" else e$manifest$species
+    mtype <- if (is.null(e$manifest$matrix_type) || is.na(e$manifest$matrix_type)) "" else e$manifest$matrix_type
+    nsamp <- e$checks$experimental_design$n_samples
+    if (is.null(nsamp)) nsamp <- e$checks$matrix_semantics$n_samples
+    nsamp_txt <- if (is.null(nsamp) || length(nsamp) != 1L || is.na(nsamp)) "" else as.character(nsamp)
+    row <- shiny::tags$tr(
+      shiny::tags$td(id),
+      shiny::tags$td(espece),
+      shiny::tags$td(mtype),
+      shiny::tags$td(nsamp_txt),
+      shiny::tags$td(if (is.null(e$status) || is.na(e$status)) "" else e$status),
+      shiny::tags$td(raison),
+      shiny::tags$td(btn)
+    )
+    out[[id]] <- list(row = row, button = btn, loadable = loadable)
+  }
+  out
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # UI
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -264,9 +317,32 @@ mod_import_bulk_ui <- function(id) {
               
               uiOutput(ns("ps_status_banner"))
             )
+          ),
+
+          # ── Panel 5 : PoC « Datasets découverts » (jalon P1, fiche §3.3) ──
+          # Scan À LA DEMANDE seulement (AC2/§5 : jamais au cold-boot, jamais
+          # au montage — le serveur ne scanne qu'au clic). Table = la table de
+          # scan P0 ; « Charger » n'est actif que sur un dataset valid (AC3 —
+          # refus doublé côté serveur). ZÉRO nouveau chemin de chargement :
+          # l'importeur bulk publié pour le canal drive est réutilisé tel quel.
+          # fix 2026-11-03 : i18n$use_js() fait de i18n$t() un <span> htmltools
+          # au build — or accordion_panel exige value = is_string(title) (bslib
+          # 0.12) → boot fatal. Convention mod_bulk.R : titre i18n + `value=`
+          # explicite (cf. panel_mapping/panel_filter/panel_datasets).
+          accordion_panel(
+            i18n$t("Datasets découverts"),
+            value = "panel_datasets",
+            icon = icon("folder-open"),
+            helpText(i18n$t("Déposez des datasets conformes cerberus-exchange/v1 dans le répertoire, puis scannez : rien n'est lu au démarrage et rien n'est chargé sans votre clic.")),
+            div(class = "d-flex align-items-center gap-2 mb-2",
+                actionButton(ns("btn_scan_datasets"), i18n$t("Scanner le répertoire"),
+                             class = "btn-outline-secondary btn-sm"),
+                uiOutput(ns("datasets_dir_txt"))
+            ),
+            uiOutput(ns("datasets_table_ui"))
           )
         ),
-        
+
         hr(),
         # ── Bouton persistant (inchangé) ───────────────────────────────────
         div(
@@ -811,7 +887,103 @@ mod_import_bulk_server <- function(id, global_data) {
       list(ok = TRUE, status = "applied", errors = character(0),
            warnings = warnings)
     })
-    
+
+    # ── PoC « DATASETS DÉCOUVERTS » (fiche §3.3, jalon P1) ─────────────────
+    # Scan À LA DEMANDE (bouton) — JAMAIS au montage (AC2/§5) : rien de ce
+    # bloc ne s'exécute à l'init. « Charger » réutilise l'importeur bulk
+    # PUBLIÉ ci-dessus pour le canal drive (ts_drive_importer_of,
+    # drive_allowlist.R:1945) — ZÉRO nouveau chemin de chargement ; l'état
+    # aboutit dans global_data$bulk_obj exactement comme un import manuel
+    # (règle « deux voies, un dépôt »). Double garde AC3 : le bouton est
+    # désactivé côté UI (.bulk_datasets_table_rows) ET le serveur refuse tout
+    # statut ≠ valid, même si l'input est forcé.
+    ds_scan_rv <- shiny::reactiveVal(NULL)
+    ds_dir_rv <- shiny::reactiveVal(NULL)
+    ds_seen_ids <- shiny::reactiveVal(character(0))
+
+    .charger_dataset <- function(id) {
+      entry <- shiny::isolate(ds_scan_rv())[[id]]
+      if (is.null(entry)) return(invisible(NULL))
+      if (!identical(entry$status, "valid")) {
+        raison <- if (is.null(entry$raison) || is.na(entry$raison)) "?" else entry$raison
+        msg <- sprintf(.tr("Refusé : dataset « %s » non valide (raison : %s)."), id, raison)
+        add_log(paste("⛔", msg))
+        showNotification(msg, type = "warning", duration = 8)
+        return(invisible(NULL))
+      }
+      imp <- ts_drive_importer_of(global_data, "import_bulk")
+      if (is.null(imp)) {
+        showNotification(.tr("Importeur bulk indisponible — relancez l'application."),
+                         type = "error", duration = 10)
+        return(invisible(NULL))
+      }
+      add_log(paste0("📂 ", sprintf(.tr("Chargement du dataset « %s » depuis le répertoire..."), id)))
+      res <- tryCatch(
+        imp(list(counts_path = entry$paths$matrix,
+                 metadata_path = entry$paths$samplesheet)),
+        error = function(e) list(ok = FALSE, status = "error",
+                                 errors = conditionMessage(e),
+                                 warnings = character(0)))
+      if (isTRUE(res$ok)) {
+        showNotification(sprintf(.tr("✓ Dataset « %s » chargé."), id),
+                         type = "message", duration = 5)
+      } else {
+        showNotification(sprintf(.tr("Erreur chargement dataset : %s"),
+                                 paste(unlist(res$errors), collapse = " ; ")),
+                         type = "error", duration = 10)
+      }
+      invisible(NULL)
+    }
+
+    observeEvent(input$btn_scan_datasets, {
+      res <- tryCatch(ts_dataset_dir_scan(), error = function(e) e)
+      if (inherits(res, "condition")) {
+        showNotification(sprintf(.tr("Erreur scan du répertoire : %s"),
+                                 conditionMessage(res)),
+                         type = "error", duration = 10)
+        return()
+      }
+      ds_dir_rv(ts_datasets_dir())
+      ds_scan_rv(res)
+      # Observateurs « Charger » par dataset (motif lapply + observeEvent
+      # dynamique, mod_sc_communication.R:756-760) : les ids ne sont connus
+      # qu'APRÈS le scan — le registre ds_seen_ids crée chaque observateur
+      # UNE seule fois (re-scan idempotent, pas d'accumulation).
+      new_ids <- setdiff(names(res), shiny::isolate(ds_seen_ids()))
+      lapply(new_ids, function(id) {
+        local({
+          idd <- id
+          observeEvent(input[[paste0("btn_load_ds_", idd)]], .charger_dataset(idd))
+        })
+      })
+      ds_seen_ids(c(shiny::isolate(ds_seen_ids()), new_ids))
+      add_log(sprintf(.tr("Scan du répertoire des datasets : %d dataset(s)."), length(res)))
+    })
+
+    output$datasets_dir_txt <- renderUI({
+      d <- ds_dir_rv()
+      if (is.null(d)) return(NULL)
+      tags$span(class = "text-muted small",
+                sprintf(.tr("Répertoire : %s"), d))
+    })
+
+    output$datasets_table_ui <- renderUI({
+      sc <- ds_scan_rv()
+      if (is.null(sc)) return(NULL)
+      if (length(sc) == 0L) {
+        return(tags$div(class = "text-muted",
+                        .tr("Aucun dataset découvert — cliquez sur « Scanner le répertoire ».")))
+      }
+      rows <- .bulk_datasets_table_rows(sc, ns, .tr)
+      tags$table(class = "table table-sm table-striped align-middle",
+        tags$thead(tags$tr(
+          lapply(c("Identifiant", "Espèce", "Type", "Échantillons", "État", "Raison", "Charger"),
+                 function(h) tags$th(.tr(h)))
+        )),
+        tags$tbody(lapply(rows, function(r) r$row))
+      )
+    })
+
     observe({
       shinyjs::toggleState("btn_infer_preview", condition = is.null(metadata_file_reactive()))
       shinyjs::toggleState("btn_infer_apply",   condition = is.null(metadata_file_reactive()))

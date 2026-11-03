@@ -27,7 +27,7 @@
   e
 }
 
-test_that("local MCP keeps TEN tools and resolves only the Spatial pipeline button", {
+test_that("local MCP keeps the TWELVE declared tools and resolves only the Spatial pipeline button", {
   e <- .mcp_local_env()
   tools <- e$.ts_tools()
   # TEN since R1 (2026-10-04): `transcripto_drive_read` is the tool for the
@@ -36,14 +36,18 @@ test_that("local MCP keeps TEN tools and resolves only the Spatial pipeline butt
   # for — a module never adds a tool — is asserted directly in
   # test-mcp-sc-local.R, where it can be stated over the module inventory
   # instead of over a count. See the note there.
-  expect_length(tools, 11L)
+  # TWELVE since the PoC dataset directory P2 (2026-11-03, fiche
+  # PROPOSAL_DATASET_DIRECTORY_POC_2026-11-02.md §3.4) : le 12e outil,
+  # transcripto_drive_datasets, est PASSIF LECTURE SEULE et SANS session
+  # (listing du répertoire de datasets) — pas une surface de module.
+  expect_length(tools, 12L)
   expect_setequal(vapply(tools, function(x) x$name, character(1)), c(
     "transcripto_drive_status", "transcripto_drive_read_result",
     "transcripto_drive_snapshot", "transcripto_drive_set_inputs",
     "transcripto_drive_run", "transcripto_drive_wait",
     "transcripto_drive_set_armed", "transcripto_drive_export",
     "transcripto_drive_import", "transcripto_drive_read",
-    "transcripto_drive_state"
+    "transcripto_drive_state", "transcripto_drive_datasets"
   ))
   expect_length(e$.ts_mcp_run_problems(), 0L)
   expect_identical(e$TS_MCP_RUN_ACTIONS, "run_pipeline")

@@ -16,6 +16,8 @@ tools/pkg_skeleton/R/error_state.R
 tools/pkg_skeleton/R/drive_allowlist.R
 tools/pkg_skeleton/R/drive_watcher.R
 tools/pkg_skeleton/R/session_checkpoint.R
+tools/pkg_skeleton/R/cerberus_handoff.R
+tools/pkg_skeleton/R/dataset_directory.R
 tools/pkg_skeleton/R/palettes.R
 tools/pkg_skeleton/R/theme.R
 tools/pkg_skeleton/R/export.R

@@ -103,6 +103,7 @@ if ("--check" %in% .args) {
   .ts_stderr("  transport    : stdio (no network port)")
   .ts_stderr("  tools        : transcripto_drive_status, transcripto_drive_read_result (read-only)")
   .ts_stderr("                 transcripto_drive_state (M2: passive, read-only)")
+  .ts_stderr("                 transcripto_drive_datasets (P2 PoC datasets: passive, read-only, session-free)")
   .ts_stderr("                 transcripto_drive_snapshot (M3a: passive, read-only)")
   .ts_stderr("                 transcripto_drive_import (S3: controlled import, scenario.json only)")
   .ts_stderr("                 transcripto_drive_set_inputs (M3b: controlled write, scenario.json only)")
@@ -140,6 +141,17 @@ if (!.ts_have_jsonlite) {
   file.path(.project_root, "tools", "pkg_skeleton", "R", "drive_watcher.R")
 }
 .ts_source_quiet(.ts_drive_watcher_path)
+# PoC « répertoire de datasets » (fiche PROPOSAL_DATASET_DIRECTORY_POC_2026-11-02.md
+# §3.4, jalon P2) : le moteur du scan + ses dépendances runtime (le lecteur de
+# manifeste v1 cerberus_handoff, câblé dans app.R au jalon P1 ; la résolution
+# racine .sc_project_root du checkpoint). Ces fichiers n'ont JAMAIS vécu sous
+# R/core — chemin unique, pas de fallback dual.
+.ts_source_quiet(file.path(.project_root, "tools", "pkg_skeleton", "R",
+                           "session_checkpoint.R"))
+.ts_source_quiet(file.path(.project_root, "tools", "pkg_skeleton", "R",
+                           "cerberus_handoff.R"))
+.ts_source_quiet(file.path(.project_root, "tools", "pkg_skeleton", "R",
+                           "dataset_directory.R"))
 ts_drive_boot(.project_root)
 
 # --- 3. Framing: newline-delimited JSON (MCP stdio) -------------------------
@@ -243,6 +255,12 @@ ts_drive_boot(.project_root)
                       # session family, PAYLOAD_REFUSED (malformed values) —
                       # there is no route/handle argument, so no handle code.
                       "NO_EXPORT_TARGET",
+                      # P2 PoC datasets (2026-11-03) — the second passive tool.
+                      # OUTSIDE_ALLOWLIST: the resolved datasets root fails the
+                      # SAME S11 confinement every import path goes through
+                      # (fail-closed, never widened). SCAN_FAILED: the root
+                      # could not be resolved or listed at all.
+                      "OUTSIDE_ALLOWLIST", "SCAN_FAILED",
                       # Slice 3 — session-derived inputs, addressed by index.
                       # INPUT_NOT_READY: the module's published vocabulary is
                       # absent or the key list is empty (data not loaded).
@@ -575,6 +593,72 @@ ts_drive_boot(.project_root)
                   if (is.list(state$errors)) length(state$errors) else 0L,
                   state$content_hash %|NA|% "none")
   .ts_tool_ok(state, text)
+}
+
+# --- 7a2. PoC datasets (P2, 2026-11-03) — the SECOND passive tool ------------
+#
+# `transcripto_drive_datasets` (fiche PROPOSAL_DATASET_DIRECTORY_POC_2026-11-02.md
+# §3.4, AC4/T7): list the datasets deposited in the datasets root. READ-ONLY
+# like tool n°11, and SESSION-FREE where tool n°11 needs a live channel:
+# a directory listing answers before the app is ever started. The root is
+# resolved by the P0 engine (ts_datasets_dir, 3 levels) and CONFINED by the
+# existing S11 rule for directories — the SAME containment every import path
+# goes through, never a widened allowlist. The listing runs the engine's
+# LIGHT scan (validate = FALSE — supported and frozen by T5): manifest
+# summaries and paths, NO v1 verdicts (the app-side scan, P1 UI, validates).
+#
+# ZERO writes: no state.json, no arm.json, nothing — measured by T7-3.
+
+.ts_tool_datasets <- function() {
+  root <- tryCatch(ts_datasets_dir(), error = function(e) NULL)
+  if (is.null(root)) {
+    return(.ts_tool_err(
+      "SCAN_FAILED",
+      "The datasets root could not be resolved.",
+      "Check TRANSCRIPTO_DATASETS_DIR / TRANSCRIPTO_DRIVE_DATA_DIR."))
+  }
+  # S11 confinement of the RESOLVED root (path-level: no existence demand —
+  # a not-yet-created default root is a normal empty listing, never an error).
+  conf <- tryCatch(
+    .ts_drive_resolve_import_path(root, ts_drive_import_roots()),
+    error = function(e) list(ok = FALSE, path = NULL,
+                             reason = conditionMessage(e)))
+  if (!isTRUE(conf$ok)) {
+    return(.ts_tool_err(
+      "OUTSIDE_ALLOWLIST",
+      sprintf("the datasets root '%s' is outside the allowlisted roots: %s",
+              .ts_clean(root), .ts_clean(conf$reason %|NA|% "unknown")),
+      paste0("Set TRANSCRIPTO_DATASETS_DIR inside the project root, tempdir(), ",
+             "or a TRANSCRIPTO_DRIVE_DATA_DIR entry. The allowlist is never ",
+             "widened by a tool.")))
+  }
+  scan <- tryCatch(
+    ts_dataset_dir_scan(datasets_dir = root, validate = FALSE),
+    error = function(e) NULL)
+  if (is.null(scan)) {
+    return(.ts_tool_err(
+      "SCAN_FAILED",
+      sprintf("the datasets root '%s' could not be listed.", .ts_clean(root)),
+      "Check the directory's readability."))
+  }
+  entries <- lapply(names(scan), function(id) {
+    en <- scan[[id]]
+    list(dataset_id = id,
+         species = en$manifest$species %|NA|% NULL,
+         matrix_type = en$manifest$matrix_type %|NA|% NULL,
+         dir = en$paths$dir %|NA|% NULL,
+         mtime = if (is.null(en$mtime) || is.na(en$mtime)) NULL
+                 else format(en$mtime, "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"))
+  })
+  payload <- list(
+    datasets_dir = root,
+    count = length(entries),
+    validate = FALSE,
+    read_only = TRUE,
+    datasets = entries)
+  .ts_tool_ok(payload, sprintf(
+    "datasets: %d found in %s (light listing, validate=FALSE — no v1 verdicts)",
+    length(entries), .ts_clean(root)))
 }
 
 # --- 7b. M2 — the ONE controlled arm/disarm tool ----------------------------
@@ -3682,6 +3766,23 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
          inputSchema = list(
            type = "object",
            properties = list(),
+           additionalProperties = FALSE)),
+    list(name = "transcripto_drive_datasets",
+         description = paste0(
+           "List the datasets deposited in the Cerberus datasets root ",
+           "(cerberus-exchange/v1 drops; PoC dataset directory, fiche 2026-11-02 ",
+           "section 3.4). PASSIVE and READ-ONLY, and SESSION-FREE unlike ",
+           "transcripto_drive_state: a filesystem listing answers before the app ",
+           "is started. The root is resolved by the engine (TRANSCRIPTO_DATASETS_DIR ",
+           "-> TRANSCRIPTO_DRIVE_DATA_DIR/datasets -> <project root>/data_sc/datasets) ",
+           "and confined by the SAME allowlisted-roots rule as every import path ",
+           "(OUTSIDE_ALLOWLIST refusal, never widened). Light listing: manifest ",
+           "summary (dataset_id, species, matrix_type), directory and mtime per ",
+           "dataset — NO validation verdicts (validate=FALSE); the app-side scan ",
+           "(Bulk import > Datasets decouverts) validates and loads."),
+         inputSchema = list(
+           type = "object",
+           properties = list(),
            additionalProperties = FALSE))
   )
 }
@@ -3697,9 +3798,9 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
     capabilities = list(tools = list(listChanged = FALSE)),
     serverInfo = list(name = "cerberus-drive", version = "0.6.0-m4"),
     instructions = paste0(
-      "Access to a LIVE Cerberus drive session. Eleven tools: five read-only ",
+      "Access to a LIVE Cerberus drive session. Twelve tools: six read-only ",
       "(status, verdict, state digest, passive snapshot, bounded read of the ",
-      "exported artefact), one controlled import (import, ",
+      "exported artefact, dataset directory listing), one controlled import (import, ",
       "action=import_file only), one controlled input write (set_inputs), ",
       "one controlled run (run, action=run_pipeline only), one bounded observation ",
       "(wait), one controlled arm/disarm and one controlled export (export, the ",
@@ -3732,6 +3833,7 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
     if (is.na(nm)) return(.ts_error(id, -32602, "Invalid params: 'name' must be one string."))
     if (identical(nm, "transcripto_drive_status")) return(.ts_result(id, .ts_tool_status()))
     if (identical(nm, "transcripto_drive_state")) return(.ts_result(id, .ts_tool_state()))
+    if (identical(nm, "transcripto_drive_datasets")) return(.ts_result(id, .ts_tool_datasets()))
     if (identical(nm, "transcripto_drive_import")) {
       args <- if (is.list(params$arguments)) params$arguments else list()
       # PROTOCOL-level shape checks stay here; domain refusals live in the tool.

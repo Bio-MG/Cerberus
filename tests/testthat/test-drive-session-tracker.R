@@ -395,13 +395,17 @@ test_that("additivity: existing state.json fields keep schema+semantics and the 
   expect_identical(TS_DRIVE_PROTOCOL, "ts-drive/1")
 })
 
-test_that("additivity: the MCP tool set stays EXACTLY the frozen 11 (§6 non-goal 3 — no tracker tool)", {
+test_that("additivity: the MCP tool set stays EXACTLY the frozen set (§6 non-goal 3 — no tracker tool)", {
   e <- .dstv1_mcp_env("tools")
   on.exit(unlink(attr(e, "sandbox_root"), recursive = TRUE, force = TRUE), add = TRUE)
 
   tools <- e$.ts_tools()
   tool_names <- sort(vapply(tools, function(x) x$name, character(1)))
   # Measured 2026-10-31 on the unmodified tree (mcp_server.R:3222-3616).
+  # Re-basage 11 -> 12, PoC dataset directory P2 (2026-11-03, fiche
+  # PROPOSAL_DATASET_DIRECTORY_POC_2026-11-02.md §3.4) : le 12e outil,
+  # transcripto_drive_datasets, est PASSIF et LECTURE SEULE (listing du
+  # répertoire de datasets) — l'additivité du tracker n'est pas touchée.
   expect_setequal(
     tool_names,
     c("transcripto_drive_export", "transcripto_drive_read",
@@ -409,9 +413,9 @@ test_that("additivity: the MCP tool set stays EXACTLY the frozen 11 (§6 non-goa
       "transcripto_drive_read_result", "transcripto_drive_snapshot",
       "transcripto_drive_set_inputs", "transcripto_drive_run",
       "transcripto_drive_wait", "transcripto_drive_set_armed",
-      "transcripto_drive_state")
+      "transcripto_drive_state", "transcripto_drive_datasets")
   )
-  expect_identical(length(tool_names), 11L)
+  expect_identical(length(tool_names), 12L)
 })
 
 # ── §3.3 / §8.2 — O18 recency unchanged; manual status fills the idle gap ────

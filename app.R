@@ -76,8 +76,12 @@ source("tools/pkg_skeleton/R/biostat_tree.R")
 # domaine R/reports ENTIER, livré au bloc 08 ci-dessous).
 # D2 M5 lot 5 (2026-10-25) : les 9 fichiers R/core RESTANTS suivent (caching,
 # drive_allowlist, drive_watcher, error_state, jobs, memory, pathway_helpers,
-# rdata_io, validation) — même régime ; R/core ne garde plus que le fichier
-# étranger CERBERUS non câblé (cerberus_handoff.R, hors lot).
+# rdata_io, validation) — même régime ; R/core ne gardait plus que le fichier
+# étranger CERBERUS non câblé (cerberus_handoff.R, hors lot) — MAJ jalon PoC
+# dataset directory P1 (2026-11-03) : cerberus_handoff.R est DÉSORMAIS CÂBLÉ
+# (source() au bloc 03, juste avant dataset_directory.R) — dépendance runtime
+# de l'app via le scan du répertoire de datasets ; son statut « étranger non
+# câblé » prend fin ici (les tests CERBERUS étrangers ne sont pas concernés).
 source("tools/pkg_skeleton/R/state.R")        # contrat d'etat + fabriques d'etat partagees
 source("tools/pkg_skeleton/R/io_helpers.R")
 source("tools/pkg_skeleton/R/rdata_io.R")     # import .rda/.RData "Inspect & Select" (contrat RDATA_IMPORT_CONTRACT)
@@ -100,6 +104,22 @@ source("tools/pkg_skeleton/R/drive_watcher.R")    # poller fichier -> session (i
 # inerte au runtime (symboles moteur absents — gap preexistant ASR-1..3,
 # signalé par la vérification indépendante de la passe câblage 2026-11-01).
 source("tools/pkg_skeleton/R/session_checkpoint.R")
+# PoC « répertoire de datasets » (fiche docs/proposals/
+# PROPOSAL_DATASET_DIRECTORY_POC_2026-11-02.md §3.1-3.2, jalon P0) : moteur
+# PUR du scanner passif (ts_datasets_dir + ts_dataset_dir_scan) — STRICTEMENT
+# lecture seule (AC2) et JAMAIS appelé au cold-boot : aucun appel au scan
+# dans app.R/server, l'appel vient du module bulk (jalon P1, section
+# « Datasets découverts ») puis de l'outil drive passif
+# transcripto_drive_datasets (jalon P2). Position bloc 03, immédiatement
+# après session_checkpoint.R : ts_datasets_dir() suit le motif
+# ts_session_checkpoint_dir() (résolution racine partagée .sc_project_root).
+# Jalon P1 (2026-11-03) : la section UI appelle réellement le scan — la
+# dépendance runtime annoncée en P0 (adjacence impossible alors, cerberus
+# « hors lot » non sourcé) est CÂBLÉE ici, arbitrage opérateur : UNE ligne
+# source() de plus, manifeste suit (rebuild mécanique, épingles re-basées
+# dans le même geste).
+source("tools/pkg_skeleton/R/cerberus_handoff.R")
+source("tools/pkg_skeleton/R/dataset_directory.R")
 # Racine applicative capturee UNE fois, au chargement (app.R tourne depuis la
 # racine renv). JAMAIS getwd() au moment du tick : RStudio peut deriver.
 ts_drive_boot(getwd())

@@ -80,17 +80,21 @@
 # =============================================================================
 # 1. L'invariant : deux boutons, une route, ZÉRO outil de plus
 # =============================================================================
-test_that("bulk_wgcna adds buttons and a route, and NO tool: TEN stays TEN", {
+test_that("bulk_wgcna adds buttons and a route, and NO tool: the count moves only for a protocol capability", {
   e <- .mcp_wgcna_env()
   tools <- e$.ts_tools()
-  expect_length(tools, 11L)
+  # Re-basage 11 -> 12, PoC dataset directory P2 (2026-11-03, fiche
+  # PROPOSAL_DATASET_DIRECTORY_POC_2026-11-02.md §3.4) : le 12e outil,
+  # transcripto_drive_datasets, est PASSIF LECTURE SEULE (listing du
+  # répertoire de datasets) — bulk_wgcna n'ajoute toujours AUCUN outil.
+  expect_length(tools, 12L)
   expect_setequal(vapply(tools, function(x) x$name, character(1)),
                   c("transcripto_drive_status", "transcripto_drive_read_result",
                     "transcripto_drive_snapshot", "transcripto_drive_set_inputs",
                     "transcripto_drive_run", "transcripto_drive_wait",
                     "transcripto_drive_set_armed", "transcripto_drive_export",
                     "transcripto_drive_import", "transcripto_drive_read",
-                    "transcripto_drive_state"))
+                    "transcripto_drive_state", "transcripto_drive_datasets"))
 
   # La table de run du serveur connaît les DEUX boutons du module.
   expect_setequal(e$TS_MCP_RUN_BUTTONS$bulk_wgcna,

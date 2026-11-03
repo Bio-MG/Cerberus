@@ -52,7 +52,7 @@
   invisible(TRUE)
 }
 
-test_that("local MCP keeps TEN tools and resolves the three SC action buttons", {
+test_that("local MCP keeps the TWELVE declared tools and resolves the three SC action buttons", {
   e <- .mcp_sc_local_env()
   tools <- e$.ts_tools()
   # THE INVARIANT, restated rather than deleted â€” and the distinction is the whole
@@ -73,14 +73,19 @@ test_that("local MCP keeps TEN tools and resolves the three SC action buttons", 
   # for a new protocol capability (import, READING), never for a module". The
   # read reads the CURRENT export verdict; it names no route, no handle, no
   # path, and adds no module surface.
-  expect_length(tools, 11L)
+  # TWELVE since the PoC dataset directory P2 (2026-11-03, fiche
+  # PROPOSAL_DATASET_DIRECTORY_POC_2026-11-02.md §3.4):
+  # `transcripto_drive_datasets` is the SECOND passive READ-ONLY tool (6e
+  # read-only) and SESSION-FREE — a filesystem listing of the datasets root,
+  # not a new module surface ; the rule above is untouched.
+  expect_length(tools, 12L)
   expect_setequal(vapply(tools, function(x) x$name, character(1)), c(
     "transcripto_drive_status", "transcripto_drive_read_result",
     "transcripto_drive_snapshot", "transcripto_drive_set_inputs",
     "transcripto_drive_run", "transcripto_drive_wait",
     "transcripto_drive_set_armed", "transcripto_drive_export",
     "transcripto_drive_import", "transcripto_drive_read",
-    "transcripto_drive_state"
+    "transcripto_drive_state", "transcripto_drive_datasets"
   ))
   # THE RULE, enforced where it can be: every module in the app's own table must be
   # reachable through the EXISTING tools, so a new module is a new entry in
@@ -1126,8 +1131,10 @@ test_that("indexed inputs are validated against the published vocabulary, and th
                          collapse = " "), scn_bytes)
 
   # 7. Les cinq ids restent des ENTRÉES : le compte d'outils ne bouge pas.
+  # (Re-basage 11 -> 12, PoC dataset directory P2 2026-11-03 : le 12e outil
+  # transcripto_drive_datasets est PASSIF LECTURE SEULE, fiche §3.4.)
   tools <- e$.ts_tools()
-  expect_length(tools, 11L)
+  expect_length(tools, 12L)
 })
 
 # =============================================================================

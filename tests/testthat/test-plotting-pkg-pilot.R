@@ -222,9 +222,17 @@ test_that("frontiere : le paquet contient EXACTEMENT 6 plotting + 4 fournisseurs
                           # BIOSTAT_DECISION_CONTRACT.md §8 row M2 ; source()
                           # app.R bloc 02 après thresholds.R ; freeze test
                           # test-biostat-tree.R (RED mesuré avant code).
+                          # PoC DATASET DIRECTORY (2026-11-03, P0) : le moteur
+                          # pur du scanner passif dataset_directory.R (fiche
+                          # PROPOSAL_DATASET_DIRECTORY_POC_2026-11-02.md
+                          # §3.1-3.2) ; source() app.R bloc 03 après
+                          # session_checkpoint.R ; freeze test
+                          # test-dataset-dir-scan.R (RED mesuré avant code
+                          # : failed=7).
                           "cerberus_handoff.R", "sc_qc_doublets.R",
-                          "session_checkpoint.R", "biostat_tree.R")),
-                   info = "le perimetre du paquet doit etre exactement 6 plotting + 4 fournisseurs R/core + 4 reports + 18 bulk + 11 spatial + 10 core (J1 : +cerberus_handoff) + 2 config + 27 sc (M4 : +sc_qc_doublets) + 1 resilience (ASR-1 : +session_checkpoint) + 1 biostat M2 (O27 : +biostat_tree) = 84")
+                          "session_checkpoint.R", "biostat_tree.R",
+                          "dataset_directory.R")),
+                   info = "le perimetre du paquet doit etre exactement 6 plotting + 4 fournisseurs R/core + 4 reports + 18 bulk + 11 spatial + 10 core (J1 : +cerberus_handoff) + 2 config + 27 sc (M4 : +sc_qc_doublets) + 1 resilience (ASR-1 : +session_checkpoint) + 1 biostat M2 (O27 : +biostat_tree) + 1 PoC datasets P0 (+dataset_directory) = 85")
 })
 
 # ─── M4 suite (2026-10-25) : les 4 autres fichiers du domaine ────────────────
