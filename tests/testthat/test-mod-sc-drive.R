@@ -35,6 +35,7 @@ source_project_file("tools/pkg_skeleton/R/sc_pipeline.R")    # M-2 : .sc_ap_driv
 source_project_file("tools/pkg_skeleton/R/sc_helpers.R")      # resolve_sketch_preset, robust_find_clusters
 source_project_file("tools/pkg_skeleton/R/sc_bpcells.R")      # smart_scale_data, sc_backend_status
 source_project_file("tools/pkg_skeleton/R/sc_trajectory.R")   # calculate_pseudotime
+source_project_file("tools/pkg_skeleton/R/sc_communication_input.R")  # CQF-2 (bcb116b) : .singler_annotation_column_pattern — requis par mod_sc_annotation.R/mod_sc.R ; position manifeste l.34 (après sc_trajectory.R l.31)
 source_project_file("tools/pkg_skeleton/R/sc_pipeline.R")     # run_sc_auto_pipeline (READ-ONLY, decision B1)
 source_project_file("modules/sc/mod_sc_pipeline.R")
 source_project_file("modules/sc/mod_sc_trajectory.R")

@@ -36,8 +36,8 @@ if (!requireNamespace("shinyjs", quietly = TRUE)) {
   )
 }
 
-# SOURCING (plan D2, jalon M2, 2026-10-24) : les 155 source() ci-dessous sont
-# organisés en 12 BLOCS DE DOMAINE INLINE. L'ordre inter-bloc ET intra-bloc est
+# SOURCING (plan D2, jalon M2, 2026-10-24) : les 166 source() ci-dessous sont
+# organisés en 13 BLOCS DE DOMAINE INLINE (corrigé 2026-11-03, comptes mesurés). L'ordre inter-bloc ET intra-bloc est
 # FIGÉ par R/.sources_manifest.txt (généré par tools/sources_manifest.R ;
 # gardes : test-app-sourcing.R + test-sources-manifest.R). Blocs INLINE par
 # choix mesuré : des fichiers de blocs sous R/ seraient flottés « présents sur
