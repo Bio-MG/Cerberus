@@ -157,6 +157,19 @@ test_that("rendu pur : .dataset_health_html — bloc warn-only, titre via traduc
   expect_match(html, "Santé du dataset", fixed = TRUE,
                info = "le titre du bloc passe par le traducteur")
 
+  # falsification live (coordinateur, 2026-11-03, commit 5904fa5) : le contenu
+  # doit être des ENFANTS <li> du <ul>, jamais un attribut `.list` (texte
+  # présent dans le HTML mais liste invisible à l'écran — le test texte seul
+  # passait). Verrous structurels (leçon CQF-2).
+  ul <- tag$children[[2]]
+  expect_identical(ul$name, "ul", info = "2e enfant du bloc = <ul>")
+  expect_null(ul$attribs$.list, info = "aucun attribut .list (bug falsifié live)")
+  expect_true(length(ul$children) >= 1L, info = "les findings sont des enfants <li>")
+  expect_identical(ul$children[[1]]$name, "li", info = "1er finding = <li>")
+  expect_match(paste(capture.output(print(ul$children[[1]])), collapse = "\n"),
+               "TPM", fixed = TRUE,
+               info = "le libellé d'échelle vit DANS le <li> rendu")
+
   # rapport propre (counts bruts + MT présents) : AUCUN bloc (pas de bruit)
   clean <- ts_dataset_health(mat = .dhu_raw_matrix())
   expect_null(.dataset_health_html(clean, tr = function(x) x),

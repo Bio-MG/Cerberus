@@ -140,7 +140,7 @@
     class = "alert alert-warning",
     style = "font-size:0.82rem;",
     shiny::tags$strong(tr("Santé du dataset — anomalies détectées :")),
-    shiny::tags$ul(.list = items)
+    do.call(shiny::tags$ul, items)  # falsification live 2026-11-03 : tags$ul(.list=) sérialisait les <li> en ATTRIBUT (liste invisible à l'écran) — les <li> doivent être des enfants
   )
 }
 
