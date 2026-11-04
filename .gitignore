@@ -99,6 +99,8 @@ repomix-core-output.xml
 # -------------------------------------------------
 tools/_drive/*.json
 tools/_drive/*.tmp
+# N3 cerberus-dock : etat runtime des satellites (pid+log), local only
+tools/_drive/satellites/
 
 # -------------------------------------------------
 # Runtime artefacts (OmnipathR logger, drive IPC tests)

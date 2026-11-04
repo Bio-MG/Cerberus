@@ -1,0 +1,26 @@
+{
+  "capability_version": "1.0.0",
+  "satellite": "watchtower",
+  "satellite_version": "1.0.0",
+  "role": "Human-facing read-only dashboard of the drive channel (O11/SW-5c complement, satellite S1) — renders tools/_drive/ state for the operator.",
+  "surface": {
+    "kind": "static_page",
+    "entry": "/tools/satellites/watchtower/index.html",
+    "reads": [
+      "tools/_drive/ready.json",
+      "tools/_drive/result.json",
+      "tools/_drive/scenario.json"
+    ],
+    "writes": []
+  },
+  "process": {
+    "kind": "static_http_server",
+    "owner": "dock",
+    "shares_app_process": false
+  },
+  "contract_refs": [
+    "tools/satellites/watchtower/README.md",
+    "tools/_drive/README.md",
+    "tools/satellites/dock/MANIFEST.md"
+  ]
+}

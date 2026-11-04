@@ -1,0 +1,20 @@
+{
+  "format_version": "1.0.0",
+  "satellites": [
+    {
+      "name": "watchtower",
+      "command": ["python", "-m", "http.server", "4892"],
+      "cwd": ".",
+      "port": 4892,
+      "health": {
+        "url": "http://127.0.0.1:4892/tools/satellites/watchtower/index.html",
+        "expect_status": 200,
+        "timeout_s": 5,
+        "interval_s": 2
+      },
+      "capability": "capabilities/watchtower.json",
+      "enabled": true,
+      "notes": "N1 drive-watchtower — vue humaine du canal drive (O11/SW-5c, satellite S1 c992dfe) ; PREMIER LOCATAIRE du dock (dogfood, fiche §2-S7). Commande = instruction de service EXACTE mesurée par S1 (README watchtower) : serveur statique a la racine du depot, page ET JSON same-origin."
+    }
+  ]
+}
