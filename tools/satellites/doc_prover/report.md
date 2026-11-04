@@ -1,6 +1,6 @@
 # Rapport doc-prover — docs/mcp/DRIVE_SESSION_RUNBOOK.md
 
-Généré : 2026-11-04T17:45:44Z · --live : non · moteur : prover_lib (base R)
+Généré : 2026-11-04T18:55:35Z · --live : non · moteur : prover_lib (base R)
 
 **Verdict global : runbook ✅ complet**
 

@@ -162,8 +162,8 @@
       "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
       "line": 183,
       "assertion": "§4.2 : le re-arm conserve la MÊME session — session_token inchangé, armed:true, hb_n repart sans redémarrer au milieu de session",
-      "expected": "après écriture arm.json {même token, armed:true} : token identique, armed=true, hb_n avancé",
-      "evidence_note": "écriture limitée au drop-box GITIGNORÉ tools/_drive/*.json (.gitignore:100) ; opt-in --live explicite ; untested sinon"
+      "expected": "après écriture arm.json {protocol: ts-drive/1, même token, armed:true} : token identique, armed=true, hb_n avancé",
+      "evidence_note": "écriture limitée au drop-box GITIGNORÉ tools/_drive/*.json (.gitignore:100) ; opt-in --live explicite ; untested sinon ; CORRECTION 2026-11-04 : la sonde écrivait SANS protocol — le rejet mesuré (token_same=TRUE armed=FALSE hb_advance=FALSE) était le comportement CORRECT du gate (leçon S4), pas un défaut de re-arm ; sonde corrigée (protocol ajouté), re-vérification live pendante (stall F2)"
     },
     {
       "id": "live-stale-tool",

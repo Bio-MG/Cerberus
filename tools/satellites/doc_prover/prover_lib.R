@@ -792,11 +792,20 @@ probe_drive_session <- function(drive_dir, wait_s = 4L,
   }
 
   # §4.2 re-arm — écriture UNIQUEMENT sur demande explicite (--live), drop-box gitignorée
+  # CORRECTION 2026-11-04 (mission round8, post-passe D) : la sonde écrivait
+  # arm.json {token, armed} SANS « protocol » — le gate de l'app
+  # (ts_drive_arm_state, condition 2 documentée) refuse un arm.json sans
+  # « ts-drive/1 » : le « re-arm incomplet » mesuré le 2026-11-03
+  # (token_same=TRUE armed=FALSE hb_advance=FALSE) était le rejet CORRECT
+  # d'un arm.json sans protocole (leçon S4), PAS un défaut de l'app. Le
+  # writer UI (ts_drive_write_arm) inclut toujours le protocole — c'est la
+  # raison pour laquelle le re-arm humain fonctionnait.
   if (do_rearm && out$fresh && out$hb_advance && !is.null(r2) && !is.null(r2$session_token)) {
     tok <- as.character(r2$session_token)
     arm_path <- file.path(drive_dir, "arm.json")
     ok <- tryCatch({
-      writeLines(jsonlite::toJSON(list(token = tok, armed = TRUE), auto_unbox = TRUE), arm_path)
+      writeLines(jsonlite::toJSON(list(protocol = "ts-drive/1", token = tok, armed = TRUE),
+                                  auto_unbox = TRUE), arm_path)
       TRUE
     }, error = function(e) FALSE, warning = function(w) FALSE)
     if (ok) {

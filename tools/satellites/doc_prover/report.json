@@ -3,7 +3,7 @@
     "engine": "prover_lib (base R)",
     "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
     "live": false,
-    "generated_at": "2026-11-04T17:45:44Z",
+    "generated_at": "2026-11-04T18:55:35Z",
     "repo_root": "D:\\Data_science\\SHINYAPP test (git work)\\SHINYAPP test"
   },
   "rows": [
@@ -183,7 +183,7 @@
       "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
       "line": 183,
       "assertion": "§4.2 : le re-arm conserve la MÊME session — session_token inchangé, armed:true, hb_n repart sans redémarrer au milieu de session",
-      "expected": "après écriture arm.json {même token, armed:true} : token identique, armed=true, hb_n avancé",
+      "expected": "après écriture arm.json {protocol: ts-drive/1, même token, armed:true} : token identique, armed=true, hb_n avancé",
       "verdict": "untested",
       "evidence": "re-arm non exécuté (exige --live ; écriture limitée au drop-box gitigné tools/_drive/*.json, .gitignore:100)"
     },
