@@ -276,16 +276,18 @@ gate_live_ok <- function(probe) {
         return(list(verdict = "untested", evidence = "scripts/mcp_server.R illisible — fait indisponible"))
       }
       tools3 <- c("transcripto_drive_status", "transcripto_drive_read_result", "transcripto_drive_snapshot")
-      win <- .prover_slice(lines, 104, 106)
+      # passe doc 2026-11-04 : le runbook réparé cite :104-107 (snapshot à la 107)
+      win <- .prover_slice(lines, 104, 107)
       ok <- vapply(tools3, function(t) any(grepl(t, win, fixed = TRUE)), logical(1))
       snap_lines <- .prover_find_lines(lines, "transcripto_drive_snapshot", fixed = TRUE, max_n = 3L)
       if (all(ok)) {
         list(verdict = "pass",
-             evidence = "les lignes 104-106 nomment les trois outils read-only")
+             evidence = paste0("les lignes 104-107 nomment les trois outils read-only (ré-ancrage passe doc 2026-11-04 ; snapshot première occurrence : ligne ",
+                               if (length(snap_lines)) as.character(snap_lines[1]) else "?", ")"))
       } else {
         list(verdict = "fail",
              evidence = paste0(
-               "fenêtre 104-106 mesurée : ", paste(win, collapse = " | "),
+               "fenêtre 104-107 mesurée : ", paste(win, collapse = " | "),
                " — « transcripto_drive_snapshot » ABSENT de la fenêtre citée (première occurrence réelle : ligne ",
                if (length(snap_lines)) as.character(snap_lines[1]) else "?",
                ") — ancre dérivée (drift)"))
@@ -298,14 +300,15 @@ gate_live_ok <- function(probe) {
       if (is.null(lines)) {
         return(list(verdict = "untested", evidence = "scripts/mcp_server.R illisible — fait indisponible"))
       }
-      l219 <- if (length(lines) >= 219L) lines[219L] else ""
-      if (grepl("STALE_SESSION", l219, fixed = TRUE)) {
-        list(verdict = "pass", evidence = paste0("scripts/mcp_server.R:219 = « ", l219, " »"))
+      # passe doc 2026-11-04 : ré-ancré de :219 (périmé) à :231 (première occurrence réelle)
+      l231 <- if (length(lines) >= 231L) lines[231L] else ""
+      if (grepl("STALE_SESSION", l231, fixed = TRUE)) {
+        list(verdict = "pass", evidence = paste0("scripts/mcp_server.R:231 = « ", l231, " »"))
       } else {
         occ <- .prover_find_lines(lines, "STALE_SESSION", fixed = TRUE, max_n = 6L)
         list(verdict = "fail",
              evidence = paste0(
-               "scripts/mcp_server.R:219 ne porte PAS le code ; mesuré : « ", l219,
+               "scripts/mcp_server.R:231 ne porte PAS le code ; mesuré : « ", l231,
                " ». Le code existe ailleurs (occurrences mesurées : ",
                paste(occ, collapse = ", "),
                " ; table .ts_domain_codes à la première d'entre elles) — SUBSTANCE VRAIE, ancre dérivée (drift)"))
@@ -375,21 +378,28 @@ gate_live_ok <- function(probe) {
                     evidence = "tools/pkg_skeleton/R/drive_watcher.R illisible — fait indisponible"))
       }
       win <- .prover_slice(lines, 1936, 1990)
+      # passe doc 2026-11-04 : le runbook réparé lit « active_module » (champ
+      # top-level RÉEL) — le claim vérifie ce champ, plus l'absence d'un
+      # top-level « module » (qui n'existe que DANS le bloc job)
+      top_active <- any(grepl("^\\s*active_module\\s*=", win, perl = TRUE))
       top_module <- any(grepl("^\\s*module\\s*=", win, perl = TRUE))
       job_module <- any(grepl("module\\s*=\\s*as\\.character\\(job\\$module\\)", .prover_slice(lines, 4801, 4827), perl = TRUE))
       fix <- .prover_json_names(.prover_path(ctx, "tools", "satellites", "watchtower",
                                              "fixtures", "alive", "result.json"))
-      fix_has <- if (is.null(fix)) NA else "module" %in% fix
-      if (top_module) {
-        list(verdict = "pass", evidence = "un champ top-level « module » existe dans le payload result.json")
+      fix_has <- if (is.null(fix)) NA else "active_module" %in% fix
+      if (top_active && !top_module) {
+        list(verdict = "pass", evidence = paste0(
+          "le champ top-level du payload result.json est « active_module » (fenêtre 1936-1990 ; ",
+          if (job_module) "« module » confirmé DANS le bloc job 4801-4827" else "bloc job non mesurable",
+          if (!is.na(fix_has)) paste0(" ; fixture watchtower : active_module ", if (fix_has) "présent" else "ABSENT") else "",
+          ") — commande 3 réparée « Select-Object status, active_module, applied_at » cohérente (passe doc 2026-11-04)"))
       } else {
         list(verdict = "fail",
              evidence = paste0(
-               "PAS de champ top-level « module » dans le contrat mesuré (1936-1990) — le champ top-level est « active_module » ; ",
-               "« module » n'existe que DANS le bloc job (",
-               if (job_module) "mesuré à 4801-4827 : module = as.character(job$module)" else "bloc job non mesurable",
-               if (!is.na(fix_has)) paste0(" ; fixture watchtower : ", if (fix_has) "module présent" else "module ABSENT top-level") else "",
-               "). La commande 3 du runbook (« Select-Object status, module, applied_at », l.75) afficherait une colonne module VIDE — drift SUBSTANTIEL"))
+               "contrat mesuré inattendu (1936-1990) : active_module présent = ", top_active,
+               " ; un top-level « module » existe = ", top_module,
+               if (job_module) " ; « module » dans le bloc job (4801-4827)" else "",
+               " — la commande 3 du runbook (l.75) ne correspond plus au contrat : drift SUBSTANTIEL"))
       }
     },
 
@@ -426,21 +436,21 @@ gate_live_ok <- function(probe) {
       }
     },
 
-    # -- STATIC 9 — les citations R/core/drive_watcher.R pointent un fichier EXISTANT
+    # -- STATIC 9 — les citations drive_watcher.R pointent un fichier EXISTANT
+    # passe doc 2026-11-04 : le runbook réparé cite le NOUVEAU chemin
+    # tools/pkg_skeleton/R/drive_watcher.R — le claim vérifie ce chemin
     `static-core-path` = function(claim, ctx) {
       old <- .prover_path(ctx, "R", "core", "drive_watcher.R")
       new <- .prover_path(ctx, "tools", "pkg_skeleton", "R", "drive_watcher.R")
-      core_ls <- tryCatch(list.files(.prover_path(ctx, "R", "core")), error = function(e) character(0))
-      if (file.exists(old)) {
-        list(verdict = "pass", evidence = "R/core/drive_watcher.R existe")
+      if (file.exists(new)) {
+        list(verdict = "pass", evidence = paste0(
+          "tools/pkg_skeleton/R/drive_watcher.R existe (runbook réparé : citations l.47/215/217/265 au nouveau chemin — passe doc 2026-11-04",
+          if (!file.exists(old)) " ; l'ancien R/core/drive_watcher.R reste absent, conforme" else " ; ⚠️ l'ancien R/core/drive_watcher.R RÉAPPARU",
+          ")"))
       } else {
         list(verdict = "fail",
              evidence = paste0(
-               "R/core/drive_watcher.R ABSENT (contenu de R/core/ mesuré : ",
-               if (length(core_ls)) paste(core_ls, collapse = ", ") else "VIDE",
-               ") — le fichier vit à tools/pkg_skeleton/R/drive_watcher.R (",
-               if (file.exists(new)) "présent" else "ABSENT lui aussi",
-               "). Les citations l.47/215/217/265 du runbook pointent un chemin déménagé — drift majeur, substance couverte par static-functions-exist"))
+               "tools/pkg_skeleton/R/drive_watcher.R ABSENT — les citations du runbook pointent un chemin inexistant (substance couverte par static-functions-exist)"))
       }
     },
 
@@ -479,17 +489,18 @@ gate_live_ok <- function(probe) {
       if (is.null(lines)) {
         return(list(verdict = "untested", evidence = "AGENTS.md illisible — fait indisponible"))
       }
-      l7 <- if (length(lines) >= 7L) lines[7L] else ""
-      if (grepl("RÈGLE OPÉRATIONNELLE", l7, fixed = TRUE) && grepl("ready_fresh", l7, fixed = TRUE)) {
-        list(verdict = "pass", evidence = "AGENTS.md:7 porte la règle opérationnelle 🔴")
+      # passe doc 2026-11-04 : ré-ancré de :7 (MODE BOOST) à :11 (règle 🔴)
+      l11 <- if (length(lines) >= 11L) lines[11L] else ""
+      if (grepl("RÈGLE OPÉRATIONNELLE", l11, fixed = TRUE) && grepl("ready_fresh", l11, fixed = TRUE)) {
+        list(verdict = "pass", evidence = "AGENTS.md:11 porte la règle opérationnelle 🔴 (ré-ancrage passe doc 2026-11-04)")
       } else {
         occ <- .prover_find_lines(lines, "RÈGLE OPÉRATIONNELLE", fixed = TRUE, max_n = 3L)
         list(verdict = "fail",
              evidence = paste0(
-               "AGENTS.md:7 mesuré = « ", substr(l7, 1, 120),
-               "… » (MODE BOOST) — la règle 🔴 « ne JAMAIS conclure “session morte”… » est maintenant à la ligne ",
+               "AGENTS.md:11 mesuré = « ", substr(l11, 1, 120),
+               "… » — la règle 🔴 « ne JAMAIS conclure “session morte”… » mesurée à la ligne ",
                if (length(occ)) paste(occ, collapse = ", ") else "INTRROUVABLE",
-               " (cité AGENTS.md:7 aux l.226/236 du runbook) — ancre dérivée (drift)"))
+               " (cité AGENTS.md:11 aux l.226/236/251 du runbook) — ancre dérivée (drift)"))
       }
     },
 
@@ -533,11 +544,13 @@ gate_live_ok <- function(probe) {
       if (is.null(lines)) {
         return(list(verdict = "untested", evidence = "tools/_drive/README.md illisible — fait indisponible"))
       }
+      # passe doc 2026-11-04 : ancres réparées — :39 (cadence ~3 s), :40
+      # (hb_n 0 at boot), :145 (étape 7), :557-558 (citation boot lent)
       items <- list(
-        c("l.185 : cadence ~3 s à README:38", 38, 38, "~3 s"),
-        c("l.115 : hb_n « 0 at boot » à README:39", 39, 39, "0 at boot"),
-        c("l.182 : étape 7 « Disarm by removing arm.json » à README:143-144", 143, 144, "7. Disarm by removing"),
-        c("l.190 : « not evidence of a lost write » à README:527-556", 527, 556, "not evidence of a lost write")
+        c("l.185 : cadence ~3 s à README:39", 39, 39, "~3 s"),
+        c("l.115 : hb_n « 0 at boot » à README:40", 40, 40, "0 at boot"),
+        c("l.182 : étape 7 « Disarm by removing arm.json » à README:145", 145, 145, "7. Disarm by removing"),
+        c("l.190 : « not evidence of a lost write » à README:557-558", 557, 558, "not evidence of a lost write")
       )
       misses <- character(0)
       whereis <- character(0)

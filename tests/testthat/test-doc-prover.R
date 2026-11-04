@@ -57,9 +57,9 @@ source(normalizePath(.prover_lib_hit), local = FALSE)
 .prover_claim_banner <- function() {
   list(id = "static-anchor-mcp-banner", type = "static",
        doc = "docs/mcp/DRIVE_SESSION_RUNBOOK.md", line = 19L,
-       assertion = "les lignes 104-106 de scripts/mcp_server.R nomment les trois outils read-only cités",
-       expected = "status + read_result + snapshot tous présents dans la fenêtre 104-106",
-       evidence_note = "claim de test — arbre planté")
+       assertion = "les lignes 104-107 de scripts/mcp_server.R nomment les trois outils read-only cités",
+       expected = "status + read_result + snapshot tous présents dans la fenêtre 104-107",
+       evidence_note = "claim de test — arbre planté (fenêtre ré-ancrée passe doc 2026-11-04)")
 }
 
 .prover_claim_commits <- function() {
@@ -113,15 +113,17 @@ test_that("verdict FAIL — l'ancre citée ne porte pas la substance (drift)", {
 })
 
 test_that("verdict FAIL sur fenêtre de lignes — la substance est hors fenêtre citée", {
-  # variante FIDÈLE au dépôt réel : la bannière nomme snapshot à la ligne 107,
-  # pas dans la fenêtre 104-106 citée par le runbook -> le checker doit dire fail.
+  # fenêtre ré-ancrée passe doc 2026-11-04 : le runbook réparé cite 104-107
+  # (snapshot réellement à la 107). Variante NÉGATIVE : snapshot hors fenêtre
+  # (à la 108) -> le checker doit dire fail ; variante conforme -> pass.
   root <- .prover_tmp_root("window")
   .prover_plant(file.path(root, "scripts", "mcp_server.R"), c(.prover_at(104L,
     c('  .ts_stderr("  tools        : transcripto_drive_status, transcripto_drive_read_result")',
       '  .ts_stderr("                 transcripto_drive_state (M2: passive, read-only)")',
       '  .ts_stderr("                 transcripto_drive_datasets (P2 PoC datasets)")',
+      '  .ts_stderr("                 fin de la bannière")',
       '  .ts_stderr("                 transcripto_drive_snapshot (M3a: passive, read-only)")')),
-    .prover_at(219L, "       structuredContent = structured, isError = FALSE)")))
+    .prover_at(231L, "       structuredContent = structured, isError = FALSE)")))
   res <- evaluate_claim(.prover_claim_banner(), ctx_min(root))
   expect_equal(res$verdict, "fail")
   # et la variante où le runbook aurait raison -> pass :

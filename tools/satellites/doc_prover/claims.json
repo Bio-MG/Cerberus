@@ -27,8 +27,8 @@
       "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
       "line": 19,
       "assertion": "§1 : l'ancre « scripts/mcp_server.R:104-106 » nomme les trois outils read-only cités",
-      "expected": "les 3 noms présents dans la fenêtre de lignes 104-106",
-      "evidence_note": "mesure au 2026-11-03 : snapshot est nommé à la ligne 107 (104-106 = status/read_result/state/datasets) — off-by-one attendu"
+      "expected": "les 3 noms présents dans la fenêtre de lignes 104-107 (ré-ancrage passe doc 2026-11-04)",
+      "evidence_note": "mesure au 2026-11-03 : snapshot est nommé à la ligne 107 (104-106 = status/read_result/state/datasets) — off-by-one mesuré, RÉPARÉ le 2026-11-04 (passe doc D : le runbook cite désormais :104-107)"
     },
     {
       "id": "static-anchor-stale-code",
@@ -36,8 +36,8 @@
       "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
       "line": 21,
       "assertion": "§1 : « STALE_SESSION » est un code de domaine porté par « scripts/mcp_server.R:219 » (cité aussi l.38)",
-      "expected": "la ligne 219 contient STALE_SESSION",
-      "evidence_note": "mesure au 2026-11-03 : la ligne 219 est « structuredContent = structured, isError = FALSE) » ; occurrences réelles 231 (table .ts_domain_codes), 422, 781, 1815, 2618, 2900 — substance vraie, ancre dérivée"
+      "expected": "la ligne 231 contient STALE_SESSION (ré-ancrage passe doc 2026-11-04)",
+      "evidence_note": "mesure au 2026-11-03 : la ligne 219 est « structuredContent = structured, isError = FALSE) » ; occurrences réelles 231 (table .ts_domain_codes), 422, 781, 1815, 2618, 2900 — substance vraie, ancre dérivée ; RÉPARÉ le 2026-11-04 (le runbook cite désormais :231)"
     },
     {
       "id": "static-commits-exist",
@@ -62,9 +62,9 @@
       "type": "static",
       "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
       "line": 75,
-      "assertion": "§2 commande 3 : result.json porte un champ top-level « module » lisible par « Select-Object status, module, applied_at »",
-      "expected": "une ligne « module = » existe dans le payload top-level du writer (fenêtre 1936-1990)",
-      "evidence_note": "mesure au 2026-11-03 : le top-level porte « active_module », « module » n'existe que dans le bloc job (4801-4827) — la commande 3 afficherait une colonne module vide : drift substantiel attendu"
+      "assertion": "§2 commande 3 (réparée 2026-11-04) : result.json porte un champ top-level « active_module » lisible par « Select-Object status, active_module, applied_at »",
+      "expected": "une ligne « active_module = » existe dans le payload top-level du writer (fenêtre 1936-1990) et AUCUN top-level « module »",
+      "evidence_note": "mesure au 2026-11-03 : le top-level porte « active_module », « module » n'existe que dans le bloc job (4801-4827) — drift substantiel mesuré, RÉPARÉ le 2026-11-04 (commande 3 du runbook lit désormais active_module)"
     },
     {
       "id": "static-ready-contract",
@@ -81,8 +81,8 @@
       "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
       "line": 47,
       "assertion": "§2/§4.4/l.265 : le fichier cité « R/core/drive_watcher.R » (ancres :588-589, :688, :806, :4486) existe",
-      "expected": "R/core/drive_watcher.R présent dans l'arbre",
-      "evidence_note": "mesure au 2026-11-03 : R/core/ ne contient que .gitkeep ; le fichier vit à tools/pkg_skeleton/R/drive_watcher.R — chemin déménagé, drift majeur attendu"
+      "expected": "tools/pkg_skeleton/R/drive_watcher.R présent dans l'arbre (ré-ancrage passe doc 2026-11-04)",
+      "evidence_note": "mesure au 2026-11-03 : R/core/ ne contient que .gitkeep ; le fichier vit à tools/pkg_skeleton/R/drive_watcher.R — chemin déménagé, drift majeur mesuré, RÉPARÉ le 2026-11-04 (le runbook cite désormais le nouveau chemin aux l.47/215/217/265)"
     },
     {
       "id": "static-functions-exist",
@@ -99,8 +99,8 @@
       "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
       "line": 226,
       "assertion": "§5 : la règle opérationnelle 🔴 (« ne JAMAIS conclure session morte de ready_fresh()==FALSE pendant un job en vol ») est écrite à « AGENTS.md:7 », texte cité",
-      "expected": "la ligne 7 de AGENTS.md contient « RÈGLE OPÉRATIONNELLE » et « ready_fresh »",
-      "evidence_note": "mesure au 2026-11-03 : AGENTS.md:7 = le paragraphe MODE BOOST ; la règle 🔴 est à la ligne 11 (41ᵉ passe 2026-10-29 a réorganisé la tête de fichier) — ancre dérivée attendue"
+      "expected": "la ligne 11 de AGENTS.md contient « RÈGLE OPÉRATIONNELLE » et « ready_fresh » (ré-ancrage passe doc 2026-11-04)",
+      "evidence_note": "mesure au 2026-11-03 : AGENTS.md:7 = le paragraphe MODE BOOST ; la règle 🔴 est à la ligne 11 (41ᵉ passe 2026-10-29 a réorganisé la tête de fichier) — ancre dérivée mesurée, RÉPARÉ le 2026-11-04 (le runbook cite désormais AGENTS.md:11)"
     },
     {
       "id": "static-drive-readme-anchors",
@@ -116,9 +116,9 @@
       "type": "static",
       "doc": "docs/mcp/DRIVE_SESSION_RUNBOOK.md",
       "line": 185,
-      "assertion": "ancres FINES de tools/_drive/README.md exactes — :38 (cadence ~3 s), :39 (hb_n 0 at boot), :143-144 (étape 7 « Disarm by removing arm.json »), :527-556 (citation « not evidence of a lost write »)",
-      "expected": "4/4 motifs dans leurs fenêtres citées",
-      "evidence_note": "mesure au 2026-11-03 : hb_at est à la ligne 39 (38 = séparateur de table), hb_n à la 40, l'étape 7 à la 145, la citation à 557-558 — 4 off-by-N attendus"
+      "assertion": "ancres FINES de tools/_drive/README.md exactes — :39 (cadence ~3 s), :40 (hb_n 0 at boot), :145 (étape 7 « Disarm by removing arm.json »), :557-558 (citation « not evidence of a lost write ») — ré-ancrage passe doc 2026-11-04",
+      "expected": "4/4 motifs dans leurs fenêtres réparées (39/40/145/557-558)",
+      "evidence_note": "mesure au 2026-11-03 : hb_at est à la ligne 39 (38 = séparateur de table), hb_n à la 40, l'étape 7 à la 145, la citation à 557-558 — 4 off-by-N mesurés, RÉPARÉS le 2026-11-04 (le runbook cite désormais les fenêtres exactes)"
     },
     {
       "id": "static-audit-anchors",
