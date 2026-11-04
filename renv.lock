@@ -1356,6 +1356,75 @@
       "Author": "Hervé Pagès [aut, cre], Patrick Aboyoun [aut], Robert Gentleman [aut], Saikat DebRoy [aut], Vince Carey [ctb], Nicolas Delhomme [ctb], Felix Ernst [ctb], Wolfgang Huber [ctb] ('matchprobes' vignette), Beryl Kanali [ctb] (Converted 'MultipleAlignments' vignette from Sweave to RMarkdown), Haleema Khan [ctb] (Converted 'matchprobes' vignette from Sweave to RMarkdown), Aidan Lakshman [ctb], Kieran O'Neill [ctb], Valerie Obenchain [ctb], Marcel Ramos [ctb], Albert Vill [ctb], Jen Wokaty [ctb] (Converted 'matchprobes' vignette from Sweave to RMarkdown), Erik Wright [ctb]",
       "Maintainer": "Hervé Pagès <hpages.on.github@gmail.com>"
     },
+    "celda": {
+      "Package": "celda",
+      "Version": "1.22.1",
+      "Source": "Bioconductor",
+      "Depends": [
+            "R (>= 4.0)",
+            "SingleCellExperiment",
+            "Matrix"
+      ],
+      "Imports": [
+            "plyr",
+            "foreach",
+            "ggplot2",
+            "RColorBrewer",
+            "grid",
+            "scales",
+            "gtable",
+            "grDevices",
+            "graphics",
+            "matrixStats",
+            "doParallel",
+            "digest",
+            "methods",
+            "reshape2",
+            "S4Vectors",
+            "data.table",
+            "Rcpp",
+            "RcppEigen",
+            "uwot",
+            "enrichR",
+            "SummarizedExperiment",
+            "MCMCprecision",
+            "ggrepel",
+            "Rtsne",
+            "withr",
+            "scater (>= 1.14.4)",
+            "scran",
+            "dbscan",
+            "DelayedArray",
+            "stringr",
+            "ComplexHeatmap",
+            "gridExtra",
+            "circlize",
+            "dendextend",
+            "ggdendro",
+            "pROC"
+      ],
+      "LinkingTo": [
+            "Rcpp",
+            "RcppEigen"
+      ],
+      "Suggests": [
+            "testthat",
+            "knitr",
+            "roxygen2",
+            "rmarkdown",
+            "biomaRt",
+            "covr",
+            "BiocManager",
+            "BiocStyle",
+            "TENxPBMCData",
+            "singleCellTK",
+            "M3DExampleData"
+      ],
+      "License": "MIT + file LICENSE",
+      "NeedsCompilation": "yes",
+      "Repository": "BioCsoft",
+      "Type": "source"
+    },
     "CellChat": {
       "Package": "CellChat",
       "Version": "2.2.0.9001",
@@ -2930,6 +2999,57 @@
       "Author": "Alboukadel Kassambara [aut, cre]",
       "Maintainer": "Alboukadel Kassambara <alboukadel.kassambara@gmail.com>",
       "Repository": "CRAN"
+    },
+    "scDblFinder": {
+      "Package": "scDblFinder",
+      "Version": "1.20.2",
+      "Source": "Bioconductor",
+      "Depends": [
+            "R (>= 4.0)",
+            "SingleCellExperiment"
+      ],
+      "Imports": [
+            "igraph",
+            "Matrix",
+            "BiocGenerics",
+            "BiocParallel",
+            "BiocNeighbors",
+            "BiocSingular",
+            "S4Vectors",
+            "SummarizedExperiment",
+            "scran",
+            "scater",
+            "scuttle",
+            "bluster",
+            "methods",
+            "DelayedArray",
+            "xgboost",
+            "stats",
+            "utils",
+            "MASS",
+            "IRanges",
+            "GenomicRanges",
+            "GenomeInfoDb",
+            "Rsamtools",
+            "rtracklayer"
+      ],
+      "Suggests": [
+            "BiocStyle",
+            "knitr",
+            "rmarkdown",
+            "testthat",
+            "scRNAseq",
+            "circlize",
+            "ComplexHeatmap",
+            "ggplot2",
+            "dplyr",
+            "viridisLite",
+            "mbkmeans"
+      ],
+      "License": "GPL-3 + file LICENSE",
+      "NeedsCompilation": "no",
+      "Repository": "BioCsoft",
+      "Type": "source"
     },
     "sceasy": {
       "Package": "sceasy",
@@ -16709,6 +16829,31 @@
       ],
       "NeedsCompilation": "no",
       "Repository": "CRAN"
+    },
+    "SoupX": {
+      "Package": "SoupX",
+      "Version": "1.6.2",
+      "Source": "Repository",
+      "Depends": [
+            "R (>= 3.5.0)"
+      ],
+      "Imports": [
+            "ggplot2",
+            "Matrix",
+            "methods",
+            "Seurat (>= 3.2.2)"
+      ],
+      "Suggests": [
+            "knitr",
+            "rstan",
+            "DropletUtils",
+            "rmarkdown",
+            "formatR"
+      ],
+      "License": "GPL-2",
+      "NeedsCompilation": "no",
+      "Repository": "CRAN",
+      "Type": "source"
     },
     "sourcetools": {
       "Package": "sourcetools",
