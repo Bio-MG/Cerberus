@@ -11788,6 +11788,94 @@
     {
       "fr": "dépassé — typique {range}, ×{ratio}",
       "en": "over budget — typically {range}, ×{ratio}"
+    },
+    {
+      "fr": "🧭 Bienvenue dans Cerberus",
+      "en": "🧭 Welcome to Cerberus"
+    },
+    {
+      "fr": "Cerberus analyse vos données Single-Cell, Bulk RNA et Spatial. Cette visite (8 étapes) présente les surfaces principales ; quittez-la à tout moment avec « Passer la visite ». Premier arrêt : l'onglet d'import — le bouton « Charger » crée l'objet d'analyse depuis vos fichiers (comptes bruts attendus).",
+      "en": "Cerberus analyses your Single-Cell, Bulk RNA and Spatial data. This tour (8 steps) presents the main surfaces; leave it at any time with 'Skip the tour'. First stop: the import tab — the 'Load' button builds the analysis object from your files (raw counts expected)."
+    },
+    {
+      "fr": "📊 Step 1 — Filtrage & VST (Bulk)",
+      "en": "📊 Step 1 — Filtering & VST (Bulk)"
+    },
+    {
+      "fr": "Le cœur Bulk commence ici : « Lancer Filtrage & VST » prépare la matrice (filtres qualité, transformation de variance stabilisée). C'est l'étape 1 de la chaîne Bulk — la DE et les pathways la consomment.",
+      "en": "The Bulk core starts here: 'Run Filtering & VST' prepares the matrix (quality filters, variance-stabilising transformation). This is step 1 of the Bulk chain — DE and pathways consume it."
+    },
+    {
+      "fr": "📊 Analyse différentielle (Bulk)",
+      "en": "📊 Differential analysis (Bulk)"
+    },
+    {
+      "fr": "Après le choix du design (contraste), « Lancer DE » exécute l'analyse différentielle (DESeq2) et remplit la table des gènes différentiels, base des analyses suivantes.",
+      "en": "After choosing the design (contrast), 'Run DE' performs the differential analysis (DESeq2) and fills the differential-gene table, the basis for downstream analyses."
+    },
+    {
+      "fr": "📊 Enrichissement en pathways (Bulk)",
+      "en": "📊 Pathway enrichment (Bulk)"
+    },
+    {
+      "fr": "« Lancer Pathway » enrichit la liste de gènes différentiels en voies biologiques (GO/Reactome) : barplot, dotplot et réseau d'enrichissement se remplissent au fil des résultats.",
+      "en": "'Run Pathway' enriches the differential-gene list with biological pathways (GO/Reactome): barplot, dotplot and the enrichment network fill up as results come in."
+    },
+    {
+      "fr": "📊 Signatures (Bulk)",
+      "en": "📊 Signatures (Bulk)"
+    },
+    {
+      "fr": "Au-delà de la chaîne DE : scores de signatures géniques (empreintes prédéfinies ou personnalisées) — l'onglet Signatures héberge ces analyses par échantillon.",
+      "en": "Beyond the DE chain: gene-signature scores (predefined or custom footprints) — the Signatures tab hosts these per-sample analyses."
+    },
+    {
+      "fr": "🔬 Annotation des cellules (Single-Cell)",
+      "en": "🔬 Cell annotation (Single-Cell)"
+    },
+    {
+      "fr": "Onglet Single-Cell : « Lancer Annotation » identifie les types cellulaires (SingleR) — première étape du workflow SC, dont dépend la lecture biologique de tous les panneaux en aval.",
+      "en": "Single-Cell tab: 'Run Annotation' identifies cell types (SingleR) — the first step of the SC workflow, on which the biological reading of every downstream panel depends."
+    },
+    {
+      "fr": "🔬 Marqueurs (Single-Cell)",
+      "en": "🔬 Markers (Single-Cell)"
+    },
+    {
+      "fr": "« Lancer Marqueurs » calcule les gènes marqueurs par identité cellulaire ; la table des marqueurs (onglet Tableau) est le rendu principal, consultable et exportable.",
+      "en": "'Run Markers' computes marker genes per cell identity; the marker table (Table tab) is the main rendering, browsable and exportable."
+    },
+    {
+      "fr": "🗺️ Pipeline Spatial",
+      "en": "🗺️ Spatial pipeline"
+    },
+    {
+      "fr": "Onglet Spatial : « Lancer le pipeline » enchaîne les étapes d'analyse spatiale (QC, déconvolution, clustering). Fin de la visite — elle ne réapparaîtra pas automatiquement ; le bouton « Visite guidée » de la barre latérale la relance à la demande.",
+      "en": "Spatial tab: 'Run the pipeline' chains the spatial analysis steps (QC, deconvolution, clustering). End of the tour — it will not start again automatically; the 'Guided tour' button in the sidebar relaunches it on demand."
+    },
+    {
+      "fr": "🧭 Visite guidée",
+      "en": "🧭 Guided tour"
+    },
+    {
+      "fr": "Étape {i} sur {n}",
+      "en": "Step {i} of {n}"
+    },
+    {
+      "fr": "Précédent",
+      "en": "Previous"
+    },
+    {
+      "fr": "Suivant",
+      "en": "Next"
+    },
+    {
+      "fr": "Passer la visite",
+      "en": "Skip the tour"
+    },
+    {
+      "fr": "Terminer",
+      "en": "Finish"
     }
   ]
 }

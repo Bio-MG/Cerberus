@@ -211,9 +211,16 @@ test_that("M2 semantics: 159 explicit sources, zero hidden sourcing loop", {
   # satellites slice S3 ; freeze test test-job-timebox.R, RED mesuré avant
   # implémentation : FAIL 22 / PASS 0 / SKIP 2 / 0 erreur ; échec de pin
   # mesuré AVANT re-basage : FAIL 1 « 168 - 167 == 1 »).
+  # N4 cerberus-tour (2026-11-04) : re-basage 168 -> 170 (+2 : registre PUR
+  # tools/pkg_skeleton/R/tour_registry.R bloc 03 juste après job_timebox.R
+  # [ancres ⊆ vocabulaire gelé drive_allowlist.R — la visite EST une suite
+  # d'acceptation ; RED FAIL 3 / SKIP 5 / PASS 0 / 0 erreur] + module
+  # modules/session/mod_tour.R bloc 13 juste après mod_session_checkpoint.R ;
+  # satellites slice S6 mission A ; tests test-tour-registry.R FAIL 0 /
+  # PASS 140 + test-mod-tour.R FAIL 0 / PASS 36).
   expect_identical(
-    length(.app_explicit(.app_src)), 168L,
-    info = paste("app.R doit porter exactement 168 source() explicites",
+    length(.app_explicit(.app_src)), 170L,
+    info = paste("app.R doit porter exactement 170 source() explicites",
                  "(M2 : 145 + 10 bulk_de deplies, + 3 export drive M3,",
                  "+ 1 moteur sc_qc_doublets M4, + 1 module session ASR-3 O29,",
                  "+ 1 moteur session_checkpoint ASR câblage O29,",
@@ -223,7 +230,9 @@ test_that("M2 semantics: 159 explicit sources, zero hidden sourcing loop", {
                  "+ 1 moteur dataset_directory PoC datasets P0,",
                  "+ 1 câblage cerberus_handoff PoC datasets P1,",
                  "+ 1 moteur dataset_health N5 dataset-doctor S2,",
-                 "+ 1 moteur job_timebox N7 timebox S3)",
+                 "+ 1 moteur job_timebox N7 timebox S3,",
+                 "+ 1 registre tour_registry N4 cerberus-tour S6,",
+                 "+ 1 module mod_tour N4 cerberus-tour S6)",
                  "-- le compte observe differe")
   )
   # et plus AUCUNE boucle list.files() de sourcing : M2 a deplie la derniere,

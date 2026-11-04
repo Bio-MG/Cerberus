@@ -132,6 +132,13 @@ source("tools/pkg_skeleton/R/dataset_health.R")
 # (ts_job_overrun_entry → new_provenance_entry/provenance_append) ; consommé
 # par mod_bulk_pathways (ligne de statut + finalisation drive_record).
 source("tools/pkg_skeleton/R/job_timebox.R")
+# N4 cerberus-tour (satellites slice S6, mission A, 2026-11-04) : registre PUR
+# des steps de la visite guidée (ts_tour_steps + validateur + vocabulaire) —
+# ancres ⊆ vocabulaire GELÉ drive_allowlist.R (sourcé plus haut dans CE bloc)
+# : la visite EST une suite d'acceptation, chaque step = une ancre
+# drive-checkable. Aucun appel Shiny (C2) ; consommé par
+# modules/session/mod_tour.R (Bloc 13) qui ne fabrique aucun id.
+source("tools/pkg_skeleton/R/tour_registry.R")
 # Racine applicative capturee UNE fois, au chargement (app.R tourne depuis la
 # racine renv). JAMAIS getwd() au moment du tick : RStudio peut deriver.
 ts_drive_boot(getwd())
@@ -366,6 +373,13 @@ source("modules/spatial/mod_spatial.R")
 # testable (tests/testthat/test-asr3-ui.R) ; app.R n'en fait que le MONTAGE
 # (sidebar + header= + server) et n'appelle jamais le moteur directement.
 source("modules/session/mod_session_checkpoint.R")
+# N4 cerberus-tour (satellites slice S6, mission A, 2026-11-04) : surface UI de
+# la visite guidée — mod_tour_ui dans la sidebar (voisin de help_btn),
+# mod_tour_server en fin de server(). Consomme le registre PUR
+# tour_registry.R (Bloc 03) VERBATIM — aucun id fabriqué par le module ;
+# skippable, first-run localStorage (clé TS_TOUR_STORAGE_KEY, côté navigateur,
+# JAMAIS une écriture disque app), easyClose=FALSE (aucune sortie silencieuse).
+source("modules/session/mod_tour.R")
 
 
 
@@ -553,7 +567,14 @@ ui <- page_navbar(
                  
                  icon = icon("question-circle"), 
                  
-                 class = "btn-info w-100")
+                 class = "btn-info w-100"),
+    
+    # N4 cerberus-tour (satellites slice S6, mission A) : lance la visite
+    # guidée à la demande ; le premier lancement (clé localStorage absente)
+    # démarre aussi la visite automatiquement. Registre = tour_registry.R
+    # (ancres ⊆ vocabulaire gelé drive_allowlist.R). Modèle
+    # mod_session_checkpoint : module transversal, zéro écriture disque.
+    mod_tour_ui("tour")
     
   ),
   
@@ -1778,6 +1799,12 @@ server <- function(input, output, session) {
   # §4/§7.5) ; ON => scan événementiel unique, offre = plan ASR-2 validé,
   # acceptation = apply() dans global_data, refus = purge de l'offre seule.
   mod_session_checkpoint_server("session_ckpt", global_data)
+  
+  # ── N4 cerberus-tour (satellites slice S6, mission A) — visite guidée ─────
+  # Monté APRÈS session_ckpt (modèle : les montages transversaux finissent
+  # server()) ; consomme le registre PUR verbatim — machine à états pure,
+  # effets session par seams à défauts de production (en-tête mod_tour.R).
+  mod_tour_server("tour")
   
 }
 

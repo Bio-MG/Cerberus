@@ -20,6 +20,7 @@ tools/pkg_skeleton/R/cerberus_handoff.R
 tools/pkg_skeleton/R/dataset_directory.R
 tools/pkg_skeleton/R/dataset_health.R
 tools/pkg_skeleton/R/job_timebox.R
+tools/pkg_skeleton/R/tour_registry.R
 tools/pkg_skeleton/R/palettes.R
 tools/pkg_skeleton/R/theme.R
 tools/pkg_skeleton/R/export.R
@@ -166,3 +167,4 @@ modules/spatial/mod_spatial_export.R
 modules/spatial/mod_spatial_report.R
 modules/spatial/mod_spatial.R
 modules/session/mod_session_checkpoint.R
+modules/session/mod_tour.R
