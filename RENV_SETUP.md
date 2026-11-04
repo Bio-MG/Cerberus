@@ -100,3 +100,34 @@ consultez `BiocManager::version()` localement pour connaître la release
 active sur votre machine, et reportez-la ici une fois `renv.lock` généré :
 
 > **Release Bioconductor figée dans `renv.lock` : `_à compléter après le premier `renv::snapshot()`_`**
+
+## Environnement Python (scCODA) — pin des versions
+
+> Ajouté le 2026-11-04 (QW-2, Flux QW — `docs/ROADMAP.md` §2.0 row « → Flux QW » ;
+> source `docs/ideation/USED_PACKAGE_GEMS_2026-11-03.md` §12.3, factcheck indépendant).
+
+L'application utilise un venv Python local `python_env_sccoda/` (Python 3.13.2)
+pour le module scCODA (déconvolution bayésienne de composition cellulaire) et
+sa pile scanpy. Sans pin, un rebuild — ou une montée de Python/pip — peut
+changer silencieusement les versions, donc les résultats.
+
+- **Pin généré le 2026-11-04** : `python_env_sccoda/requirements.lock.txt`
+  (101 paquets, `pip 26.2.1 freeze`). Versions clés mesurées :
+  `scanpy==1.12.4` · `scCODA==0.1.9` · `anndata==0.13.3.post0` · `tensorflow==2.21.0`.
+- ⚠️ **Le venv entier est gitigné** (`.gitignore` `/python_env_sccoda/`) — le
+  fichier requirements est donc **local-only par défaut**. Le versionner
+  exige une décision opérateur (exception `.gitignore` + `git add -f`, ou
+  recopie vers un chemin suivi) ; en attendant, ce fichier + la date ci-dessus
+  font foi pour cette machine.
+- **Reconstruire l'env à l'identique** :
+
+  ```bash
+  python -m venv python_env_sccoda
+  python_env_sccoda/Scripts/python.exe -m pip install -r python_env_sccoda/requirements.lock.txt
+  ```
+
+- **Re-générer le pin après toute installation/mise à jour** :
+
+  ```bash
+  python_env_sccoda/Scripts/python.exe -m pip freeze > python_env_sccoda/requirements.lock.txt
+  ```
