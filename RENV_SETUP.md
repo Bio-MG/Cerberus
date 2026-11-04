@@ -111,23 +111,24 @@ pour le module scCODA (déconvolution bayésienne de composition cellulaire) et
 sa pile scanpy. Sans pin, un rebuild — ou une montée de Python/pip — peut
 changer silencieusement les versions, donc les résultats.
 
-- **Pin généré le 2026-11-04** : `python_env_sccoda/requirements.lock.txt`
-  (101 paquets, `pip 26.2.1 freeze`). Versions clés mesurées :
-  `scanpy==1.12.4` · `scCODA==0.1.9` · `anndata==0.13.3.post0` · `tensorflow==2.21.0`.
-- ⚠️ **Le venv entier est gitigné** (`.gitignore` `/python_env_sccoda/`) — le
-  fichier requirements est donc **local-only par défaut**. Le versionner
-  exige une décision opérateur (exception `.gitignore` + `git add -f`, ou
-  recopie vers un chemin suivi) ; en attendant, ce fichier + la date ci-dessus
-  font foi pour cette machine.
+- **Pin généré le 2026-11-04** — **copie canonique SUIVIE : `python-env-requirements.lock.txt`**
+  (racine du dépôt, commitée — décision opérateur option B, 101 paquets, `pip 26.2.1 freeze`,
+  Python 3.13.2). Versions clés mesurées : `scanpy==1.12.4` · `scCODA==0.1.9` ·
+  `anndata==0.13.3.post0` · `tensorflow==2.21.0`.
+  `python_env_sccoda/requirements.lock.txt` (dans le venv) = copie de travail régénérable,
+  pas la référence.
+- ⚠️ **Le venv entier reste gitigné** (`.gitignore` `/python_env_sccoda/`) — seule la copie
+  racine est versionnée. Après toute installation/mise à jour dans le venv : re-générer
+  la copie canonique (commande ci-dessous) et la commiter.
 - **Reconstruire l'env à l'identique** :
 
   ```bash
   python -m venv python_env_sccoda
-  python_env_sccoda/Scripts/python.exe -m pip install -r python_env_sccoda/requirements.lock.txt
+  python_env_sccoda/Scripts/python.exe -m pip install -r python-env-requirements.lock.txt
   ```
 
-- **Re-générer le pin après toute installation/mise à jour** :
+- **Re-générer le pin canonique après toute installation/mise à jour** :
 
   ```bash
-  python_env_sccoda/Scripts/python.exe -m pip freeze > python_env_sccoda/requirements.lock.txt
+  python_env_sccoda/Scripts/python.exe -m pip freeze > python-env-requirements.lock.txt
   ```
