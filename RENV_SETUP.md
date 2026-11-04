@@ -43,9 +43,15 @@ renv trace bien la source) :
 renv::install("bnprks/BPCells/r")            # backend disque spatial — obligatoire
 renv::install("dmcable/spacexr")             # RCTD (déconvolution avec référence)
 renv::install("cellgeni/schard")             # lecteur .h5ad robuste
+renv::install("mojaveazure/loomR")           # lecteur .loom — obligatoire depuis le
+                                             # 2026-11-05 (QW-3 option a : retiré de
+                                             # ignored.packages ; import .loom natif,
+                                             # hard-stop mod_import_sc.R:1008 neutre)
 # Optionnels, non requis par le pipeline par défaut :
 # renv::install("prabhakarlab/Banksy@devel")
 # renv::install("satijalab/seurat-wrappers")
+# renv::install("zdebruine/sceasy")           # conversion sce↔anndata — optionnel-guarded,
+                                              # reste dans ignored.packages (décision QW-3)
 ```
 
 Puis les paquets CRAN/Bioconductor restants (`RANN`, `irlba`,
