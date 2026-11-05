@@ -637,7 +637,11 @@ ui <- page_navbar(
             # M3 BIOSTAT O27 : miroir LECTURE SEULE de la recommandation
             # validée côté Bulk (même source global_data$biostat_decision,
             # aucune re-dérivation ; uiOutput NULL = empreinte nulle à vide).
-            tagList(mod_sc_ui("sc"), mod_biostat_mirror_ui("biostat_sc"))),
+            # ASSISTANT BIOSTAT DÉSACTIVÉ (décision opérateur 2026-11-04, jugeant
+            # l'orientation sans utilité immédiate — réactivable en décommentant
+            # mod_biostat_mirror_ui + mod_biostat_tree_ui ci-dessous/line 652 et
+            # leurs serveurs) : tagList(mod_sc_ui("sc"), mod_biostat_mirror_ui("biostat_sc"))),
+            mod_sc_ui("sc")),
 
 
 
@@ -649,7 +653,9 @@ ui <- page_navbar(
             # (orientation seule — O27 §12.2 ; monté au niveau du nav_panel,
             # surface minimale, l'accordéon interne de mod_bulk.R reste
             # inchangé).
-            tagList(mod_bulk_ui("bulk"), mod_biostat_tree_ui("biostat_bulk"))),
+            # ASSISTANT BIOSTAT DÉSACTIVÉ (décision opérateur 2026-11-04) :
+            # tagList(mod_bulk_ui("bulk"), mod_biostat_tree_ui("biostat_bulk"))),
+            mod_bulk_ui("bulk")),
   
   
   
@@ -1160,10 +1166,15 @@ server <- function(input, output, session) {
   # shinytest2 « 404 for values URL .../dataobj/shinytest ») ; testServer
   # masquait le problème. La valeur est stable : le handle publié par
   # mod_bulk_server n'est jamais remplacé (la purge mute ses champs en place).
-  mod_biostat_tree_server("biostat_bulk", global_data,
-                          shared_rv = isolate(global_data$bulk_shared_rv))
-
-  mod_biostat_mirror_server("biostat_sc", global_data)
+  # ASSISTANT BIOSTAT DÉSACTIVÉ (décision opérateur 2026-11-04) — EFFET DE
+  # BORD BÉNÉFIQUE : la ligne ci-dessous lisait global_data$bulk_shared_rv
+  # HORS consommateur réactif = LE site de crash BUG #1 (session #2 en boucle
+  # reconnect, 330 crashes mesurés 2026-11-02). Désactiver l'assistant
+  # supprime le crash multi-onglet. Réactivation = décommenter + régler le
+  # bug d'abord (plan P0-1, ADJUSTMENTS_PLAN.md).
+  # mod_biostat_tree_server("biostat_bulk", global_data,
+  #                         shared_rv = isolate(global_data$bulk_shared_rv))
+  # mod_biostat_mirror_server("biostat_sc", global_data)
 
   mod_spatial_server("spatial", global_data)
   

@@ -392,10 +392,20 @@ test_that("W7 pont bulk_shared_rv : publié par mod_bulk, monté dans app.R, lec
   #     test-shinytest2-bulk.R « bulk_ids » 404 sur dataobj/shinytest).
   app_src <- paste(readLines(file.path(ts_project_root(), "app.R"), warn = FALSE),
                    collapse = "\n")
-  expect_true(grepl(paste0('mod_biostat_tree_server\\("biostat_bulk", global_data,\\s*',
-                           'shared_rv = isolate\\(global_data\\$bulk_shared_rv\\)\\)'), app_src),
-              info = paste("app.R:1102 doit monter l'assistant M4 avec",
-                           "shared_rv = isolate(global_data$bulk_shared_rv) (pièce D)"))
+  # RE-BASAGE (2026-11-05, reprise du jalon étranger sur GO opérateur) : le
+  # montage M4 est DÉSACTIVÉ dans app.R (décision opérateur 2026-11-04 —
+  # suppression du site de crash BUG #1 : lecture bulk_shared_rv hors
+  # consommateur, 330 crashes mesurés 2026-11-02). Le pont mod_bulk_server (a)
+  # et le comportement module (c) restent testés ci-dessous. Pin inversé :
+  # marque de désactivation présente, aucune ligne active ne monte.
+  # ancre ASCII volontaire : readLines hors UTF-8 (LC_CTYPE) fait échouer les
+  # motifs accentués (leçon frontière QW-1) ; « ASSISTANT BIOSTAT » = 3x app.R.
+  expect_true(grepl("ASSISTANT BIOSTAT", app_src, fixed = TRUE),
+              info = paste("app.R: la marque de désactivation biostat est absente",
+                           "(décision opérateur 2026-11-04, BUG #1)"))
+  expect_false(grepl("(?m)^\\s*mod_biostat_tree_server\\(", app_src, perl = TRUE),
+               info = paste("app.R monte encore l'assistant M4 en ligne active —",
+                            "réactivation non arbitrée (BUG #1)"))
 
   # (c) comportement via le pont + I1 ÉLARGI au pont : instantané complet du
   #     handle avant/après un parcours + confirmation -- identique (assertion).
