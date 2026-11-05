@@ -288,3 +288,14 @@ test_that("the contract documents the UI exposure", {
                 label = paste("le contrat doit mentionner", needle))
   }
 })
+
+test_that("CC-1 : la vue Centralité consomme les rôles CellChat (rôles-first, fallback dérivé)", {
+  # le module cite les trois coutures du contrat CC-1 :
+  # champ additif `cellchat_roles` (consommé rôles-first), sortie plot
+  # `comm_centrality_plot`, fonction de vue `plot_communication_roles_dot`.
+  expect_gte(.count(.cc_ui_src, "cellchat_roles"), 2L)
+  expect_identical(.count(.cc_ui_src, "comm_centrality_plot"), 2L)  # UI + serveur
+  expect_identical(.count(.cc_ui_src, "plot_communication_roles_dot"), 1L)
+  # le fallback dérivé reste présent (voie import) — jamais supprimé par CC-1
+  expect_gte(.count(.cc_ui_src, "build_communication_centrality"), 1L)
+})

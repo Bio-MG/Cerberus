@@ -47,6 +47,7 @@ communication_views_public_api <- function() {
     "plot_communication_pathway_heatmap",
     "plot_communication_circle",
     "build_communication_centrality",
+    "plot_communication_roles_dot",
     "build_communication_filter_provenance",
     "build_communication_filtered_export"
   )
@@ -698,3 +699,44 @@ build_communication_filtered_export <- function(communication_result,
     stringsAsFactors = FALSE
   )
 }
+
+#' Dot plot des rôles de signalisation (CC-1) — consommateur pur
+#'
+#' Visualise la table `cellchat_roles` produite par le moteur CellChat
+#' (`run_cellchat()`, voir `.cellchat_engine_signaling_roles()`) : une ligne
+#' par voie × groupe, taille = degré pondéré (`outdeg`/`indeg`), la couleur
+#' porte le rôle classé (mediator/sender/receiver/minor). DESCRIPTIF : aucun
+#' contrôle biologique, aucun seuil de signification — la classification est
+#' re-calculable depuis les colonnes exportées.
+#'
+#' @param roles_table data.frame portant au moins (pathway, group, outdeg,
+#'   indeg, role) — colonnes du contrat CC-1.
+#' @return objet ggplot.
+#' @export
+plot_communication_roles_dot <- function(roles_table) {
+  if (!is.data.frame(roles_table) ||
+      !all(c("pathway", "group", "outdeg", "indeg", "role") %in%
+           colnames(roles_table))) {
+    .views_stop("plot_communication_roles_dot() : table roles CC-1 requise (pathway, group, outdeg, indeg, role).")
+  }
+  df <- roles_table
+  df$pathway <- factor(df$pathway, levels = rev(sort(unique(df$pathway))))
+  df$role <- factor(df$role,
+                    levels = c("sender", "receiver", "mediator", "minor"))
+  ggplot2::ggplot(df, ggplot2::aes(x = .data$group, y = .data$pathway)) +
+    ggplot2::geom_point(ggplot2::aes(size = pmax(.data$outdeg, .data$indeg),
+                                    color = .data$role), alpha = 0.85) +
+    ggplot2::scale_color_manual(values = c(sender = "#2166AC",
+                                           receiver = "#B2182B",
+                                           mediator = "#4D4D4D",
+                                           minor = "#BDBDBD"),
+                                drop = FALSE) +
+    ggplot2::labs(x = NULL, y = NULL,
+                  size = "degré pondéré",
+                  color = "rôle",
+                  title = "Rôles de signalisation par voie (CellChat)") +
+    ggplot2::theme_minimal(base_size = 12) +
+    ggplot2::theme(legend.position = "right",
+                   panel.grid.minor = ggplot2::element_blank())
+}
+

@@ -336,6 +336,71 @@ cellchat_engine_available <- function() {
 #' @return Le resultat canonique produit par finalize_communication_result(),
 #'   avec `provenance$import_only = FALSE` et les champs d'identite moteur.
 #' @export
+#' Extraire la table des rôles de signalisation (CC-1) — consommatrice pure
+#'
+#' Source MESURÉE 2026-11-05 sur CellChat 2.2.0.9001 : après
+#' `netAnalysis_computeCentrality(object, slot.name = "netP")`, les rôles
+#' vivent dans `object@netP$centr` — une LISTE nommée par voie, chaque
+#' élément étant une liste de vecteurs nommés par groupe cellulaire
+#' (`outdeg_unweighted`, `indeg_unweighted`, `outdeg`, `indeg`, `hub`,
+#' `authority`, `eigen`, `page_rank`, `betweenness`, `flowbet`, `info`).
+#' ⚠️ le champ `centrality` cité par la documentation courante N'EXISTE PAS
+#' dans cette version (mesure, jamais la documentation).
+#'
+#' Classification déterministe v1, par voie, sur parts normalisées des
+#' degrés pondérés (`out_share`/`in_share` — somme des degrés de la voie) :
+#' mediator (les deux parts >= .25) > sender (out >= .5) > receiver
+#' (in >= .5) > minor. La classification est DESCRIPTIVE (aucun contrôle
+#' biologique) et entièrement re-calculable depuis les colonnes exportées.
+#'
+#' @param object Objet CellChat post-centrality, OU liste nommée répliquant
+#'   les slots (route de test — même accesseur tolerant que l'extraction).
+#' @return data.frame (pathway, group, outdeg, indeg, outdeg_unweighted,
+#'   indeg_unweighted, out_share, in_share, role) ou NULL si rien à extraire.
+.cellchat_engine_signaling_roles <- function(object) {
+  netp <- .cellchat_engine_slot(object, "netP")
+  cent <- if (is.null(netp)) NULL else netp$centr
+  if (is.null(cent) || !is.list(cent) || length(cent) == 0L) return(NULL)
+  paths <- intersect(netp$pathways %||% names(cent), names(cent))
+  if (!length(paths)) return(NULL)
+  rows <- list()
+  for (pw in paths) {
+    el <- cent[[pw]]
+    if (is.null(el) || !is.list(el)) next
+    outdeg <- el$outdeg
+    indeg <- el$indeg
+    if (is.null(outdeg) || is.null(indeg)) next
+    groups <- names(outdeg)
+    if (is.null(groups) || !length(groups)) next
+    so <- sum(outdeg, na.rm = TRUE)
+    si <- sum(indeg, na.rm = TRUE)
+    for (g in groups) {
+      o <- suppressWarnings(as.numeric(outdeg[[g]]))
+      i <- suppressWarnings(as.numeric(indeg[[g]]))
+      out_share <- if (is.finite(so) && so > 0 && is.finite(o)) o / so else 0
+      in_share <- if (is.finite(si) && si > 0 && is.finite(i)) i / si else 0
+      role <- if (out_share >= 0.25 && in_share >= 0.25) "mediator"
+              else if (out_share >= 0.5) "sender"
+              else if (in_share >= 0.5) "receiver"
+              else "minor"
+      rows[[length(rows) + 1L]] <- data.frame(
+        pathway = pw,
+        group = as.character(g),
+        outdeg = if (is.finite(o)) o else NA_real_,
+        indeg = if (is.finite(i)) i else NA_real_,
+        outdeg_unweighted = as.numeric(el$outdeg_unweighted[[g]] %||% NA_real_),
+        indeg_unweighted = as.numeric(el$indeg_unweighted[[g]] %||% NA_real_),
+        out_share = out_share,
+        in_share = in_share,
+        role = role,
+        stringsAsFactors = FALSE
+      )
+    }
+  }
+  if (!length(rows)) return(NULL)
+  do.call(rbind, rows)
+}
+
 run_cellchat <- function(cellchat_input, seed, nboot = TS_CELLCHAT_NBOOT_DEFAULT,
                          seurat_obj = NULL, on_progress = NULL) {
   .cellchat_engine_require()
@@ -482,6 +547,33 @@ run_cellchat <- function(cellchat_input, seed, nboot = TS_CELLCHAT_NBOOT_DEFAULT
     n_pathways_significant <- length(object@netP$pathways %||% character(0))
   }
 
+  # CC-1 : centralité des rôles de signalisation — NON bloquant, comme les
+  # autres étapes CellChat : un échec est avalé-tracé et le résultat
+  # canonique est inchangé. Le champ produit est `centr` (et non
+  # `centrality`) — MESURÉ 2026-11-05 sur CellChat 2.2.0.9001 (voir
+  # .cellchat_engine_signaling_roles()).
+  ran_cent <- FALSE
+  if (ran_netp) {
+    cent <- tryCatch({
+      object <- CellChat::netAnalysis_computeCentrality(object, slot.name = "netP")
+      TRUE
+    }, error = function(e) { ts_log_swallow("sc_communication_engine.cellchat_centrality", e); FALSE })
+    ran_cent <- isTRUE(cent)
+  }
+
+  # CC-1 : extraction des rôles — AVANT le rm(object) (le moteur est
+  # éphémère), non bloquante : un échec avale-trace et la table n'est
+  # simplement pas attachée (le consommateur retombe sur la vue dérivée).
+  roles_df <- NULL
+  if (ran_cent) {
+    roles_df <- tryCatch(.cellchat_engine_signaling_roles(object),
+                         error = function(e) {
+                           ts_log_swallow("sc_communication_engine.cellchat_roles", e)
+                           NULL
+                         })
+    if (!is.null(roles_df) && nrow(roles_df) == 0L) roles_df <- NULL
+  }
+
   extracted <- .cellchat_engine_extract(object)
 
   # ── MOTEUR EPHEMERE : on retire la reference des la extraction faite ──────
@@ -559,6 +651,12 @@ run_cellchat <- function(cellchat_input, seed, nboot = TS_CELLCHAT_NBOOT_DEFAULT
     steps = steps
   )
   result$engine_path <- "B"
+
+  # CC-1 : attach ADDITIF — la vue Centralité du module consomme ces rôles
+  # quand ils existent et retombe sur sa vue dérivée sinon (jamais bloquant,
+  # jamais une réécriture du contrat : champs nouveaux, rien de réécrit).
+  result$cellchat_roles <- roles_df
+  result$cellchat_roles_ran <- ran_cent
 
   .progress("terminé")
   result

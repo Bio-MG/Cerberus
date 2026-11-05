@@ -11876,6 +11876,10 @@
     {
       "fr": "Terminer",
       "en": "Finish"
+    },
+    {
+      "fr": "Roles CellChat indisponibles (voie import ou centralite non calculee) — vue derivee seule.",
+      "en": "CellChat roles unavailable (import path or centrality not computed) — derived view only."
     }
   ]
 }

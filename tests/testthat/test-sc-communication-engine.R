@@ -311,6 +311,40 @@ test_that("a real run produces a canonical result with no CellChat object", {
   # NB : assert_communication_result() rend une liste BASE, pas un objet S3 —
   # la garde VALIDE, elle ne requalifie pas le type.
   expect_true(is.list(assert_communication_result(res)))
+
+  # CC-1 : les rôles de signalisation sont produits par le moteur (additif,
+  # non bloquant). Source MESURÉE : netP$centr (champ `centr` de CellChat
+  # 2.2.0.9001 — le champ `centrality` de la documentation n'existe pas).
+  expect_true(isTRUE(res$cellchat_roles_ran))
+  expect_true(is.data.frame(res$cellchat_roles))
+  expect_true(nrow(res$cellchat_roles) > 0L)
+  expect_true(all(c("pathway", "group", "outdeg", "indeg",
+                    "outdeg_unweighted", "indeg_unweighted",
+                    "out_share", "in_share", "role") %in% colnames(res$cellchat_roles)))
+  # groupes = identités passées au moteur (jamais un label inventé)
+  expect_true(all(res$cellchat_roles$group %in%
+                    unique(as.character(input$meta[["labels"]]))))
+  # classification fermée + parts normalisées par voie + re-calcul exact
+  expect_true(all(res$cellchat_roles$role %in%
+                    c("sender", "receiver", "mediator", "minor")))
+  expect_true(all(res$cellchat_roles$out_share >= 0 &
+                    res$cellchat_roles$out_share <= 1))
+  expect_true(all(res$cellchat_roles$in_share >= 0 &
+                    res$cellchat_roles$in_share <= 1))
+  pw_sums <- tapply(res$cellchat_roles$out_share,
+                    res$cellchat_roles$pathway, sum)
+  expect_true(all(abs(pw_sums - 1) < 1e-8))
+  recomputed <- ifelse(res$cellchat_roles$out_share >= 0.25 &
+                         res$cellchat_roles$in_share >= 0.25, "mediator",
+                       ifelse(res$cellchat_roles$out_share >= 0.5, "sender",
+                              ifelse(res$cellchat_roles$in_share >= 0.5,
+                                     "receiver", "minor")))
+  expect_identical(as.character(res$cellchat_roles$role), recomputed)
+  # classification descriptive cohérente : un sender n'est pas receiver
+  roles_by <- split(res$cellchat_roles$role, res$cellchat_roles$group)
+  expect_true(any(roles_by[[1]] == "sender") ||
+                any(roles_by[[1]] == "mediator") ||
+                any(roles_by[[1]] == "receiver"))
 })
 
 test_that("a run with no usable LR pair fails as no_interactions, not as a crash", {

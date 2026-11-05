@@ -395,3 +395,24 @@ test_that("score-source views and centrality remain non-regressive", {
                    sum(fs$table$score[fs$table$sender_node == "CD4 T"]))
   expect_true(all(diff(cen$total_interactions) <= 0))
 })
+
+test_that("CC-1 : le dot plot des rôles exige la table du contrat et rend un ggplot", {
+  expect_error(plot_communication_roles_dot(data.frame(bad = 1)),
+               class = "communication_import_error")
+  roles <- data.frame(
+    pathway = c("MHC-I", "MHC-I", "MHC-I"),
+    group = c("A", "B", "C"),
+    outdeg = c(47.7, 0, 34.5),
+    indeg = c(0, 47.7, 34.6),
+    role = c("sender", "receiver", "mediator"),
+    stringsAsFactors = FALSE
+  )
+  p <- plot_communication_roles_dot(roles)
+  expect_s3_class(p, "ggplot")
+  expect_identical(levels(p$data$role)[1], "sender")
+  expect_true(all(as.character(p$data$group) %in% c("A", "B", "C")))
+})
+
+test_that("CC-1 : l'API publique des vues cite le dot plot des rôles", {
+  expect_true("plot_communication_roles_dot" %in% communication_views_public_api())
+})

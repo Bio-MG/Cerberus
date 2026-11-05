@@ -313,7 +313,10 @@ mod_sc_communication_output_ui <- function(id) {
       nav_panel(i18n$t("Centralité"), value = "ccc_tab_centralite",
                 div(class = "small text-muted m-2",
                     i18n$t("Centralité dérivée du réseau, descriptive — ce n'est pas un contrôle biologique.")),
-                DT::dataTableOutput(ns("comm_centrality"), height = "420px"))
+                DT::dataTableOutput(ns("comm_centrality"), height = "420px"),
+                # CC-1 : dot plot des rôles (voie × groupe) — affiché quand les
+                # rôles CellChat du moteur sont présents, message i18n sinon.
+                plotOutput(ns("comm_centrality_plot"), height = "420px"))
       ),
       nav_menu(i18n$t("Contextes multi-modaux"),
       # ── Contextes V1.x (roadmap CCC avancée : contrainte/ordre/contexte —
@@ -1256,15 +1259,35 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       )
     })
 
+    # CC-1 : la vue Centralité consomme les RÔLES CellChat (moteur, quand
+    # l'extraction a tourné) et retombe sur la vue dérivée sinon — un seul
+    # calcul, partagé par la table et l'export CSV (jamais deux sources).
+    comm_centrality_df <- reactive({
+      req(comm_state$result)
+      roles <- comm_state$result$cellchat_roles
+      if (!is.null(roles) && is.data.frame(roles) && nrow(roles) > 0L) roles
+      else build_communication_centrality(comm_state$result, comm_filtered()$table)
+    })
+
     output$comm_centrality <- DT::renderDataTable({
       req(comm_state$result)
       .check_fingerprint()
       ts_datatable(
-        build_communication_centrality(comm_state$result, comm_filtered()$table),
+        comm_centrality_df(),
         page_length = 15L,
         filename_base = "sc_comm_centrality",
         filter = "none"
       )
+    })
+
+    output$comm_centrality_plot <- renderPlot({
+      req(comm_state$result)
+      roles <- comm_state$result$cellchat_roles
+      if (!is.null(roles) && is.data.frame(roles) && nrow(roles) > 0L) {
+        plot_communication_roles_dot(roles)
+      } else {
+        .tr("Roles CellChat indisponibles (voie import ou centralite non calculee) — vue derivee seule.")
+      }
     })
 
     output$comm_schema <- DT::renderDataTable({
@@ -1547,8 +1570,7 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
         req(comm_state$result)
         .check_fingerprint()
         .append_filter_provenance()
-        df <- build_communication_centrality(comm_state$result, comm_filtered()$table)
-        utils::write.csv(df, file, row.names = FALSE)
+        utils::write.csv(comm_centrality_df(), file, row.names = FALSE)
       }
     )
 
