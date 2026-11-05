@@ -165,7 +165,7 @@ test_that("le manifeste existe et n'est pas trivial", {
                  "Rscript tools/sources_manifest.R --build"))
   if (is.null(lines)) return(invisible(NULL))
   # tripwire de vacuite : 159 fichiers attendus (159 explicites + 0 boucle,
-  # re-basage M4 CERBERUS 2026-10-26 : +1 moteur sc_qc_doublets.R, mesure
+  # re-basage M4 BIOMENTAT 2026-10-26 : +1 moteur sc_qc_doublets.R, mesure
   # tools/sources_manifest.R --build) ; un extracteur regex casse rendrait peu
   # ou rien -- 100 = plancher.
   expect_true(length(lines) >= 100L,

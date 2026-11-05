@@ -61,7 +61,7 @@ test_that("T4-MSB-2: multi-sample design invariants guarantee differential expre
     batch = c("b1", "b2", "b1", "b2"),
     stringsAsFactors = FALSE
   )
-  res <- cerberus_handoff_validate_samplesheet(sheet, mat_colnames = s_ids)
+  res <- biomentat_handoff_validate_samplesheet(sheet, mat_colnames = s_ids)
   expect_true(res$valid)
   expect_identical(length(res$conditions), 2L)
   expect_identical(length(res$confounded_covariates), 0L)

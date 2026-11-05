@@ -1,5 +1,5 @@
 # =============================================================================
-# sc_qc_doublets.R — Moteur M4 « cerberus-doublets » : doublets (scDblFinder)
+# sc_qc_doublets.R — Moteur M4 « biomentat-doublets » : doublets (scDblFinder)
 #                     + RNA ambiant (SoupX/celda), erreurs classées, provenance
 # =============================================================================
 # Contrat ÉPINGLÉ par les tests :
@@ -8,7 +8,7 @@
 #       list(obj = <Seurat>, qc_metrics = <list>, provenance = <list>) ;
 #     erreur classée sc_qc_error / sous-classe sc_ambient_package_missing ;
 #     défauts max_contamination = 0.20, doublet_score_cutoff = 0.25 (0.0-1.0) ;
-#     provenance via new_provenance_entry(analysis_id = "cerberus-doublets",
+#     provenance via new_provenance_entry(analysis_id = "biomentat-doublets",
 #     method = "scDblFinder", cells_used, cells_excluded, seed).
 #   - PROJECT.md:57-62 (features 19-24, owner M4) ; tests contractuels :
 #     tests/e2e/tier1_features/test-tier1-m4-doublets-qc.R (en-tête 14-23) et
@@ -385,7 +385,7 @@ sc_filter_doublets_and_ambient <- function(obj, params = list()) {
   if (!is.null(batch_used)) applied_params$batch_var <- batch_used
   entry <- if (exists("new_provenance_entry", mode = "function")) {
     new_provenance_entry(
-      analysis_id = "cerberus-doublets",
+      analysis_id = "biomentat-doublets",
       method = "scDblFinder",
       parameters = applied_params,
       dataset = obj,
@@ -398,7 +398,7 @@ sc_filter_doublets_and_ambient <- function(obj, params = list()) {
   } else {
     # Repli structurel si provenance.R n'est pas résidente (contexte de test
     # isolé) : mêmes champs, JSON-sérialisable (F23-5).
-    list(analysis_id = "cerberus-doublets", method = "scDblFinder",
+    list(analysis_id = "biomentat-doublets", method = "scDblFinder",
          timestamp = t_start, parameters = applied_params,
          cells_used = keep_cells, cells_excluded = excluded_cells,
          seed = seed, warnings = warnings_vec)

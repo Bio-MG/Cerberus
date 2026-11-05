@@ -35,7 +35,7 @@
 # =============================================================================
 
 source_project_file("tools/pkg_skeleton/R/session_checkpoint.R")
-source_project_file("tools/pkg_skeleton/R/cerberus_handoff.R")
+source_project_file("tools/pkg_skeleton/R/biomentat_handoff.R")
 source_project_file("tools/pkg_skeleton/R/dataset_directory.R")
 source_project_file("tools/pkg_skeleton/R/drive_allowlist.R")
 source_project_file("tools/pkg_skeleton/R/drive_watcher.R")
@@ -61,7 +61,7 @@ test_that("T7-0 : l'outil transcripto_drive_datasets est câblé dans mcp_server
   # adversarial ne source que drive_watcher — l'outil datasets a besoin des
   # 4 fichiers moteur PoC + de l'allowlist pour le confinement S11).
   for (f in c("tools/pkg_skeleton/R/session_checkpoint.R",
-              "tools/pkg_skeleton/R/cerberus_handoff.R",
+              "tools/pkg_skeleton/R/biomentat_handoff.R",
               "tools/pkg_skeleton/R/dataset_directory.R",
               "tools/pkg_skeleton/R/drive_allowlist.R",
               "tools/pkg_skeleton/R/drive_watcher.R")) {
@@ -108,7 +108,7 @@ test_that("T7-0 : l'outil transcripto_drive_datasets est câblé dans mcp_server
                        file.path(d, "samplesheet.tsv"),
                        sep = "\t", quote = FALSE, row.names = FALSE)
     writeLines(jsonlite::toJSON(list(
-      schema_version = "cerberus-exchange/v1", dataset_id = id,
+      schema_version = "biomentat-exchange/v1", dataset_id = id,
       species = "human", genome_assembly = "GRCh38",
       feature_id_type = "ensembl", matrix_path = "counts.tsv",
       matrix_type = "raw_counts", samplesheet_path = "samplesheet.tsv"),

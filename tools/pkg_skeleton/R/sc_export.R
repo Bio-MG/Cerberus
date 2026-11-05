@@ -36,7 +36,7 @@ sc_r_script_text <- function(obj, shared_rv = NULL) {
 
   paste0(
 '# =============================================================================
-# Script R Reproductible \u2014 Cerberus (Single-Cell)
+# Script R Reproductible \u2014 Biomentat (Single-Cell)
 # Généré le : ', date, '
 # Dataset    : ', n_genes, ' gènes \u00d7 ', n_cells, ' cellules
 # Pipeline   : PCA=', if(has_pca)"oui" else "non",

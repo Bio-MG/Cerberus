@@ -1,5 +1,5 @@
 # =============================================================================
-# scripts/mcp_server.R — Cerberus MCP server (stdio, NATIVE JSON-RPC)
+# scripts/mcp_server.R — Biomentat MCP server (stdio, NATIVE JSON-RPC)
 # =============================================================================
 # M1 — READ-ONLY drive tools. Native handler: NO mcptools, NO btw, NO ellmer.
 # Only jsonlite (already in renv.lock) is used, and only for the protocol layer.
@@ -143,13 +143,13 @@ if (!.ts_have_jsonlite) {
 .ts_source_quiet(.ts_drive_watcher_path)
 # PoC « répertoire de datasets » (fiche PROPOSAL_DATASET_DIRECTORY_POC_2026-11-02.md
 # §3.4, jalon P2) : le moteur du scan + ses dépendances runtime (le lecteur de
-# manifeste v1 cerberus_handoff, câblé dans app.R au jalon P1 ; la résolution
+# manifeste v1 biomentat_handoff, câblé dans app.R au jalon P1 ; la résolution
 # racine .sc_project_root du checkpoint). Ces fichiers n'ont JAMAIS vécu sous
 # R/core — chemin unique, pas de fallback dual.
 .ts_source_quiet(file.path(.project_root, "tools", "pkg_skeleton", "R",
                            "session_checkpoint.R"))
 .ts_source_quiet(file.path(.project_root, "tools", "pkg_skeleton", "R",
-                           "cerberus_handoff.R"))
+                           "biomentat_handoff.R"))
 .ts_source_quiet(file.path(.project_root, "tools", "pkg_skeleton", "R",
                            "dataset_directory.R"))
 ts_drive_boot(.project_root)
@@ -3523,7 +3523,7 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
            additionalProperties = FALSE)),
     list(name = "transcripto_drive_status",
          description = paste0(
-           "Read-only. Report the live Cerberus drive session: protocol, ",
+           "Read-only. Report the live Biomentat drive session: protocol, ",
            "viewer mode, pid, started_at, heartbeat freshness and job state. ",
            "Returns a domain error code (NO_SESSION, STALE_SESSION, ",
            "INVALID_PROTOCOL, READ_FAILED) in structuredContent when the session ",
@@ -3759,7 +3759,7 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
     list(name = "transcripto_drive_state",
          description = paste0(
            "Read the passive observation channel state digest emitted by the live ",
-           "Cerberus session. Returns the latest state.json (session token, active module, ",
+           "Biomentat session. Returns the latest state.json (session token, active module, ",
            "pipeline status, recent error count, and state hash). Differs from ",
            "transcripto_drive_status in that it provides a lightweight reactive ",
            "fingerprint without triggering an active drive read."),
@@ -3769,8 +3769,8 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
            additionalProperties = FALSE)),
     list(name = "transcripto_drive_datasets",
          description = paste0(
-           "List the datasets deposited in the Cerberus datasets root ",
-           "(cerberus-exchange/v1 drops; PoC dataset directory, fiche 2026-11-02 ",
+           "List the datasets deposited in the Biomentat datasets root ",
+           "(biomentat-exchange/v1 drops; PoC dataset directory, fiche 2026-11-02 ",
            "section 3.4). PASSIVE and READ-ONLY, and SESSION-FREE unlike ",
            "transcripto_drive_state: a filesystem listing answers before the app ",
            "is started. The root is resolved by the engine (TRANSCRIPTO_DATASETS_DIR ",
@@ -3796,9 +3796,9 @@ TS_MCP_WAIT_EXPECT_FIELDS <- c("session_id", "pid", "started_at")
   list(
     protocolVersion = ver,
     capabilities = list(tools = list(listChanged = FALSE)),
-    serverInfo = list(name = "cerberus-drive", version = "0.6.0-m4"),
+    serverInfo = list(name = "biomentat-drive", version = "0.6.0-m4"),
     instructions = paste0(
-      "Access to a LIVE Cerberus drive session. Twelve tools: six read-only ",
+      "Access to a LIVE Biomentat drive session. Twelve tools: six read-only ",
       "(status, verdict, state digest, passive snapshot, bounded read of the ",
       "exported artefact, dataset directory listing), one controlled import (import, ",
       "action=import_file only), one controlled input write (set_inputs), ",

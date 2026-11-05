@@ -154,11 +154,11 @@ test_that("M2 semantics: 159 explicit sources, zero hidden sourcing loop", {
   # 155 = 145 source() historiques + 10 de l'ancienne boucle bulk_de DEPLIEE
   # (bloc 11). Tout ajout/retrait de fichier source DOIT reecrire ce nombre
   # consciemment, pas glisser sous un plancher magique.
-  # J1 CERBERUS (2026-10-26) : re-basage 155 -> 158 mesure sur HEAD aa364ea
+  # J1 BIOMENTAT (2026-10-26) : re-basage 155 -> 158 mesure sur HEAD aa364ea
   # (158 = 145 + 10 bulk_de deplies + 3 routes d'export drive M3 posees par
   # fe47823 : mod_sc_annotation_export.R, mod_sc_viz_export.R,
   # mod_sc_trajectory_export.R). Les 3 gardes etaient ROUGES sur ce decalage.
-  # M4 CERBERUS (2026-10-26) : re-basage 158 -> 159 (+1 moteur
+  # M4 BIOMENTAT (2026-10-26) : re-basage 158 -> 159 (+1 moteur
   # sc_qc_doublets.R, source litteral top-level apres sc_batch_metrics.R).
   # ASR-3 O29 (2026-11-01) : re-basage 159 -> 160 (+1 module
   # modules/session/mod_session_checkpoint.R, bloc 13 — surface UI des
@@ -193,9 +193,9 @@ test_that("M2 semantics: 159 explicit sources, zero hidden sourcing loop", {
   # §3.1-3.2 ; freeze test test-dataset-dir-scan.R, RED mesuré avant
   # implémentation : failed=7 ; jamais appelé au cold-boot, AC2).
   # PoC DATASET DIRECTORY P1 (2026-11-03) : re-basage 165 -> 166 (+1 câblage
-  # tools/pkg_skeleton/R/cerberus_handoff.R, bloc 03 juste avant
+  # tools/pkg_skeleton/R/biomentat_handoff.R, bloc 03 juste avant
   # dataset_directory.R — dépendance runtime du scan, arbitrage opérateur ;
-  # le statut « étranger CERBERUS non câblé » du fichier prend fin, fiche
+  # le statut « étranger BIOMENTAT non câblé » du fichier prend fin, fiche
   # §3.3/AC3 ; section UI testée par test-dataset-dir-ui.R, RED mesuré avant
   # implémentation : failed=6).
   # N5 dataset-doctor (2026-11-03) : re-basage 166 -> 167 (+1 moteur
@@ -211,7 +211,7 @@ test_that("M2 semantics: 159 explicit sources, zero hidden sourcing loop", {
   # satellites slice S3 ; freeze test test-job-timebox.R, RED mesuré avant
   # implémentation : FAIL 22 / PASS 0 / SKIP 2 / 0 erreur ; échec de pin
   # mesuré AVANT re-basage : FAIL 1 « 168 - 167 == 1 »).
-  # N4 cerberus-tour (2026-11-04) : re-basage 168 -> 170 (+2 : registre PUR
+  # N4 biomentat-tour (2026-11-04) : re-basage 168 -> 170 (+2 : registre PUR
   # tools/pkg_skeleton/R/tour_registry.R bloc 03 juste après job_timebox.R
   # [ancres ⊆ vocabulaire gelé drive_allowlist.R — la visite EST une suite
   # d'acceptation ; RED FAIL 3 / SKIP 5 / PASS 0 / 0 erreur] + module
@@ -228,11 +228,11 @@ test_that("M2 semantics: 159 explicit sources, zero hidden sourcing loop", {
                  "+ 1 module biostat_tree M3 BIOSTAT O27,",
                  "+ 1 moteur spatial_meta_col_validation SPMV-1 O-SPMV,",
                  "+ 1 moteur dataset_directory PoC datasets P0,",
-                 "+ 1 câblage cerberus_handoff PoC datasets P1,",
+                 "+ 1 câblage biomentat_handoff PoC datasets P1,",
                  "+ 1 moteur dataset_health N5 dataset-doctor S2,",
                  "+ 1 moteur job_timebox N7 timebox S3,",
-                 "+ 1 registre tour_registry N4 cerberus-tour S6,",
-                 "+ 1 module mod_tour N4 cerberus-tour S6)",
+                 "+ 1 registre tour_registry N4 biomentat-tour S6,",
+                 "+ 1 module mod_tour N4 biomentat-tour S6)",
                  "-- le compte observe differe")
   )
   # et plus AUCUNE boucle list.files() de sourcing : M2 a deplie la derniere,

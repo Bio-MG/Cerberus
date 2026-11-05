@@ -1,4 +1,4 @@
-# N3 `cerberus-dock` — l'hôte des satellites
+# N3 `biomentat-dock` — l'hôte des satellites
 
 Satellite **hôte** (R, CLI) : il connaît, par **manifeste figé**, comment
 démarrer / sonder / arrêter chaque satellite du dépôt. Fiche de lancement :
@@ -49,7 +49,7 @@ Le R du dock vit sous `tools/` : la conventions gate (exigence « 0 erreur »)
 voit `modules/` et l'arbre du package — **pas** `tools/`. Le satellite échappe
 donc **par construction** au gate. Contrepartie assumée : R minimal (une lib
 pure + un CLI fin, ~0 logique métier), et **la porte de validation est
-`tests/testthat/test-cerberus-dock.R`** (32 assertions : validateur du format
+`tests/testthat/test-biomentat-dock.R`** (32 assertions : validateur du format
 figé avec 8 corruptions refusées, matrice de verdict santé, cohérence disque du
 locataire, verrou O6). Dépendances : **aucune nouvelle** — `processx` + `curl`
 sont déjà verrouillés (renv.lock, infra de test / http).

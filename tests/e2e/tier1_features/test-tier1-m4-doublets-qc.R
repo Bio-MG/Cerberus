@@ -409,7 +409,7 @@ test_that("F22-5: metrics handle extreme distributions (e.g. 0% or 100% doublets
 
 # ── Feature 23: Cell Provenance Recording ────────────────────────────────────
 
-test_that("F23-1: new_provenance_entry records cerberus-doublets tool provenance", {
+test_that("F23-1: new_provenance_entry records biomentat-doublets tool provenance", {
   if (!is_m4_ready()) skip("M4 cell provenance not yet active")
   if (!requireNamespace("scDblFinder", quietly = TRUE)) {
     skip("scDblFinder not installed in this environment")
@@ -417,7 +417,7 @@ test_that("F23-1: new_provenance_entry records cerberus-doublets tool provenance
   obj <- .make_test_sc_obj()
   res <- sc_filter_doublets_and_ambient(obj, params = list(seed = 42))
   expect_true(is.list(res$provenance))
-  expect_true(grepl("cerberus-doublets", as.character(res$provenance$analysis_id),
+  expect_true(grepl("biomentat-doublets", as.character(res$provenance$analysis_id),
                     fixed = TRUE))
   expect_identical(as.character(res$provenance$method), "scDblFinder")
 })
@@ -457,16 +457,16 @@ test_that("F23-4: provenance list appends without corrupting existing history", 
   expect_true(exists("new_provenance_entry", mode = "function"))
   expect_true(exists("provenance_append", mode = "function"))
   st <- shiny::reactiveValues()
-  e1 <- new_provenance_entry(analysis_id = "cerberus-doublets-1", method = "scDblFinder",
+  e1 <- new_provenance_entry(analysis_id = "biomentat-doublets-1", method = "scDblFinder",
                              cells_used = 70, cells_excluded = 10)
-  e2 <- new_provenance_entry(analysis_id = "cerberus-doublets-2", method = "scDblFinder",
+  e2 <- new_provenance_entry(analysis_id = "biomentat-doublets-2", method = "scDblFinder",
                              cells_used = 75, cells_excluded = 5)
   provenance_append(st, e1)
   provenance_append(st, e2)
   h <- state_get(st, "provenance")
   expect_length(h, 2)
-  expect_identical(as.character(h[[1]]$analysis_id), "cerberus-doublets-1")
-  expect_identical(as.character(h[[2]]$analysis_id), "cerberus-doublets-2")
+  expect_identical(as.character(h[[1]]$analysis_id), "biomentat-doublets-1")
+  expect_identical(as.character(h[[2]]$analysis_id), "biomentat-doublets-2")
   expect_equal(h[[1]]$cells_used, 70)
   expect_equal(h[[2]]$cells_excluded, 5)
 })
@@ -482,7 +482,7 @@ test_that("F23-5: provenance history serializes cleanly to JSON report", {
   expect_type(js, "character")
   back <- jsonlite::fromJSON(as.character(js), simplifyVector = FALSE)
   expect_identical(as.character(back$method), "scDblFinder")
-  expect_true(grepl("cerberus-doublets", as.character(back$analysis_id), fixed = TRUE))
+  expect_true(grepl("biomentat-doublets", as.character(back$analysis_id), fixed = TRUE))
   expect_false(is.null(back$parameters))
 })
 

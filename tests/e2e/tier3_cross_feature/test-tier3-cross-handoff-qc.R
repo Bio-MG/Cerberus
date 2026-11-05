@@ -20,13 +20,13 @@ test_that("T3-HQC-1: validated drop matrix is successfully ingested and prepared
   d <- e2e_make_test_drop(prefix = "t3_hqc_valid_")
   on.exit(unlink(d, recursive = TRUE), add = TRUE)
   
-  res <- cerberus_handoff_validate_drop(drop_dir = d)
+  res <- biomentat_handoff_validate_drop(drop_dir = d)
   expect_true(res$valid)
   expect_identical(res$status, "VALID")
   
   # Read validated matrix and verify dimensions
   man <- jsonlite::fromJSON(file.path(d, "manifest.json"))
-  mat <- cerberus_handoff_read_matrix(file.path(d, man$matrix_path))
+  mat <- biomentat_handoff_read_matrix(file.path(d, man$matrix_path))
   expect_identical(nrow(mat), 120L)
   expect_identical(ncol(mat), 4L)
   expect_true(all(mat >= 0))
@@ -42,7 +42,7 @@ test_that("T3-HQC-2: ungrounded continuous data rejected at handoff cannot enter
   d <- e2e_make_test_drop(prefix = "t3_hqc_cont_", counts = cont_mat)
   on.exit(unlink(d, recursive = TRUE), add = TRUE)
   
-  res <- cerberus_handoff_validate_drop(drop_dir = d)
+  res <- biomentat_handoff_validate_drop(drop_dir = d)
   expect_false(res$valid)
   expect_true(any(vapply(res$errors, function(x) x$code == "not_raw_counts", logical(1))))
 })
@@ -59,7 +59,7 @@ test_that("T3-HQC-3: pseudoreplicated drop is blocked from entering biological Q
   d <- e2e_make_test_drop(prefix = "t3_hqc_pseudo_", counts = mat3, samplesheet = sheet)
   on.exit(unlink(d, recursive = TRUE), add = TRUE)
   
-  res <- cerberus_handoff_validate_drop(drop_dir = d)
+  res <- biomentat_handoff_validate_drop(drop_dir = d)
   expect_false(res$valid)
   expect_true(any(vapply(res$errors, function(x) x$code == "pseudoreplication_detected", logical(1))))
 })

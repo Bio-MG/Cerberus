@@ -48,7 +48,7 @@ sc_ap_normalize_params <- function(p = list()) {
     sc_ap_pathway_org          = "human",
     sc_ap_correlation          = FALSE,
     sc_ap_trajectory           = TRUE,
-    # M4 (2026-10-26, jalon CERBERUS) : QC doublets & ambiant. Défauts = source
+    # M4 (2026-10-26, jalon BIOMENTAT) : QC doublets & ambiant. Défauts = source
     # unique defaults.R (convention QW-2). sc_ap_doublets est OPT-IN (FALSE) :
     # l'appel moteur est PARESSEUX (Step 1c) et le cœur reste exécutable sans
     # scDblFinder ; le canal drive hérite du même jeu fermé (délégation).

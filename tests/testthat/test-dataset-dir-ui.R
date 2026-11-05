@@ -26,7 +26,7 @@
 #     aucun log de scan à l'entrée ;
 #   * le scan à la demande liste les 3 formes de fixtures (recyclées du
 #     gabarit test-dataset-dir-scan.R, réécrites compactes — le gabarit v1
-#     4x2 reste le plancher anti-pseudoréplication cerberus_handoff.R:588) ;
+#     4x2 reste le plancher anti-pseudoréplication biomentat_handoff.R:588) ;
 #   * le bouton « Charger » est désactivé pour un dataset non valid et la
 #     raison v1 est visible ; actif pour un valid (AC3) — asserted sur la
 #     STRUCTURE des tags (helper top-level, pas de sérialisation HTML) ;
@@ -48,7 +48,7 @@ source_project_file("modules/import/mod_rdata_picker.R")
 source_project_file("tools/pkg_skeleton/R/bulk_import_engine.R")
 # Le moteur PoC P0 + sa dépendance runtime (câblée dans app.R au présent jalon)
 source_project_file("tools/pkg_skeleton/R/session_checkpoint.R")
-source_project_file("tools/pkg_skeleton/R/cerberus_handoff.R")
+source_project_file("tools/pkg_skeleton/R/biomentat_handoff.R")
 source_project_file("tools/pkg_skeleton/R/dataset_directory.R")
 source_project_file("modules/import/mod_import_bulk.R")
 
@@ -90,7 +90,7 @@ suppressPackageStartupMessages(library(shiny))
                      file.path(d, "samplesheet.tsv"),
                      sep = "\t", quote = FALSE, row.names = FALSE)
   writeLines(jsonlite::toJSON(list(
-    schema_version = "cerberus-exchange/v1", dataset_id = id,
+    schema_version = "biomentat-exchange/v1", dataset_id = id,
     species = "human", genome_assembly = "GRCh38",
     feature_id_type = "ensembl", matrix_path = "counts.tsv",
     matrix_type = "raw_counts", samplesheet_path = "samplesheet.tsv"),

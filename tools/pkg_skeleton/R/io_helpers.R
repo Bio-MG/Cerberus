@@ -1264,7 +1264,7 @@ remap_gene_ids_to_symbol <- function(counts_matrix, from_type, organism = "human
 }
 
 # =============================================================================
-# Identite d'objet pour les contrats de resultat (Stages 8+, TREE CERBERUS)
+# Identite d'objet pour les contrats de resultat (Stages 8+, TREE BIOMENTAT)
 # =============================================================================
 # Bloc object_identity PARTAGE par tous les finalisateurs de resultats
 # canoniques (velocity, communication, DA design...) : l'empreinte est celle

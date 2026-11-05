@@ -18,17 +18,17 @@ if (!requireNamespace("shinyjs", quietly = TRUE)) {
   ))
   if (on_proj_renv) {
     stop(
-      "Cerberus : packages requis introuvables alors que le renv du ",
+      "Biomentat : packages requis introuvables alors que le renv du ",
       "projet est actif. Librairie projet incomplète — exécutez ",
       "renv::restore() puis relancez.",
       call. = FALSE
     )
   }
   stop(
-    "Cerberus : cette session R a été démarrée en dehors du projet ",
+    "Biomentat : cette session R a été démarrée en dehors du projet ",
     "(renv du projet inactif — renv/library/ absent de .libPaths()).\n",
     "Corrections possibles :\n",
-    "  1. Ouvrez le projet via 'SHINYAPP test.Rproj' (renv s'active au ",
+    "  1. Ouvrez le projet via 'biomentat.Rproj' (renv s'active au ",
     "démarrage), puis relancez runApp() ;\n",
     "  2. ou dans la session courante : setwd('",
     getwd(), "') ; source('renv/activate.R') ; runApp().",
@@ -64,7 +64,7 @@ source("tools/pkg_skeleton/R/thresholds.R")
 source("tools/pkg_skeleton/R/biostat_tree.R")
 
 # ── Bloc 03 : R/core (infrastructure transverse) ─────────────────────────────
-# Contrat d'etat transversal source EN PREMIER (TREE CERBERUS step 3 :
+# Contrat d'etat transversal source EN PREMIER (TREE BIOMENTAT step 3 :
 # config/* -> state.R -> autres R/core/* -> domaines -> modules).
 # D2 M5 lot 1 (2026-10-25) : les 4 FOURNISSEURS du rapport consolide
 # (state, io_helpers, provenance, error_log) demenagent dans l'arbre du paquet
@@ -77,11 +77,11 @@ source("tools/pkg_skeleton/R/biostat_tree.R")
 # D2 M5 lot 5 (2026-10-25) : les 9 fichiers R/core RESTANTS suivent (caching,
 # drive_allowlist, drive_watcher, error_state, jobs, memory, pathway_helpers,
 # rdata_io, validation) — même régime ; R/core ne gardait plus que le fichier
-# étranger CERBERUS non câblé (cerberus_handoff.R, hors lot) — MAJ jalon PoC
-# dataset directory P1 (2026-11-03) : cerberus_handoff.R est DÉSORMAIS CÂBLÉ
+# étranger BIOMENTAT non câblé (biomentat_handoff.R, hors lot) — MAJ jalon PoC
+# dataset directory P1 (2026-11-03) : biomentat_handoff.R est DÉSORMAIS CÂBLÉ
 # (source() au bloc 03, juste avant dataset_directory.R) — dépendance runtime
 # de l'app via le scan du répertoire de datasets ; son statut « étranger non
-# câblé » prend fin ici (les tests CERBERUS étrangers ne sont pas concernés).
+# câblé » prend fin ici (les tests BIOMENTAT étrangers ne sont pas concernés).
 source("tools/pkg_skeleton/R/state.R")        # contrat d'etat + fabriques d'etat partagees
 source("tools/pkg_skeleton/R/io_helpers.R")
 source("tools/pkg_skeleton/R/rdata_io.R")     # import .rda/.RData "Inspect & Select" (contrat RDATA_IMPORT_CONTRACT)
@@ -114,11 +114,11 @@ source("tools/pkg_skeleton/R/session_checkpoint.R")
 # après session_checkpoint.R : ts_datasets_dir() suit le motif
 # ts_session_checkpoint_dir() (résolution racine partagée .sc_project_root).
 # Jalon P1 (2026-11-03) : la section UI appelle réellement le scan — la
-# dépendance runtime annoncée en P0 (adjacence impossible alors, cerberus
+# dépendance runtime annoncée en P0 (adjacence impossible alors, biomentat
 # « hors lot » non sourcé) est CÂBLÉE ici, arbitrage opérateur : UNE ligne
 # source() de plus, manifeste suit (rebuild mécanique, épingles re-basées
 # dans le même geste).
-source("tools/pkg_skeleton/R/cerberus_handoff.R")
+source("tools/pkg_skeleton/R/biomentat_handoff.R")
 source("tools/pkg_skeleton/R/dataset_directory.R")
 # N5 dataset-doctor (satellites slice S2, jalon round8, 2026-11-03) : moteur
 # PUR du rapport de santé unifié à l'import (ts_dataset_health) — échelle
@@ -132,7 +132,7 @@ source("tools/pkg_skeleton/R/dataset_health.R")
 # (ts_job_overrun_entry → new_provenance_entry/provenance_append) ; consommé
 # par mod_bulk_pathways (ligne de statut + finalisation drive_record).
 source("tools/pkg_skeleton/R/job_timebox.R")
-# N4 cerberus-tour (satellites slice S6, mission A, 2026-11-04) : registre PUR
+# N4 biomentat-tour (satellites slice S6, mission A, 2026-11-04) : registre PUR
 # des steps de la visite guidée (ts_tour_steps + validateur + vocabulaire) —
 # ancres ⊆ vocabulaire GELÉ drive_allowlist.R (sourcé plus haut dans CE bloc)
 # : la visite EST une suite d'acceptation, chaque step = une ancre
@@ -202,7 +202,7 @@ source("tools/pkg_skeleton/R/sc_pipeline.R")
 source("tools/pkg_skeleton/R/sc_export.R")
 source("tools/pkg_skeleton/R/sc_metadata.R")  # Design expérimental (condition/réplicat) — feature 6×10X, audit 2026-09-27 (PUR : aucun symbole Shiny)
 source("tools/pkg_skeleton/R/sc_batch_metrics.R")  # Métrique de mélange des batchs (roadmap 4.3) — PUR : aucun symbole Shiny
-# M4 (2026-10-26, jalon CERBERUS) : moteur doublets & RNA ambiant — scDblFinder,
+# M4 (2026-10-26, jalon BIOMENTAT) : moteur doublets & RNA ambiant — scDblFinder,
 # erreurs classées sc_qc_error (jamais de repli silencieux, feature 20),
 # provenance new_provenance_entry (feature 23). PUR : aucun symbole Shiny ;
 # résolu au runtime — les modules sont sourcés bien après. Garde manifeste :
@@ -373,7 +373,7 @@ source("modules/spatial/mod_spatial.R")
 # testable (tests/testthat/test-asr3-ui.R) ; app.R n'en fait que le MONTAGE
 # (sidebar + header= + server) et n'appelle jamais le moteur directement.
 source("modules/session/mod_session_checkpoint.R")
-# N4 cerberus-tour (satellites slice S6, mission A, 2026-11-04) : surface UI de
+# N4 biomentat-tour (satellites slice S6, mission A, 2026-11-04) : surface UI de
 # la visite guidée — mod_tour_ui dans la sidebar (voisin de help_btn),
 # mod_tour_server en fin de server(). Consomme le registre PUR
 # tour_registry.R (Bloc 03) VERBATIM — aucun id fabriqué par le module ;
@@ -395,7 +395,7 @@ ui <- page_navbar(
   # (nav_select) to the analysis tabs that host the ID-mapping panels.
   id = "main_nav",
 
-  title = "Cerberus v1.0 - Multi-Omics Platform",
+  title = "Biomentat v1.0 - Multi-Omics Platform",
   
   theme = my_theme,
 
@@ -569,7 +569,7 @@ ui <- page_navbar(
                  
                  class = "btn-info w-100"),
     
-    # N4 cerberus-tour (satellites slice S6, mission A) : lance la visite
+    # N4 biomentat-tour (satellites slice S6, mission A) : lance la visite
     # guidée à la demande ; le premier lancement (clé localStorage absente)
     # démarre aussi la visite automatiquement. Registre = tour_registry.R
     # (ancres ⊆ vocabulaire gelé drive_allowlist.R). Modèle
@@ -1308,7 +1308,7 @@ server <- function(input, output, session) {
   
   output$save_session_btn <- downloadHandler(
     
-    filename = function() paste0("cerberus_session_", Sys.Date(), ".rds"),
+    filename = function() paste0("biomentat_session_", Sys.Date(), ".rds"),
     
     content  = function(file) {
       
@@ -1338,7 +1338,7 @@ server <- function(input, output, session) {
         
         saved_at    = Sys.time(),
         
-        app_version = "Cerberus v1.0"
+        app_version = "Biomentat v1.0"
         
       )
       
@@ -1541,7 +1541,7 @@ server <- function(input, output, session) {
     .tr_h <- function(k) { tr <- global_data$i18n; if (is.null(tr)) return(k); tryCatch(.strip_i18n_html(tr$t(k)), error=function(e) k) }
     showModal(modalDialog(
       
-      title = .tr_h("📖 Guide d'Utilisation - Cerberus v1.0"),
+      title = .tr_h("📖 Guide d'Utilisation - Biomentat v1.0"),
       
       size = "l",
       
@@ -1811,7 +1811,7 @@ server <- function(input, output, session) {
   # acceptation = apply() dans global_data, refus = purge de l'offre seule.
   mod_session_checkpoint_server("session_ckpt", global_data)
   
-  # ── N4 cerberus-tour (satellites slice S6, mission A) — visite guidée ─────
+  # ── N4 biomentat-tour (satellites slice S6, mission A) — visite guidée ─────
   # Monté APRÈS session_ckpt (modèle : les montages transversaux finissent
   # server()) ; consomme le registre PUR verbatim — machine à états pure,
   # effets session par seams à défauts de production (en-tête mod_tour.R).

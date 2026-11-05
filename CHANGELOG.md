@@ -1,6 +1,6 @@
 # Changelog
 
-Tous les changements notables de Cerberus sont documentés ici.
+Tous les changements notables de Biomentat sont documentés ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ;
 versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur `main`.
 
@@ -29,6 +29,24 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > de commit : ce fichier est un **index**, il **cite**, il ne **re-mesure** pas.
 > ⚠️ Les chiffres de garde de ces entrées sont ceux **consignés** dans `STATUS.md`
 > au moment du jalon ; en cas d'écart, **`STATUS.md` §0 et §6 font foi**.
+
+## [RENAME — Cerberus → Biomentat] — 2026-11-05
+
+**Rupture d'identité assumée** : le projet abandonne « Cerberus » (collision same-field
+avec [`mortazavilab/cerberus`](https://github.com/mortazavilab/cerberus), outil publié de
+comparaison de modèles de transcrits long-read) au profit de **« Biomentat »** — nom mesuré
+libre au 2026-11-05 (PyPI/CRAN/Bioconductor 404 · 0 repo/user GitHub · TLD com/org/io/net/dev
+non résolus). **~811 occurrences renommées dans 76 fichiers suivis** (identifiants
+`cerberus_handoff_*` → `biomentat_handoff_*`, `cerberus_cache_*` → `biomentat_cache_*`,
+satellites `cerberus-{dock,inspector,tour,drive}` → `biomentat-{…}`, i18n, messages d'erreur)
++ docs vivants. **`cerberus-exchange/v1` → `biomentat-exchange/v1` : rupture de contrat
+épinglée** (freeze test mis à jour dans le même commit). Fichiers renommés : `tools/biomentat_handoff.R`,
+`tools/pkg_skeleton/R/biomentat_handoff.R`, `tests/testthat/test-biomentat-{handoff,handoff-contract-freeze,dock}.R`,
+`docs/contracts/BIOMENTAT_HANDOFF_CONTRACT.md`, **`SHINYAPP test.Rproj` → `biomentat.Rproj`**.
+L'histoire (archives, audits, ledgers, QC, chemins de backup externes `E:/Backups/Cerberus-docs`)
+conserve « Cerberus » volontairement. Fiche : `docs/ideation/NAME_COLLISION_ASSESSMENT.md` §9 ;
+décision : `O33` (`docs/agent/DECISIONS.md`). ⚠️ Le rename GitHub `Bio-MG/Cerberus` → `Bio-MG/biomentat`
+est exécuté par l'opérateur après commit (les anciennes URLs redirigent).
 
 ## [V1.x — Ré-application Phase F : les bits survivants de la sauvegarde WIP] — 2026-10-01
 

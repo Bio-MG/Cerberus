@@ -1,7 +1,7 @@
 # =============================================================================
 # mod_sc_pseudobulk.R — Pseudobulk differential expression (Single-Cell)
 # =============================================================================
-# Cerberus 1.0 / Step 4.0 -- SG-1 (CRITICAL scientific gap): mod_sc_markers.R
+# Biomentat 1.0 / Step 4.0 -- SG-1 (CRITICAL scientific gap): mod_sc_markers.R
 # only exposes FindAllMarkers() (cluster-vs-rest, CELL-level) -- no test
 # exists that compares CONDITIONS (treated/control, genotype, ...) while
 # avoiding pseudo-replication (treating cells from the same sample/animal as

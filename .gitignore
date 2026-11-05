@@ -10,7 +10,7 @@
 # RStudio (utilisateur et projet)
 # -------------------------------------------------
 # (*.Rproj suivi depuis le 2026-10-28 — ROOT_HYGIENE item 5 : le projet
-# s'appelle « SHINYAPP test.Rproj », il décrit l'environnement, il voyage)
+# s'appelle « biomentat.Rproj » (renommé depuis SHINYAPP test.Rproj, 2026-11-05), il décrit l'environnement, il voyage)
 .Rproj.user/
 
 # -------------------------------------------------
@@ -99,7 +99,7 @@ repomix-core-output.xml
 # -------------------------------------------------
 tools/_drive/*.json
 tools/_drive/*.tmp
-# N3 cerberus-dock : etat runtime des satellites (pid+log), local only
+# N3 biomentat-dock : etat runtime des satellites (pid+log), local only
 tools/_drive/satellites/
 
 # -------------------------------------------------

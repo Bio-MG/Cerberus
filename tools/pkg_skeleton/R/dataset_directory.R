@@ -10,7 +10,7 @@
 #   §3.1 (racine 3 niveaux, motif ts_session_checkpoint_dir(),
 #         session_checkpoint.R:120) ;
 #   §3.2 (moteur pur : UNE profondeur de sous-répertoires, délégation
-#         cerberus_handoff_validate_drop() — ZÉRO nouvelle règle) ;
+#         biomentat_handoff_validate_drop() — ZÉRO nouvelle règle) ;
 #   §5 (échec d'un drop isolé — jamais d'erreur propagée ; le scan n'écrit
 #       rien, l'état applicatif reste dans global_data/ASR — vue passive).
 #
@@ -20,7 +20,7 @@
 #   * PAS une ingestion : aucun appel au scan au cold-boot (AC2) — le
 #     branchement UI bulk est le jalon P1, l'outil drive passif
 #     transcripto_drive_datasets le jalon P2 ; tant que P1 n'est pas livré,
-#     cerberus_handoff.R reste « étranger non câblé » dans app.R (bloc 03) —
+#     biomentat_handoff.R reste « étranger non câblé » dans app.R (bloc 03) —
 #     la dépendance runtime du scan est résolue À L'APPEL, jamais au
 #     chargement.
 #
@@ -29,14 +29,14 @@
 #     tourne un process R pur ;
 #   * STRICTEMENT LECTURE SEULE (AC2) : le scan n'écrit RIEN. La seule
 #     écriture tolérée dans la chaîne est validation.json, écrite par le
-#     moteur v1 cerberus_handoff_write_validation() UNIQUEMENT quand un
-#     out_dir explicite est fourni (cerberus_handoff.R:755-757) — le scan ne
+#     moteur v1 biomentat_handoff_write_validation() UNIQUEMENT quand un
+#     out_dir explicite est fourni (biomentat_handoff.R:755-757) — le scan ne
 #     passe JAMAIS out_dir ;
 #   * ZÉRO nouvelle règle de validation (AC1) : chaque sous-répertoire est
-#     délégué tel quel au moteur v1 cerberus_handoff_validate_drop()
-#     (cerberus_handoff.R:634, alias cerberus_validate_drop) ; les raisons
-#     retournées sont les états v1 (cerberus_handoff_states(),
-#     cerberus_handoff.R:104-123) repris verbatim ;
+#     délégué tel quel au moteur v1 biomentat_handoff_validate_drop()
+#     (biomentat_handoff.R:634, alias biomentat_validate_drop) ; les raisons
+#     retournées sont les états v1 (biomentat_handoff_states(),
+#     biomentat_handoff.R:104-123) repris verbatim ;
 #   * la racine n'est JAMAIS créée ici (motif checkpoint : création au moment
 #     de l'écriture — il n'y a pas d'écriture) ; une racine absente donne une
 #     table vide, jamais une erreur ;
@@ -89,7 +89,7 @@ ts_datasets_dir <- function(dir = NULL) {
 
 #' Frozen status vocabulary of the scan table (AC1).
 #'
-#' Motif `cerberus_handoff_states()` (cerberus_handoff.R:104) : le vocabulaire
+#' Motif `biomentat_handoff_states()` (biomentat_handoff.R:104) : le vocabulaire
 #' est exposé pour être figé par le test T5 (motif test-report-contract-freeze.R).
 #' "empty" = sous-répertoire sans rien à valider (aucun fichier, aucun
 #' sous-répertoire) ; sa raison "empty_directory" est la SEULE raison hors
@@ -112,11 +112,11 @@ ts_dataset_dir_scan_states <- function() {
 }
 
 # Lecture du manifeste v1 UNE fois, par délégation au lecteur EXISTANT
-# cerberus_handoff_read_manifest() (cerberus_handoff.R:142) — zéro nouvelle
+# biomentat_handoff_read_manifest() (biomentat_handoff.R:142) — zéro nouvelle
 # règle de parsing ; tout échec -> NULL, jamais d'erreur propagée (§5). Le
 # résultat sert le résumé ET la résolution des chemins (pas de double I/O).
 .ts_datasets_read_manifest <- function(drop_dir) {
-  tryCatch(cerberus_handoff_read_manifest(drop_dir), error = function(e) NULL)
+  tryCatch(biomentat_handoff_read_manifest(drop_dir), error = function(e) NULL)
 }
 
 # Scan d'UN sous-répertoire (UNE profondeur — fiche §3.2/§5) : résumé du
@@ -173,15 +173,15 @@ ts_dataset_dir_scan_states <- function() {
   # Délégation v1 — ZÉRO nouvelle règle (AC1). out_dir jamais fourni : le
   # scan n'écrit RIEN (AC2 ; la seule écriture tolérée de la chaîne,
   # validation.json, n'est déclenchée que par un out_dir explicite,
-  # cerberus_handoff.R:755-757).
+  # biomentat_handoff.R:755-757).
   res <- tryCatch(
-    cerberus_handoff_validate_drop(drop_dir = drop_dir, out_dir = NULL),
+    biomentat_handoff_validate_drop(drop_dir = drop_dir, out_dir = NULL),
     error = function(e) NULL
   )
   if (is.null(res)) {
     # filet §5 : un drop qui ferait tomber le moteur lui-même est isolé —
     # raison = l'état catch-all du moteur v1 ("file_corrupted",
-    # cerberus_handoff.R:727-728), jamais une erreur propagée
+    # biomentat_handoff.R:727-728), jamais une erreur propagée
     entry$status <- "invalid"
     entry$raison <- "file_corrupted"
     return(entry)
@@ -217,8 +217,8 @@ ts_dataset_dir_scan_states <- function() {
 #' Scan the datasets root directory (fiche PoC §3.2 — passive, read-only).
 #'
 #' Lists ONE level of subdirectories of `datasets_dir` and delegates each one
-#' to the existing v1 engine `cerberus_handoff_validate_drop()`
-#' (cerberus_handoff.R:634) — the scan adds ZERO validation rule (AC1). The
+#' to the existing v1 engine `biomentat_handoff_validate_drop()`
+#' (biomentat_handoff.R:634) — the scan adds ZERO validation rule (AC1). The
 #' result is a NAMED LIST keyed by the v1 `dataset_id` (fallback: the
 #' subdirectory basename when no manifest is readable), each entry carrying:
 #' `status` (valid | warn | invalid | empty — AC1, `ts_dataset_dir_scan_states()`),

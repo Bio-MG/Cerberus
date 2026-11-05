@@ -1,7 +1,7 @@
 # =============================================================================
 # R/core/state.R — Contrat d'etat transversal + fabriques d'etat partage
 # =============================================================================
-# CHRYSALIS PHASE — contrat d'etat (ROADMAP 2A + TREE CERBERUS step 3).
+# CHRYSALIS PHASE — contrat d'etat (ROADMAP 2A + TREE BIOMENTAT step 3).
 # Single source of truth for every reactiveValues schema that is shared across
 # modules. Sourced in app.R BEFORE any domain file so modules can call these
 # factories without circular deps.

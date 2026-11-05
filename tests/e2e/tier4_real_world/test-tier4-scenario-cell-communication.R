@@ -58,7 +58,7 @@ test_that("T4-CCC-2: population column specified in manifest exists in sampleshe
   )
   on.exit(unlink(d, recursive = TRUE), add = TRUE)
   
-  sheet <- cerberus_handoff_read_samplesheet(file.path(d, "samplesheet.tsv"))
+  sheet <- biomentat_handoff_read_samplesheet(file.path(d, "samplesheet.tsv"))
   expect_true("cell_type" %in% colnames(sheet))
   expect_true(length(unique(sheet$cell_type)) >= 2L)
 })

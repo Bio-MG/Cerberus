@@ -1,5 +1,5 @@
 # =============================================================================
-# test-mod-tour.R — N4 cerberus-tour (satellites slice S6) : module UI/serveur
+# test-mod-tour.R — N4 biomentat-tour (satellites slice S6) : module UI/serveur
 # =============================================================================
 # FICHE (fait foi) : PROPOSAL_N_SATELLITES_LAUNCH_ROADMAP_2026-10-26.md §slice
 # S6 — skippable, first-run (localStorage), FR via i18n ; le registre PUR est

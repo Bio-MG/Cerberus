@@ -1,5 +1,5 @@
 # =============================================================================
-# test-helpers_sc.R — pure-function tests for helpers_sc.R (QA-2, Cerberus 1.0)
+# test-helpers_sc.R — pure-function tests for helpers_sc.R (QA-2, Biomentat 1.0)
 # =============================================================================
 # Scope: resolve_sketch_preset() (pure, zero extra deps), calculate_pseudotime()
 # (needs RANN + igraph, skip-guarded), subsample_seurat_for_analysis() (needs
@@ -11,7 +11,7 @@
 # output) -- not worth a fragile full-pipeline fixture for a unit test. Plot
 # builders (plot_trajectory(), plot_genes_vs_pseudotime(), ...), Slingshot,
 # and the RNA Velocity validators are likewise out of scope here -- see RF-1
-# in the Cerberus 1.0 sprint plan (extract Velocity to its own
+# in the Biomentat 1.0 sprint plan (extract Velocity to its own
 # helpers_sc_velocity.R + a dedicated test file).
 # =============================================================================
 

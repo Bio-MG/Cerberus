@@ -1,9 +1,9 @@
 # =============================================================================
-# test-tour-registry.R — N4 cerberus-tour (satellites slice S6) : registre PUR
+# test-tour-registry.R — N4 biomentat-tour (satellites slice S6) : registre PUR
 # =============================================================================
 # FICHE (fait foi) :
 # docs/proposals/PROPOSAL_N_SATELLITES_LAUNCH_ROADMAP_2026-10-26.md
-#   §slice S6 (N4 cerberus-tour) : « Steps anchored on the FROZEN allowlist DOM
+#   §slice S6 (N4 biomentat-tour) : « Steps anchored on the FROZEN allowlist DOM
 #   ids (drive_allowlist.R) so tour steps = drive-checkable anchors » ;
 #   « RED-first on the step-registry pure helper » ; « 0 new dep (hand-rolled
 #   bslib, §3-D2 default) » ; « each step's anchor testable by the drive

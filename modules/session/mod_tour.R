@@ -1,5 +1,5 @@
 # =============================================================================
-# modules/session/mod_tour.R — N4 cerberus-tour (satellites slice S6)
+# modules/session/mod_tour.R — N4 biomentat-tour (satellites slice S6)
 # =============================================================================
 # Fiche (fait foi) : docs/proposals/PROPOSAL_N_SATELLITES_LAUNCH_ROADMAP_
 # 2026-10-26.md §slice S6 + mission round8 slice A. Visite guidée HAND-ROLLED

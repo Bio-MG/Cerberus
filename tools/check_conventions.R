@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 # =============================================================================
 # tools/check_conventions.R — garde statique des conventions de code
-#                             TranscriptoShiny ("Cerberus")
+#                             TranscriptoShiny ("Biomentat")
 # =============================================================================
 # Base R uniquement (aucune dépendance), comme tools/check_duplication.R : la
 # garde doit pouvoir tourner sur n'importe quel poste avant un merge, sans

@@ -1,6 +1,6 @@
-# FORMAT v1.0.0 — le contrat journey/report de `cerberus-inspector` (FIGÉ)
+# FORMAT v1.0.0 — le contrat journey/report de `biomentat-inspector` (FIGÉ)
 
-Satellite **N2 `cerberus-inspector`** — la pièce **contract-first** de la slice
+Satellite **N2 `biomentat-inspector`** — la pièce **contract-first** de la slice
 S4 (fiche de lancement
 `docs/proposals/PROPOSAL_N_SATELLITES_LAUNCH_ROADMAP_2026-10-26.md`, §2 slice
 S4, lignes 161-178 : *« Define the scenario + report FORMAT first (frozen,
@@ -260,7 +260,7 @@ au 2026-11-04 ; commandes drive alignées sur la séquence G2/G3 mesurée de
 
 **Prérequis** : une session armée (`tools/launch_dev_drive.R`, README §
 Instruction de service) OU une app visible pilotée aux gestes ; **un drop
-`cerberus-exchange/v1` valide** dans le répertoire datasets (manifest.json +
+`biomentat-exchange/v1` valide** dans le répertoire datasets (manifest.json +
 matrix.csv de counts bruts + samplesheet.csv — chemin prouvé au jalon 2
 round8, ledger `docs/agent/swarm/round8/ROUND8_EXECUTION_LEDGER.md` § 2 :
 drop construit hors dépôt, import abouti, **6 échantillons / 200 gènes

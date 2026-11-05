@@ -22,7 +22,7 @@ test_that("T2-FS-1: zero-byte manifest.json triggers manifest_malformed error st
   on.exit(unlink(d, recursive = TRUE), add = TRUE)
   file.create(file.path(d, "manifest.json")) # 0-byte file
   
-  res <- cerberus_handoff_validate_drop(drop_dir = d)
+  res <- biomentat_handoff_validate_drop(drop_dir = d)
   expect_false(res$valid)
   expect_identical(res$status, "INVALID")
   expect_true(any(vapply(res$errors, function(x) x$code == "manifest_malformed", logical(1))))
@@ -31,9 +31,9 @@ test_that("T2-FS-1: zero-byte manifest.json triggers manifest_malformed error st
 test_that("T2-FS-2: syntax-corrupted JSON manifest triggers manifest_malformed error state", {
   d <- e2e_make_test_drop(prefix = "t2_corrupt_json_", write_manifest = FALSE)
   on.exit(unlink(d, recursive = TRUE), add = TRUE)
-  writeLines("{ \"schema_version\": \"cerberus-exchange/v1\", INVALID_JSON...", file.path(d, "manifest.json"))
+  writeLines("{ \"schema_version\": \"biomentat-exchange/v1\", INVALID_JSON...", file.path(d, "manifest.json"))
   
-  res <- cerberus_handoff_validate_drop(drop_dir = d)
+  res <- biomentat_handoff_validate_drop(drop_dir = d)
   expect_false(res$valid)
   expect_identical(res$status, "INVALID")
   expect_true(any(vapply(res$errors, function(x) x$code == "manifest_malformed", logical(1))))
@@ -43,7 +43,7 @@ test_that("T2-FS-3: manifest referencing non-existent matrix path triggers file_
   d <- e2e_make_test_drop(prefix = "t2_missing_mat_", manifest_extra = list(matrix_path = "non_existent_matrix.tsv"))
   on.exit(unlink(d, recursive = TRUE), add = TRUE)
   
-  res <- cerberus_handoff_validate_drop(drop_dir = d)
+  res <- biomentat_handoff_validate_drop(drop_dir = d)
   expect_false(res$valid)
   expect_identical(res$status, "INVALID")
   expect_true(any(vapply(res$errors, function(x) x$code == "file_not_found", logical(1))))
@@ -53,7 +53,7 @@ test_that("T2-FS-4: manifest referencing non-existent samplesheet path triggers 
   d <- e2e_make_test_drop(prefix = "t2_missing_sheet_", manifest_extra = list(samplesheet_path = "missing_sheet.tsv"))
   on.exit(unlink(d, recursive = TRUE), add = TRUE)
   
-  res <- cerberus_handoff_validate_drop(drop_dir = d)
+  res <- biomentat_handoff_validate_drop(drop_dir = d)
   expect_false(res$valid)
   expect_identical(res$status, "INVALID")
   expect_true(any(vapply(res$errors, function(x) x$code == "file_not_found", logical(1))))
@@ -61,7 +61,7 @@ test_that("T2-FS-4: manifest referencing non-existent samplesheet path triggers 
 
 test_that("T2-FS-5: completely non-existent drop directory triggers file_not_found", {
   non_dir <- file.path(tempdir(), "definitely_non_existent_drop_dir_xyz")
-  res <- cerberus_handoff_validate_drop(drop_dir = non_dir)
+  res <- biomentat_handoff_validate_drop(drop_dir = non_dir)
   expect_false(res$valid)
   expect_identical(res$status, "INVALID")
   expect_true(any(vapply(res$errors, function(x) x$code == "file_not_found", logical(1))))
@@ -75,7 +75,7 @@ test_that("T2-FS-6: extraneous unrecognized manifest keys do not corrupt validat
   d <- e2e_make_test_drop(prefix = "t2_extra_keys_", manifest_extra = extra_keys)
   on.exit(unlink(d, recursive = TRUE), add = TRUE)
   
-  res <- cerberus_handoff_validate_drop(drop_dir = d)
+  res <- biomentat_handoff_validate_drop(drop_dir = d)
   expect_true(res$valid)
   expect_identical(res$status, "VALID")
 })

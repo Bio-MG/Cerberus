@@ -326,12 +326,12 @@ test_that("C3.2: Error buffer limits, clipping, multiline, NULL, empty", {
 test_that("C3.3: Condition object extraction preserves state and class without memory leak", {
   ts_drive_clear_errors()
 
-  cond <- errorCondition("Custom domain failure", class = "cerberus_de_error")
+  cond <- errorCondition("Custom domain failure", class = "biomentat_de_error")
   ts_drive_record_error("Custom domain failure", module = "bulk", condition = cond)
 
   errs <- ts_drive_get_errors()
   expect_length(errs, 1L)
-  expect_identical(errs[[1L]]$class, "cerberus_de_error")
+  expect_identical(errs[[1L]]$class, "biomentat_de_error")
   expect_identical(errs[[1L]]$module, "bulk")
   expect_identical(errs[[1L]]$message, "Custom domain failure")
 })

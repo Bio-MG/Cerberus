@@ -1,6 +1,6 @@
 # =============================================================================
 # test-check_duplication.R — pre-merge guard: fail the suite on ERROR-severity
-# findings from tools/check_duplication.R (QA-1 / RF-4, Cerberus 1.0 Step 4.0)
+# findings from tools/check_duplication.R (QA-1 / RF-4, Biomentat 1.0 Step 4.0)
 # =============================================================================
 # Scans app.R/global.R/helpers_*.R (top-level "."), R/*.R, and modules/**/*.R
 # for: output$ redefinitions, top-level function names defined in more than

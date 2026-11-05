@@ -273,7 +273,7 @@ build_consolidated_report_html <- function(report_input, validation) {
   )
 
   footer <- tg$div(class = "footer", sprintf(
-    "Rapport consolidé Cerberus (4F) · analysis_id : %s · version %s · compilateur d'état et de provenance — aucune analyse ré-exécutée.",
+    "Rapport consolidé Biomentat (4F) · analysis_id : %s · version %s · compilateur d'état et de provenance — aucune analyse ré-exécutée.",
     report_input$analysis_id, report_input$version
   ))
 

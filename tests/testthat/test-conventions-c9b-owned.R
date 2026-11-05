@@ -150,7 +150,7 @@ test_that("C9b : le ROUGE existe — un fichier a test eponyme et fonctions orph
   # sens : jobs.R est bien au paquet, et son test eponyme suit le fichier.
   # ⚠️ D2 M5 LOT 6 (2026-10-25) : le domaine R/sc ENTIER (26 fichiers) demenage
   # dans le paquet et quitte la population C9b (R/ ne garde plus que le fichier
-  # etranger CERBERUS). Le temoin SUIT le fichier : chemin du paquet passe
+  # etranger BIOMENTAT). Le temoin SUIT le fichier : chemin du paquet passe
   # DIRECTEMENT au garde (meme mecanique que le temoin bulk_gsva du lot 3 ;
   # mesure du lot : check_c9b_owned_functions_mentioned signale bien
   # tools/pkg_skeleton/R/sc_pipeline.R). La dette des sortants N'EST PAS
@@ -229,7 +229,7 @@ test_that("C9b : les fichiers de la mesure INITIALE sont TOUS hors population C9
   abs_export <- .c9b_abs("tools/pkg_skeleton/R/sc_export.R")
   expect_false("tools/pkg_skeleton/R/sc_export.R" %in% .c9_flagged(abs_export))
   # ⚠️ D2 M5 LOT 6 : sc_export.R a QUITTE la population C9b (R/ vide hors
-  # etranger CERBERUS) — le « fichier vivant encore » s'assere a son adresse
+  # etranger BIOMENTAT) — le « fichier vivant encore » s'assere a son adresse
   # du paquet (file.exists), plus dans la population.
   expect_false(abs_export %in% .c9b_population())
   expect_true(file.exists(abs_export),
@@ -415,7 +415,7 @@ test_that("C9b : la population signalee est un PLAFOND a 0, jamais un compte exa
   # changement de `R/` (mesure `git archive` + `diff` de listes, pas
   # deduction). Lecon : un plafond se MESURE sur une ligne de base EXTRAITE,
   # jamais ne se recopie.
-  # ⚠️ D2 M5 LOT 3 (2026-10-25) : 33 - 12 (bulk) + 1 (etranger CERBERUS) = 22 ;
+  # ⚠️ D2 M5 LOT 3 (2026-10-25) : 33 - 12 (bulk) + 1 (etranger BIOMENTAT) = 22 ;
   # plafond 39 -> 22.
   # ⚠️ D2 M5 LOT 4 (2026-10-25) : les 11 fichiers de R/spatial demenagent dans
   # tools/pkg_skeleton/R/ et quittent la population C9b (R/ uniquement). Mesure
@@ -446,7 +446,7 @@ test_that("C9b : la population signalee est un PLAFOND a 0, jamais un compte exa
   # au nouveau chemin).
   # ⚠️ D2 M5 LOT 6 (2026-10-25) : le domaine R/sc ENTIER (26 fichiers) demenage
   # dans tools/pkg_skeleton/R/ et quitte la population C9b (R/ ne garde plus
-  # que le fichier etranger CERBERUS, couvert par son nom). Mesure du lot
+  # que le fichier etranger BIOMENTAT, couvert par son nom). Mesure du lot
   # (--list-all) : 14 fichiers sc restaient C9b-flagges — la dette des sortants
   # N'EST PAS payee : elle SORT de la population avec le domaine — la
   # couverture est desormais epinglee par les tests stricts retargetes
@@ -456,8 +456,8 @@ test_that("C9b : la population signalee est un PLAFOND a 0, jamais un compte exa
   # arriere SILENCIEUX de 14 fichiers.
   flagged <- .c9b_flagged(.c9b_population())
   # ✅ RÉSORBE (2026-10-26, J1 d2fdac8) : la copie étrangère
-  # `R/core/drive_watcher.R` (session CERBERUS) était byte-identique au
-  # squelette — supprimée (git rm -f) et le moteur CLI cerberus_handoff.R
+  # `R/core/drive_watcher.R` (session BIOMENTAT) était byte-identique au
+  # squelette — supprimée (git rm -f) et le moteur CLI biomentat_handoff.R
   # déménagé au squelette ; R/ ne contient plus que le manifeste + .gitkeep.
   # Le plafond retourne à 0 ; le témoin de non-vacuité ci-dessous garde le
   # plafond falsifiable.
@@ -523,7 +523,7 @@ test_that("C9b : le signalement atterrit dans les AVERTISSEMENTS, pas dans les E
   .REPORT$errors <- list()
   .REPORT$warns  <- list()
   # D2 M5 LOT 6 (2026-10-25) : la population R/ est RESORTEE (R/ ne contient
-  # plus que le fichier etranger CERBERUS, couvert par son nom). Le temoin du
+  # plus que le fichier etranger BIOMENTAT, couvert par son nom). Le temoin du
   # canal est rejoue sur la dette a l'adresse du paquet (sc_pipeline.R,
   # temoin mesure de la direction 2) : le signalement C9b atterrit toujours
   # dans `warns`, jamais dans `errors`.
@@ -574,8 +574,8 @@ test_that("C9b : la POPULATION SCANNEE est celle de C9 (le cablage passe r_files
 
   .REPORT$errors <- list()
   .REPORT$warns  <- list()
-  # J1 CERBERUS (2026-10-26) : R/ est DESORMAIS VIDE (dernier etranger
-  # CERBERUS demenage au paquet : git mv cerberus_handoff.R ; copie
+  # J1 BIOMENTAT (2026-10-26) : R/ est DESORMAIS VIDE (dernier etranger
+  # BIOMENTAT demenage au paquet : git mv biomentat_handoff.R ; copie
   # drive_watcher.R supprimee). Le temoin de non-vacuite survit via un
   # fixture temporaire : si run_check cessait de scanner R/ (ou elargissait
   # a tests/ ou modules/), le fixture ne serait pas vu (ou mal place) et le

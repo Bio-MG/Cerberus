@@ -1,13 +1,13 @@
 #!/usr/bin/env Rscript
 # =============================================================================
-# tools/cerberus_handoff.R — CLI de validation headless pour cerberus-handoff
-#                            TranscriptoShiny ("Cerberus")
+# tools/biomentat_handoff.R — CLI de validation headless pour biomentat-handoff
+#                            TranscriptoShiny ("Biomentat")
 # =============================================================================
 # Valide un bundle de données déposé par une application amont selon le contrat
-# `cerberus-exchange/v1`.
+# `biomentat-exchange/v1`.
 #
 # USAGE:
-#   Rscript tools/cerberus_handoff.R --drop=<path> --out=<output_dir> [--strict] [--quiet]
+#   Rscript tools/biomentat_handoff.R --drop=<path> --out=<output_dir> [--strict] [--quiet]
 #
 # ARGUMENTS:
 #   --drop=<path>       : Répertoire contenant le drop amont (manifest.json,
@@ -27,7 +27,7 @@
 `%||%` <- function(x, y) if (is.null(x) || length(x) == 0L || (length(x) == 1L && is.na(x))) y else x
 
 # ── Résolution de la racine du projet ---------------------------------------
-cerberus_handoff_root <- function() {
+biomentat_handoff_root <- function() {
   args <- commandArgs(trailingOnly = FALSE)
   hit <- grep("^--file=", args, value = TRUE)
   start <- if (length(hit) > 0L) dirname(sub("^--file=", "", hit[1L])) else getwd()
@@ -42,11 +42,11 @@ cerberus_handoff_root <- function() {
 }
 
 # ── Chargement du moteur de validation et dépendances -----------------------
-cerberus_handoff_load_engine <- function(root = cerberus_handoff_root()) {
-  # J1 CERBERUS (2026-10-26) : le moteur suit l'arbre du paquet (D2 M5) —
-  # ex-R/core/cerberus_handoff.R, dernier etranger de R/core (git mv, sha256
+biomentat_handoff_load_engine <- function(root = biomentat_handoff_root()) {
+  # J1 BIOMENTAT (2026-10-26) : le moteur suit l'arbre du paquet (D2 M5) —
+  # ex-R/core/biomentat_handoff.R, dernier etranger de R/core (git mv, sha256
   # inchange 6208f2bf). Le moteur est pur R : il garde ses replis exists().
-  engine_file <- file.path(root, "tools", "pkg_skeleton", "R", "cerberus_handoff.R")
+  engine_file <- file.path(root, "tools", "pkg_skeleton", "R", "biomentat_handoff.R")
   if (!file.exists(engine_file)) {
     stop(sprintf("Moteur de validation introuvable : %s", engine_file), call. = FALSE)
   }
@@ -68,7 +68,7 @@ cerberus_handoff_load_engine <- function(root = cerberus_handoff_root()) {
 }
 
 # ── Parsing des arguments de la ligne de commande ----------------------------
-cerberus_handoff_args <- function(argv = commandArgs(trailingOnly = TRUE)) {
+biomentat_handoff_args <- function(argv = commandArgs(trailingOnly = TRUE)) {
   opt <- list(
     drop = NULL,
     out = NULL,
@@ -106,9 +106,9 @@ cerberus_handoff_args <- function(argv = commandArgs(trailingOnly = TRUE)) {
 }
 
 # ── Affichage de l'aide -----------------------------------------------------
-cerberus_handoff_usage <- function() {
+biomentat_handoff_usage <- function() {
   cat(
-    "Usage: Rscript tools/cerberus_handoff.R --drop=<path> --out=<output_dir> [options]\n\n",
+    "Usage: Rscript tools/biomentat_handoff.R --drop=<path> --out=<output_dir> [options]\n\n",
     "Options:\n",
     "  --drop=<path>       Repertoire du drop amont (obligatoire)\n",
     "  --out=<output_dir>  Repertoire de sortie pour validation.json (obligatoire)\n",
@@ -124,7 +124,7 @@ cerberus_handoff_usage <- function() {
 }
 
 # ── Écriture atomique du rapport JSON ---------------------------------------
-cerberus_handoff_write_json <- function(obj, out_path) {
+biomentat_handoff_write_json <- function(obj, out_path) {
   if (!requireNamespace("jsonlite", quietly = TRUE)) {
     stop("Le paquet 'jsonlite' est requis pour serialiser validation.json", call. = FALSE)
   }
@@ -143,21 +143,21 @@ cerberus_handoff_write_json <- function(obj, out_path) {
 }
 
 # ── Point d'entrée principal ------------------------------------------------
-cerberus_handoff_main <- function(argv = commandArgs(trailingOnly = TRUE)) {
-  opt <- tryCatch(cerberus_handoff_args(argv), error = function(e) e)
+biomentat_handoff_main <- function(argv = commandArgs(trailingOnly = TRUE)) {
+  opt <- tryCatch(biomentat_handoff_args(argv), error = function(e) e)
   if (inherits(opt, "condition")) {
     message("ERREUR CLI: ", conditionMessage(opt))
-    cerberus_handoff_usage()
+    biomentat_handoff_usage()
     return(invisible(1L))
   }
   if (isTRUE(opt$help)) {
-    cerberus_handoff_usage()
+    biomentat_handoff_usage()
     return(invisible(0L))
   }
 
   if (is.null(opt$out) || !nzchar(trimws(opt$out))) {
     message("ERREUR CLI: L'argument --out=<output_dir> est obligatoire.")
-    cerberus_handoff_usage()
+    biomentat_handoff_usage()
     return(invisible(1L))
   }
   out_dir <- normalizePath(opt$out, winslash = "/", mustWork = FALSE)
@@ -176,7 +176,7 @@ cerberus_handoff_main <- function(argv = commandArgs(trailingOnly = TRUE)) {
     payload <- list(
       valid = FALSE,
       status = "INVALID",
-      schema_version = "cerberus-exchange/v1",
+      schema_version = "biomentat-exchange/v1",
       dataset_id = NA_character_,
       validated_at = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
       summary = list(
@@ -192,7 +192,7 @@ cerberus_handoff_main <- function(argv = commandArgs(trailingOnly = TRUE)) {
       )),
       warnings = list()
     )
-    cerberus_handoff_write_json(payload, val_json_path)
+    biomentat_handoff_write_json(payload, val_json_path)
     return(invisible(1L))
   }
 
@@ -203,7 +203,7 @@ cerberus_handoff_main <- function(argv = commandArgs(trailingOnly = TRUE)) {
     payload <- list(
       valid = FALSE,
       status = "INVALID",
-      schema_version = "cerberus-exchange/v1",
+      schema_version = "biomentat-exchange/v1",
       dataset_id = NA_character_,
       validated_at = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
       summary = list(
@@ -220,19 +220,19 @@ cerberus_handoff_main <- function(argv = commandArgs(trailingOnly = TRUE)) {
       )),
       warnings = list()
     )
-    cerberus_handoff_write_json(payload, val_json_path)
+    biomentat_handoff_write_json(payload, val_json_path)
     return(invisible(1L))
   }
 
-  root <- cerberus_handoff_root()
-  load_err <- tryCatch(cerberus_handoff_load_engine(root), error = function(e) e)
+  root <- biomentat_handoff_root()
+  load_err <- tryCatch(biomentat_handoff_load_engine(root), error = function(e) e)
   if (inherits(load_err, "condition")) {
     err_msg <- sprintf("Echec chargement moteur de validation : %s", conditionMessage(load_err))
     if (!opt$quiet) message("ERREUR: ", err_msg)
     payload <- list(
       valid = FALSE,
       status = "INVALID",
-      schema_version = "cerberus-exchange/v1",
+      schema_version = "biomentat-exchange/v1",
       dataset_id = NA_character_,
       validated_at = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
       summary = list(
@@ -248,18 +248,18 @@ cerberus_handoff_main <- function(argv = commandArgs(trailingOnly = TRUE)) {
       )),
       warnings = list()
     )
-    cerberus_handoff_write_json(payload, val_json_path)
+    biomentat_handoff_write_json(payload, val_json_path)
     return(invisible(1L))
   }
 
   t0 <- Sys.time()
   val_res <- tryCatch(
-    cerberus_handoff_validate_drop(drop_dir = drop_dir, out_dir = NULL),
+    biomentat_handoff_validate_drop(drop_dir = drop_dir, out_dir = NULL),
     error = function(e) {
       list(
         valid = FALSE,
         status = "INVALID",
-        schema_version = "cerberus-exchange/v1",
+        schema_version = "biomentat-exchange/v1",
         dataset_id = NA_character_,
         validated_at = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
         summary = list(
@@ -294,7 +294,7 @@ cerberus_handoff_main <- function(argv = commandArgs(trailingOnly = TRUE)) {
   }
 
   write_err <- tryCatch(
-    cerberus_handoff_write_json(val_res, val_json_path),
+    biomentat_handoff_write_json(val_res, val_json_path),
     error = function(e) e
   )
   if (inherits(write_err, "condition")) {
@@ -305,7 +305,7 @@ cerberus_handoff_main <- function(argv = commandArgs(trailingOnly = TRUE)) {
 
   if (!isTRUE(opt$quiet)) {
     cat("\n====================================================================\n")
-    cat(" TranscriptoShiny ('Cerberus') — Handoff Ingestion Validator\n")
+    cat(" TranscriptoShiny ('Biomentat') — Handoff Ingestion Validator\n")
     cat("====================================================================\n")
     cat(sprintf("Drop directory : %s\n", drop_dir))
     cat(sprintf("Output report  : %s\n", val_json_path))
@@ -354,6 +354,6 @@ cerberus_handoff_main <- function(argv = commandArgs(trailingOnly = TRUE)) {
 # ── Point d'entrée script Rscript (jamais au source) -------------------------
 if (identical(environment(), globalenv()) && sys.nframe() == 0L &&
     !interactive() && length(grep("--file=", commandArgs(trailingOnly = FALSE))) > 0L) {
-  status <- cerberus_handoff_main(commandArgs(trailingOnly = TRUE))
+  status <- biomentat_handoff_main(commandArgs(trailingOnly = TRUE))
   quit(status = status, save = "no")
 }

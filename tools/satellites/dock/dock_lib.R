@@ -1,12 +1,12 @@
 # =============================================================================
-# tools/satellites/dock/dock_lib.R — N3 cerberus-dock : lib PUR
+# tools/satellites/dock/dock_lib.R — N3 biomentat-dock : lib PUR
 # =============================================================================
 # Fiche (fait foi) : PROPOSAL_N_SATELLITES_LAUNCH_ROADMAP_2026-10-26.md §2-S7 ;
 # contrat figé : tools/satellites/dock/MANIFEST.md v1.0.0.
 #
 # RÔLE : helpers PURS du dock (charge/valide le manifeste, décision de santé,
 # chemin de pid-file) — testables hors session, sans réseau, sans process
-# (test-cerberus-dock.R). Les EFFETS (spawn/kill/HTTP) vivent dans run_dock.R,
+# (test-biomentat-dock.R). Les EFFETS (spawn/kill/HTTP) vivent dans run_dock.R,
 # qui consomme cette lib. Ce fichier est sous tools/ : hors conventions gate
 # par construction (note MANIFEST.md §1) — le test éponyme est la seule porte.
 #

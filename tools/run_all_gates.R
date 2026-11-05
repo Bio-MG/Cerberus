@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 # =============================================================================
 # tools/run_all_gates.R — META-GATE : les gardes du projet en une commande
-#                          TranscriptoShiny ("Cerberus")
+#                          TranscriptoShiny ("Biomentat")
 # =============================================================================
 # POURQUOI CE FICHIER EXISTE (mesure 2026-10-24)
 # ----------------------------------------------

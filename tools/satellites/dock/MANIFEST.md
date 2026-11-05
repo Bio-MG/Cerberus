@@ -1,4 +1,4 @@
-# MANIFEST.md — N3 `cerberus-dock` : format figé du manifeste des satellites
+# MANIFEST.md — N3 `biomentat-dock` : format figé du manifeste des satellites
 
 **Statut : FIGÉ v1.0.0** (contract-first — fiche
 `docs/proposals/PROPOSAL_N_SATELLITES_LAUNCH_ROADMAP_2026-10-26.md` §2-S7 :
@@ -32,7 +32,7 @@ démarrer / sonder / arrêter chaque satellite. Trois règles PORTÉES PAR LA FI
 Cécité de garde **assumée** (modèle S1/S5, note reprise dans le README) : le
 code R du dock vit sous `tools/` — la conventions gate ne le voit **pas par
 construction** ; la contrepartie est la minimisation du R (lib pure + CLI fin)
-et la validation par `tests/testthat/test-cerberus-dock.R` + falsification live.
+et la validation par `tests/testthat/test-biomentat-dock.R` + falsification live.
 
 ## 2. `dock_manifest.json` — schéma d'entrée (figé)
 

@@ -1,6 +1,8 @@
-# Cerberus
+# Biomentat
 
 Une plateforme R/Shiny modulaire, **local-first**, dédiée à l’exploration et à l’analyse guidées de données de bulk RNA-seq, de single-cell RNA-seq et de transcriptomique spatiale.
+
+> ℹ️ **Anciennement « Cerberus »** (octobre–novembre 2026) — renommé le 2026-11-05. À ne pas confondre avec [`mortazavilab/cerberus`](https://github.com/mortazavilab/cerberus) (outil Python/Streamlit de comparaison de modèles de transcrits long-read), sans lien avec ce projet.
 
 [![R](https://img.shields.io/badge/language-R-blue.svg)](https://www.r-project.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -14,9 +16,9 @@ Une plateforme R/Shiny modulaire, **local-first**, dédiée à l’exploration e
 
 # Français
 
-## Pourquoi Cerberus ?
+## Pourquoi Biomentat ?
 
-Cerberus est conçu pour l’exploration itérative de données transcriptomiques par des biologistes et des bioinformaticiens. L’application combine des interfaces guidées, des messages de validation proactifs, des visualisations interactives et des rapports reproductibles, tout en maintenant un contrôle strict des données locales par l’utilisateur.
+Biomentat est conçu pour l’exploration itérative de données transcriptomiques par des biologistes et des bioinformaticiens. L’application combine des interfaces guidées, des messages de validation proactifs, des visualisations interactives et des rapports reproductibles, tout en maintenant un contrôle strict des données locales par l’utilisateur.
 
 L’application privilégie :
 
@@ -30,7 +32,7 @@ L’application privilégie :
 
 ## Workflows pris en charge
 
-Cerberus fournit des environnements modulaires dédiés à trois domaines transcriptomiques principaux :
+Biomentat fournit des environnements modulaires dédiés à trois domaines transcriptomiques principaux :
 
 1. **Single-cell RNA-seq** : de l'import de données 10x ou de matrices jusqu'au clustering, à l'annotation, à la recherche de marqueurs et à l'analyse de voies — plus vitesse ARN, communication cellulaire, abondance différentielle (Milo/scCODA) et rapport consolidé.
 2. **Bulk RNA-seq** : des matrices de comptages bruts et métadonnées jusqu’à l’expression différentielle, à la comparaison multi-contrastes et à l’enrichissement fonctionnel — plus scores de voies, WGCNA, survie, clustering de profils, dose-réponse, réseau PCSF et gestion multi-jeux.
@@ -126,16 +128,16 @@ Le workflow Single-Cell est nativement multi-échantillons (ex: Contrôle vs Tra
 
 ## Architecture
 
-Cerberus repose sur une architecture Shiny modulaire. La logique analytique réutilisable est séparée de l'interface, les modules orchestrent les workflows, et les résultats exportables conservent la provenance nécessaire à leur interprétation.
+Biomentat repose sur une architecture Shiny modulaire. La logique analytique réutilisable est séparée de l'interface, les modules orchestrent les workflows, et les résultats exportables conservent la provenance nécessaire à leur interprétation.
 Le développement suit une approche testée et orientée reproductibilité : les résultats analytiques clés sont validés par des tests automatisés avant d'être exposés dans l'interface.
 
 ```text
-Cerberus/
+Biomentat/
 ├── app.R / global.R
 ├── i18n/            # translation.json (fr/en)
 ├── tools/
 │   └── pkg_skeleton/  # package tree (DESCRIPTION, NAMESPACE)
-│       └── R/         # ALL domain logic: defaults/thresholds, state, validation, provenance, jobs, memory, io, error_state, rdata_io, drive (watcher/allowlist), cerberus_handoff, plotting/theme, sc_* (pipeline, doublets, communication, abundance, velocity, …), bulk_* (import, batch, signatures, wgcna, survival, PCSF, multi, merge, …), spatial_*, report_*
+│       └── R/         # ALL domain logic: defaults/thresholds, state, validation, provenance, jobs, memory, io, error_state, rdata_io, drive (watcher/allowlist), biomentat_handoff, plotting/theme, sc_* (pipeline, doublets, communication, abundance, velocity, …), bulk_* (import, batch, signatures, wgcna, survival, PCSF, multi, merge, …), spatial_*, report_*
 ├── R/               # frozen source-list manifest (R/.sources_manifest.txt)
 ├── modules/         # import/ (sc, bulk, spatial, geo, rdata picker), sc/, bulk/, bulk_de/, spatial/ (+ deconv sub-modules)
 ├── tests/           # testthat + 4-tier opaque-box e2e (tests/e2e/)
@@ -148,15 +150,15 @@ L'état inter-modules passe par le `reactiveValues` partagé (`global_data`) ; l
 
 ## Serveur MCP local et pilotage par agent (optionnel)
 
-Pour le développement et l'audit, Cerberus embarque un **serveur MCP local** (Model Context Protocol) sur stdio — `scripts/mcp_server.R` — qui permet à un agent IA (ZCode, Claude Desktop, VS Code…) d'observer et, de façon strictement contrôlée, de piloter une session **vivante** de l'application :
+Pour le développement et l'audit, Biomentat embarque un **serveur MCP local** (Model Context Protocol) sur stdio — `scripts/mcp_server.R` — qui permet à un agent IA (ZCode, Claude Desktop, VS Code…) d'observer et, de façon strictement contrôlée, de piloter une session **vivante** de l'application :
 
 - **Transport** : JSON-RPC 2.0 natif sur stdio (`jsonlite` uniquement), lancé depuis la racine du projet avec `Rscript --no-init-file scripts/mcp_server.R` — le drapeau est obligatoire (le `.Rprofile` du projet écrirait sinon sur stdout et corromprait le transport). Diagnostic : `Rscript --no-init-file scripts/mcp_server.R --check`.
-- **11 outils, dont 5 en lecture seule** (identité serveur `cerberus-drive`) : lecture seule (`transcripto_drive_status`, `transcripto_drive_read_result`, `transcripto_drive_read` — lecture bornée de l'artefact exporté courant, `transcripto_drive_state` — digest passif de `state.json`, `transcripto_drive_snapshot` — photo instantanée), armement contrôlé (`transcripto_drive_set_armed`), écritures contrôlées (`transcripto_drive_set_inputs`, `transcripto_drive_run`, `transcripto_drive_wait`, `transcripto_drive_export`, `transcripto_drive_import` — import de données vers un module d'import).
+- **11 outils, dont 5 en lecture seule** (identité serveur `biomentat-drive`) : lecture seule (`transcripto_drive_status`, `transcripto_drive_read_result`, `transcripto_drive_read` — lecture bornée de l'artefact exporté courant, `transcripto_drive_state` — digest passif de `state.json`, `transcripto_drive_snapshot` — photo instantanée), armement contrôlé (`transcripto_drive_set_armed`), écritures contrôlées (`transcripto_drive_set_inputs`, `transcripto_drive_run`, `transcripto_drive_wait`, `transcripto_drive_export`, `transcripto_drive_import` — import de données vers un module d'import).
 - **Toute écriture passe par un dépôt de fichiers `tools/_drive/*.json`** (file-drop) sous une allowlist gelée de modules, boutons et entrées — le serveur ne démarre jamais l'application et n'exécute jamais d'analyse lui-même. Les exports lisibles par l'agent sont limités aux **13 routes déclarées** (`TS_DRIVE_EXPORT_ROUTES`).
 - **Deux modes de visibilité, un seul protocole** : `headless` ou `visible` (vrai onglet navigateur) — seul le client change, le contrat IPC reste identique.
 - Gabarits clients dans `mcp.examples/` (formats vérifiés pour les lanceurs actifs ; répertoire local, non suivi par git) ; plan et documentation détaillée dans `docs/` (local, non suivi).
 
-- **Contrat d'ingestion `cerberus-exchange/v1`** : la CLI headless `tools/cerberus_handoff.R` valide un drop amont (manifeste, matrice de counts, samplesheet) et écrit un `validation.json` — utilisable sans application lancée.
+- **Contrat d'ingestion `biomentat-exchange/v1`** : la CLI headless `tools/biomentat_handoff.R` valide un drop amont (manifeste, matrice de counts, samplesheet) et écrit un `validation.json` — utilisable sans application lancée.
 - **Maîtrise opérateur** : l'application affiche l'état du contrôle par agent, permet de le basculer, montre l'identifiant de session dérivé et permet de reprendre une session armée par une session morte.
 
 > Le pilotage par agent est un outil de développement/validation, local-first : il ne contourne aucune validation de l'application et n'envoie aucune donnée hors de la machine.
@@ -166,8 +168,8 @@ Pour le développement et l'audit, Cerberus embarque un **serveur MCP local** (M
 ### 1. Cloner le dépôt
 
 ```bash
-git clone https://github.com/Bio-MG/Cerberus.git
-cd Cerberus
+git clone https://github.com/Bio-MG/Biomentat.git
+cd Biomentat
 ```
 
 ### 2. Installer les dépendances (recommandé : renv)
@@ -175,7 +177,7 @@ cd Cerberus
 Le projet utilise **renv** pour restaurer un environnement R reproductible. Travaillez depuis la racine du dépôt cloné afin que `.Rprofile` puisse activer `renv`.
 Dans R ou RStudio :
 ```r
-setwd("path/to/Cerberus")
+setwd("path/to/Biomentat")
 if (!requireNamespace("renv", quietly = TRUE)) install.packages("renv")
 renv::restore()
 ```
@@ -231,7 +233,7 @@ Vous pouvez aussi ouvrir `app.R` dans RStudio puis cliquer sur **Run App**.
 | Composant | Recommandation |
 | :--- | :--- |
 | **Version de R** | 4.4.2 (version unique supportée) |
-| **IDE** | RStudio (recommandé pour le développement et le débogage) — ouvrir `Cerberus.Rproj` pour activer renv |
+| **IDE** | RStudio (recommandé pour le développement et le débogage) — ouvrir `Biomentat.Rproj` pour activer renv |
 | **RAM (usage courant)** | 16 Go minimum |
 | **RAM (grands jeux de données)** | 32 Go recommandés pour les grands jeux single-cell ou spatiaux |
 | **Calcul** | L’exécution CPU-only est entièrement prise en charge ; aucun GPU n’est requis |
@@ -305,7 +307,7 @@ au niveau cellule pour éviter la pseudo-réplication.
 
 ## Travailler avec de grands jeux de données
 
-Cerberus intègre des garde-fous spécifiques pour gérer les limites de mémoire et de calcul sur des stations de travail :
+Biomentat intègre des garde-fous spécifiques pour gérer les limites de mémoire et de calcul sur des stations de travail :
 
 - **Utilisez les workflows de sketch** : pour les grands jeux single-cell ou spatiaux, activez les options de sketch Seurat v5 ou l’intégration spatiale par sketch afin d’éviter le chargement des matrices complètes en RAM.
 - **Respectez les limites du stockage sur disque** : ne forcez pas les matrices de comptages spatiales complètes en mémoire ; utilisez les tâches asynchrones fournies et adossées à BPCells.
@@ -332,7 +334,7 @@ La barre latérale permet de sauvegarder/charger une session `.rds`. Les objets 
 
 ## Reproductibilité et utilisation scientifique
 
-Cerberus favorise la recherche reproductible grâce à l’export de rapports HTML/PDF paramétrés et de scripts R spécifiques à chaque domaine, qui récapitulent les étapes analytiques effectuées dans l’interface.
+Biomentat favorise la recherche reproductible grâce à l’export de rapports HTML/PDF paramétrés et de scripts R spécifiques à chaque domaine, qui récapitulent les étapes analytiques effectuées dans l’interface.
 
 Le **rapport consolidé (4F)** va plus loin : les rapports sont des **compilateurs d'état + provenance**, jamais des ré-exécuteurs d'analyses. Le compilateur agrège les résultats des domaines **sans ré-exécution**, produit un HTML autonome et un bundle d'export (manifeste, tables de résultats fidèles, script R reproductible, sessionInfo). Aucune donnée brute n'est embarquée par défaut. La provenance est obligatoire pour toute section du rapport consolidé — le validateur rejette la provenance incomplète. Le contrat consolidé couvre **12 domaines de résultats** (dont pseudobulk, corrélation génique et comparaison multi-jeux bulk) ; le rapport de domaine Single-Cell restitue en option les tables canoniques vitesse ARN, communication cellulaire et abondance différentielle (tables pures, aucun recalcul).
 
@@ -349,7 +351,7 @@ La reproductibilité et la validité scientifique dépendent également :
 
 - Enregistrez votre `sessionInfo()` lors du partage ou de la publication de résultats.
 - Conservez et partagez le fichier `renv.lock` fourni avec vos fichiers sources, métadonnées, paramètres et exports de provenance pour reconstruire l'environnement d'analyse.
-- Considérez l’application comme une aide analytique. Tous les résultats nécessitent une revue biologique et statistique indépendante ; Cerberus ne remplace ni un design d’étude rigoureux, ni le jugement en contrôle qualité, ni l’expertise du domaine.
+- Considérez l’application comme une aide analytique. Tous les résultats nécessitent une revue biologique et statistique indépendante ; Biomentat ne remplace ni un design d’étude rigoureux, ni le jugement en contrôle qualité, ni l’expertise du domaine.
 
 ### Types d'exports
 
@@ -384,7 +386,7 @@ La reproductibilité et la validité scientifique dépendent également :
 - [x] Multi-jeux : enregistrement, comparaison et fusion de jeux bulk, pont pseudobulk, double jeu SC.
 - [x] Communication cellule-cellule : moteurs natifs CellChat & LIANA (calcul dans l'app) + vues de contexte (spatial, trajectoire, vélocité, perturbation in silico).
 - [x] Rareté par population (analyse descriptive mono-condition).
-- [x] Serveur MCP local (11 outils) + protocole drive de pilotage contrôlé d'une session vivante par un agent ; contrat d'ingestion `cerberus-exchange/v1` (CLI de validation headless).
+- [x] Serveur MCP local (11 outils) + protocole drive de pilotage contrôlé d'une session vivante par un agent ; contrat d'ingestion `biomentat-exchange/v1` (CLI de validation headless).
 - [x] Détection des doublets & QC ARN ambiant (scDblFinder) dans le pipeline single-cell.
 - [x] Exécution asynchrone (ExtendedTask/mirai) pour la DE bulk et le pipeline auto single-cell.
 - [ ] Choix élargis d'intégration single-cell au-delà de Harmony.
@@ -420,9 +422,9 @@ Ce projet est distribué sous licence MIT. Consultez le fichier `LICENSE` du dé
 **Status:** `V1.x` (after the `V1.1.0-rc` wave) — local transcriptomics platform covering single-cell RNA-seq, bulk RNA-seq, and spatial transcriptomics, with advanced analyses available depending on installed dependencies: RNA velocity, cell–cell communication (import CellChat/CellPhoneDB/LIANA **or native in-app engines**), Milo/scCODA differential abundance, spatial deconvolution, the Bulk V2 wave (pathway scores, WGCNA, survival, profile clustering, dose-response, PCSF network), multi-dataset management, and reproducible reports. V1.1 was a UX/UI wave (mutualized 1-click auto pipeline, panel grouping, Spatial container) — **zero scientific behavior change**; V1.x milestones are additive, contract-frozen features.
 > Some advanced analyses rely on optional dependencies, GitHub packages, or a dedicated Python environment. Check the Installation section before running a workflow.
 
-## Why Cerberus?
+## Why Biomentat?
 
-Cerberus is designed for iterative transcriptomic data exploration by biologists and bioinformaticians. It combines guided user interfaces, proactive validation messages, interactive visualizations, and reproducible reporting, all while maintaining strict user control over local data.
+Biomentat is designed for iterative transcriptomic data exploration by biologists and bioinformaticians. It combines guided user interfaces, proactive validation messages, interactive visualizations, and reproducible reporting, all while maintaining strict user control over local data.
 
 The application prioritizes:
 - **Local-first execution**: Data remains on your workstation, ensuring privacy and control.
@@ -435,7 +437,7 @@ The application prioritizes:
 
 ## Supported workflows
 
-Cerberus provides dedicated, modular environments for three primary transcriptomic domains:
+Biomentat provides dedicated, modular environments for three primary transcriptomic domains:
 1. **Single-cell RNA-seq**: From raw 10x or matrix imports to clustering, annotation, marker discovery, and pathway analysis — plus RNA velocity, cell-cell communication, differential abundance (Milo/scCODA), and the consolidated report.
 2. **Bulk RNA-seq**: From raw count matrices and metadata to differential expression, multi-contrast comparison, and functional enrichment — plus per-sample pathway scores, WGCNA, survival, profile clustering, dose-response, PCSF network, and multi-dataset management.
 3. **Spatial transcriptomics**: From Visium/Xenium/CosMx/Slide-seq imports to spatial clustering, deconvolution, multi-sample integration, and niche analysis.
@@ -527,16 +529,16 @@ The Single-Cell workflow is natively multi-sample (e.g. Control vs Treatment, Da
 
 ## Architecture
 
-Cerberus uses a modular Shiny architecture. Reusable analytical logic is separated from the interface, modules orchestrate workflows, and exportable results retain the provenance needed for interpretation.
+Biomentat uses a modular Shiny architecture. Reusable analytical logic is separated from the interface, modules orchestrate workflows, and exportable results retain the provenance needed for interpretation.
 Development follows a tested, reproducibility-oriented approach: key analytical results are validated by automated tests before being exposed in the UI.
 
 ```text
-Cerberus/
+Biomentat/
 ├── app.R / global.R
 ├── i18n/            # translation.json (fr/en)
 ├── tools/
 │   └── pkg_skeleton/  # package tree (DESCRIPTION, NAMESPACE)
-│       └── R/         # ALL domain logic: defaults/thresholds, state, validation, provenance, jobs, memory, io, error_state, rdata_io, drive (watcher/allowlist), cerberus_handoff, plotting/theme, sc_* (pipeline, doublets, communication, abundance, velocity, …), bulk_* (import, batch, signatures, wgcna, survival, PCSF, multi, merge, …), spatial_*, report_*
+│       └── R/         # ALL domain logic: defaults/thresholds, state, validation, provenance, jobs, memory, io, error_state, rdata_io, drive (watcher/allowlist), biomentat_handoff, plotting/theme, sc_* (pipeline, doublets, communication, abundance, velocity, …), bulk_* (import, batch, signatures, wgcna, survival, PCSF, multi, merge, …), spatial_*, report_*
 ├── R/               # frozen source-list manifest (R/.sources_manifest.txt)
 ├── modules/         # import/ (sc, bulk, spatial, geo, rdata picker), sc/, bulk/, bulk_de/, spatial/ (+ deconv sub-modules)
 ├── tests/           # testthat + 4-tier opaque-box e2e (tests/e2e/)
@@ -549,15 +551,15 @@ Cross-module state flows through the shared `reactiveValues` (`global_data`); he
 
 ## Local MCP server & agent control (optional)
 
-For development and audit purposes, Cerberus ships a **local MCP server** (Model Context Protocol) over stdio — `scripts/mcp_server.R` — that lets an AI agent (ZCode, Claude Desktop, VS Code…) observe and, under strict control, drive a **live** session of the app:
+For development and audit purposes, Biomentat ships a **local MCP server** (Model Context Protocol) over stdio — `scripts/mcp_server.R` — that lets an AI agent (ZCode, Claude Desktop, VS Code…) observe and, under strict control, drive a **live** session of the app:
 
 - **Transport**: native JSON-RPC 2.0 over stdio (`jsonlite` only), launched from the repository root with `Rscript --no-init-file scripts/mcp_server.R` — the flag is mandatory (the project `.Rprofile` would otherwise write to stdout and corrupt the transport). Diagnostic: `Rscript --no-init-file scripts/mcp_server.R --check`.
-- **11 tools, 5 of them read-only** (server identity `cerberus-drive`): read-only (`transcripto_drive_status`, `transcripto_drive_read_result`, `transcripto_drive_read` — bounded read of the current exported artefact, `transcripto_drive_state` — passive `state.json` digest, `transcripto_drive_snapshot` — instant snapshot), controlled arming (`transcripto_drive_set_armed`), controlled writes (`transcripto_drive_set_inputs`, `transcripto_drive_run`, `transcripto_drive_wait`, `transcripto_drive_export`, `transcripto_drive_import` — data import into an importer module).
+- **11 tools, 5 of them read-only** (server identity `biomentat-drive`): read-only (`transcripto_drive_status`, `transcripto_drive_read_result`, `transcripto_drive_read` — bounded read of the current exported artefact, `transcripto_drive_state` — passive `state.json` digest, `transcripto_drive_snapshot` — instant snapshot), controlled arming (`transcripto_drive_set_armed`), controlled writes (`transcripto_drive_set_inputs`, `transcripto_drive_run`, `transcripto_drive_wait`, `transcripto_drive_export`, `transcripto_drive_import` — data import into an importer module).
 - **Every write goes through `tools/_drive/*.json` file drops** under a frozen allowlist of modules, buttons, and inputs — the server never starts the app and never runs analysis code itself. Agent-readable exports are limited to the **13 declared routes** (`TS_DRIVE_EXPORT_ROUTES`).
 - **Two visibility modes, one protocol**: `headless` or `visible` (a real browser tab) — only the client changes, the IPC contract stays identical.
 - Client templates in `mcp.examples/` (formats verified for the active launchers; local directory, not tracked by git); plan and detailed documentation in `docs/` (local, not tracked).
 
-- **`cerberus-exchange/v1` ingestion contract**: the headless CLI `tools/cerberus_handoff.R` validates an upstream drop (manifest, counts matrix, samplesheet) and writes a `validation.json` — usable with no app instance running.
+- **`biomentat-exchange/v1` ingestion contract**: the headless CLI `tools/biomentat_handoff.R` validates an upstream drop (manifest, counts matrix, samplesheet) and writes a `validation.json` — usable with no app instance running.
 - **Operator control**: the app displays the agent-control state, lets the operator toggle it, shows the derived session id, and lets them reclaim a session armed by a dead one.
 
 > Agent control is a local-first development/validation tool: it bypasses no application validation and sends no data off the machine.
@@ -566,15 +568,15 @@ For development and audit purposes, Cerberus ships a **local MCP server** (Model
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/Bio-MG/Cerberus.git
-cd Cerberus
+git clone https://github.com/Bio-MG/Biomentat.git
+cd Biomentat
 ```
 
 ### 2. Install dependencies (recommended: renv)
 The project uses **renv** to restore a reproducible R environment. Work from the cloned repository root so that `.Rprofile` can activate `renv`.
 In R or RStudio:
 ```r
-setwd("path/to/Cerberus")
+setwd("path/to/Biomentat")
 if (!requireNamespace("renv", quietly = TRUE)) install.packages("renv")
 renv::restore()
 ```
@@ -626,7 +628,7 @@ Alternatively, open `app.R` in RStudio and click **Run App**.
 | Component | Recommendation |
 | :--- | :--- |
 | **R Version** | 4.4.2 (single supported version) |
-| **IDE** | RStudio (recommended for development and debugging) — open `Cerberus.Rproj` to activate renv |
+| **IDE** | RStudio (recommended for development and debugging) — open `Biomentat.Rproj` to activate renv |
 | **RAM (Routine)** | 16 GB minimum |
 | **RAM (Large Data)** | 32 GB recommended for large single-cell or spatial datasets |
 | **Compute** | CPU-only execution is fully supported; GPU is not required |
@@ -662,7 +664,7 @@ Alternatively, open `app.R` in RStudio and click **Run App**.
 
 ## Working with large datasets
 
-Cerberus includes specific safeguards to manage memory and compute limits on workstation-scale hardware:
+Biomentat includes specific safeguards to manage memory and compute limits on workstation-scale hardware:
 - **Use sketch workflows**: For large single-cell or spatial datasets, enable the Seurat v5 sketching options or spatial sketch integration to avoid loading full-resolution matrices into RAM.
 - **Respect disk-backed boundaries**: Do not attempt to force full-resolution spatial count matrices into memory; rely on the provided BPCells-backed asynchronous tasks.
 - **Leverage previews**: Utilize preview/subsampled visualizations where offered in the UI, reserving full-fidelity exports for final reporting.
@@ -688,7 +690,7 @@ The sidebar allows saving/loading a `.rds` session. SC, Bulk, and the spatial sk
 
 ## Reproducibility and scientific use
 
-Cerberus supports reproducible research by exporting parameterized HTML/PDF reports and domain-specific R scripts that recapitulate the analytical steps performed in the UI.
+Biomentat supports reproducible research by exporting parameterized HTML/PDF reports and domain-specific R scripts that recapitulate the analytical steps performed in the UI.
 
 The **consolidated report (4F)** goes further: reports are **compilers of state + provenance**, never re-runners of analyses. The compiler aggregates cross-domain results **without re-execution**, producing standalone HTML and an export bundle (manifest, faithful result tables, reproducible R script, sessionInfo). No raw data is embedded by default. Provenance is mandatory for any section that appears in a consolidated report — the validator rejects incomplete provenance. The consolidated contract covers **12 result domains** (including pseudobulk, gene correlation, and bulk multi-dataset comparison); the Single-Cell domain report optionally renders the canonical RNA velocity, cell–cell communication, and differential abundance tables (pure tables, no recomputation).
 
@@ -703,7 +705,7 @@ However, true reproducibility and scientific validity also depend on:
 **Best practices**:
 - Record your `sessionInfo()` when sharing or publishing results.
 - Keep and share the provided `renv.lock` file together with your source files, metadata, parameters, and provenance exports to reconstruct the analytical environment.
-- Treat the application as an analytical aid. All results require independent biological and statistical review; Cerberus does not replace rigorous study design, quality control judgment, or domain expertise.
+- Treat the application as an analytical aid. All results require independent biological and statistical review; Biomentat does not replace rigorous study design, quality control judgment, or domain expertise.
 
 ### Export types
 
@@ -738,7 +740,7 @@ However, true reproducibility and scientific validity also depend on:
 - [x] Multi-dataset: registration, comparison, and merge of bulk datasets, pseudobulk bridge, SC dual dataset.
 - [x] Cell–cell communication: native CellChat & LIANA engines (in-app computation) + context views (spatial, trajectory, velocity, in-silico perturbation).
 - [x] Population rarity (descriptive single-condition analysis).
-- [x] Local MCP server (11 tools) + drive protocol for controlled agent-driven live-session control; `cerberus-exchange/v1` ingestion contract (headless validation CLI).
+- [x] Local MCP server (11 tools) + drive protocol for controlled agent-driven live-session control; `biomentat-exchange/v1` ingestion contract (headless validation CLI).
 - [x] Doublet detection & ambient-RNA QC (scDblFinder) in the single-cell pipeline.
 - [x] Asynchronous execution (ExtendedTask/mirai) for bulk DE and the single-cell auto pipeline.
 - [ ] Expanded single-cell integration choices beyond Harmony.

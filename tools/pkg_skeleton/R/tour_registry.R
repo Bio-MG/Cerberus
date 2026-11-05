@@ -1,5 +1,5 @@
 # =============================================================================
-# tools/pkg_skeleton/R/tour_registry.R — N4 cerberus-tour (satellites slice S6)
+# tools/pkg_skeleton/R/tour_registry.R — N4 biomentat-tour (satellites slice S6)
 # =============================================================================
 # Fiche (fait foi) : docs/proposals/PROPOSAL_N_SATELLITES_LAUNCH_ROADMAP_
 # 2026-10-26.md §slice S6 — « Hand-rolled tour on existing bslib
@@ -37,7 +37,7 @@ TS_TOUR_VERSION <- "v1"
 
 #' Clé localStorage du drapeau « visite déjà faite ». Porte la version : un
 #' changement de parcours v2 repartira avec une clé neuve, jamais en silence.
-TS_TOUR_STORAGE_KEY <- "cerberus_tour_done_v1"
+TS_TOUR_STORAGE_KEY <- "biomentat_tour_done_v1"
 
 #' Les trois valeurs nav_top gelées que la visite est autorisée à sélectionner
 #' (références aux CONSTANTES de drive_allowlist.R — aucun littéral local).
@@ -77,9 +77,9 @@ ts_tour_steps <- function() {
     list(
       id = "import_bulk", anchor = "import_bulk-btn_load", tab = NULL,
       kind = "button",
-      title = "🧭 Bienvenue dans Cerberus",
+      title = "🧭 Bienvenue dans Biomentat",
       text = paste(
-        "Cerberus analyse vos données Single-Cell, Bulk RNA et Spatial.",
+        "Biomentat analyse vos données Single-Cell, Bulk RNA et Spatial.",
         "Cette visite (8 étapes) présente les surfaces principales ; quittez-la",
         "à tout moment avec « Passer la visite ». Premier arrêt : l'onglet",
         "d'import — le bouton « Charger » crée l'objet d'analyse depuis vos",

@@ -1,5 +1,5 @@
 # =============================================================================
-# helper-e2e.R — Shared Fixtures and Utilities for E2E Test Suite (Cerberus)
+# helper-e2e.R — Shared Fixtures and Utilities for E2E Test Suite (Biomentat)
 # =============================================================================
 # Provides project root discovery, hermetic environment bootstrap, drop
 # generators, CLI subprocess runners, and progressive milestone capability
@@ -65,8 +65,8 @@ if (file.exists(file.path(e2e_project_root(), "tools/pkg_skeleton/R/batch_correc
 e2e_source_if_exists("tools/pkg_skeleton/R/drive_allowlist.R")
 e2e_source_if_exists("tools/pkg_skeleton/R/drive_watcher.R")
 e2e_source_if_exists("tools/pkg_skeleton/R/spatial_async.R")
-e2e_source_if_exists("tools/pkg_skeleton/R/cerberus_handoff.R")
-e2e_source_if_exists("tools/cerberus_handoff.R")
+e2e_source_if_exists("tools/pkg_skeleton/R/biomentat_handoff.R")
+e2e_source_if_exists("tools/biomentat_handoff.R")
 
 # Progressive milestone sources (source if available)
 e2e_source_if_exists("tools/pkg_skeleton/R/sc_helpers.R")
@@ -96,9 +96,9 @@ options(ts.drive.hb_interval = 2)
 # ── Milestone Readiness & Capability Detection ──────────────────────────────
 
 is_m1_ready <- function() {
-  file.exists(file.path(e2e_project_root(), "tools/pkg_skeleton/R/cerberus_handoff.R")) &&
-  file.exists(file.path(e2e_project_root(), "tools/cerberus_handoff.R")) &&
-  exists("cerberus_handoff_validate_drop", mode = "function")
+  file.exists(file.path(e2e_project_root(), "tools/pkg_skeleton/R/biomentat_handoff.R")) &&
+  file.exists(file.path(e2e_project_root(), "tools/biomentat_handoff.R")) &&
+  exists("biomentat_handoff_validate_drop", mode = "function")
 }
 
 is_m2_ready <- function() {
@@ -142,7 +142,7 @@ e2e_rscript_bin <- function() {
 
 e2e_run_cli <- function(args, cwd = e2e_project_root()) {
   bin <- e2e_rscript_bin()
-  cli_script <- file.path(e2e_project_root(), "tools", "cerberus_handoff.R")
+  cli_script <- file.path(e2e_project_root(), "tools", "biomentat_handoff.R")
   full_args <- c("--vanilla", shQuote(cli_script))
   for (a in args) {
     if (grepl("=", a, fixed = TRUE)) {
@@ -229,7 +229,7 @@ e2e_make_test_drop <- function(prefix = "e2e_drop_",
   # Write manifest
   if (isTRUE(write_manifest)) {
     man <- list(
-      schema_version = "cerberus-exchange/v1",
+      schema_version = "biomentat-exchange/v1",
       dataset_id = dataset_id,
       species = species,
       genome_assembly = genome_assembly,
@@ -240,7 +240,7 @@ e2e_make_test_drop <- function(prefix = "e2e_drop_",
       metadata = list(
         project = "E2E_Test_Project",
         technology = "RNA-seq",
-        description = "Deterministic synthetic dataset for Cerberus E2E verification"
+        description = "Deterministic synthetic dataset for Biomentat E2E verification"
       )
     )
     for (k in names(manifest_extra)) {

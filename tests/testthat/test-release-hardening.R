@@ -250,9 +250,9 @@ test_that("C12 repeated execution and state reset: identical verdicts, clean cac
   expect_true(all(vapply(fresh$verdicts, function(v) v$state == "absent",
                          logical(1))))
   # Cache : clear idempotent.
-  cerberus_cache_set(cerberus_cache_key("trajectory", "k"), 1)
-  cerberus_cache_clear()
-  expect_null(cerberus_cache_get(cerberus_cache_key("trajectory", "k")))
+  biomentat_cache_set(biomentat_cache_key("trajectory", "k"), 1)
+  biomentat_cache_clear()
+  expect_null(biomentat_cache_get(biomentat_cache_key("trajectory", "k")))
 })
 
 # ── C13 : reproductibilité — mêmes entrées => mêmes empreintes ──────────────

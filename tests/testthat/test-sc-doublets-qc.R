@@ -121,7 +121,7 @@ test_that("provenance : analysis_id, method, écho des paramètres APPLIQUÉS (p
   obj <- .m4u_make_obj()
   r1 <- sc_filter_doublets_and_ambient(
     obj, params = list(seed = 42, doublet_score_cutoff = 0.3, max_contamination = 0.15))
-  expect_true(grepl("cerberus-doublets", as.character(r1$provenance$analysis_id), fixed = TRUE))
+  expect_true(grepl("biomentat-doublets", as.character(r1$provenance$analysis_id), fixed = TRUE))
   expect_identical(as.character(r1$provenance$method), "scDblFinder")
   pp <- r1$provenance$parameters
   expect_equal(pp$doublet_score_cutoff, 0.3)
@@ -172,7 +172,7 @@ test_that("provenance : JSON round-trip propre (auto_unbox)", {
   expect_type(js, "character")
   back <- jsonlite::fromJSON(as.character(js), simplifyVector = FALSE)
   expect_identical(as.character(back$method), "scDblFinder")
-  expect_true(grepl("cerberus-doublets", as.character(back$analysis_id), fixed = TRUE))
+  expect_true(grepl("biomentat-doublets", as.character(back$analysis_id), fixed = TRUE))
   expect_false(is.null(back$parameters))
 })
 
@@ -184,7 +184,7 @@ test_that("provenance_append accepte l'entrée du moteur dans un reactiveValues"
   provenance_append(st, res$provenance)
   h <- state_get(st, "provenance")
   expect_length(h, 1)
-  expect_identical(as.character(h[[1]]$analysis_id), "cerberus-doublets")
+  expect_identical(as.character(h[[1]]$analysis_id), "biomentat-doublets")
 })
 
 test_that("garde no-silent-fallback : run_ambient sans moteur => erreur classée", {

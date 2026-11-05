@@ -21,24 +21,24 @@ if (!exists("e2e_project_root", mode = "function")) {
 test_that("T2-SP-1: species with leading/trailing whitespace or upper case is normalized", {
   mat <- matrix(1L:10L, nrow = 10L, ncol = 1L,
                 dimnames = list(sprintf("ENSG%011d", seq_len(10L)), "s1"))
-  res <- cerberus_handoff_validate_identifiers(mat = mat, species = "  HUMAN  ", feature_id_type = "ensembl")
+  res <- biomentat_handoff_validate_identifiers(mat = mat, species = "  HUMAN  ", feature_id_type = "ensembl")
   expect_identical(res$detected_organism, "human")
 })
 
 test_that("T2-SP-2: empty or blank species string triggers invalid_species", {
   mat <- matrix(1L:2L, nrow = 2L, ncol = 1L, dimnames = list(c("g1", "g2"), "s1"))
   err <- tryCatch(
-    cerberus_handoff_validate_identifiers(mat = mat, species = "   ", feature_id_type = "symbol"),
-    cerberus_handoff_error = function(e) e
+    biomentat_handoff_validate_identifiers(mat = mat, species = "   ", feature_id_type = "symbol"),
+    biomentat_handoff_error = function(e) e
   )
-  expect_true(inherits(err, "cerberus_handoff_error"))
+  expect_true(inherits(err, "biomentat_handoff_error"))
   expect_identical(err$state, "invalid_species")
 })
 
 test_that("T2-SP-3: versioned Ensembl IDs (ENSG... .15) are correctly recognized as ensembl", {
   versioned_ids <- sprintf("ENSG%011d.%d", seq_len(10L), seq_len(10L))
   mat <- matrix(1L:10L, nrow = 10L, ncol = 1L, dimnames = list(versioned_ids, "s1"))
-  res <- cerberus_handoff_validate_identifiers(mat = mat, species = "human", feature_id_type = "ensembl")
+  res <- biomentat_handoff_validate_identifiers(mat = mat, species = "human", feature_id_type = "ensembl")
   expect_identical(res$detected_type, "ensembl")
   expect_identical(res$detected_organism, "human")
 })
@@ -47,10 +47,10 @@ test_that("T2-SP-4: declared symbol namespace with Ensembl IDs triggers invalid_
   ensembl_ids <- sprintf("ENSG%011d", seq_len(10L))
   mat <- matrix(1L:10L, nrow = 10L, ncol = 1L, dimnames = list(ensembl_ids, "s1"))
   err <- tryCatch(
-    cerberus_handoff_validate_identifiers(mat = mat, species = "human", feature_id_type = "symbol"),
-    cerberus_handoff_error = function(e) e
+    biomentat_handoff_validate_identifiers(mat = mat, species = "human", feature_id_type = "symbol"),
+    biomentat_handoff_error = function(e) e
   )
-  expect_true(inherits(err, "cerberus_handoff_error"))
+  expect_true(inherits(err, "biomentat_handoff_error"))
   expect_identical(err$state, "invalid_feature_ids")
 })
 
@@ -58,10 +58,10 @@ test_that("T2-SP-5: declared entrez namespace with non-numeric gene IDs triggers
   non_numeric_entrez <- c("101", "102", "NOT_A_NUMBER", "104")
   mat <- matrix(1L:4L, nrow = 4L, ncol = 1L, dimnames = list(non_numeric_entrez, "s1"))
   err <- tryCatch(
-    cerberus_handoff_validate_identifiers(mat = mat, species = "human", feature_id_type = "entrez"),
-    cerberus_handoff_error = function(e) e
+    biomentat_handoff_validate_identifiers(mat = mat, species = "human", feature_id_type = "entrez"),
+    biomentat_handoff_error = function(e) e
   )
-  expect_true(inherits(err, "cerberus_handoff_error"))
+  expect_true(inherits(err, "biomentat_handoff_error"))
   expect_identical(err$state, "invalid_feature_ids")
 })
 
@@ -70,9 +70,9 @@ test_that("T2-SP-6: species assembly mismatch in manifest triggers species_assem
   on.exit(unlink(d, recursive = TRUE), add = TRUE)
   man <- jsonlite::fromJSON(file.path(d, "manifest.json"))
   err <- tryCatch(
-    cerberus_handoff_validate_manifest(man, drop_dir = d),
-    cerberus_handoff_error = function(e) e
+    biomentat_handoff_validate_manifest(man, drop_dir = d),
+    biomentat_handoff_error = function(e) e
   )
-  expect_true(inherits(err, "cerberus_handoff_error"))
+  expect_true(inherits(err, "biomentat_handoff_error"))
   expect_identical(err$state, "species_assembly_mismatch")
 })

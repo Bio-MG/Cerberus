@@ -16,7 +16,7 @@ if (!exists("e2e_project_root", mode = "function")) {
   }
 }
 
-test_that("T4-PBMC-1: full 10x PBMC drop validates headlessly via cerberus-handoff CLI", {
+test_that("T4-PBMC-1: full 10x PBMC drop validates headlessly via biomentat-handoff CLI", {
   mat_pbmc <- e2e_make_pbmc_matrix(n_genes = 250L, n_cells = 60L, seed = 2026L)
   sheet_pbmc <- e2e_make_pbmc_samplesheet(colnames(mat_pbmc), seed = 2026L)
   
@@ -57,7 +57,7 @@ test_that("T4-PBMC-2: PBMC dataset sparse matrix loads with intact dimensions an
   d <- e2e_make_test_drop(prefix = "t4_pbmc_mat_", counts = mat_pbmc, samplesheet = sheet_pbmc, matrix_filename = "counts.rds")
   on.exit(unlink(d, recursive = TRUE), add = TRUE)
   
-  loaded <- cerberus_handoff_read_matrix(file.path(d, "counts.rds"))
+  loaded <- biomentat_handoff_read_matrix(file.path(d, "counts.rds"))
   expect_true(inherits(loaded, "dgCMatrix"))
   expect_identical(dim(loaded), c(200L, 40L))
   expect_true(all(startsWith(colnames(loaded), "PBMC_CELL_")))

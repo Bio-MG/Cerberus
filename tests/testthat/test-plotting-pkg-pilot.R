@@ -148,7 +148,7 @@ test_that("frontiere : le paquet contient EXACTEMENT 6 plotting + 4 fournisseurs
   # R/core/ RESTANTS (caching, drive_allowlist, drive_watcher, error_state,
   # jobs, memory, pathway_helpers, rdata_io, validation) + config/
   # {defaults,thresholds}.R suivent — R/core/ ne garde plus que le fichier
-  # étranger CERBERUS non câblé (cerberus_handoff.R, hors lot). Les 4 sites
+  # étranger BIOMENTAT non câblé (biomentat_handoff.R, hors lot). Les 4 sites
   # TS_PATHWAY_* non qualifiés de pathway_helpers.R basculent en carry+pin
   # (précédents .ts_dt_const / .ts_report_const) ; rdata_io.R garde son repli
   # exists(inherits=TRUE) (classe has-fallback, précédent lot 3).
@@ -208,7 +208,7 @@ test_that("frontiere : le paquet contient EXACTEMENT 6 plotting + 4 fournisseurs
                           "sc_export.R", "sc_metadata.R", "sc_batch_metrics.R",
                           "sc_multi.R", "sc_state.R",
                           # J1 (2026-10-26, d2fdac8) : le moteur CLI du legs
-                          # cerberus_handoff.R quitte R/core (vidé) pour le
+                          # biomentat_handoff.R quitte R/core (vidé) pour le
                           # paquet (sha256 inchangé, 7 consommateurs
                           # retargetés) ; M4 (2026-10-27, a987f48) : le moteur
                           # doublets & RNA ambiant sc_qc_doublets.R ;
@@ -229,10 +229,22 @@ test_that("frontiere : le paquet contient EXACTEMENT 6 plotting + 4 fournisseurs
                           # session_checkpoint.R ; freeze test
                           # test-dataset-dir-scan.R (RED mesuré avant code
                           # : failed=7).
-                          "cerberus_handoff.R", "sc_qc_doublets.R",
+                          "biomentat_handoff.R", "sc_qc_doublets.R",
                           "session_checkpoint.R", "biostat_tree.R",
-                          "dataset_directory.R")),
-                   info = "le perimetre du paquet doit etre exactement 6 plotting + 4 fournisseurs R/core + 4 reports + 18 bulk + 11 spatial + 10 core (J1 : +cerberus_handoff) + 2 config + 27 sc (M4 : +sc_qc_doublets) + 1 resilience (ASR-1 : +session_checkpoint) + 1 biostat M2 (O27 : +biostat_tree) + 1 PoC datasets P0 (+dataset_directory) = 85")
+                          "dataset_directory.R",
+                          # S3-suite N5 DATASET-DOCTOR (2026-11-04, 5904fa5) :
+                          # dataset_health.R · S3 N7 TIMEBOX (2026-11-04,
+                          # a792379) : job_timebox.R · S6 N4 TOUR (2026-11-04,
+                          # 998a98c) : tour_registry.R. RE-BASAGE de la
+                          # population 86→89 daté au jalon RENAME 2026-11-05 :
+                          # le pin était resté à la population du 2026-11-01
+                          # (dernière suite complète), les 3 fichiers étant
+                          # entrés par des suites ciblées sans re-basage —
+                          # défaut PRÉEXISTANT au rename, constaté par la
+                          # passe de validation du jalon.
+                          "dataset_health.R", "job_timebox.R",
+                          "tour_registry.R")),
+                   info = "le perimetre du paquet doit etre exactement 6 plotting + 4 fournisseurs R/core + 4 reports + 18 bulk + 11 spatial + 10 core (J1 : +biomentat_handoff) + 2 config + 27 sc (M4 : +sc_qc_doublets) + 1 resilience (ASR-1 : +session_checkpoint) + 1 biostat M2 (O27 : +biostat_tree) + 1 PoC datasets P0 (+dataset_directory) + 1 dataset-doctor (S3) + 1 timebox (S3) + 1 tour (S6) = 89")
 })
 
 # ─── M4 suite (2026-10-25) : les 4 autres fichiers du domaine ────────────────

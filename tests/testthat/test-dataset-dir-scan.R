@@ -9,8 +9,8 @@
 #      AC5 (garde RED-first + test freeze) ;
 #   §3.1 (racine 3 niveaux, motif ts_session_checkpoint_dir(),
 #         session_checkpoint.R:120) ;
-#   §3.2 (moteur pur : UNE profondeur, délégation cerberus_handoff_validate_drop(),
-#         cerberus_handoff.R:634 — ZÉRO nouvelle règle de validation) ;
+#   §3.2 (moteur pur : UNE profondeur, délégation biomentat_handoff_validate_drop(),
+#         biomentat_handoff.R:634 — ZÉRO nouvelle règle de validation) ;
 #   §4 T1-T5 ; §5 (échec d'un drop isolé — jamais d'erreur propagée).
 #
 # Jalon P0 : ts_datasets_dir() + ts_dataset_dir_scan() + tests T1-T5
@@ -22,26 +22,26 @@
 # skip — un skip n'est pas une porte rouge ; motif test-spmv1-meta-col-
 # validation.R:118-122, lui-même motif test-biostat-tree.R:53-67).
 #
-# Fixtures : gabarit test-cerberus-handoff.R (.make_test_drop, :23-63) —
+# Fixtures : gabarit test-biomentat-handoff.R (.make_test_drop, :23-63) —
 # drop bulk minimal construit DANS le test, en tempdir : 120 gènes Ensembl,
-# rpois(lambda=300) seed 42, TSV col.names=NA, manifest cerberus-exchange/v1.
+# rpois(lambda=300) seed 42, TSV col.names=NA, manifest biomentat-exchange/v1.
 # Le drop VALIDE porte 4 échantillons / 2 conditions (2x2) : c'est le
-# PLANCHER du plan anti-pseudoréplication v1 (cerberus_handoff.R:588,
+# PLANCHER du plan anti-pseudoréplication v1 (biomentat_handoff.R:588,
 # min_rep = 2) — 3 échantillons sur 2 conditions est TOUJOURS déficient
 # d'un côté (le « 3 échantillons / 2 conditions » de la fiche §3.5 sert
 # donc le cas T4 : control, control, treated -> treated = 1 réplicat ->
 # pseudoreplication_detected, mesuré).
 #
 # QU'EST ASSERTABLE HEADLESS (honneteté du garde, AC5) :
-#   * états + raisons (vocabulaire v1 tel quel, cerberus_handoff_states(),
-#     cerberus_handoff.R:104-123), checks v1 hérités, chemins résolus,
+#   * états + raisons (vocabulaire v1 tel quel, biomentat_handoff_states(),
+#     biomentat_handoff.R:104-123), checks v1 hérités, chemins résolus,
 #     mtime, noms de la table ;
 #   * le schéma de sortie (noms de champs, états) est FIGÉ (T5, motif
 #     test-report-contract-freeze.R : surface figée = code + test ensemble) ;
 #   * la lecture-seule (AC2) : snapshot du répertoire avant/après scan,
 #     validation.json exclu (SEULE écriture tolérée de la chaîne, produite
 #     par le moteur v1 quand un out_dir explicite est fourni,
-#     cerberus_handoff.R:755-757 — le scan ne passe JAMAIS out_dir).
+#     biomentat_handoff.R:755-757 — le scan ne passe JAMAIS out_dir).
 #
 # ASCII pur dans les motifs de garde (C7) ; paste0 des que multi-arguments.
 # =============================================================================
@@ -61,12 +61,12 @@
 source_project_file("tools/pkg_skeleton/R/io_helpers.R")
 source_project_file("tools/pkg_skeleton/R/error_state.R")
 source_project_file("tools/pkg_skeleton/R/session_checkpoint.R")
-source_project_file("tools/pkg_skeleton/R/cerberus_handoff.R")
+source_project_file("tools/pkg_skeleton/R/biomentat_handoff.R")
 if (.dds_present) {
   source_project_file(.dds_comp_rel)
 }
 
-# ── Fixtures (gabarit test-cerberus-handoff.R:23-63, ~3/2 échantillons) ------
+# ── Fixtures (gabarit test-biomentat-handoff.R:23-63, ~3/2 échantillons) ------
 
 .dds_root <- function() {
   d <- tempfile(pattern = "datasets_poc_")
@@ -98,7 +98,7 @@ if (.dds_present) {
   # Samplesheet : sample + condition (+ batch non confondu, gabarit).
   # sheet_samples : noms de la samplesheet DÉCOUPLÉS des colonnes de la
   # matrice — c'est la discordance du T4a (concordance rompue,
-  # cerberus_handoff.R:564-571).
+  # biomentat_handoff.R:564-571).
   sheet_ids <- if (is.null(sheet_samples)) samples else sheet_samples
   sheet_path <- file.path(drop_dir, "samplesheet.tsv")
   utils::write.table(
@@ -110,7 +110,7 @@ if (.dds_present) {
     writeLines(manifest_raw, file.path(drop_dir, "manifest.json"), useBytes = TRUE)
   } else if (isTRUE(write_manifest)) {
     man <- list(
-      schema_version = "cerberus-exchange/v1",
+      schema_version = "biomentat-exchange/v1",
       dataset_id = dataset_id,
       species = "human",
       genome_assembly = "GRCh38",
@@ -199,7 +199,7 @@ test_that("T2 drop v1 valide : status valid, checks v1 verts, paths résolus, no
   expect_true(is.na(entry$raison),
               info = "pas de raison quand le drop est valide")
 
-  # checks v1 hérités, tous verts (délégation cerberus_handoff_validate_drop)
+  # checks v1 hérités, tous verts (délégation biomentat_handoff_validate_drop)
   expect_true(is.list(entry$checks) && length(entry$checks) >= 4L,
               info = "les 4 familles de checks v1 sont héritées")
   expect_identical(entry$checks$manifest_syntax$valid, TRUE)
@@ -242,10 +242,10 @@ test_that("T3 manifest absent / malformé : invalid + raison v1, un drop cassé 
   expect_length(res, 3L)
   expect_identical(res[["DS_SCAN_NO_MANIFEST"]]$status, "invalid")
   expect_identical(res[["DS_SCAN_NO_MANIFEST"]]$raison, "manifest_missing",
-                   info = "vocabulaire v1 tel quel (cerberus_handoff.R:156)")
+                   info = "vocabulaire v1 tel quel (biomentat_handoff.R:156)")
   expect_identical(res[["DS_SCAN_BAD_JSON"]]$status, "invalid")
   expect_identical(res[["DS_SCAN_BAD_JSON"]]$raison, "manifest_malformed",
-                   info = "vocabulaire v1 tel quel (cerberus_handoff.R:167/174)")
+                   info = "vocabulaire v1 tel quel (biomentat_handoff.R:167/174)")
   # nommage de repli : pas de dataset_id lisible -> basename du sous-répertoire
   expect_true(all(c("DS_SCAN_NO_MANIFEST", "DS_SCAN_BAD_JSON", "DS_SCAN_VALID")
                   %in% names(res)),
@@ -266,12 +266,12 @@ test_that("T4 samplesheet discordante -> samplesheet_matrix_mismatch ; 1 réplic
 
   # (a) samplesheet discordante : un échantillon renommé DANS LA SAMPLESHEET
   #     SEULE (la matrice garde sample_4) -> concordance rompue
-  #     (cerberus_handoff.R:564-571, setequal samp_ids vs colnames matrice)
+  #     (biomentat_handoff.R:564-571, setequal samp_ids vs colnames matrice)
   drop_mismatch <- .dds_write_drop(
     root, "DS_SCAN_MISMATCH",
     sheet_samples = c("sample_1", "sample_2", "sample_3", "sample_9"))
   # (b) 1 seul réplicat : 3 échantillons / 2 conditions (control, control,
-  #     treated) -> treated deficiente (cerberus_handoff.R:588-594)
+  #     treated) -> treated deficiente (biomentat_handoff.R:588-594)
   drop_pseudo <- .dds_write_drop(
     root, "DS_SCAN_PSEUDO",
     samples = paste0("sample_", seq_len(3L)),
@@ -282,10 +282,10 @@ test_that("T4 samplesheet discordante -> samplesheet_matrix_mismatch ; 1 réplic
   expect_length(res, 2L)
   expect_identical(res[["DS_SCAN_MISMATCH"]]$status, "invalid")
   expect_identical(res[["DS_SCAN_MISMATCH"]]$raison, "samplesheet_matrix_mismatch",
-                   info = "vocabulaire v1 tel quel (cerberus_handoff.R:570)")
+                   info = "vocabulaire v1 tel quel (biomentat_handoff.R:570)")
   expect_identical(res[["DS_SCAN_PSEUDO"]]$status, "invalid")
   expect_identical(res[["DS_SCAN_PSEUDO"]]$raison, "pseudoreplication_detected",
-                   info = "vocabulaire v1 tel quel (cerberus_handoff.R:593)")
+                   info = "vocabulaire v1 tel quel (biomentat_handoff.R:593)")
   # checks v1 hérités aussi sur l'échec (aucune règle maison ajoutée — AC1)
   expect_true(is.list(res[["DS_SCAN_MISMATCH"]]$checks),
               info = "checks v1 (structure) hérités même en échec")
@@ -304,7 +304,7 @@ test_that("T5 freeze du schéma de sortie : noms de champs, états, vocabulaire 
   if (!.dds_present) return(invisible(NULL))
 
   # vocabulaire des états figé, exposé par le moteur (motif
-  # cerberus_handoff_states(), cerberus_handoff.R:104)
+  # biomentat_handoff_states(), biomentat_handoff.R:104)
   expect_identical(
     ts_dataset_dir_scan_states(), c("valid", "warn", "invalid", "empty"),
     info = "états AC1 figés : valid | warn | invalid | empty")
@@ -389,7 +389,7 @@ test_that("T6 le scan est strictement lecture seule (AC2) : snapshot du réperto
   after <- .dds_snapshot(root)
 
   # (a) validation.json n'apparaît PAS du tout : le scan ne passe pas out_dir
-  #     au moteur v1 (cerberus_handoff.R:755-757) -> la seule écriture tolérée
+  #     au moteur v1 (biomentat_handoff.R:755-757) -> la seule écriture tolérée
   #     de la chaîne n'est même pas déclenchée
   expect_false(any(grepl("validation\\.json$", before$path)),
                info = "pré-condition : pas de validation.json avant le scan")

@@ -22,7 +22,7 @@ test_that("T3-ERR-1: handoff error contains classed state and message readable b
   # Malformed manifest
   writeLines("{\"invalid\": true}", file.path(d, "manifest.json"))
   
-  res <- cerberus_handoff_validate_drop(drop_dir = d)
+  res <- biomentat_handoff_validate_drop(drop_dir = d)
   expect_false(res$valid)
   expect_identical(res$status, "INVALID")
   expect_true(length(res$errors) >= 1L)

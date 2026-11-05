@@ -1,5 +1,5 @@
 # =============================================================================
-# tools/satellites/dock/run_dock.R — N3 cerberus-dock : CLI (effets)
+# tools/satellites/dock/run_dock.R — N3 biomentat-dock : CLI (effets)
 # =============================================================================
 # Fiche (fait foi) : PROPOSAL_N_SATELLITES_LAUNCH_ROADMAP_2026-10-26.md §2-S7 ;
 # contrat figé : tools/satellites/dock/MANIFEST.md v1.0.0 (verbes + exit codes).
@@ -17,7 +17,7 @@
 # Effets (ce fichier) : spawn/kill via processx (dépôt verrouillé — zéro
 # nouvelle dépendance), sonde HTTP via curl (verrouillé), état runtime dans
 # tools/_drive/satellites/ (gitigné). La DÉCISION (validation manifeste,
-# verdict santé) vit dans dock_lib.R (pure, testée par test-cerberus-dock.R).
+# verdict santé) vit dans dock_lib.R (pure, testée par test-biomentat-dock.R).
 # Ce fichier est sous tools/ : hors conventions gate par construction (note
 # MANIFEST.md §1).
 # =============================================================================
@@ -38,7 +38,7 @@
                                        winslash = "/", mustWork = TRUE)
 
 .dock_usage <- function() {
-  cat("cerberus-dock — h\u00f4te des satellites (contrat MANIFEST.md v1.0.0)\n\n")
+  cat("biomentat-dock — h\u00f4te des satellites (contrat MANIFEST.md v1.0.0)\n\n")
   cat("Verbes (UN verbe par invocation, jamais de d\u00e9marrage implicite) :\n")
   cat("  --start  <name>   d\u00e9marre le satellite (commande explicite), attend la sant\u00e9\n")
   cat("  --health <name>   sonde la sant\u00e9 (OK/FAIL/TIMEOUT)\n")

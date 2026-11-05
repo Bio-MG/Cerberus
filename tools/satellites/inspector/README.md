@@ -1,4 +1,4 @@
-# N2 `cerberus-inspector` — l'inspecteur qui rend les journeys reproductibles
+# N2 `biomentat-inspector` — l'inspecteur qui rend les journeys reproductibles
 
 Satellite **sans code** (`FORMAT.md` contrat figé v1.0.0 + ce README — **zéro
 `.R`, zéro dépendance, zéro app change**) qui donne à l'app une couche
@@ -165,7 +165,7 @@ ses libellés français via i18n) :
 - **PIDs/ports/valeurs chiffrées citées = photographies datées** (8127, 1,1 s,
   2,1 s, 852,7 s, `v1.1.0-20-g4bb23af`…) : elles prouvent que le chemin a été
   mesuré, pas l'état courant — re-mesurer à chaque session.
-- **Les journeys supposent une fixture de drop `cerberus-exchange/v1` valide**
+- **Les journeys supposent une fixture de drop `biomentat-exchange/v1` valide**
   (manifest.json + matrix.csv counts bruts + samplesheet.csv) dans le
   répertoire datasets — construite **hors dépôt** (motif jalon 2,
   `_jalon2_falsif/datasets/`) ; sans elle, les steps 2-6 de J1 sont UNTESTED

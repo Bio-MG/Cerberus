@@ -2,7 +2,7 @@
 # =============================================================================
 # tools/check_tools_tracked.R — GARDE 7 : « ce qui vit dans tools/ est-il
 #                                vraiment dans le depot ? »
-#                          TranscriptoShiny ("Cerberus")
+#                          TranscriptoShiny ("Biomentat")
 # =============================================================================
 # POURQUOI CE FICHIER EXISTE (mesure 2026-10-24)
 # ----------------------------------------------

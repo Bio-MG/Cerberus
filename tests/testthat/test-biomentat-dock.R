@@ -1,5 +1,5 @@
 # =============================================================================
-# test-cerberus-dock.R — N3 cerberus-dock (satellites slice S7) : lib PUR
+# test-biomentat-dock.R — N3 biomentat-dock (satellites slice S7) : lib PUR
 # =============================================================================
 # FICHE (fait foi) : docs/proposals/PROPOSAL_N_SATELLITES_LAUNCH_ROADMAP_
 # 2026-10-26.md §2-S7 — « Manifest first (frozen format) » ; « FIRST TENANT =

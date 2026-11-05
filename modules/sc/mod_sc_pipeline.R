@@ -77,7 +77,7 @@
 # disk I/O) only pays off once RAM would otherwise be the bottleneck.
 .BPCELLS_AUTO_THRESHOLD <- if (exists("TS_BPCELLS_AUTO_THRESHOLD")) TS_BPCELLS_AUTO_THRESHOLD else 150000L
 
-# M4 (features 19-22, jalon CERBERUS 2026-10-26) : défauts des contrôles
+# M4 (features 19-22, jalon BIOMENTAT 2026-10-26) : défauts des contrôles
 # contrefactuels doublets/ambiant — SOURCE UNIQUE defaults.R (contrat
 # PROJECT.md:146-147, convention QW-2 anti-fork UI/drive) ; retombe sur le
 # littéral contractuel si defaults.R n'est pas résidente (test isolé).

@@ -71,7 +71,7 @@ test_that("C9 : un fichier sans AUCUN test est bien SIGNALE (le rouge existe)", 
   # (deja utilise comme temoin vivant par la direction 3 ci-dessous).
   # ⚠️ D2 M5 LOT 6 (2026-10-25) : le domaine R/sc ENTIER (26 fichiers) demenage
   # dans le paquet et quitte la population C9 (R/ ne garde plus que le fichier
-  # etranger CERBERUS, couvert par son nom). Le temoin SUIT le fichier : le
+  # etranger BIOMENTAT, couvert par son nom). Le temoin SUIT le fichier : le
   # garde le signale encore par son nom a son adresse du paquet (aucun test
   # eponyme test-sc_state.R ne l'y suit — mesure du lot).
   expect_true("tools/pkg_skeleton/R/sc_state.R" %in%
@@ -133,7 +133,7 @@ test_that("C9 : l'alias de domaine ne DEBORDE pas (temoin de traversee)", {
   # aucun test eponyme ne l'y suit encore), rempli par
   # `R/sc/sc_communication_input.R` (mesure : flagge C9, non flagge C9b, pas
   # de test eponyme). Solde du sortant asseré dans les DEUX sens (dossier
-  # R/core ne contient plus que le fichier etranger CERBERUS, couvert par son
+  # R/core ne contient plus que le fichier etranger BIOMENTAT, couvert par son
   # nom, HORS lot + les 9 fichiers presents au paquet), meme forme que les
   # soldes M4-suite / lots 2-4.
   # ⚠️ AMENDE le 2026-10-25 (D2 M5 LOT 6) : `R/sc/sc_communication_input.R`
@@ -141,7 +141,7 @@ test_that("C9 : l'alias de domaine ne DEBORDE pas (temoin de traversee)", {
   # autres fichiers R/sc) et sort de la population C9 — il reste au temoin de
   # traversee comme SORTANT asseré a l'adresse du paquet (mesure du lot :
   # le garde le signale encore par son nom la-bas, aucun test eponyme ne l'y
-  # suit). R/ ne contient PLUS que le fichier etranger CERBERUS : le temoin de
+  # suit). R/ ne contient PLUS que le fichier etranger BIOMENTAT : le temoin de
   # traversee vit desormais ENTIEREMENT a l'adresse du paquet (rdata_io + le
   # sortant sc_communication_input), meme forme que les soldes M4-suite /
   # lots 2-5.
@@ -158,12 +158,12 @@ test_that("C9 : l'alias de domaine ne DEBORDE pas (temoin de traversee)", {
     expect_true(file.exists(file.path(pkg, f)),
                 info = paste(f, "absent du paquet apres extraction M5 lot 6"))
   }
-  # Solde lot 5 : R/core ne contient plus que cerberus_handoff.R (etranger,
+  # Solde lot 5 : R/core ne contient plus que biomentat_handoff.R (etranger,
   # hors lot) et les 9 fichiers vivent bien dans le paquet.
   core_left <- sort(list.files(file.path(ts_project_root(), "R", "core"), pattern = "[.]R$"))
-  # J1 (2026-10-26, commit d2fdac8) : les 2 fichiers étrangers CERBERUS ont
+  # J1 (2026-10-26, commit d2fdac8) : les 2 fichiers étrangers BIOMENTAT ont
   # rejoint le paquet — copie byte-identique drive_watcher.R supprimée,
-  # moteur CLI cerberus_handoff.R déménagé au squelette (sha256 inchangé).
+  # moteur CLI biomentat_handoff.R déménagé au squelette (sha256 inchangé).
   # R/core est désormais VIDE par design ; le pin suit l'état réel et le
   # témoin de présence des 2 fichiers au paquet est ajouté.
   expect_length(core_left, 0L)
@@ -172,7 +172,7 @@ test_that("C9 : l'alias de domaine ne DEBORDE pas (temoin de traversee)", {
   for (f in c("caching.R", "drive_allowlist.R", "drive_watcher.R",
               "error_state.R", "jobs.R", "memory.R", "pathway_helpers.R",
               "rdata_io.R", "validation.R", "defaults.R", "thresholds.R",
-              "cerberus_handoff.R")) {
+              "biomentat_handoff.R")) {
     expect_true(file.exists(file.path(pkg, f)),
                 info = paste(f, "absent du paquet apres extraction M5 lot 5"))
   }
@@ -217,16 +217,16 @@ test_that("C9 : le plafond de dette est 0 (recompose par le lot D2 M5 lot 6)", {
   # Plafond, pas egalite : le compte doit pouvoir BAISSER quand un test est
   # ecrit, mais ne doit jamais REMONTER (une regression de l'alias le ferait).
   # ⚠️ Le plafond SUIT la derniere mesure : il valait 22 (§2cy), puis 21 (§2db),
-  # 20 (§2dd), 19 (§2df), 14 (M5 lot 2, recompose 14 pour l'etranger CERBERUS),
-  # 13 (la session CERBERUS a PAYE sa dette : test-cerberus-handoff.R couvre
-  # cerberus_handoff.R par son nom, mesure du 13:59), 10 (lot 4 : les 11
+  # 20 (§2dd), 19 (§2df), 14 (M5 lot 2, recompose 14 pour l'etranger BIOMENTAT),
+  # 13 (la session BIOMENTAT a PAYE sa dette : test-biomentat-handoff.R couvre
+  # biomentat_handoff.R par son nom, mesure du 13:59), 10 (lot 4 : les 11
   # fichiers de R/spatial quittent la population, dont 3 flagges — async,
   # deconv_prep, export), 9 (lot 5 : les 9 fichiers R/core restants + config
   # quittent la population, dont 1 flagge — rdata_io). D2 M5 LOT 6 (2026-10-25) :
   # le domaine R/sc ENTIER (26 fichiers) demenage dans tools/pkg_skeleton/R/
   # et quitte la population — 9 etaient flagges (les fichiers sans test
   # eponyme ; mesure --list-all du lot). R/ ne contient PLUS que
-  # cerberus_handoff.R (etranger CERBERUS, couvert par son nom, HORS lot) :
+  # biomentat_handoff.R (etranger BIOMENTAT, couvert par son nom, HORS lot) :
   # la population C9 est RESORTEE. Aucun etranger en vol au moment de la
   # mesure (check_writers 16:06 : aucun battement etranger).
   flagged <- .c9_flagged(.c9_population())

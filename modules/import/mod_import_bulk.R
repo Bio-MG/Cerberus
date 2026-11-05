@@ -369,7 +369,7 @@ mod_import_bulk_ui <- function(id) {
             i18n$t("Datasets découverts"),
             value = "panel_datasets",
             icon = icon("folder-open"),
-            helpText(i18n$t("Déposez des datasets conformes cerberus-exchange/v1 dans le répertoire, puis scannez : rien n'est lu au démarrage et rien n'est chargé sans votre clic.")),
+            helpText(i18n$t("Déposez des datasets conformes biomentat-exchange/v1 dans le répertoire, puis scannez : rien n'est lu au démarrage et rien n'est chargé sans votre clic.")),
             div(class = "d-flex align-items-center gap-2 mb-2",
                 actionButton(ns("btn_scan_datasets"), i18n$t("Scanner le répertoire"),
                              class = "btn-outline-secondary btn-sm"),

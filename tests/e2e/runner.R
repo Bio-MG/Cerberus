@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 # =============================================================================
-# runner.R — Headless E2E Test Suite Runner for TranscriptoShiny ("Cerberus")
+# runner.R — Headless E2E Test Suite Runner for TranscriptoShiny ("Biomentat")
 # =============================================================================
 # Executes the comprehensive opaque-box E2E test suite across Tiers 1-4:
 #   Tier 1: Feature Coverage (Features 1-24: M1, M2, M3, M4)
@@ -66,7 +66,7 @@ for (arg in args) {
 }
 
 cat("==============================================================================\n")
-cat(" TranscriptoShiny ('Cerberus') — Opaque-Box E2E Test Suite Runner\n")
+cat(" TranscriptoShiny ('Biomentat') — Opaque-Box E2E Test Suite Runner\n")
 cat(" R version: ", R.version.string, "\n")
 cat(" Project root: ", project_root, "\n")
 cat(" Active tier selection: ", tier_filter, "\n")

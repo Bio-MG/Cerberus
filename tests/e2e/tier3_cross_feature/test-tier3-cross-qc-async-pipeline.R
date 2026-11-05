@@ -36,12 +36,12 @@ if (!exists("e2e_project_root", mode = "function")) {
 test_that("T3-QCP-1: QC filtered singlets propagate into run_sc_auto_pipeline_core", {
   if (!is_m3_ready() || !is_m4_ready()) skip("M3 pipeline and/or M4 QC not yet active")
   # M5 : la Step 1c du cœur (opt-in sc_ap_doublets) appelle le MOTEUR M4 réel
-  # — la provenance du doublet (analysis_id cerberus-doublets) voyage dans le
+  # — la provenance du doublet (analysis_id biomentat-doublets) voyage dans le
   # retour étendu du cœur, avec la graine écho.
   res <- run_sc_auto_pipeline_core(.t3qcp_obj(),
                                    params = list(sc_ap_doublets = TRUE, sc_ap_res = 0.5))
   expect_false(is.null(res$doublets_provenance))
-  expect_identical(res$doublets_provenance$analysis_id, "cerberus-doublets")
+  expect_identical(res$doublets_provenance$analysis_id, "biomentat-doublets")
   expect_identical(res$doublets_provenance$method, "scDblFinder")
   expect_true(is.list(res$qc_distributions))
 })

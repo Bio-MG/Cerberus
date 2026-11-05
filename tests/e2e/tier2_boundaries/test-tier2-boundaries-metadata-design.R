@@ -25,10 +25,10 @@ test_that("T2-DES-1: single condition experimental design triggers pseudoreplica
     stringsAsFactors = FALSE
   )
   err <- tryCatch(
-    cerberus_handoff_validate_samplesheet(sheet, mat_colnames = paste0("s", 1:4)),
-    cerberus_handoff_error = function(e) e
+    biomentat_handoff_validate_samplesheet(sheet, mat_colnames = paste0("s", 1:4)),
+    biomentat_handoff_error = function(e) e
   )
-  expect_true(inherits(err, "cerberus_handoff_error"))
+  expect_true(inherits(err, "biomentat_handoff_error"))
   expect_identical(err$state, "pseudoreplication_detected")
 })
 
@@ -40,10 +40,10 @@ test_that("T2-DES-2: one condition with 10 replicates and second condition with 
     stringsAsFactors = FALSE
   )
   err <- tryCatch(
-    cerberus_handoff_validate_samplesheet(sheet, mat_colnames = samples),
-    cerberus_handoff_error = function(e) e
+    biomentat_handoff_validate_samplesheet(sheet, mat_colnames = samples),
+    biomentat_handoff_error = function(e) e
   )
-  expect_true(inherits(err, "cerberus_handoff_error"))
+  expect_true(inherits(err, "biomentat_handoff_error"))
   expect_identical(err$state, "pseudoreplication_detected")
 })
 
@@ -54,10 +54,10 @@ test_that("T2-DES-3: duplicate sample IDs in samplesheet trigger samplesheet_mat
     stringsAsFactors = FALSE
   )
   err <- tryCatch(
-    cerberus_handoff_validate_samplesheet(sheet, mat_colnames = c("s1", "s2", "s3", "s4")),
-    cerberus_handoff_error = function(e) e
+    biomentat_handoff_validate_samplesheet(sheet, mat_colnames = c("s1", "s2", "s3", "s4")),
+    biomentat_handoff_error = function(e) e
   )
-  expect_true(inherits(err, "cerberus_handoff_error"))
+  expect_true(inherits(err, "biomentat_handoff_error"))
   expect_identical(err$state, "samplesheet_matrix_mismatch")
 })
 
@@ -68,10 +68,10 @@ test_that("T2-DES-4: whitespace-only sample ID triggers samplesheet_matrix_misma
     stringsAsFactors = FALSE
   )
   err <- tryCatch(
-    cerberus_handoff_validate_samplesheet(sheet, mat_colnames = c("s1", "s2", "s3", "s4")),
-    cerberus_handoff_error = function(e) e
+    biomentat_handoff_validate_samplesheet(sheet, mat_colnames = c("s1", "s2", "s3", "s4")),
+    biomentat_handoff_error = function(e) e
   )
-  expect_true(inherits(err, "cerberus_handoff_error"))
+  expect_true(inherits(err, "biomentat_handoff_error"))
   expect_identical(err$state, "samplesheet_matrix_mismatch")
 })
 
@@ -82,10 +82,10 @@ test_that("T2-DES-5: sample in matrix but omitted from samplesheet triggers samp
     stringsAsFactors = FALSE
   )
   err <- tryCatch(
-    cerberus_handoff_validate_samplesheet(sheet, mat_colnames = c("s1", "s2", "s3", "s4")), # 4 in matrix
-    cerberus_handoff_error = function(e) e
+    biomentat_handoff_validate_samplesheet(sheet, mat_colnames = c("s1", "s2", "s3", "s4")), # 4 in matrix
+    biomentat_handoff_error = function(e) e
   )
-  expect_true(inherits(err, "cerberus_handoff_error"))
+  expect_true(inherits(err, "biomentat_handoff_error"))
   expect_identical(err$state, "samplesheet_matrix_mismatch")
 })
 
@@ -97,7 +97,7 @@ test_that("T2-DES-6: multiple covariates isolate exactly the confounded covariat
     donor = c("d1", "d2", "d1", "d2"),     # Not confounded (orthogonal)
     stringsAsFactors = FALSE
   )
-  res <- cerberus_handoff_validate_samplesheet(sheet, mat_colnames = paste0("s", 1:4))
+  res <- biomentat_handoff_validate_samplesheet(sheet, mat_colnames = paste0("s", 1:4))
   expect_true(res$valid)
   expect_identical(res$confounded_covariates, "batch")
 })
