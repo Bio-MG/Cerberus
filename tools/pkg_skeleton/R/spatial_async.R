@@ -278,6 +278,18 @@ init_spatial_daemons <- function(n_daemons = ts_mirai_n_daemons(),
         if (requireNamespace("igraph", quietly = TRUE))  library(igraph)
         if (requireNamespace("harmony", quietly = TRUE)) library(harmony)
       })
+      # --- SA (Seurat 5.6) : un worker = un thread ----------------------------
+      # v5.6 rend le multithreading reglable via Seurat::setThreads() ; on
+      # epingle 1 thread par daemon pour interdire la sursouscription
+      # (n workers x n threads sur un poste 1 utilisateur). Garde exists() :
+      # no-op si un Seurat < 5.6 est encore en bibliotheque (pas de setThreads).
+      # Le process principal, lui, reste sur le defaut v5.6 : le reglage fin
+      # est opt-in operateur via TS_SEURAT_THREADS (bloc init plus bas) —
+      # jamais d'auto-detection de cores dans l'app.
+      if (requireNamespace("Seurat", quietly = TRUE) &&
+          exists("setThreads", envir = asNamespace("Seurat"), inherits = FALSE)) {
+        suppressWarnings(Seurat::setThreads(1L))
+      }
       for (.f in .abs_files) {
         if (file.exists(.f)) {
           source(.f)
@@ -289,6 +301,25 @@ init_spatial_daemons <- function(n_daemons = ts_mirai_n_daemons(),
   }, error = function(e) {
     warning("mirai::everywhere() a echoue lors du preload des daemons : ", conditionMessage(e))
   })
+
+  # --- SA (Seurat 5.6) : politique threads du process principal -----------
+  # Opt-in operateur : TS_SEURAT_THREADS (variable d'environnement ou option)
+  # fixe le nombre de threads Seurat du process principal. Non-fixe = defaut
+  # v5.6 intact (aucune auto-detection de cores dans l'app). Les WORKERS sont
+  # epingles a 1 thread dans le bloc everywhere() ci-dessus, quel que soit ce
+  # reglage : la politique du principal ne se propage pas aux daemons.
+  .ts_seurat_threads_main <- Sys.getenv("TS_SEURAT_THREADS", unset = "")
+  if (!nzchar(.ts_seurat_threads_main)) {
+    .ts_seurat_threads_main <- as.character(getOption("TS_SEURAT_THREADS", ""))
+  }
+  if (nzchar(.ts_seurat_threads_main)) {
+    .ts_seurat_threads_n <- suppressWarnings(as.integer(.ts_seurat_threads_main))
+    if (!is.na(.ts_seurat_threads_n) && .ts_seurat_threads_n >= 1L &&
+        requireNamespace("Seurat", quietly = TRUE) &&
+        exists("setThreads", envir = asNamespace("Seurat"), inherits = FALSE)) {
+      suppressWarnings(Seurat::setThreads(.ts_seurat_threads_n))
+    }
+  }
 
   # Post-init verification: mark the pool ready ONLY once we know what
   # actually happened on the workers, not just that daemons(n) returned.
