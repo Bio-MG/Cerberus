@@ -63,7 +63,12 @@
 # "secondary" run so it never becomes the bottleneck of a routine pipeline run
 # on a 32Go CPU-only machine. Users who explicitly pick "t-SNE" as their PRIMARY
 # reduction method below are not capped (informed, deliberate choice).
-.AUTO_TSNE_MAX_CELLS <- if (exists("TS_AUTO_TSNE_MAX_CELLS")) TS_AUTO_TSNE_MAX_CELLS else 30000L
+# fix 2026-11-03 (mesure E2E 16 échantillons GSE96583) : 27 550 cellules =
+# >60 min dans la phase t-SNE secondaire (~7% CPU, aucun log, Progress
+# invisible) — le seuil 30k laissait les jeux ~30k dans la zone coûteuse.
+# 10k garde le confort « toutes réductions dispo » sur les petits jeux sans
+# bloquer les moyens ; t-SNE explicite reste possible en méthode principale.
+.AUTO_TSNE_MAX_CELLS <- if (exists("TS_AUTO_TSNE_MAX_CELLS")) TS_AUTO_TSNE_MAX_CELLS else 10000L
 
 # Step-3.7A: default cell-count threshold above which "Auto" mode switches the
 # pipeline to a disk-backed (BPCells) counts layer instead of RAM. Below this,
