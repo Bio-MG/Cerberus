@@ -497,7 +497,10 @@ mod_import_sc_server <- function(id, global_data) {
       for (d in subdirs) {
         has_matrix <- any(file.exists(file.path(d, c("matrix.mtx", "matrix.mtx.gz"))))
         if (!has_matrix) next
-        sn <- utils::basename(d)
+        # fix 2026-11-03: basename vit dans `base`, pas `utils` — utils::basename()
+        # n'existe pas et faisait planter l'observateur dir_scan au premier
+        # sous-dossier (aucun échantillon détectable via le scanner).
+        sn <- basename(d)
         cs <- sample_list()
         if (sn %in% names(cs)) {
           add_log(paste("  =", sn, "—", .tr("déjà dans la liste, ignoré")))
@@ -582,7 +585,10 @@ mod_import_sc_server <- function(id, global_data) {
         # échantillon, puis on joint les couches v5 (sinon l'assay reste
         # éclaté en counts.<sample> et certaines analyses aval dégradent).
         if (length(obj_list) > 1) {
-          per_feat <- vapply(obj_list, function(o) nrow(o), integer(1))
+          # fix 2026-11-03 (bug #4) : nrow(<Seurat v5>) renvoie un DOUBLE
+          # (méthode dim C++) — vapply(..., integer(1)) refusait le type et
+          # tuait l'import APRÈS une fusion réussie (29k cellules perdues).
+          per_feat <- vapply(obj_list, function(o) as.integer(nrow(o)), integer(1))
           add_log(paste("  🧬", .tr("Gènes par échantillon :"),
                         paste(paste0(names(per_feat), "=", per_feat), collapse = ", ")))
           add_log(paste("  🧬", .tr("Union au merge :"), nrow(merged), .tr("gènes"),
