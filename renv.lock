@@ -2775,6 +2775,43 @@
       "Repository": "Bioconductor 3.20",
       "NeedsCompilation": "yes"
     },
+    "presto": {
+      "Package": "presto",
+      "Version": "1.1.0",
+      "Source": "Repository",
+      "Depends": [
+        "R (>= 3.5.0)"
+      ],
+      "Imports": [
+        "Rcpp",
+        "data.table",
+        "dplyr",
+        "methods",
+        "tidyr",
+        "purrr",
+        "tibble",
+        "Matrix",
+        "rlang",
+        "stats",
+        "utils"
+      ],
+      "LinkingTo": [
+        "Rcpp",
+        "RcppArmadillo"
+      ],
+      "License": "GPL-3",
+      "Title": "Fast Functions for Differential Expression Using Wilcoxon and AUC",
+      "Type": "Package",
+      "Authors@R": "c( person(\"Ilya\", \"Korsunsky\", email = \"ilya.korsunsky@gmail.com\",  role = c(\"aut\"), comment = c(ORCID = \"0000-0003-4848-3948\")), person(\"Aparna\", \"Nathan\",  role = \"aut\"), person(\"Nghia\", \"Millard\",  role = \"aut\", comment = c(ORCID = \"0000-0002-0518-7674\")), person(\"Soumya\", \"Raychaudhuri\",  role = c(\"aut\"), comment = c(ORCID = \"0000-0002-1901-8265\")), person(\"Kamil\", \"Slowikowski\", email = \"kslowikowski@gmail.com\", role = c(\"cre\", \"ctb\"), comment = c(ORCID = \"0000-0002-2843-6370\")), person(\"Austin\", \"Hartman\",  role = c(\"ctb\"), comment = c(ORCID = \"0000-0001-7278-1852\")) )",
+      "Author": "Ilya Korsunsky [aut] (ORCID: <https://orcid.org/0000-0003-4848-3948>), Aparna Nathan [aut], Nghia Millard [aut] (ORCID: <https://orcid.org/0000-0002-0518-7674>), Soumya Raychaudhuri [aut] (ORCID: <https://orcid.org/0000-0002-1901-8265>), Kamil Slowikowski [cre, ctb] (ORCID: <https://orcid.org/0000-0002-2843-6370>), Austin Hartman [ctb] (ORCID: <https://orcid.org/0000-0001-7278-1852>)",
+      "Maintainer": "Kamil Slowikowski <kslowikowski@gmail.com>",
+      "Description": "Scalable implementation of the Wilcoxon rank sum test and the area under the receiver operating characteristic curve (also known as auROC or AUC) statistic. Interfaces to dense and sparse matrices, as well as the genomics analysis frameworks 'Seurat' and 'SingleCellExperiment'.",
+      "Encoding": "UTF-8",
+      "RoxygenNote": "7.3.3",
+      "VignetteBuilder": "knitr",
+      "NeedsCompilation": "yes",
+      "Repository": "CRAN"
+    },
     "RcppML": {
       "Package": "RcppML",
       "Version": "0.3.7.1",
