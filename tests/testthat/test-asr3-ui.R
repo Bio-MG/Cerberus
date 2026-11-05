@@ -391,6 +391,11 @@ test_that("ASR-3 accept: the ASR-2 plan is applied into global_data once, offer 
 test_that("ASR-3 wiring: app.R sources and mounts the module, and never calls the engine directly", {
   app_lines <- readLines(file.path(ts_project_root(), "app.R"), warn = FALSE)
   app_src <- paste(app_lines, collapse = "\n")
+  # Garde moteur : sur le CODE seulement (lignes pleinement commentées
+  # retirées) — un commentaire qui MENTIONNE le moteur n'est pas un APPEL.
+  # (passe de fix d'héritage 2026-11-05 : app.R:115 documente la résolution
+  # de racine partagée et tripait ce garde sans être un appel.)
+  app_code <- paste(app_lines[!grepl("^\\s*#", app_lines)], collapse = "\n")
   # le module est sourcé par app.R (garde d'exhaustivité test-app-sourcing.R)
   expect_true(any(grepl('source\\("modules/session/mod_session_checkpoint\\.R"\\)', app_lines, perl = TRUE)),
               info = "app.R doit sourcer modules/session/mod_session_checkpoint.R")
@@ -402,7 +407,7 @@ test_that("ASR-3 wiring: app.R sources and mounts the module, and never calls th
   expect_true(grepl('mod_session_checkpoint_server\\("session_ckpt", global_data\\)', app_src),
               info = "le serveur du module n'est pas monté dans server()")
   # AUCUN appel moteur direct depuis app.R (l'accès moteur vit dans le module)
-  expect_false(grepl("ts_session_checkpoint_", app_src),
+  expect_false(grepl("ts_session_checkpoint_", app_code),
                info = paste("app.R appelle le moteur directement — l'accès moteur",
                             "doit rester dans le module ASR-3 (un seul appel,",
                             "derrière le toggle)"))

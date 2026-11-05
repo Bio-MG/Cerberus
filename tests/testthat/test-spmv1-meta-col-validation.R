@@ -382,12 +382,13 @@ test_that("T6 SPMV-1 pins d'arbre : app.R source, test-app-sourcing 163->164, ma
                         app_lines, fixed = TRUE)),
               info = "app.R doit sourcer tools/pkg_skeleton/R/spatial_meta_col_validation.R (pin d'arbre SPMV-1)")
 
-  # (b) tests/testthat/test-app-sourcing.R re-base 163 -> 164 avec trace datee.
+  # (b) tests/testthat/test-app-sourcing.R re-base 164 -> 170 avec trace datee
+  #     (S6 998a98c : manifeste 168 -> 170 ; passe de fix d'heritage 2026-11-05).
   pins_src <- paste(readLines(
     file.path(ts_project_root(), "tests", "testthat", "test-app-sourcing.R"),
     warn = FALSE), collapse = "\n")
-  expect_true(grepl("164L", pins_src, fixed = TRUE),
-              info = "test-app-sourcing.R doit etre re-base 163 -> 164 (+1 helper pkg_skeleton/R, lecon frontiere M2/ASR)")
+  expect_true(grepl("170L", pins_src, fixed = TRUE),
+              info = "test-app-sourcing.R doit etre re-base 164 -> 170 (S6 998a98c : manifeste 168 -> 170)")
 
   # (c) Manifeste des sources contient le chemin (Rscript tools/sources_manifest.R --build).
   man <- file.path(ts_project_root(), "R", ".sources_manifest.txt")

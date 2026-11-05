@@ -139,7 +139,11 @@ suppressPackageStartupMessages(library(shiny))
 # motif .biostat_walk de test-biostat-tree.R, parcours agnostique).
 .biostat_m3_tree_keys <- function() {
   keys <- character(0)
-  walk <- function(nd) {
+  # nom privé point-préfixé (convention .biostat_walk de test-biostat-tree.R) :
+  # PAS une copie du harnais AST (parcours d'arbre métier, pas ts_ast_walk) —
+  # le garde no-local-walk réserve les noms walk()/visit() au helper partagé
+  # (passe de fix d'héritage 2026-11-05).
+  .biostat_m3_walk <- function(nd) {
     for (f in c("i18n_key", "rationale_key")) {
       v <- tryCatch(nd[[f]], error = function(e) NULL)
       if (!is.null(v) && length(v) == 1L && nzchar(v)) keys <<- c(keys, v)
@@ -147,10 +151,10 @@ suppressPackageStartupMessages(library(shiny))
     ai <- tryCatch(nd$answers_i18n, error = function(e) NULL)
     if (!is.null(ai)) keys <<- c(keys, as.character(ai))
     kids <- tryCatch(nd$children, error = function(e) NULL)
-    if (!is.null(kids)) for (k in kids) walk(k)
+    if (!is.null(kids)) for (k in kids) .biostat_m3_walk(k)
     invisible(NULL)
   }
-  walk(biostat_build_tree())
+  .biostat_m3_walk(biostat_build_tree())
   sort(unique(keys))
 }
 

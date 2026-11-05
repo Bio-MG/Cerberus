@@ -102,6 +102,13 @@ source_project_file("modules/import/mod_import_bulk.R")
   e$input <- list(counts_format = "rows", min_counts = 10,
                   project_name = "Bulk", bulk_import_mode = "merged_matrix")
   e$add_log <- function(msg) invisible(NULL)
+  # `.dataset_health_report` is a SIBLING defined in the server body (N5
+  # dataset-doctor, 5904fa5) that import_bulk now fires post-import — warn-only
+  # by contract (AC2.4: never blocking). This extracted harness env has no
+  # server scope, so it carries the same invisible-NULL contract stub; the
+  # probe under test is `drive_state`, not the doctor. (passe de fix
+  # d'héritage 2026-11-05)
+  e$.dataset_health_report <- function(obj) invisible(NULL)
   e
 }
 
