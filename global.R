@@ -405,6 +405,15 @@ my_theme <- bs_theme(
 #   .bulk-console-scroll — confinement vertical conservateur de la console de
 #     logs (max-height, jamais height) ; le confinement complet du viewport
 #     reste différé (IMPORT-05 NON VÉRIFIÉ navigateur).
+# P0-17/18 (2026-11-06, mesure navigateur 1920x1080) : les navset_card avec
+#   `title` et de NOMBREUX onglets wrappent — le UL.nav-underline passe sur
+#   ~3 rangées (h mesurée 158 px) et le titre du header se retrouve posé
+#   latéralement au milieu du bloc d'onglets (header .card-header h=167 px,
+#   titre SPAN à y=226 entre les rangées ; « onglets surchargés 17/19+ » de
+#   UIUX_REVIEW_2026-10-29, re-mesuré au DOM). Règle générique (la classe
+#   bslib-navs-card-title ne porte QUE les navsets titrés) : le titre prend
+#   sa propre rangée, la nav passe full-width dessous — s'applique à tous
+#   les panneaux de résultats (bulk, SC, spatial) sans hook par module.
 my_theme <- bslib::bs_add_rules(my_theme, '
   .bslib-value-box .showcase {
     opacity: 0.15 !important;
@@ -418,6 +427,12 @@ my_theme <- bslib::bs_add_rules(my_theme, '
   .bulk-console-scroll {
     max-height: calc(100vh - 280px);
     overflow-y: auto;
+  }
+  .card-header.bslib-navs-card-title > span:first-child {
+    flex: 0 0 100%;
+  }
+  .card-header.bslib-navs-card-title > .nav {
+    flex: 1 1 100%;
   }
 ')
 
