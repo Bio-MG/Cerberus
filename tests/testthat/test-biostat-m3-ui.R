@@ -474,19 +474,20 @@ test_that("T6 pins : app.R source le module (manifeste) et le DÉSACTIVE (décis
               info = "app.R doit sourcer modules/bulk_de/mod_biostat_tree.R (pin d'arbre, leçon frontière M2)")
   # RE-BASAGE (2026-11-05, reprise du jalon étranger sur GO opérateur — agents
   # stoppés) : l'assistant biostat est DÉSACTIVÉ dans app.R (décision opérateur
-  # 2026-11-04 — supprime le site de crash BUG #1 : lecture de
-  # global_data$bulk_shared_rv hors consommateur au montage, 330 crashes
-  # mesurés 2026-11-02 ; réactivation = décommenter + régler le bug d'abord,
-  # ADJUSTMENTS_PLAN.md P0-1). Les pins inversent : marque de désactivation
-  # présente, AUCUNE ligne active ne monte les modules (les appels ne
-  # survivent qu'en commentaires).
+  # 2026-11-06 — RÉACTIVATION P0-1 (décision opérateur « go » post-fix F2) :
+  # le site de crash BUG #1 est réglé (lecture initiale = isolate()-au-montage,
+  # pattern M4 testé vert 4/4 session réelle ; lectures récurrentes du module
+  # dans des observateurs consommateurs, gated !is.null(shared_rv)). Les pins
+  # reviennent au sens actif : marque présente (commentaire de réactivation)
+  # ET les montages ui/server sont des lignes actives.
   # ancre ASCII volontaire : readLines hors UTF-8 (LC_CTYPE) fait échouer les
-  # motifs accentués (leçon frontière, échappements octaux QW-1) ;
-  # « ASSISTANT BIOSTAT » apparaît 3x dans app.R (mesuré), toujours en commentaire.
+  # motifs accentués (leçon frontière, échappements octaux QW-1).
   expect_true(grepl("ASSISTANT BIOSTAT", app_src, fixed = TRUE),
-              info = "la marque de désactivation biostat est absente de app.R")
-  expect_false(grepl("(?m)^\\s*mod_biostat_(tree|mirror)_(ui|server)\\(", app_src, perl = TRUE),
-               info = "app.R monte encore un module biostat en ligne active — réactivation non arbitrée (BUG #1)")
+              info = "la marque biostat est absente de app.R (bloc de réactivation P0-1)")
+  expect_true(grepl("(?m)^\\s*mod_biostat_(tree|mirror)_(ui|server)\\(", app_src, perl = TRUE),
+              info = "app.R ne monte AUCUN module biostat en ligne active — réactivation P0-1 manquante")
+  expect_false(grepl("#\\s*mod_biostat_tree_server\\(", app_src, fixed = TRUE),
+               info = "l'appel serveur biostat est encore commenté — décommentage P0-1 incomplet")
 
   manifest <- readLines(file.path(ts_project_root(), "R", ".sources_manifest.txt"),
                         warn = FALSE)

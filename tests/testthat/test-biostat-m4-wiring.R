@@ -393,19 +393,19 @@ test_that("W7 pont bulk_shared_rv : publié par mod_bulk, monté dans app.R, lec
   app_src <- paste(readLines(file.path(ts_project_root(), "app.R"), warn = FALSE),
                    collapse = "\n")
   # RE-BASAGE (2026-11-05, reprise du jalon étranger sur GO opérateur) : le
-  # montage M4 est DÉSACTIVÉ dans app.R (décision opérateur 2026-11-04 —
-  # suppression du site de crash BUG #1 : lecture bulk_shared_rv hors
-  # consommateur, 330 crashes mesurés 2026-11-02). Le pont mod_bulk_server (a)
-  # et le comportement module (c) restent testés ci-dessous. Pin inversé :
-  # marque de désactivation présente, aucune ligne active ne monte.
+  # montage M4 est RÉACTIVÉ dans app.R (P0-1, 2026-11-06 — décision opérateur
+  # « go » post-fix F2 ; site de crash BUG #1 réglé : isolate()-au-montage,
+  # pattern M4 testé vert). Le pont mod_bulk_server (a) et le comportement
+  # module (c) restent testés ci-dessous. Pin au sens actif : marque présente
+  # (bloc de réactivation) + l'appel serveur M4 est une ligne active.
   # ancre ASCII volontaire : readLines hors UTF-8 (LC_CTYPE) fait échouer les
-  # motifs accentués (leçon frontière QW-1) ; « ASSISTANT BIOSTAT » = 3x app.R.
+  # motifs accentués (leçon frontière QW-1) ; « ASSISTANT BIOSTAT » = bloc P0-1.
   expect_true(grepl("ASSISTANT BIOSTAT", app_src, fixed = TRUE),
-              info = paste("app.R: la marque de désactivation biostat est absente",
-                           "(décision opérateur 2026-11-04, BUG #1)"))
-  expect_false(grepl("(?m)^\\s*mod_biostat_tree_server\\(", app_src, perl = TRUE),
-               info = paste("app.R monte encore l'assistant M4 en ligne active —",
-                            "réactivation non arbitrée (BUG #1)"))
+              info = paste("app.R: la marque biostat est absente",
+                           "(bloc de réactivation P0-1, 2026-11-06)"))
+  expect_true(grepl("(?m)^\\s*mod_biostat_tree_server\\(", app_src, perl = TRUE),
+              info = paste("app.R ne monte pas l'assistant M4 en ligne active —",
+                           "réactivation P0-1 manquante"))
 
   # (c) comportement via le pont + I1 ÉLARGI au pont : instantané complet du
   #     handle avant/après un parcours + confirmation -- identique (assertion).
