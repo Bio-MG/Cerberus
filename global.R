@@ -17,6 +17,13 @@
 # function-to-function calls at call time, not at source time), then the
 # R/utils_spatial_*.R pair (spatial daemons init), then modules.
 #
+# F2 (2026-11-06, candidat 4 « réordonnancement partiel ») : le chargement
+# d'ANALYSE et le plan future ne sont plus payés ici — ils sont DIFFÉRÉS
+# après la mise à l'écoute (.biomentat_deferred_boot_run(), schedulée par
+# app.R derrière une porte TCP, voir la section 3bis en fin de fichier). Ce
+# fichier ne charge plus à la source que le LIGHT : options, packages du
+# build UI, i18n, thème. Garde : tests/testthat/test-deferred-boot-init.R.
+#
 # AUDIT FIX (quick win): R/utils_spatial_io.R used to be source()'d HERE,
 # BEFORE any package is loaded, AND AGAIN in app.R (after packages are
 # loaded, alongside the rest of the spatial infrastructure). Two independent
@@ -84,15 +91,26 @@ renderPlot <- function(expr, width = "auto", height = "auto", res = 72, ...,
 
 # --- 2. PACKAGES (CRAN / Bioconductor — installables via install.packages()/BiocManager) ---
 # new package install.packages(c("RANN", "irlba", "topicmodels", "slam")) , deconvonvolution label transfer : BiocManager::install('glmGamPoi')
-
+#
+# F2 (2026-11-06, candidat 4 « réordonnancement partiel ») : split MESURÉ.
+#   - LIGHT (ci-dessous, chargé à la source) : les packages du BUILD UI —
+#     95 corps de mod_*_ui scannés par AST le 2026-11-06 : 0 appel aux
+#     packages différés ; app.R lui-même : 0 appel de code (chaînes
+#     Seurat/BPCells décoratives mises à part).
+#   - DEFERRED (deferred_packages + loops optionnels/bioc, en fin de
+#     fichier) : les packages d'analyse, un processus frais chacun,
+#     mesurés le 2026-11-06 : celldex 7.3 s, destiny 7.3 s, Seurat 5.3 s,
+#     SingleR 5.1 s, DESeq2 4.3 s, slingshot 4.1 s, sva 3.7 s,
+#     SingleCellExperiment 3.4 s, BPCells 2.5 s — ils ne précèdent plus le
+#     bind (naissance→« Listening » ~38 s → ~10-15 s espéré, marker.log
+#     QC/boot_diagnose/20261105T211025) et leur coût ne peut plus tomber
+#     DANS la fenêtre bind→listen (la porte TCP l'interdit, section 3bis).
 required_packages <- c(
-  "shiny", "bslib", "Seurat", "SeuratObject",
-  "ggplot2", "dplyr", "DT", "patchwork", "viridis", "ggrepel",
+  "shiny", "bslib", "ggplot2", "dplyr", "DT", "patchwork", "viridis", "ggrepel",
   "plotly", "bsicons", "future", "shinyFiles",
-  "SingleR", "celldex", "SingleCellExperiment",
-  "harmony", "destiny", "fs", "igraph", "Matrix", "reshape2",
+  "fs", "igraph", "Matrix", "reshape2",
   "shinyjs", "circlize", "rmarkdown", "zip",
-  "mirai", "sf", "leaflet", "scattermore",
+  "mirai", "leaflet", "scattermore",
   "ape", "RANN", "irlba", "png", "RColorBrewer", "shinyWidgets", "shinycssloaders",
   # PLOT-S5 — export SVG. svglite est le device vectoriel de la branche
   # format == "svg" de ts_export_plot() (R/plotting/export.R). Il etait deja
@@ -100,6 +118,15 @@ required_packages <- c(
   # svg retombait donc silencieusement sur png. Le declarer la rend
   # garantie (et non plus dependante d'une installation fortuite).
   "svglite"
+)
+
+# F2 — packages d'analyse DIFFÉRÉS (chargés par .biomentat_deferred_boot_run(),
+# après l'armement de l'accept ; consommés à l'APPEL par les modules —
+# résolution runtime, jamais au build UI, mesure AST ci-dessus).
+deferred_packages <- c(
+  "Seurat", "SeuratObject",
+  "SingleR", "celldex", "SingleCellExperiment",
+  "harmony", "destiny", "sf"
 )
 
 optional_packages <- c(
@@ -127,85 +154,53 @@ bioc_packages <- c(
 )
 
 
+# F2 : LIGHT loop uniquement — les loops optional/bioc/deferred vivent dans
+# .biomentat_deferred_boot_run() (fin de fichier), mêmes messages/warnings.
 for (pkg in required_packages) {
   if (!require(pkg, character.only = TRUE, quietly = TRUE)) {
     warning(sprintf("Paquet requis manquant : %s", pkg))
   }
 }
 
-for (pkg in optional_packages) {
-  if (!requireNamespace(pkg, quietly = TRUE)) {
-    message(sprintf("Paquet optionnel absent : %s", pkg))
-  }
-}
-
-for (pkg in bioc_packages) {
-  if (!requireNamespace(pkg, quietly = TRUE)) {
-    warning(sprintf("Paquet Bioconductor manquant : %s", pkg))
-  }
-}
-
-
-
-has_deseq2 <- requireNamespace("DESeq2", quietly = TRUE)
-
+# F2 — flags d'analyse consommés au FLUX DES OBSERVERS (session déjà ouverte,
+# mod_bulk_de_engine.R:116 pour has_limma, bulk_helpers.R:933 pour
+# isTRUE(has_limma)) : limma/edgeR sont LIGHT (0.09/0.25 s mesurés) donc
+# restent pré-écoute, pour qu'une session précoce voie le vrai flag.
 has_edger <- requireNamespace("edgeR", quietly = TRUE)
 
 has_limma <- requireNamespace("limma", quietly = TRUE)
 
+# F2 — SCAFFOLDING des flags différés : pré-DÉCLARÉS FALSE (sémantique
+# « package pas encore chargé » — les modules sont construits pour la
+# dégradation gracieuse, jamais un « object not found ») ; la vraie valeur
+# est posée par .biomentat_deferred_boot_run(). Mesure consommateurs
+# 2026-11-06 : AUCUN de ces 11 symboles n'est lu hors global.R (le
+# requireNamespace inline des modules/spatial_async.R/io_helpers.R fabrique
+# ses propres flags locaux) — le FALSE précoce est donc invisible au build
+# UI et ne dégrade que la fenêtre de race (~init, post-écoute).
+has_deseq2       <- FALSE
+has_bpcells      <- FALSE
+has_spacexr      <- FALSE
+has_stdeconvolve <- FALSE
+has_leafgl       <- FALSE
+has_mirai        <- FALSE
+has_rann         <- FALSE
+has_slingshot    <- FALSE
+has_schard       <- FALSE
+has_arrow        <- FALSE
+
 
 
 # --- Spatial v3 : dependances non-CRAN / optionnelles ---------------------
-# Le clustering spatial ("BANKSY-lite", mod_spatial_cluster.R) et la
-# deconvolution reference-free (mod_spatial_deconv.R) sont maintenant
-# implementes SANS dependre de Banksy/SeuratWrappers ni de
-# STdeconvolve::fitLDA() -- ces derniers spawnaient des sous-processus
-# paralleles internes qui se bloquaient depuis un daemon mirai. RCTD
-# (spacexr) reste utilise mais force en mono-coeur (max_cores=1).
-#
-#   remotes::install_github("bnprks/BPCells/r")     # backend disque (obligatoire)
-#   remotes::install_github("dmcable/spacexr")      # RCTD (deconvolution avec reference)
-#   install.packages(c("STdeconvolve", "topicmodels", "slam"))  # LDA (deconvolution sans reference)
-#   remotes::install_github("cellgeni/schard")      # lecture .h5ad robuste (reference
-#                                                    # de deconvolution + import Single-Cell,
-#                                                    # voir helpers_io.R::load_single_cell_data())
-#
-# Optionnels, non requis par le pipeline par defaut :
-#   remotes::install_github("prabhakarlab/Banksy", ref = "devel")
-#   remotes::install_github("satijalab/seurat-wrappers")
-#
-has_bpcells      <- requireNamespace("BPCells", quietly = TRUE)
-has_spacexr      <- requireNamespace("spacexr", quietly = TRUE)
-has_stdeconvolve <- requireNamespace("STdeconvolve", quietly = TRUE) &&
-  requireNamespace("topicmodels", quietly = TRUE) &&
-  requireNamespace("slam", quietly = TRUE)
-has_leafgl       <- requireNamespace("leafgl", quietly = TRUE)
-has_mirai        <- requireNamespace("mirai", quietly = TRUE)
-has_rann         <- requireNamespace("RANN", quietly = TRUE)
-# Trajectoire : Slingshot optionnel a l'echelle de l'app — le module
-# Trajectoire refuse proprement l'option "slingshot" avec un message en
-# francais si ce flag est FALSE (voir helpers_sc.R::calculate_slingshot_pseudotime()).
-has_slingshot    <- requireNamespace("slingshot", quietly = TRUE)
-# Phase 5 : lecteur .h5ad robuste (reference de deconvolution RCTD/Label
-# Transfer + import Single-Cell) — voir helpers_io.R::load_single_cell_data().
-# Optionnel : a defaut, l'app retombe sur SeuratDisk (moins fiable pour
-# AnnData) si celui-ci est installe, sinon .h5ad est simplement indisponible.
-has_schard       <- requireNamespace("schard", quietly = TRUE)
-# Phase 5 : requis pour lire les .parquet des exports Visium HD "binned"
-# (tissue_positions.parquet sous binned_outputs/square_0XXum/spatial/) —
-# voir helpers_io.R::load_spatial_visium_hd(), qui verifie aussi ce point
-# lui-meme avant d'importer (message clair plutot que l'erreur Seurat brute
-# "Please install arrow to read parquet files"). Souvent difficile a
-# installer depuis les sources sous Windows sans toolchain complet — si
-# aucun binaire CRAN n'est disponible pour votre version de R, essayez :
-# install.packages("arrow", repos = c("https://apache.r-universe.dev", getOption("repos")))
-has_arrow        <- requireNamespace("arrow", quietly = TRUE)
-
-for (dep in c("bpcells", "spacexr", "stdeconvolve", "leafgl", "mirai", "rann", "schard", "arrow")) {
-  if (!get(paste0("has_", dep))) {
-    message(sprintf("[spatial] Package(s) pour '%s' non installe(s) — fonctionnalite associee indisponible tant que non installee (voir commentaire ci-dessus pour la commande d'installation).", dep))
-  }
-}
+# F2 (2026-11-06) : ce bloc (requires + messages) est DÉPLACÉ VERBATIM dans
+# .biomentat_deferred_boot_run() (fin de fichier) — les namespaces
+# BPCells 2.5 s / spacexr 0.5 s / STdeconvolve 0.5 s / slingshot 4.1 s /
+# schard 0.5 s / arrow 0.9 s (mesures processus frais 2026-11-06) ne
+# précèdent plus le bind. Les 10 flags correspondants sont pré-déclarés
+# FALSE ci-dessus (scaffolding) et y sont posés à leur vraie valeur. Aucun
+# consommateur hors global.R (mesure grep 2026-11-06 : les modules
+# fabrique leurs propres flags locaux par requireNamespace inline). Le
+# commentaire d'origine (commandes d'installation) suit le bloc.
 
 
 
@@ -216,10 +211,16 @@ for (dep in c("bpcells", "spacexr", "stdeconvolve", "leafgl", "mirai", "rann", "
 # connexions PSOCK expiraient ("Cluster setup failed ... 13 of 14 workers")
 # et l'app mourait au lancement. Un seul plan, plafonne a 4 workers ; les
 # gros calculs async passent deja par le pool mirai (R/utils_spatial_async.R).
-if (require("future", quietly = TRUE)) {
-  plan(multisession, workers = min(4L, max(1L, parallel::detectCores() - 2)))
-  options(future.globals.maxSize = 10000 * 1024^2)  # 10GB
-}
+#
+# F2 (2026-11-06) : le plan() lui-même est DIFFÉRÉ dans
+# .biomentat_deferred_boot_run() — marker.log 211025 : plan + 8 pids workers
+# x renv 0.9-1.2 s ≈ 6.5 s payés avant « Listening » aujourd'hui ; demain le
+# spawn ne peut plus tomber DANS la fenêtre bind→listen (la porte TCP du run
+# l'interdit). future résout le plan paresseusement au premier job : entre
+# la source et l'init différée, un job éventuel tournerait en sequential
+# (comportement « plan absent », identique à une installation sans future).
+# Plafond mirai 1-2 workers intouché (MODE_C_audit:143) — ce bloc ne
+# concerne que le plan future, jamais le pool mirai.
 
 
 
@@ -423,3 +424,119 @@ my_theme <- bslib::bs_add_rules(my_theme, '
 
 
 clean_mem <- function() { gc() }
+
+# =============================================================================
+# --- 3bis. F2 — INIT LOURDE DIFFÉRÉE APRÈS LA MISE À L'ÉCOUTE ----------------
+# =============================================================================
+# Mécanisme mesuré (O34, docs/agent/HANDOFF.md:57 passe 4-6) : « Listening »
+# est imprimé AVANT le bind (shiny 1.14.0, code lu) et la fenêtre bind→listen
+# (15-25 s à vide, 300-945 s sous 20+ Rscript concurrents) vit côté C de
+# httpuv 1.6.17 — hors de portée d'une passe R. Ce que l'app contrôle : ne
+# plus faire PRÉCÉDER le bind par ~28 s de chargement d'analyse + spawn
+# workers (mesures 2026-11-06 : celldex 7.3 s, destiny 7.3 s, Seurat 5.3 s,
+# SingleR 5.1 s, DESeq2 4.3 s, slingshot 4.1 s, sva 3.7 s,
+# SingleCellExperiment 3.4 s, BPCells 2.5 s — un processus frais chacun ;
+# plan(multisession) + 8 pids × renv ≈ 6.5 s, marker.log 211025).
+#
+# LA PORTE (init) : pendant TOUTE la fenêtre, les connexions TCP sont
+# REFUSÉES (HANDOFF.md:57 (iii)) ; une socket qui CONNECTE = accept armé.
+# L'init ne démarre donc qu'après le premier accept armé — le chargement
+# lourd ne peut JAMAIS tomber À L'INTÉRIEUR de la fenêtre ni y ajouter de
+# contention. NE RACCOURCIT PAS la fenêtre elle-même (atome C) : le gain est
+# naissance→« Listening » ~38 s → ~10-15 s espéré + accept armé ~27 s plus
+# tôt. app.R schedule la porte sur la boucle httpuv via later (delay 0).
+# Garde : tests/testthat/test-deferred-boot-init.R.
+.biomentat_deferred_boot_init <- function() {
+  svrs <- tryCatch(httpuv::listServers(), error = function(e) list())
+  # rev() : le serveur RÉEL est le dernier démarré (la sonde de port de
+  # shiny .setupShinyApp est déjà stoppée et dé-registry à ce stade —
+  # vérifié : listServers() renvoie .globals$servers, stopServer dé-registre).
+  for (s in rev(svrs)) {
+    port <- tryCatch(s$getPort(), error = function(e) NA_integer_)
+    host <- tryCatch(s$getHost(), error = function(e) "127.0.0.1")
+    if (is.null(port) || is.na(port)) next
+    con <- suppressWarnings(tryCatch(
+      socketConnection(host = host, port = port, server = FALSE,
+                       open = "r+b", timeout = 1),
+      error = function(e) NULL
+    ))
+    if (!is.null(con)) {
+      close(con)  # connexion probe jetable : un connect sans données HTTP est refermé par httpuv
+      .biomentat_deferred_boot_run()
+      return(invisible())
+    }
+  }
+  # accept pas encore armé : re-sonde dans 1 s. Coût ~0 ; la boucle httpuv
+  # ne tourne que tant que l'app vit, le re-schedul meurt avec elle.
+  later::later(.biomentat_deferred_boot_init, delay = 1)
+}
+
+.biomentat_deferred_boot_run <- function() {
+  # 1) Optionnels — messages d'origine inchangés (loop optionnel pré-F2).
+  for (pkg in optional_packages) {
+    if (!requireNamespace(pkg, quietly = TRUE)) {
+      message(sprintf("Paquet optionnel absent : %s", pkg))
+    }
+  }
+  # 2) Bioconductor — warnings d'origine inchangés (loop bioc pré-F2).
+  for (pkg in bioc_packages) {
+    if (!requireNamespace(pkg, quietly = TRUE)) {
+      warning(sprintf("Paquet Bioconductor manquant : %s", pkg))
+    }
+  }
+  # 3) Packages d'analyse lourds — même sémantique require()/warning que le
+  #    loop required pré-F2 (dégradation gracieuse, jamais de crash dur).
+  for (pkg in deferred_packages) {
+    if (!require(pkg, character.only = TRUE, quietly = TRUE)) {
+      warning(sprintf("Paquet requis manquant : %s", pkg))
+    }
+  }
+  # 4) Flags d'analyse (<<- : environnement global — les consommateurs
+  #    runtime lisent les globales ; has_deseq2 pré-déclaré FALSE au light).
+  has_deseq2 <<- requireNamespace("DESeq2", quietly = TRUE)
+  # 5) Spatial v3 — bloc déplacé VERBATIM du light (flags + messages) ;
+  #    les requireNamespace y remplacent les FALSE du scaffolding.
+  has_bpcells      <<- requireNamespace("BPCells", quietly = TRUE)
+  has_spacexr      <<- requireNamespace("spacexr", quietly = TRUE)
+  has_stdeconvolve <<- requireNamespace("STdeconvolve", quietly = TRUE) &&
+    requireNamespace("topicmodels", quietly = TRUE) &&
+    requireNamespace("slam", quietly = TRUE)
+  has_leafgl       <<- requireNamespace("leafgl", quietly = TRUE)
+  has_mirai        <<- requireNamespace("mirai", quietly = TRUE)
+  has_rann         <<- requireNamespace("RANN", quietly = TRUE)
+  # Trajectoire : Slingshot optionnel a l'echelle de l'app — le module
+  # Trajectoire refuse proprement l'option "slingshot" avec un message en
+  # francais si ce flag est FALSE (voir helpers_sc.R::calculate_slingshot_pseudotime()).
+  has_slingshot    <<- requireNamespace("slingshot", quietly = TRUE)
+  # Phase 5 : lecteur .h5ad robuste (reference de deconvolution RCTD/Label
+  # Transfer + import Single-Cell) — voir helpers_io.R::load_single_cell_data().
+  # Optionnel : a defaut, l'app retombe sur SeuratDisk (moins fiable pour
+  # AnnData) si celui-ci est installe, sinon .h5ad est simplement indisponible.
+  has_schard       <<- requireNamespace("schard", quietly = TRUE)
+  # Phase 5 : requis pour lire les .parquet des exports Visium HD "binned"
+  # (tissue_positions.parquet sous binned_outputs/square_0XXum/spatial/) —
+  # voir helpers_io.R::load_spatial_visium_hd(), qui verifie aussi ce point
+  # lui-meme avant d'importer (message clair plutot que l'erreur Seurat brute
+  # "Please install arrow to read parquet files"). Souvent difficile a
+  # installer depuis les sources sous Windows sans toolchain complet — si
+  # aucun binaire CRAN n'est disponible pour votre version de R, essayez :
+  # install.packages("arrow", repos = c("https://apache.r-universe.dev", getOption("repos")))
+  has_arrow        <<- requireNamespace("arrow", quietly = TRUE)
+
+  for (dep in c("bpcells", "spacexr", "stdeconvolve", "leafgl", "mirai", "rann", "schard", "arrow")) {
+    if (!get(paste0("has_", dep))) {
+      message(sprintf("[spatial] Package(s) pour '%s' non installe(s) — fonctionnalite associee indisponible tant que non installee (voir commentaire ci-dessus pour la commande d'installation).", dep))
+    }
+  }
+  # 6) Plan future — bloc déplacé VERBATIM du light (voir le commentaire
+  #    PARALLÉLISATION en amont : un seul plan, plafonné, jamais le pool
+  #    mirai). Spawn des workers post-écoute, jamais dans la fenêtre.
+  if (require("future", quietly = TRUE)) {
+    plan(multisession, workers = min(4L, max(1L, parallel::detectCores() - 2)))
+    options(future.globals.maxSize = 10000 * 1024^2)  # 10GB
+  }
+  # Marqueur non bufferisé pour le log de boot (boot_diagnose lit app_r.log).
+  message("[F2] deferred boot init done: analysis packages attached, future plan=",
+          if (require("future", quietly = TRUE)) class(future::plan())[1] else "absent",
+          " workers=", if (require("future", quietly = TRUE)) future::nbrOfWorkers() else 0L)
+}

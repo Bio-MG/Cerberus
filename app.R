@@ -1821,6 +1821,28 @@ server <- function(input, output, session) {
 
 
 
+# ── F2 (2026-11-06) : init lourde APRÈS la mise à l'écoute (candidat 4) ─────
+# « Listening » est imprimé AVANT le bind (shiny 1.14.0, code lu — O34) et la
+# fenêtre bind→listen (15-25 s à vide, 300-945 s sous charge) vit côté C de
+# httpuv 1.6.17. Le chargement d'analyse (~40 s frais cumulés mesurés 2026-11-06)
+# et le spawn plan(multisession) (~6.5 s) ne la précèdent plus : schedulés sur
+# la boucle httpuv via later, la porte .biomentat_deferred_boot_init()
+# (global.R section 3bis) attend le PREMIER accept TCP armé — connexions
+# REFUSÉES toute la fenêtre (HANDOFF.md:57 (iii)) — pour ne jamais ajouter de
+# contention À L'INTÉRIEUR de la fenêtre. NE RACCOURCIT PAS la fenêtre
+# elle-même (atome C, hors de portée d'une passe R) : gain = naissance→
+# « Listening » ~38 s → ~10-15 s espéré + accept armé ~27 s plus tôt.
+# Garde : tests/testthat/test-deferred-boot-init.R (scheduling AVANT
+# shinyApp, exactement une fois).
+if (requireNamespace("later", quietly = TRUE)) {
+  later::later(function() .biomentat_deferred_boot_init(), delay = 0)
+} else {
+  # Repli honnête (later est une dépendance dure de shiny — inaccessible
+  # uniquement hors renv) : sérialisation pré-F2, l'init repasse avant
+  # l'écoute, exactement le comportement historique.
+  .biomentat_deferred_boot_run()
+}
+
 # Lancement de l'application
 
 shinyApp(ui, server)
