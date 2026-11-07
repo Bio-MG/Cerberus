@@ -30,7 +30,8 @@ test_that("bulk_shared_result_fields couvre tout slot résultat écrit par un mo
       "network_result", "de_padj_ctx",
       "wgcna_power", "wgcna_modules", "signature_scores", "pattern_result",
       "dose_result", "survival_km", "survival_cox",
-      "de_bypass")
+      "de_bypass",
+      "last_report")
   )
 })
 

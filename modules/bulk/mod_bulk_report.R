@@ -244,8 +244,15 @@ mod_bulk_report_server <- function(id, global_data, shared_rv) {
 
     output$report_status <- renderText({
       global_data$language
-      if (is.null(shared_rv$vst_mat)) .tr("Lancez d'abord l'\u00e9tape 1 (Filtrage & VST).")
-      else .tr("Pr\u00eat \u2014 s\u00e9lectionnez les sections puis cliquez sur 'G\u00e9n\u00e9rer Rapport'.")
+      base <- if (is.null(shared_rv$vst_mat)) .tr("Lancez d'abord l'\u00e9tape 1 (Filtrage & VST).")
+              else .tr("Pr\u00eat \u2014 s\u00e9lectionnez les sections puis cliquez sur 'G\u00e9n\u00e9rer Rapport'.")
+      # Chantier 7 : registre live du dernier artefact généré (cf. dl_report).
+      last <- shared_rv$last_report
+      if (is.list(last) && !is.null(last$name)) {
+        base <- paste0(base, " — ", .tr("dernier export : "), last$name,
+                       " (", last$kind, " ", last$at, ")")
+      }
+      base
     })
 
     # ── HTML / PDF Report ──────────────────────────────────────────────────
@@ -306,6 +313,15 @@ mod_bulk_report_server <- function(id, global_data, shared_rv) {
         if (length(out_files) == 0) stop(errorCondition(.tr("Aucun format g\u00e9n\u00e9r\u00e9."), class = "bulk_report_error"))
         else if (length(out_files) == 1) file.copy(out_files[1], file, overwrite = TRUE)
         else zip::zip(file, files = out_files, mode = "cherry-pick")
+        # Chantier 7 (2026-11-08) : registre live — le succès d'un download ne
+        # peut PAS notifier au client (R-6 mesuré) ; la ligne report_status
+        # (renderText, relue à chaque ouverture du panneau) porte le dernier
+        # artefact. SP-FIND3 : un ré-import purge les résultats (epoch) — la
+        # ligne retombe sur « Prêt » d'elle-même, elle ne survit pas à un état
+        # qui ne produit plus ce rapport.
+        shared_rv$last_report <- list(name = basename(file),
+                                      kind = .tr("Rapport bulk"),
+                                      at   = format(Sys.time(), "%H:%M:%S"))
       }
     )
 
@@ -379,6 +395,10 @@ mod_bulk_report_server <- function(id, global_data, shared_rv) {
                                  file.path(tmp_dir, "counts_raw.rds"),
                                  file.path(tmp_dir, "metadata.rds")),
                  mode = "cherry-pick")
+        # Chantier 7 : registre live — même règle que dl_report.
+        shared_rv$last_report <- list(name = basename(file),
+                                      kind = .tr("Script R"),
+                                      at   = format(Sys.time(), "%H:%M:%S"))
       }
     )
 

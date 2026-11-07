@@ -117,8 +117,15 @@ mod_spatial_report_server <- function(id, global_data, shared_rv) {
 
     output$report_status <- renderText({
       global_data$language  # re-render on language switch
-      if (is.null(global_data$spatial_obj)) .tr("Importez d'abord un echantillon spatial.")
-      else .tr("Pret -- selectionnez les sections puis cliquez sur 'Generer le rapport'.")
+      base <- if (is.null(global_data$spatial_obj)) .tr("Importez d'abord un echantillon spatial.")
+              else .tr("Pret -- selectionnez les sections puis cliquez sur 'Generer le rapport'.")
+      # Chantier 7 : registre live du dernier artefact généré (cf. dl_report).
+      last <- shared_rv$last_report
+      if (is.list(last) && !is.null(last$name)) {
+        base <- paste0(base, " — ", .tr("dernier export : "), last$name,
+                       " (", last$kind, " ", last$at, ")")
+      }
+      base
     })
 
     .snapshot_results <- function() {
@@ -342,6 +349,12 @@ mod_spatial_report_server <- function(id, global_data, shared_rv) {
           } else {
             zip::zip(file, files = out_files, mode = "cherry-pick")
           }
+          # Chantier 7 (2026-11-08) : registre live — même règle que le module
+          # bulk (le succès d'un download ne peut pas notifier : R-6 mesuré ;
+          # la ligne report_status porte le dernier artefact).
+          shared_rv$last_report <- list(name = basename(file),
+                                        kind = .tr("Rapport spatial"),
+                                        at   = format(Sys.time(), "%H:%M:%S"))
         })
       }
     )

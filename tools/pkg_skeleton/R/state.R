@@ -185,6 +185,10 @@ create_bulk_shared_state <- function() {
     signature_scores = NULL, pattern_result = NULL,
     dose_result = NULL, survival_km = NULL, survival_cox = NULL,
     network_result = NULL, de_padj_ctx = NULL,
+    # Chantier 7 (2026-11-08) : registre live du dernier export (rapport/
+    # script) — purgé par epoch (bulk_shared_result_fields) pour ne pas
+    # survivre à un ré-import (SP-FIND3).
+    last_report = NULL,
     lfc_thresh = 1, padj_thresh = 0.05,
     heatmap_top_n = 30, heatmap_annot = NULL,
     pathway_db = "GOBP", pathway_mode = "ora", bulk_palette = "default",
@@ -228,7 +232,11 @@ bulk_shared_result_fields <- function() {
     "network_result", "de_padj_ctx",
     "wgcna_power", "wgcna_modules", "signature_scores", "pattern_result",
     "dose_result", "survival_km", "survival_cox",
-    "de_bypass")
+    "de_bypass",
+    # Chantier 7 (2026-11-08) : registre live du dernier export — SP-FIND3 :
+    # après ré-import (purge epoch) le rapport ne correspond plus à l'état,
+    # la ligne retombe sur « Prêt » au lieu de mentir.
+    "last_report")
 }
 
 #' Purger les champs résultats d'un état partagé Bulk

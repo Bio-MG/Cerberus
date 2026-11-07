@@ -417,6 +417,12 @@ ui <- page_navbar(
         }, 1000);
       })();")),
     uiOutput("drive_badge"),
+    # Chantier 6 (2026-11-08) : bannière last-wins multi-onglets — quand le
+    # protocole drive vit mais que CETTE page n'est pas la session nommée par
+    # ready.json (le dernier onglet booté gagne), l'opérateur doit savoir que
+    # ses scénarios/inputs partent ailleurs. Passive, muette, jamais bloquante
+    # : une ligne muted, aucun bouton.
+    uiOutput("drive_not_selected_note"),
     # ASR-3 (O29) : bannière de reprise de session — même discipline que le
     # badge ci-dessus : renderUI() NULL (toggle OFF, aucun checkpoint validé,
     # offre refusée ou purgée) => conteneur vide, empreinte nulle, layout
@@ -825,6 +831,26 @@ server <- function(input, output, session) {
     m$action <- r$action %||% ""
     drive_state(m)
   }, ignoreNULL = TRUE)
+
+  # Chantier 6 — bannière last-wins : cette page N'EST PAS la session
+  # pilotée. Réactive via drive_control (rafraîchi à chaque battement) — la
+  # lecture ready.json de .drive_selected() est non réactive par elle-même.
+  output$drive_not_selected_note <- shiny::renderUI({
+    ctl <- drive_control()
+    if (!isTRUE(ts_drive_interactive())) return(NULL)
+    if (is.null(ctl)) return(NULL)
+    # la note n'a de sens que si le protocole VIT (une session drive est
+    # attachée quelque part — ready.json existe) et que ce n'est pas nous
+    if (is.null(ts_drive_read_ready())) return(NULL)
+    if (.drive_selected()) return(NULL)
+    htmltools::tags$span(
+      id = "ts_drive_not_selected",
+      style = paste("display:inline-block; font-size:11px; padding:2px 8px;",
+                    "border-radius:10px; background:rgba(108,117,125,.15);",
+                    "color:#6c757d; vertical-align:middle;"),
+      "\U0001f4c4 Cette page n'est pas la session pilot\u00e9e (le drive pilote un autre onglet)."
+    )
+  })
 
   # ── AGENT CONTROL PANEL — the human's side of `arm.json` ──────────────────
   # A dedicated, CHEAP reactive state on the same discipline as the badge: the
@@ -1787,12 +1813,33 @@ server <- function(input, output, session) {
   
   
   
-  observeEvent(input$gc_btn, { 
-    
-    clean_mem() 
+  observeEvent(input$gc_btn, {
+
+    # Chantier 6 (2026-11-08) : « effet mesurable ou suppression » (PROPOSAL).
+    # clean_mem() n'était qu'un gc() muet — le notification n'apprenait rien.
+    # Le bouton rend maintenant sa MESURE : Mo utilisés par R avant → après.
+    # Honnêteté : gc() collecte l'intérieur de R ; la restitution à l'OS est
+    # un autre mécanisme (et les gros objets restent tant que l'utilisateur
+    # ne les purge pas — voir le panneau Objets Chargés).
+    before <- if (exists("memory.size", where = baseenv()) ||
+                  exists("memory.size", envir = globalenv())) {
+      tryCatch(memory.size(FALSE), error = function(e) NA_real_)
+    } else NA_real_
+    clean_mem()
+    after <- if (!is.na(before)) tryCatch(memory.size(FALSE), error = function(e) NA_real_) else NA_real_
+    used_now <- sum(gc()[, 2])
     .tr_gc <- function(k) { tr <- global_data$i18n; if (is.null(tr)) return(k); tryCatch(.strip_i18n_html(tr$t(k)), error=function(e) k) }
-    showNotification(.tr_gc("🧹 Mémoire nettoyée"), type = "message", duration = 2)
-    
+    if (!is.na(before) && !is.na(after)) {
+      showNotification(.t_fmt(.tr_gc("🧹 RAM R : {a} → {b} Mo (collectés : {f} Mo). Les gros objets se purgent dans « Objets Chargés »."),
+                              a = round(before), b = round(after),
+                              f = sprintf("%+.0f", after - before)),
+                     type = "message", duration = 8)
+    } else {
+      showNotification(.t_fmt(.tr_gc("🧹 RAM R : {u} Mo utilisés (gc forcé)."),
+                              u = round(used_now)),
+                     type = "message", duration = 8)
+    }
+
   })
   
   
