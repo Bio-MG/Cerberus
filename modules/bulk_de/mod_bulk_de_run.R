@@ -367,6 +367,10 @@
     showNotification(.t_fmt(.tr("\u2713 Contraste '{c}': {n} g\u00e8nes significatifs"),
                             c = ctx$cname, n = n_sig),
                      type = "message", duration = 6)
+    # Chantier 6 : écho badge « run UI » — un run fait à la souris laisse une
+    # trace sur le badge (l'ancien badge restait sur un scénario drive périmé).
+    global_data$badge_ui_run <- list(module = "bulk_de",
+                                     action = paste("run_de:", ctx$cname))
     if (!is.null(ctx$bypass_info)) {
       showNotification(
         .t_fmt(.tr("\u26a0\ufe0f Mode exploratoire sans r\u00e9plicat : dispersion impos\u00e9e (BCV = {b}), p-values NON inf\u00e9rentielles \u2014 \u00e0 ne pas publier comme une DE classique."),

@@ -394,6 +394,28 @@ ui <- page_navbar(
     # le card reprend sa hauteur au contenu, et le retry « empoisonné pendant
     # cachée → visible » fonctionne (instance.data survit à la suspension).
     tags$style(HTML(".html-fill-container > .html-fill-item.datatables { min-height: 120px !important; }")),
+    # Chantier 6 : auto-expire 15 s des notifications persistantes. Les 411
+    # sites showNotification restent INTACTS — le timer client clique le bouton
+    # close des persistantes (elles en ont une) ; les auto-expirantes (duration
+    # fixée) se ferment seules avant les 15 s et n'ont rien à faire. Une
+    # notification expirée d'elle-même est déjà partie : double fermeture
+    # inoffensive.
+    tags$script(HTML(
+      "(function(){
+        var TTL = 15000;
+        setInterval(function(){
+          var panel = document.getElementById('shiny-notification-panel');
+          if (!panel) return;
+          var now = Date.now();
+          panel.querySelectorAll('.shiny-notification').forEach(function(n){
+            if (!n.dataset.tsSeen) { n.dataset.tsSeen = String(now); return; }
+            if (now - parseInt(n.dataset.tsSeen, 10) >= TTL) {
+              var btn = n.querySelector('.shiny-notification-close');
+              if (btn) btn.click();
+            }
+          });
+        }, 1000);
+      })();")),
     uiOutput("drive_badge"),
     # ASR-3 (O29) : bannière de reprise de session — même discipline que le
     # badge ci-dessus : renderUI() NULL (toggle OFF, aucun checkpoint validé,
@@ -422,6 +444,21 @@ ui <- page_navbar(
                   choices = c("Français" = "fr", "English" = "en"),
                   selected = I18N_DEFAULT_LANG, width = "100%")
     } else NULL,
+
+    # ── Chantier 6 (fix 2026-11-08) : lifecycle des notifications ───────────
+    # Mesuré (REPORT_BULK) : 286/411 showNotification sont persistants (sans
+    # duration) -> la pile accumule des heures d'historique. Deux niveaux :
+    # (1) auto-expire côté client à 15 s (script dans header=, ne touche AUCUN
+    # des 411 sites : les persistantes ont un bouton close que le timer
+    # clique ; les auto-expirantes se ferment seules avant) ; (2) bouton
+    # « Tout effacer » (onclick pur client, aucun aller-retour serveur).
+    actionButton("clear_notifications",
+                 label = i18n$t("🧹 Tout effacer les notifications"),
+                 class = "btn btn-outline-secondary btn-sm w-100",
+                 onclick = paste(
+                   "document.querySelectorAll",
+                   "('#shiny-notification-panel .shiny-notification-close')",
+                   ".forEach(function(b){b.click()});", sep = "")),
     
     # ── AGENT CONTROL (MCP / Live Control) ───────────────────────────────────
     # The drive protocol used to be ONE-WAY: only an external agent could arm a
@@ -773,6 +810,21 @@ server <- function(input, output, session) {
     if (!vis) return(NULL)
     ts_drive_badge_ui(ts_drive_badge_view(st))
   })
+
+  # Chantier 6 (2026-11-08) — écho badge des runs FAITS À LA SOURIS. Les
+  # modules publient `global_data$badge_ui_run <- list(module=, action=)` à la
+  # fin d'un run réussi ; ce seul observateur le projette sur le badge (état
+  # "ui", pas de seq drive). Un événement drive ultérieur réécrit le badge
+  # par-dessus — l'écho ne masque jamais la vérité du protocole.
+  shiny::observeEvent(global_data$badge_ui_run, {
+    r <- global_data$badge_ui_run
+    if (!is.list(r) || is.null(r$module)) return()
+    m <- ts_drive_badge_model()
+    m$state <- "ui"
+    m$module <- r$module
+    m$action <- r$action %||% ""
+    drive_state(m)
+  }, ignoreNULL = TRUE)
 
   # ── AGENT CONTROL PANEL — the human's side of `arm.json` ──────────────────
   # A dedicated, CHEAP reactive state on the same discipline as the badge: the

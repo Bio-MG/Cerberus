@@ -1950,8 +1950,16 @@ ts_drive_write_result <- function(seq, status, active_module, armed,
   .ascii_fold <- function(x) {
     vapply(as.character(x), function(s) {
       if (is.na(s) || !nzchar(s)) return(s)
-      r <- tryCatch(iconv(s, from = "UTF-8", to = "ASCII", sub = "-"),
-                    error = function(e) s)
+      # Chantier 6 (2026-11-08) : TRANSLIT d'abord — "terminé" lit "termine"
+      # et non "termin--" (REPORT_BULK micro-bug : le pli sec cassait la
+      # lisibilité). Mesuré Windows iconv : é->e, em-dash->" - ". Le fallback
+      # pli sec (N1 d'origine) reste si TRANSLIT indisponible/échoue ; la
+      # garantie wire ASCII est inchangée.
+      r <- tryCatch(iconv(s, from = "UTF-8", to = "ASCII//TRANSLIT", sub = "-"),
+                    error = function(e) NULL)
+      if (is.null(r) || is.na(r) || !nzchar(r))
+        r <- tryCatch(iconv(s, from = "UTF-8", to = "ASCII", sub = "-"),
+                      error = function(e) s)
       if (is.null(r) || is.na(r)) "" else r
     }, character(1), USE.NAMES = FALSE)
   }
@@ -4680,8 +4688,14 @@ ts_drive_badge_advance <- function(model, event, status = NULL, ack_seq = NULL,
 #' @param armed Is the session armed?
 #' @param state Current badge state.
 ts_drive_badge_visible <- function(enabled, interactive, selected, armed, state) {
-  isTRUE(enabled) && isTRUE(interactive) && isTRUE(selected) && isTRUE(armed) &&
-    nzchar(ts_drive_badge_chr(state)) && !identical(ts_drive_badge_chr(state), "off")
+  isTRUE(enabled) && isTRUE(interactive) && isTRUE(selected) &&
+    nzchar(ts_drive_badge_chr(state)) && !identical(ts_drive_badge_chr(state), "off") &&
+    # Chantier 6 (2026-11-08) : l'écho "ui" (run fait à la souris) est visible
+    # MÊME non armé — c'est le retour que l'opérateur d'un run UI n'avait
+    # jamais eu (REPORT_BULK micro-bug 2). Les quatre portes d'origine tiennent
+    # pour tous les états drive ; l'écho reste dev-only (enabled) et
+    # session-sélectionnée (selected).
+    (isTRUE(armed) || identical(ts_drive_badge_chr(state), "ui"))
 }
 
 

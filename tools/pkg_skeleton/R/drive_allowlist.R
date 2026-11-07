@@ -2116,7 +2116,12 @@ ts_drive_export_write_table <- function(df, next_path, dir = NULL) {
 # call, so C2 holds and the whole thing is testable from Rscript.
 
 #' Frozen badge states. UI mapping may change; these strings may not.
-TS_DRIVE_BADGE_STATES <- c("off", "armed", "running", "done", "error")
+#' Chantier 6 (2026-11-08) : état "ui" ajouté — l'écho des runs FAITS À LA
+#' SOURIS (REPORT_BULK micro-bug 2 : après un run edgeR UI, le badge continuait
+#' d'afficher « drive: done · seq 181 · read_export » — un écho de scénario
+#' drive périmé, aucun retour du run UI). Publié par app.R via
+#' ts_drive_badge_ui_run(), consommé par ts_drive_badge_view/ui.
+TS_DRIVE_BADGE_STATES <- c("off", "armed", "running", "done", "error", "ui")
 
 #' The ONLY events allowed to move the badge.
 #'
@@ -2220,6 +2225,7 @@ ts_drive_badge_view <- function(model) {
   list(
     visible = TRUE,
     state   = state,
+    # Chantier 6 : l'écho UI n'a PAS de seq drive (0L = le bloc seq reste muet).
     ack_seq = suppressWarnings(as.integer(model$ack_seq %||% 0L)),
     # `known` names the FROZEN set each label must belong to. A declared member
     # comes back verbatim; anything else is free text and is sanitized in full.
@@ -2269,6 +2275,7 @@ ts_drive_badge_ui <- function(view) {
                   running = "drive: running",
                   done    = "drive: done",
                   error   = "drive: error",
+                  ui      = "run UI: done",
                   "drive")
   bits <- label
   if (!is.null(view$ack_seq) && !is.na(view$ack_seq) && view$ack_seq > 0L) {

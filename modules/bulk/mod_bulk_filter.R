@@ -370,6 +370,9 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
         showNotification(.t_fmt(.tr("\u2713 {n} g\u00e8nes conserv\u00e9s sur {m} \u00e9chantillons"),
                                 n = nrow(filtered), m = ncol(filtered)),
                          type = "message", duration = 5)
+        # Chantier 6 : écho badge « run UI » (même règle que bulk_de).
+        global_data$badge_ui_run <- list(module = "bulk_filter",
+                                         action = "run_filter_norm")
       }, error = function(e) {
         showNotification(paste(.tr("Erreur filtrage/VST:"), e$message), type = "error", duration = 8)
       })
