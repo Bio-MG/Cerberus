@@ -580,7 +580,12 @@ mod_import_bulk_server <- function(id, global_data) {
         metadata_names <- rownames(metadata)
         if (all(sample_names %in% metadata_names)) {
           bulk_obj$metadata <- metadata[sample_names, , drop = FALSE]
-          add_log(paste(" ✓ Métadonnées alignées:", ncol(bulk_obj$metadata), "variables"))
+          # BULK-8 (diagnosis 2026-11-06) : le refus runtime « colonne de dose
+          # 'dose' absente des métadonnées » (H21, dataset clinique) implique
+          # un drop en amont que le code de CET assembleur ne montre pas —
+          # tracer les colonnes réellement retenues à l'assemblage.
+          add_log(paste(" ✓ Métadonnées alignées:", ncol(bulk_obj$metadata), "variables :",
+                        paste(colnames(bulk_obj$metadata), collapse = ", ")))
         } else {
           bulk_obj$metadata <- data.frame(sample = sample_names, row.names = sample_names)
           add_log(" ⚠️ Métadonnées non alignées - création de métadonnées par défaut")

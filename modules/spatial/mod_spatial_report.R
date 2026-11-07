@@ -213,10 +213,37 @@ mod_spatial_report_server <- function(id, global_data, shared_rv) {
         paste0("rapport_spatial_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".", ext)
       },
       content = function(file) {
-        req(length(input$formats %||% character(0)) > 0)
-
-        ds_list <- tryCatch(.gather_datasets(), error = function(e) NULL)
-        validate(need(!is.null(ds_list) && length(ds_list) > 0, .tr("Aucun echantillon a inclure dans le rapport.")))
+        # P1-21 (fix 2026-11-06) : un abort dans un downloadHandler est
+        # INVISIBLE (SP14 : 8 tentatives, 0 octet, 0 message — le couple
+        # tryCatch(...)/validate() avale l'échec). Chaque abort est précédé
+        # d'une notification nommant la donnée manquante ET l'endroit qui
+        # la fournit (règle chantier 5).
+        if (!length(input$formats %||% character(0))) {
+          showNotification(.tr("❌ Rapport impossible : sélectionnez au moins un format (case « HTML ») avant de générer."), type = "error", duration = 12)
+          validate(.tr("Aucun format sélectionné."))
+          return()
+        }
+        nid <- showNotification(.tr("⏳ Génération du rapport spatial en cours — le knit peut prendre quelques dizaines de secondes…"), type = "message", duration = NULL, closeButton = FALSE)
+        on.exit(try(removeNotification(nid), silent = TRUE), add = TRUE)
+        # P1-21 (fix 2026-11-06) : pandoc absent => knit mort — refus immédiat
+        # livré DANS le fichier téléchargé (les notifications pendant un
+        # download n'atteignent pas le client — mesuré).
+        if (!rmarkdown::pandoc_available()) {
+          writeLines(c("⚠️ Rapport impossible : Pandoc est introuvable dans cet environnement R.",
+                       "Correctif : installer RStudio (fournit pandoc) ou définir RSTUDIO_PANDOC,",
+                       "puis relancer l'application."),
+                     file)
+          return()
+        }
+        ds_list <- tryCatch(.gather_datasets(), error = function(e) {
+          showNotification(.t_fmt(.tr("❌ Rapport impossible — collecte des données : {m}. Vérifiez qu'un échantillon spatial est importé (onglet « Import Données > Spatial ») et qu'il est ACTIF dans cette session."), m = conditionMessage(e)), type = "error", duration = 20)
+          NULL
+        })
+        if (is.null(ds_list) || !length(ds_list)) {
+          showNotification(.tr("❌ Aucun échantillon à inclure dans le rapport — importez un échantillon spatial puis lancez le pipeline (bouton « Lancer le pipeline » de l'onglet 2)."), type = "error", duration = 20)
+          validate(.tr("Aucun échantillon à inclure dans le rapport."))
+          return()
+        }
 
         template_path <- tryCatch(find_spatial_report_template(), error = function(e) {
           showNotification(conditionMessage(e), type = "error", duration = 15)

@@ -44,6 +44,11 @@
 
   output$table_updown <- renderDT({
     global_data$language  # i18n
+    # R-3bis (fix 2026-11-06) : lecture du miroir d'onglet (mod_bulk.R) —
+    # ré-exécute ce render au moment où l'onglet devient VISIBLE, ce qui
+    # débloque la DT « empoisonnée » par une invalidation pendant cachée
+    # (mécanisme mesuré en app minimale : Shiny 1.14 + DT 0.34 + bslib).
+    force(shared_rv$main_tabs_current)
     req(updown_summary())
     df <- updown_summary()
     df$Actif <- ifelse(df$actif, .tr("\u2192 actif"), "")
@@ -58,4 +63,13 @@
     filename = function() paste0("updown_summary_", Sys.Date(), ".csv"),
     content  = function(file) write.csv(updown_summary(), file, row.names = FALSE)
   )
+
+  # R-3 (fix 2026-11-06, clan BULK-7 « jamais rendu ») : mesuré live (probe
+  # DOM), la DT Up/Down n'a JAMAIS reçu son payload (aucun script[data-for])
+  # quand son invalidation a eu lieu dans un onglet inactif — la reprise de
+  # suspension ne la re-flushe pas, alors que le plot du même reactive rend.
+  # Idiome Shiny standard : désactiver la suspension de CETTE sortie — elle
+  # calcule et envoie son payload même cachée ; le binding DT dessine (et
+  # redessine à l'activation via les hooks de redimensionnement bslib).
+  outputOptions(output, "table_updown", suspendWhenHidden = FALSE)
 }

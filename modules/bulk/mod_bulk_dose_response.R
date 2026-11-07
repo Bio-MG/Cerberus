@@ -89,6 +89,13 @@ mod_bulk_dose_response_server <- function(id, global_data, shared_rv) {
         length(nx) > 0 && all(is.finite(nx))
       }, logical(1))
       updateSelectInput(session, "dose_column", choices = names(meta)[ok])
+      # BULK-8 (diagnosis 2026-11-06) : trace console des colonnes ÉCARTÉES du
+      # picker avec leur existence attestée — localise un éventuel drop en
+      # amont (refus H21 « colonne de dose absente des métadonnées »).
+      rej <- setdiff(names(meta), names(meta)[ok])
+      if (length(rej)) message(sprintf(
+        "[bulk_dose] colonnes métadonnées écartées du picker dose_column : %s",
+        paste(rej, collapse = ", ")))
     }, ignoreNULL = TRUE)
 
     observe({
@@ -111,7 +118,15 @@ mod_bulk_dose_response_server <- function(id, global_data, shared_rv) {
     })
 
     observeEvent(input$run_dose, {
-      req(shared_rv$vst_mat)
+      # Chantier 5 (fix 2026-11-07) : zéro no-op silencieux — nommer (1) la
+      # donnée manquante, (2) le bouton qui la fournit (avant : req() avalait
+      # le clic sans retour, famille H15).
+      if (is.null(shared_rv$vst_mat)) {
+        showNotification(
+          .tr("⚠️ VST absente — lancez d'abord le Filtrage & VST (bouton « 🚀 Lancer Filtrage & VST », panneau Étape 1 de la barre latérale)."),
+          type = "warning", duration = 8)
+        return()
+      }
       res_de <- .active_de_results()
       if (is.null(res_de)) {
         showNotification(.tr("⚠️ Lancez d'abord l'étape 2 (Analyse Différentielle)."), type = "warning")

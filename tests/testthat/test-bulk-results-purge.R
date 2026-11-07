@@ -16,12 +16,20 @@ source_project_file("tools/pkg_skeleton/R/state.R")
 }
 
 test_that("bulk_shared_result_fields couvre tout slot résultat écrit par un module", {
+  # BULK-1 (fix 2026-11-06) : la liste inclut désormais les résultats des
+  # modules WGCNA/signatures/pattern/dose/survie/réseau — mesuré 2026-11-05,
+  # WGCNA survit au changement de dataset et s'exporte sous le jeu actif.
   expect_setequal(
     bulk_shared_result_fields(),
     c("counts_mapped", "counts_original", "mapping_applied", "mapping_summary",
+      "mapping_summary_data",
       "filtered_counts", "dds_blind", "vst_mat", "dds_full",
       "contrasts", "active_contrast", "active_condition_col",
-      "pathway_results", "pathway_db", "pathway_mode", "multimethod_de",
+      "pathway_results", "pathway_scores", "pathway_db", "pathway_mode",
+      "pathway_padj_method", "multimethod_de", "multimethod_consensus",
+      "network_result", "de_padj_ctx",
+      "wgcna_power", "wgcna_modules", "signature_scores", "pattern_result",
+      "dose_result", "survival_km", "survival_cox",
       "de_bypass")
   )
 })

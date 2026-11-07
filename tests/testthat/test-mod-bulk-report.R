@@ -207,7 +207,12 @@ test_that("mod_bulk_report : aucun gestionnaire avaleur n'a tire", {
   # Les DEUX `tryCatch` du corps (template L122-125, rendu L218-224) notifient en
   # cas d'echec. Aucun n'a tire : ni l'un ni l'autre n'est sur le chemin de sortie
   # du garde 227.
-  expect_false(any(grepl("notify:", steps, fixed = TRUE)))
+  # P1-21 (fix 2026-11-06) : le contenu emet desormais une notification « en
+  # cours » (\u23f3) sur ce chemin — contrat voulu (tout telechargement rend un
+  # feedback visible). Le verrou porte desormais sur les notifications d'ECHEC
+  # (\u274c) : aucune ne doit apparaitre sur le chemin du garde 227 (sinon un
+  # tryCatch interne aurait avale puis notifie).
+  expect_false(any(grepl("notify:\u274c", steps, fixed = TRUE)))
 })
 
 # ---------------------------------------------------------------------------

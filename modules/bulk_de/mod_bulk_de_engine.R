@@ -169,11 +169,15 @@
   }, ignoreInit = TRUE)
 
   # ── Refresh metadata-driven choices when bulk_obj changes ────────────────
+  # BULK-2 (fix 2026-11-06) : PAS de req() sur les métadonnées — un jeu sans
+  # colonnes exploitables VIDE les sélecteurs (honnêteté) au lieu d'aborter
+  # l'observer et laisser les choix de l'ère précédente.
   observeEvent(global_data$bulk_obj, {
-    req(global_data$bulk_obj, global_data$bulk_obj$metadata)
     meta <- global_data$bulk_obj$metadata
-    cat_cols <- names(meta)[sapply(meta, function(x) is.character(x) || is.factor(x))]
-    cat_cols <- if (length(cat_cols) == 0) names(meta) else cat_cols
+    cat_cols <- if (is.null(meta) || !ncol(meta)) character(0) else {
+      cc <- names(meta)[vapply(meta, function(x) is.character(x) || is.factor(x), logical(1))]
+      if (length(cc) == 0) names(meta) else cc
+    }
 
     updateSelectInput(session, "condition_col", choices = cat_cols)
     updateSelectizeInput(session, "covariates",  choices = cat_cols, server = TRUE)
@@ -181,6 +185,19 @@
   }, ignoreNULL = TRUE)
 
   # ── Update group_ref/group_target when condition_col changes ────────────
+  # BULK-6 (fix 2026-11-06) : le changement de colonne ne se traduit PLUS par
+  # une ré-résolution silencieuse du contraste. Deux cas :
+  #   • les groupes sélectionnés EXISTENT encore dans le nouveau vocabulaire
+  #     -> CONSERVÉS (aucun re-pick, la déclaration reste ce qu'elle est) ;
+  #   • sinon -> re-pick des deux premiers niveaux MAIS déclaration marquée
+  #     PÉRIMÉE (shared_rv$de_decl_valid <- FALSE) : la garde au RUN
+  #     (mod_bulk_de_run.R) refuse avec le banner de sync tant que le
+  #     contraste n'a pas été re-déclaré explicitement.
+  # Mesuré 2026-11-05 (BULK-6, ×2) : re-import sans re-déclaration -> le
+  # registre d'indices de l'ère précédente se réappliquait au NOUVEAU
+  # vocabulaire -> contraste cornea_vs_limbus calculé (3 189 « significatifs »)
+  # pendant que l'UI affichait CoV2_vs_mock. La garde existe au SET
+  # (VALUE_REFUSED drive) ; elle existe désormais aussi au RUN.
   observeEvent(input$condition_col, {
     req(global_data$bulk_obj, input$condition_col)
     meta <- global_data$bulk_obj$metadata
@@ -188,9 +205,36 @@
     .trl <- function(key) { tr <- global_data$i18n; if (is.null(tr)) return(key)
                             tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key) }
     validate(need(length(lvls) >= 2, .trl("La colonne de condition doit avoir au moins 2 niveaux.")))
-    updateSelectInput(session, "group_ref",    choices = lvls, selected = lvls[1])
-    updateSelectInput(session, "group_target", choices = lvls, selected = lvls[min(2, length(lvls))])
+    keep <- nzchar(input$group_ref %||% "") && nzchar(input$group_target %||% "") &&
+      input$group_ref %in% lvls && input$group_target %in% lvls
+    updateSelectInput(session, "group_ref",
+                      choices = lvls,
+                      selected = if (keep) input$group_ref else lvls[1])
+    updateSelectInput(session, "group_target",
+                      choices = lvls,
+                      selected = if (keep) input$group_target else lvls[min(2, length(lvls))])
+    if (!keep) shared_rv$de_decl_valid <- FALSE
   })
+
+  # BULK-6 : un remplacement de dataset (bulk_obj_epoch : imports, GEO,
+  # fusion, activation d'un jeu enregistré) PÉRIME la déclaration du
+  # contraste. Le sélecteur « Active contrast » est déjà réinitialisé par
+  # l'observer shared_rv$contrasts ci-dessous (purge -> choices vides).
+  observeEvent(global_data$bulk_obj_epoch, {
+    shared_rv$de_decl_valid <- FALSE
+  }, ignoreInit = TRUE)
+
+  # BULK-6 : canaux EXPLICITES de re-déclaration (les seuls qui re-valident) :
+  #   1. injection drive des inputs session-dérivés de bulk_de — marqueur
+  #      ts_drive_de_declared posé par drive_watcher.R après une injection
+  #      réussie (le drive re-déclare toujours ses groupes : recette b1) ;
+  #   2. le bouton « Re-déclarer ce contraste » du banner de sync
+  #      (rendu par mod_bulk_de_viz.R, handler .de_viz_server).
+  # Le re-pick automatique ci-dessus NE re-valide PAS (canal silencieux) ;
+  # la garde au RUN refuse tant que la déclaration est périmée.
+  observeEvent(global_data$ts_drive_de_declared, {
+    shared_rv$de_decl_valid <- TRUE
+  }, ignoreInit = TRUE)
 
   # ── Mirror report-relevant scalars to shared_rv ─────────────────────────
   observe({

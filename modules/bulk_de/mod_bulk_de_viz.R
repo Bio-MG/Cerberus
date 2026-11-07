@@ -100,6 +100,12 @@
   # =========================================================================
   sync_warning <- reactive({
     global_data$language  # i18n: re-evaluate the banner on language switch
+    # BULK-6 (fix 2026-11-06) : déclaration PÉRIMÉE (jeu remplacé sans
+    # re-déclaration) — prioritaire sur le contrôle de fraîcheur des gènes :
+    # le contraste affiché/sélectionné n'a jamais été déclaré pour CE jeu.
+    if (identical(shared_rv$de_decl_valid %||% TRUE, FALSE)) {
+      return(.tr("Jeu de données remplacé depuis la dernière déclaration du contraste — vérifiez la variable, la référence et la cible (panneau 2), puis re-déclarez avant de lancer l'Étape 2."))
+    }
     res <- tryCatch(active_de_results(), error = function(e) NULL)
     if (is.null(res) || is.null(shared_rv$filtered_counts)) return(NULL)
     total   <- nrow(res)
@@ -114,10 +120,30 @@
   .sync_banner <- function() {
     msg <- sync_warning()
     if (is.null(msg)) return(NULL)
-    div(class = "alert alert-danger", style = "font-size:0.82em;", icon("triangle-exclamation"), " ", msg)
+    # BULK-6 : le cas « déclaration périmée » embarque l'ACTION de
+    # re-déclaration (règle chantier 5 : tout refus nomme la donnée manquante
+    # ET le bouton qui la fournit). Le handler vit ci-dessous.
+    div(class = "alert alert-danger", style = "font-size:0.82em;",
+        icon("triangle-exclamation"), " ", msg,
+        if (identical(shared_rv$de_decl_valid %||% TRUE, FALSE))
+          tagList(
+            tags$span(style = "display:inline-block;width:8px;"),
+            actionButton(ns("de_redeclare"),
+                         .tr("\u2713 Re-déclarer ce contraste"),
+                         class = "btn-danger btn-sm")))
   }
   output$sync_warning_banner         <- renderUI({ .sync_banner() })
   output$sync_warning_banner_heatmap <- renderUI({ .sync_banner() })
+
+  # BULK-6 : handler du bouton « Re-déclarer ce contraste » — canal EXPLICITE
+  # (avec l'injection drive, le seul qui re-valide shared_rv$de_decl_valid ;
+  # voir mod_bulk_de_engine.R pour la liste complète des canaux).
+  observeEvent(input$de_redeclare, {
+    shared_rv$de_decl_valid <- TRUE
+    showNotification(
+      .tr("\u2713 Contraste re-déclaré — le run utilisera la sélection affichée (variable / référence / cible du panneau 2)."),
+      type = "message", duration = 6)
+  }, ignoreInit = TRUE)
 
   # =========================================================================
   # VOLCANO — static (export) + optional interactive (plotly, native tooltip)

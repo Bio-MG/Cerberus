@@ -108,6 +108,17 @@ mod_bulk_survival_server <- function(id, global_data, shared_rv) {
       cand <- survival_candidates()
       updateSelectInput(session, "surv_time_col",   choices = cand$time_cols)
       updateSelectInput(session, "surv_status_col", choices = cand$status_cols)
+      # BULK-8 (diagnosis 2026-11-06) : trace console des colonnes numériques
+      # présentes dans les métadonnées mais écartées des candidats
+      # temps/statut (garde bulk_survival_candidates : temps > 0, statut 0/1/2).
+      meta <- global_data$bulk_obj$metadata
+      if (!is.null(meta) && is.data.frame(meta)) {
+        num <- names(meta)[vapply(meta, is.numeric, logical(1))]
+        rej <- setdiff(num, union(cand$time_cols, cand$status_cols))
+        if (length(rej)) message(sprintf(
+          "[bulk_survival] colonnes numériques écartées des candidats temps/statut : %s",
+          paste(rej, collapse = ", ")))
+      }
     }, ignoreNULL = FALSE)
 
     observeEvent(c(global_data$bulk_obj, input$surv_source,
@@ -195,7 +206,19 @@ mod_bulk_survival_server <- function(id, global_data, shared_rv) {
 
     # ── Kaplan-Meier ─────────────────────────────────────────────────────
     observeEvent(input$run_surv_km, {
-      req(global_data$bulk_obj, input$surv_feature)
+      # Chantier 5 (fix 2026-11-07) : zéro no-op silencieux (famille H15 —
+      # clic Run KM sans sélection = 0 notification mesurée) — chaque état
+      # non prêt NOMME (1) la donnée manquante, (2) l'endroit qui la fournit.
+      if (is.null(global_data$bulk_obj)) {
+        showNotification(.tr("⚠️ Aucun dataset chargé — importez-en un (onglet 📥 Import Données)."),
+                         type = "warning", duration = 8)
+        return()
+      }
+      if (!nzchar(input$surv_feature %||% "")) {
+        showNotification(.tr("⚠️ Sélectionnez d'abord un gène/feature (panneau « Survie » de la barre latérale)."),
+                         type = "warning", duration = 8)
+        return()
+      }
       val <- tryCatch(.survival_validated(), error = function(e) e)
       if (inherits(val, "error")) {
         showNotification(paste(.tr("Erreur survie:"), conditionMessage(val)),
@@ -250,7 +273,12 @@ mod_bulk_survival_server <- function(id, global_data, shared_rv) {
 
     # ── Cox univariés ────────────────────────────────────────────────────
     observeEvent(input$run_surv_cox, {
-      req(global_data$bulk_obj)
+      # Chantier 5 (fix 2026-11-07) : même règle que KM — pas de req() muet.
+      if (is.null(global_data$bulk_obj)) {
+        showNotification(.tr("⚠️ Aucun dataset chargé — importez-en un (onglet 📥 Import Données)."),
+                         type = "warning", duration = 8)
+        return()
+      }
       feats <- input$surv_cox_features
       if (is.null(feats) || length(feats) == 0L) {
         showNotification(.tr("\u26a0\ufe0f Sélectionnez au moins une variable pour les Cox."),

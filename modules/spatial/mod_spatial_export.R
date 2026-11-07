@@ -136,7 +136,17 @@ mod_spatial_export_server <- function(id, global_data, shared_rv) {
         paste0("export_spatial_", nm, "_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".zip")
       },
       content = function(file) {
-        req(global_data$spatial_obj)
+        # P1-21 (fix 2026-11-06) : req() nu = abort INVISIBLE (SP11 : aucun
+        # download, aucun message). Notifier la cause + l'endroit qui la
+        # lève — ici un objet spatial absent de CETTE session (multi-onglets :
+        # l'objet vit dans la session où l'import a été fait).
+        if (is.null(global_data$spatial_obj)) {
+          showNotification(.tr("❌ Export impossible : aucun objet spatial dans cette session — importez un échantillon (onglet « Import Données > Spatial ») ; en session multi-onglets, l'objet appartient à la session où l'import a été fait."), type = "error", duration = 20)
+          validate(.tr("Aucun objet spatial chargé."))
+          return()
+        }
+        nid <- showNotification(.tr("⏳ Préparation du paquet complet (.zip) en cours…"), type = "message", duration = NULL, closeButton = FALSE)
+        on.exit(try(removeNotification(nid), silent = TRUE), add = TRUE)
         tmp_dir <- tempfile("spatial_export_"); dir.create(tmp_dir)
         on.exit(unlink(tmp_dir, recursive = TRUE), add = TRUE)
 
@@ -171,7 +181,15 @@ mod_spatial_export_server <- function(id, global_data, shared_rv) {
         paste0("script_spatial_", nm, "_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".zip")
       },
       content = function(file) {
-        req(global_data$spatial_obj$coords)
+        # P1-21 (fix 2026-11-06) : même discipline que dl_bundle — abort
+        # invisible remplacé par notification explicite (règle chantier 5).
+        if (is.null(global_data$spatial_obj$coords)) {
+          showNotification(.tr("❌ Script impossible : aucun objet spatial (coordonnées) dans cette session — importez un échantillon spatial d'abord (onglet « Import Données > Spatial »)."), type = "error", duration = 20)
+          validate(.tr("Aucun objet spatial (coordonnées) chargé."))
+          return()
+        }
+        nid <- showNotification(.tr("⏳ Génération du script reproductible (.zip) en cours…"), type = "message", duration = NULL, closeButton = FALSE)
+        on.exit(try(removeNotification(nid), silent = TRUE), add = TRUE)
         tmp_dir <- tempfile("spatial_script_"); dir.create(tmp_dir)
         on.exit(unlink(tmp_dir, recursive = TRUE), add = TRUE)
 

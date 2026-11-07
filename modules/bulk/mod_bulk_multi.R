@@ -23,6 +23,10 @@ mod_bulk_multi_ui <- function(id) {
           " ", i18n$t("Comparez des jeux enregistrés (import nommé ou bouton « Enregistrer l'état courant ») partageant un même nom de contraste. Les seuils choisis s'appliquent à TOUS les jeux comparés.")),
       selectInput(ns("datasets"), i18n$t("Datasets à comparer (>= 2)"),
                   choices = NULL, multiple = TRUE),
+      # BULK-3 / P1-23 (fix 2026-11-06) : le registre se peuple via un SAVE
+      # EXPLICITE (H35) — sans hint, le sélecteur vide + le no-op du run
+      # ressemblaient à un module mort. Guide visible tant que < 2 jeux.
+      uiOutput(ns("datasets_hint")),
       uiOutput(ns("contrast_ui")),
       numericInput(ns("lfc_thresh"), i18n$t("Seuil |Log2FC|"), 1,
                    min = 0, step = 0.25),
@@ -77,6 +81,20 @@ mod_bulk_multi_server <- function(id, global_data) {
                         selected = prev)
     })
 
+    # BULK-3 / P1-23 (fix 2026-11-06) : empty-state GUIDANT sous le sélecteur —
+    # nomme l'action qui peuple la liste (« Enregistrer l'état courant »,
+    # panneau « Multi-jeux — Datasets enregistrés ») tant que < 2 jeux
+    # éligibles (jeux SAUVÉS avec un pipeline DE capturé).
+    output$datasets_hint <- renderUI({
+      global_data$language
+      n <- length(eligible())
+      if (n >= 2L) return(NULL)
+      div(class = "alert alert-warning", style = "font-size:0.78rem;padding:6px 10px;",
+          icon("triangle-exclamation"), " ",
+          if (n == 0) .tr("Aucun jeu éligible : la liste se peuple avec le bouton « Enregistrer l'état courant » du panneau « Multi-jeux — Datasets enregistrés » (la sidebar Étape 2) — sauvegardez au moins deux jeux partageant un même nom de contraste.")
+          else .tr("Un seul jeu éligible : sauvegardez un second état (« Enregistrer l'état courant », panneau « Multi-jeux — Datasets enregistrés ») pour lancer une comparaison."))
+    })
+
     # Default thresholds from the FIRST selected dataset's stored pipeline
     # (predictable: re-applied on every selection change, adjustable after).
     observeEvent(input$datasets, {
@@ -118,7 +136,16 @@ mod_bulk_multi_server <- function(id, global_data) {
     # ── Run (synchronous — bulk V1.0 convention; light computation) ─────
     observeEvent(input$run, {
       global_data$language  # i18n
-      req(input$contrast, length(input$datasets) >= 2L)
+      # BULK-3 / P1-23 (fix 2026-11-06) : le req() nu était le no-op
+      # silencieux mesuré (0 notification, 0 erreur) — refus explicite.
+      if (length(input$datasets %||% character(0)) < 2L) {
+        showNotification(.tr("❌ Sélectionnez au moins 2 datasets à comparer — la liste se peuple via « Enregistrer l'état courant » (panneau « Multi-jeux — Datasets enregistrés »)."), type = "error", duration = 12)
+        return()
+      }
+      if (is.null(input$contrast) || !nzchar(input$contrast %||% "")) {
+        showNotification(.tr("❌ Sélectionnez d'abord un contraste commun aux jeux comparés (menu « Contraste »)."), type = "error", duration = 12)
+        return()
+      }
       ds <- global_data$bulk_datasets
       entries <- ds[input$datasets]
       entries <- entries[!vapply(entries, is.null, logical(1))]

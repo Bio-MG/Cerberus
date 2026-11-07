@@ -5,9 +5,14 @@
 
 mod_bulk_ui <- function(id) {
   ns <- NS(id)
-  tagList(
-    shinyjs::useShinyjs(),
-    layout_sidebar(
+  # BULK-9 (fix 2026-11-06) : layout_sidebar est rendu ENFANT UNIQUE direct du
+  # nav_panel (gabarit spatial, app.R tab_spatial) — le wrapper
+  # tagList(useShinyjs(), …) plaçait des enfants multiples dans le nav_panel,
+  # rompait la chaîne fill bslib (panneau non fillable => ligne de grille à 0 :
+  # sidebar 0×0 inerte, 14 panneaux inaccessibles, outputs suspendus classe
+  # BULK-7, signature offsetParent:null mesurée 2026-11-05/06). useShinyjs()
+  # est désormais appelé UNE fois au niveau page (app.R, header=).
+  layout_sidebar(
       sidebar = sidebar(
         width = 420,
         title = i18n$t("RNA Bulk \u2014 Analyse"),
@@ -44,16 +49,30 @@ mod_bulk_ui <- function(id) {
           # intelligent portent un badge 🔒 — concaténation UI APRÈS i18n$t()
           # (clé de traduction intacte, garde C7) ; la garde fonctionnelle
           # vit côté calcul (bulk_wgcna.R:169-176), présentation seule ici.
-          accordion_panel(paste0(i18n$t("3c. R\u00e9seau de co-expression (WGCNA)"), " 🔒"), value = "panel_wgcna",
+          # i18n (fix 2026-11-07, signalement opérateur) : paste0() coerce le
+          # HTML du span i18n en texte brut -> htmltools l'échappe et le titre
+          # affiche le markup littéral (mesuré live sur 3c/3d/3f). HTML() est
+          # l'idiome du dépôt (mod_sc_velocity.R:68).
+          # Sémantique visuelle (demande opérateur 2026-11-08) : le TEXTE du
+          # titre est GRISÉ (look désactivé = « pas utilisable pour l'instant,
+          # faites d'abord l'étape 1 / ayez les bonnes données ») ; le cadenas
+          # 🔒 reste normal, HORS du span grisé.
+          accordion_panel(HTML(paste0('<span style="color:#8a8f98">', i18n$t("3c. R\u00e9seau de co-expression (WGCNA)"), '</span>',
+                                      ' 🔒')),
+                          value = "panel_wgcna",
                           icon = icon("project-diagram"), mod_bulk_wgcna_ui(ns("wgcna"))),
           # Bulk V2 M5 : survie & associations cliniques (KM + Cox).
-          accordion_panel(paste0(i18n$t("3d. Survie & association clinique"), " 🔒"), value = "panel_survival",
+          accordion_panel(HTML(paste0('<span style="color:#8a8f98">', i18n$t("3d. Survie & association clinique"), '</span>',
+                                      ' 🔒')),
+                          value = "panel_survival",
                           icon = icon("heart-pulse"), mod_bulk_survival_ui(ns("survival"))),
           # STAT-S3 : clustering de profils d'expression (kmeans MVP, descriptif).
           accordion_panel(i18n$t("3e. Clustering de profils"), value = "panel_pattern",
                           icon = icon("chart-line"), mod_bulk_pattern_ui(ns("pattern"))),
           # NEW-1 : dose-réponse / time-course (drc, descriptif).
-          accordion_panel(paste0(i18n$t("3f. Dose–réponse / time-course"), " 🔒"), value = "panel_dose",
+          accordion_panel(HTML(paste0('<span style="color:#8a8f98">', i18n$t("3f. Dose–réponse / time-course"), '</span>',
+                                      ' 🔒')),
+                          value = "panel_dose",
                           icon = icon("chart-area"), mod_bulk_dose_response_ui(ns("dose"))),
           # NEW-3 : réseau PCSF / interactome dérivé des voies Reactome
           # (heuristique, hors ligne ; N'EST PAS un PPI).
@@ -83,51 +102,69 @@ mod_bulk_ui <- function(id) {
         # du navset). Miroir bidirectionnel de `active_contrast_view` (sidebar
         # Étape 2, source de vérité) — synchro dans mod_bulk_de_run.R.
         header = mod_bulk_de_contrast_bar_ui(ns("de")),
-        nav_panel("PCA",             value = "tab_pca",         mod_bulk_filter_pca_ui(ns("filter"))),
-        nav_panel(i18n$t("QC \u00c9chantillons"), value = "tab_qc",  mod_bulk_filter_qc_ui(ns("filter"))),
-        nav_panel(i18n$t("QC Batch"), value = "tab_batch_qc", mod_bulk_filter_batch_ui(ns("filter"))),
-        nav_panel("Volcano Plot",    value = "tab_volcano",     mod_bulk_de_volcano_ui(ns("de"))),
-        nav_panel("MA-Plot",         value = "tab_ma",          mod_bulk_de_ma_ui(ns("de"))),
-        nav_panel("Heatmap",         value = "tab_heatmap",     mod_bulk_de_heatmap_ui(ns("de"))),
-        nav_panel(i18n$t("Table DE"), value = "tab_table",      mod_bulk_de_table_ui(ns("de"))),
-        nav_panel(i18n$t("R\u00e9sum\u00e9 Up/Down"), value = "tab_updown", mod_bulk_de_summary_ui(ns("de"))),
-        nav_panel(i18n$t("Multi-m\u00e9thodes"), value = "tab_multimethod", mod_bulk_de_multimethod_ui(ns("de"))),
-        nav_panel("Venn / UpSet",    value = "tab_venn",        mod_bulk_de_venn_ui(ns("de"))),
-        nav_panel("Pathway",         value = "tab_pathway",     mod_bulk_pathways_output_ui(ns("pathways"))),
-        # Bulk V2 M3 : signatures cellulaires.
-        nav_panel(i18n$t("Signatures cellulaires"), value = "tab_signatures",
-                  mod_bulk_signatures_output_ui(ns("signatures"))),
-        # Bulk V2 M4 : WGCNA.
-        nav_panel("WGCNA", value = "tab_wgcna", mod_bulk_wgcna_output_ui(ns("wgcna"))),
-        # STAT-S3 : clustering de profils (descriptif).
-        nav_panel(i18n$t("Clustering de profils"), value = "tab_pattern",
-                  mod_bulk_pattern_output_ui(ns("pattern"))),
-        # NEW-1 : dose-réponse (descriptif).
-        nav_panel(i18n$t("Dose–réponse"), value = "tab_dose",
-                  mod_bulk_dose_response_output_ui(ns("dose"))),
-        # Bulk V2 M5 : survie.
-        nav_panel(i18n$t("Survie"), value = "tab_survival",
-                  mod_bulk_survival_output_ui(ns("survival"))),
-        # LOT 3A (V1.x UX): compact pipeline summary — reads EXISTING shared_rv
-        # fields only (no new computation, no new QC).
-        nav_panel(i18n$t("Résumé Pipeline Bulk"), value = "tab_resume",
-                  card(card_header(i18n$t("Résumé Pipeline Bulk")),
-                       uiOutput(ns("bulk_resume_panel")))),
-        # MD-2 : comparaison multi-jeux (consomme global_data$bulk_datasets,
-        # n'écrit que global_data$bulk_multi_comparison).
-        nav_panel(i18n$t("Comparaison multi-jeux"), value = "tab_bulk_multi",
-                  mod_bulk_multi_ui(ns("multi"))),
-        # NEW-2 : fusion de jeux (consomme global_data$bulk_datasets,
-        # n'écrit que global_data$bulk_obj — comportement d'un import).
-        nav_panel(i18n$t("Fusion de jeux"), value = "tab_bulk_merge",
-                  mod_bulk_merge_output_ui(ns("merge"))),
+        # Chantier 4 (PROPOSAL_UIUX_HARMONIZATION 2026-11-06) : 20 onglets à
+        # plat sur 3-4 rangées → gabarit Spatial généralisé, ≤9 items de
+        # 1er niveau numérotés par étape. Les groupes sont des `nav_menu()` —
+        # PANNEAUX ET `value` INCHANGÉS : l'input `bulk-main_tabs`, la liste
+        # figée `TS_DRIVE_BULK_TABS` (drive_allowlist.R) et `nav_select` du
+        # watcher (drive_watcher.R:2563) continuent de viser les mêmes
+        # valeurs — zéro changement serveur/drive. Effet mesuré attendu :
+        # barre ≈ 1 rangée (le header replié à 457px qui écrasait le
+        # tab-content à 53px — R-3bis-ter — disparaît structurellement).
+        nav_menu(HTML(paste("1 \u00b7", i18n$t("QC"))),
+          nav_panel("PCA",             value = "tab_pca",         mod_bulk_filter_pca_ui(ns("filter"))),
+          nav_panel(i18n$t("QC \u00c9chantillons"), value = "tab_qc",  mod_bulk_filter_qc_ui(ns("filter"))),
+          nav_panel(i18n$t("QC Batch"), value = "tab_batch_qc", mod_bulk_filter_batch_ui(ns("filter")))
+        ),
+        nav_menu(HTML(paste("2 \u00b7", i18n$t("Analyse diff\u00e9rentielle"))),
+          nav_panel("Volcano Plot",    value = "tab_volcano",     mod_bulk_de_volcano_ui(ns("de"))),
+          nav_panel("MA-Plot",         value = "tab_ma",          mod_bulk_de_ma_ui(ns("de"))),
+          nav_panel("Heatmap",         value = "tab_heatmap",     mod_bulk_de_heatmap_ui(ns("de"))),
+          nav_panel(i18n$t("Table DE"), value = "tab_table",      mod_bulk_de_table_ui(ns("de"))),
+          nav_panel(i18n$t("R\u00e9sum\u00e9 Up/Down"), value = "tab_updown", mod_bulk_de_summary_ui(ns("de")))
+        ),
+        nav_menu(HTML(paste("3 \u00b7", i18n$t("Enrichissement"))),
+          nav_panel(i18n$t("Multi-m\u00e9thodes"), value = "tab_multimethod", mod_bulk_de_multimethod_ui(ns("de"))),
+          nav_panel("Venn / UpSet",    value = "tab_venn",        mod_bulk_de_venn_ui(ns("de"))),
+          nav_panel("Pathway",         value = "tab_pathway",     mod_bulk_pathways_output_ui(ns("pathways")))
+        ),
+        nav_menu(HTML(paste("4 \u00b7", i18n$t("Signatures & profils"))),
+          # Bulk V2 M3 : signatures cellulaires.
+          nav_panel(i18n$t("Signatures cellulaires"), value = "tab_signatures",
+                    mod_bulk_signatures_output_ui(ns("signatures"))),
+          # Bulk V2 M4 : WGCNA.
+          nav_panel("WGCNA", value = "tab_wgcna", mod_bulk_wgcna_output_ui(ns("wgcna"))),
+          # STAT-S3 : clustering de profils (descriptif).
+          nav_panel(i18n$t("Clustering de profils"), value = "tab_pattern",
+                    mod_bulk_pattern_output_ui(ns("pattern"))),
+          # NEW-1 : dose-réponse (descriptif).
+          nav_panel(i18n$t("Dose–réponse"), value = "tab_dose",
+                    mod_bulk_dose_response_output_ui(ns("dose"))),
+          # Bulk V2 M5 : survie.
+          nav_panel(i18n$t("Survie"), value = "tab_survival",
+                    mod_bulk_survival_output_ui(ns("survival")))
+        ),
         # NEW-3 : sous-réseau PCSF (heuristique ; réseau DÉRIVÉ DES VOIES, pas
         # un PPI — la mise en garde est portée par l'UI du module).
-        nav_panel(i18n$t("Réseau PCSF"), value = "tab_bulk_network",
-                  mod_bulk_network_output_ui(ns("network")))
+        nav_panel(HTML(paste("5 \u00b7", i18n$t("R\u00e9seau PCSF"))), value = "tab_bulk_network",
+                  mod_bulk_network_output_ui(ns("network"))),
+        nav_menu(HTML(paste("6 \u00b7", i18n$t("Multi-jeux"))),
+          # MD-2 : comparaison multi-jeux (consomme global_data$bulk_datasets,
+          # n'écrit que global_data$bulk_multi_comparison).
+          nav_panel(i18n$t("Comparaison multi-jeux"), value = "tab_bulk_multi",
+                    mod_bulk_multi_ui(ns("multi"))),
+          # NEW-2 : fusion de jeux (consomme global_data$bulk_datasets,
+          # n'écrit que global_data$bulk_obj — comportement d'un import).
+          nav_panel(i18n$t("Fusion de jeux"), value = "tab_bulk_merge",
+                    mod_bulk_merge_output_ui(ns("merge")))
+        ),
+        # LOT 3A (V1.x UX): compact pipeline summary — reads EXISTING shared_rv
+        # fields only (no new computation, no new QC).
+        nav_panel(HTML(paste("7 \u00b7", i18n$t("R\u00e9sum\u00e9"))), value = "tab_resume",
+                  card(card_header(i18n$t("Résumé Pipeline Bulk")),
+                       uiOutput(ns("bulk_resume_panel"))))
       )
     )
-  )
 }
 
 mod_bulk_server <- function(id, global_data) {
@@ -167,6 +204,17 @@ mod_bulk_server <- function(id, global_data) {
       req(shared_rv$active_tab)
       nav_select(id = "main_tabs", selected = shared_rv$active_tab, session = session)
     })
+
+    # R-3bis (fix 2026-11-06) : miroir de l'onglet actif du navset — consommé
+    # par les renders des panneaux de résultats pour se RE-EXÉCUTER au moment
+    # où leur onglet devient VISIBLE. Mesuré en app minimale (Shiny 1.14 +
+    # DT 0.34 + bslib) : une DT invalidée PENDANT que son panneau est caché
+    # ne livre JAMAIS son payload ensuite (même avec suspendWhenHidden=FALSE) ;
+    # une invalidation pendant VISIBLE la débloque. C'est le clan
+    # « DT jamais rendue » (Up/Down table, tables multi/venn…).
+    observeEvent(input$main_tabs, {
+      shared_rv$main_tabs_current <- input$main_tabs
+    }, ignoreNULL = TRUE)
 
     # Pipeline status bar — language-aware.
     output$pipeline_status_bar <- renderUI({

@@ -225,11 +225,17 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
     }, ignoreInit = TRUE)
 
     # ── Refresh metadata-driven choices when bulk_obj changes ────────────────
+    # BULK-2 (fix 2026-11-06) : PAS de req() sur les métadonnées — un jeu sans
+    # colonnes exploitables VIDE les sélecteurs (honnêteté, chantier 5) au lieu
+    # d'aborter l'observer et de laisser les choix de l'ère précédente
+    # (mesuré H29 : batch_col resté [tissue, condition] sur un jeu sans
+    # métadonnées). Le fallback names(meta) est conservé.
     observeEvent(global_data$bulk_obj, {
-      req(global_data$bulk_obj, global_data$bulk_obj$metadata)
       meta <- global_data$bulk_obj$metadata
-      cat_cols <- names(meta)[sapply(meta, function(x) is.character(x) || is.factor(x))]
-      cat_cols <- if (length(cat_cols) == 0) names(meta) else cat_cols
+      cat_cols <- if (is.null(meta) || !ncol(meta)) character(0) else {
+        cc <- names(meta)[vapply(meta, function(x) is.character(x) || is.factor(x), logical(1))]
+        if (length(cc) == 0) names(meta) else cc
+      }
 
       updateSelectizeInput(session, "pca_color_by",  choices = cat_cols, server = FALSE)
       updateSelectizeInput(session, "pca_shape_by",  choices = cat_cols, server = FALSE)
@@ -683,6 +689,46 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
           else
             .tr("Aucune condition d\u00e9clar\u00e9e : la correction sera appliqu\u00e9e sans variable biologique \u00e0 pr\u00e9server."))
     })
+
+    # Chantier 5 (fix 2026-11-07) : zéro no-op silencieux — un clic sur un
+    # état non prêt NOMME (1) la donnée manquante, (2) le bouton qui la
+    # fournit (avant : req() avalait le clic sans aucun retour, famille H15).
+    # OBSERVER (eager) et PAS dans l'eventReactive : un eventReactive est
+    # paresseux — si aucun consommateur actif ne le lit (plots cachés,
+    # suspendus), son corps ne s'exécute JAMAIS et la notification non plus
+    # (mesuré live 2026-11-07 : clic sans VST = 0 notification via
+    # l'eventReactive, notification rendue via l'observer).
+    observeEvent(input$run_batch_correction, {
+      # NB : batch_correction_design() commence par req(bulk_obj, batch_col) —
+      # sans dataset, ce req() ABORTE l'observer silencieusement (mesuré live
+      # 2026-11-07). Chaque état non prêt est donc testé ICI, avant tout req().
+      if (is.null(global_data$bulk_obj) || is.null(global_data$bulk_obj$metadata)) {
+        showNotification(
+          .tr("\u26a0\ufe0f Aucun dataset charg\u00e9 \u2014 importez-en un (onglet \U0001f4e5 Import Donn\u00e9es)."),
+          type = "warning", duration = 8)
+        return(invisible(NULL))
+      }
+      if (is.null(bc_pristine())) {
+        showNotification(
+          .tr("\u26a0\ufe0f VST absente \u2014 lancez d'abord le Filtrage & VST (bouton \u00ab \U0001f680 Lancer Filtrage & VST \u00bb, panneau \u00c9tape 1 de la barre lat\u00e9rale)."),
+          type = "warning", duration = 8)
+        return(invisible(NULL))
+      }
+      d <- tryCatch(batch_correction_design(), error = function(e) e)
+      if (inherits(d, "error")) {
+        showNotification(paste0(
+          .tr("\u26a0\ufe0f Correction de batch impossible : "), conditionMessage(d)),
+          type = "warning", duration = 10)
+        return(invisible(NULL))
+      }
+      if (!isTRUE(d$can_apply)) {
+        showNotification(paste0(
+          .tr("\u26a0\ufe0f Correction de batch impossible : "),
+          paste(d$blocking_messages, collapse = " ")),
+          type = "warning", duration = 10)
+        return(invisible(NULL))
+      }
+    }, ignoreInit = TRUE)
 
     # eventReactive : aucun nouveau trigger dupliqué (même choix que varpart).
     batch_correction_res <- eventReactive(input$run_batch_correction, {

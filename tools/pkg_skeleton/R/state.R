@@ -163,17 +163,46 @@ create_bulk_shared_state <- function() {
   shiny::reactiveValues(
     counts_mapped = NULL, counts_original = NULL,
     mapping_applied = FALSE, mapping_summary = NULL,
+    mapping_summary_data = NULL,
     filtered_counts = NULL, dds_blind = NULL, vst_mat = NULL,
     dds_full = NULL, contrasts = list(), active_contrast = NULL,
-    pathway_results = NULL, active_tab = NULL,
+    pathway_results = NULL, pathway_scores = NULL,
+    pathway_padj_method = NULL, active_tab = NULL,
     pca_color_by = NULL, pca_shape_by = NULL,
     pca_manual_colors = NULL,
     volcano_role_colors = NULL,
     active_condition_col = NULL,
     multimethod_de = NULL,
+    multimethod_consensus = NULL,
+    # BULK-1 (fix 2026-11-06) : les résultats des modules WGCNA/signatures/
+    # pattern/dose/survie/réseau étaient écrits HORS schéma (créés à la volée)
+    # et absents de bulk_shared_result_fields() — ils SURVIVAIENT au
+    # changement de dataset et s'exportaient sous le jeu actif (mesuré 2026-
+    # 11-05 : WGCNA ds1 2 000 gènes exporté pendant ds2 500×6). Déclarés ici
+    # pour que la purge couvre un champ du schéma (même discipline que
+    # de_bypass).
+    wgcna_power = NULL, wgcna_modules = NULL,
+    signature_scores = NULL, pattern_result = NULL,
+    dose_result = NULL, survival_km = NULL, survival_cox = NULL,
+    network_result = NULL, de_padj_ctx = NULL,
     lfc_thresh = 1, padj_thresh = 0.05,
     heatmap_top_n = 30, heatmap_annot = NULL,
     pathway_db = "GOBP", pathway_mode = "ora", bulk_palette = "default",
+    # BULK-6 (fix 2026-11-06) : validité de la DÉCLARATION du contraste DE.
+    # FALSE = le jeu a été remplacé (bulk_obj_epoch) sans re-déclaration
+    # explicite — la garde au RUN (mod_bulk_de_run.R) refuse alors avec le
+    # banner de sync. N'EST PAS un champ résultat : ne va PAS dans
+    # bulk_shared_result_fields() (une purge ne réarme pas la déclaration).
+    # BULK-6 (fix 2026-11-06) : validité de la DÉCLARATION du contraste DE.
+    # FALSE = le jeu a été remplacé (bulk_obj_epoch) sans re-déclaration
+    # explicite — la garde au RUN (mod_bulk_de_run.R) refuse alors avec le
+    # banner de sync. N'EST PAS un champ résultat : ne va PAS dans
+    # bulk_shared_result_fields() (une purge ne réarme pas la déclaration).
+    de_decl_valid = TRUE,
+    # R-3bis (fix 2026-11-06) : miroir de l'onglet actif du navset bulk
+    # (écrit par mod_bulk_server) — lu par les renders de résultats pour se
+    # re-exécuter quand leur onglet devient visible (DT « empoisonnées »).
+    main_tabs_current = NULL,
     # écrit dynamiquement par le pipeline auto (mod_bulk.R) en mode exploratoire
     # sans réplicat ; déclaré ici pour que la purge couvre un champ du schéma
     de_bypass = NULL
@@ -181,12 +210,24 @@ create_bulk_shared_state <- function() {
 }
 
 #' Champs résultats du domaine Bulk (purgés au changement de dataset)
+#'
+#' BULK-1 (fix 2026-11-06) : la liste couvre maintenant TOUS les slots
+#' résultats écrits par les modules bulk (WGCNA, signatures, pattern, dose,
+#' survie, réseau PCSF, consensus multi-méthodes, scores de voies, mémo padj).
+#' Les préférences d'UI (onglet actif, seuils, palettes, annotations heatmap)
+#' n'y figurent PAS : elles survivent au changement de jeu par conception.
+#'
 #' @return Character vector of reactiveValues field names.
 bulk_shared_result_fields <- function() {
   c("counts_mapped", "counts_original", "mapping_applied", "mapping_summary",
+    "mapping_summary_data",
     "filtered_counts", "dds_blind", "vst_mat", "dds_full",
     "contrasts", "active_contrast", "active_condition_col",
-    "pathway_results", "pathway_db", "pathway_mode", "multimethod_de",
+    "pathway_results", "pathway_scores", "pathway_db", "pathway_mode",
+    "pathway_padj_method", "multimethod_de", "multimethod_consensus",
+    "network_result", "de_padj_ctx",
+    "wgcna_power", "wgcna_modules", "signature_scores", "pattern_result",
+    "dose_result", "survival_km", "survival_cox",
     "de_bypass")
 }
 

@@ -375,6 +375,25 @@ ui <- page_navbar(
   # so the layout is byte-identical to before when the protocol is off.
   header = tagList(
     if (I18N_AVAILABLE) .usei18n_fixed(i18n),
+    # BULK-9 (fix 2026-11-06) : useShinyjs() appelé UNE fois au niveau page —
+    # il a été retiré de mod_bulk_ui pour que layout_sidebar soit l'enfant
+    # unique du nav_panel bulk (chaîne fill bslib intacte). shinyjs::useShinyjs
+    # est un singleton : les appels restants dans mod_sc/mod_import_bulk sont
+    # dédupliqués, cet appel garantit l'initialisation avant tout module.
+    shinyjs::useShinyjs(),
+    # R-3bis (fix 2026-11-06, cause racine mesurée live + shiny.trace) : les DT
+    # ne rendent JAMAIS leur payload quand leur conteneur est écrasé (h=0) :
+    # datatables-binding 0.34 garde la valeur (`instance.data = data; return`)
+    # dès que offsetWidth OU offsetHeight vaut 0, et ne la rejoue QUE sur un
+    # resize ultérieur — qui ne vient jamais si la taille reste 0. Mesuré dans
+    # les sous-onglets DE : le card-header du navset (21 onglets repliés dans
+    # ~545px) consomme 457px, laissant ~53px au tab-content, et la DT
+    # (flex 1 1 400px, min-height 0) s'écrase à h=0 — 53/53 DT sans payload.
+    # Le correctif (validé live : DT Up/Down dessinée avec ses données) garantit
+    # une hauteur minimale aux DT fill-items : la passe de la garde réussit,
+    # le card reprend sa hauteur au contenu, et le retry « empoisonné pendant
+    # cachée → visible » fonctionne (instance.data survit à la suspension).
+    tags$style(HTML(".html-fill-container > .html-fill-item.datatables { min-height: 120px !important; }")),
     uiOutput("drive_badge"),
     # ASR-3 (O29) : bannière de reprise de session — même discipline que le
     # badge ci-dessus : renderUI() NULL (toggle OFF, aucun checkpoint validé,
@@ -593,10 +612,16 @@ ui <- page_navbar(
             icon = icon("chart-line"),
 
             # M3 BIOSTAT O27 : accordéon latéral de l'assistant biostatistique
-            # (orientation seule — O27 §12.2 ; monté au niveau du nav_panel,
-            # surface minimale, l'accordéon interne de mod_bulk.R reste
-            # inchangé).
-            tagList(mod_bulk_ui("bulk"), mod_biostat_tree_ui("biostat_bulk"))),
+            # DÉMONTÉ sur ce worktree (fix 2026-11-06, aligne HEAD f393f8a —
+            # décision opérateur BUG #1 : pont bulk_shared_rv lu hors
+            # consommateur ; réactivation = décommenter les 2 blocs marqués
+            # BIOSTAT-BULK-DISMOUNT). Deuxième motif : le tagList(mod_bulk_ui,
+            # biostat) plaçait des ENFANTS MULTIPLES dans le nav_panel et
+            # rompait la chaîne fill bslib (BULK-9 : sidebar 0×0, 14 panneaux
+            # inaccessibles). BULK-9 fix : enfant UNIQUE = mod_bulk_ui.
+            # BIOSTAT-BULK-DISMOUNT-UI:
+            # tagList(mod_bulk_ui("bulk"), mod_biostat_tree_ui("biostat_bulk"))),
+            mod_bulk_ui("bulk")),
   
   
   
@@ -1107,8 +1132,9 @@ server <- function(input, output, session) {
   # shinytest2 « 404 for values URL .../dataobj/shinytest ») ; testServer
   # masquait le problème. La valeur est stable : le handle publié par
   # mod_bulk_server n'est jamais remplacé (la purge mute ses champs en place).
-  mod_biostat_tree_server("biostat_bulk", global_data,
-                          shared_rv = isolate(global_data$bulk_shared_rv))
+  # BIOSTAT-BULK-DISMOUNT-SERVER (fix 2026-11-06, aligne HEAD f393f8a) :
+  # mod_biostat_tree_server("biostat_bulk", global_data,
+  #                         shared_rv = isolate(global_data$bulk_shared_rv))
 
   mod_biostat_mirror_server("biostat_sc", global_data)
 

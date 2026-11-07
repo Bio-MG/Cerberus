@@ -257,6 +257,31 @@ mod_bulk_report_server <- function(id, global_data, shared_rv) {
         paste0("rapport_bulk_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".", ext)
       },
       content = function(file) {
+        # P1-21 (fix 2026-11-06) : un abort dans un downloadHandler est
+        # INVISIBLE (req()/validate() n'affichent RIEN au client — mesuré
+        # SP15 : 110 s sans download, sans message, sans artefact). Tout
+        # abort est donc précédé d'une notification nommant la donnée
+        # manquante ET l'étape qui la fournit (règle chantier 5).
+        if (is.null(shared_rv$vst_mat)) {
+          showNotification(.tr("❌ Rapport impossible : la matrice VST est absente — exécutez d'abord l'étape 1 « Pipeline Bulk — Contrôle qualité & filtrage » (panneau latéral 1)."), type = "error", duration = 15)
+          validate(.tr("VST absente — étape 1 requise."))
+          return()
+        }
+        nid <- showNotification(.tr("⏳ Génération du rapport en cours — le rendu peut prendre quelques dizaines de secondes…"), type = "message", duration = NULL, closeButton = FALSE)
+        on.exit(try(removeNotification(nid), silent = TRUE), add = TRUE)
+        # P1-21 (fix 2026-11-06) : pandoc absent => le knit échoue FORCÉMENT
+        # (mesuré : 0 fichier, « Aucun format généré. » + erreurs internes
+        # invisibles). Les notifications émises PENDANT une requête de
+        # download n'atteignent pas le client — le refus est donc livré DANS
+        # le fichier téléchargé lui-même.
+        if (!rmarkdown::pandoc_available()) {
+          writeLines(c("⚠️ Rapport impossible : Pandoc est introuvable dans cet environnement R.",
+                       "Le rendu rmarkdown échouerait (mesuré 2026-11-06 : 0 fichier généré).",
+                       "Correctif : installer RStudio (fournit pandoc) ou définir RSTUDIO_PANDOC,",
+                       "puis relancer l'application."),
+                     file)
+          return()
+        }
         # B1-F (§2.4, round 5) : le corps du rendu vit DANS bulk_render_report_file
         # (haut de fichier) — un seul emplacement, partagé avec l'étape opt-in
         # ap_run_report du Pipeline Auto. Les liaisons de session/module sont
@@ -264,7 +289,6 @@ mod_bulk_report_server <- function(id, global_data, shared_rv) {
         # bloc dans un env enfant bouchonné). Le garde « Aucun format généré. »
         # et la copie/archive vers `file` restent ICI (contrat de classe
         # bulk_report_error préservé — test falsifiable).
-        req(shared_rv$vst_mat)
         out_files <- bulk_render_report_file(
           global_data, shared_rv,
           sections        = input$report_sections %||% character(0),
@@ -290,8 +314,21 @@ mod_bulk_report_server <- function(id, global_data, shared_rv) {
       # Step-3.5: horodatage à la seconde — même logique que dl_report.
       filename = function() paste0("analyse_bulk_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".zip"),
       content  = function(file) {
-        req(global_data$bulk_obj)
+        # P1-21 (fix 2026-11-06) : même discipline — abort précédé d'une
+        # notification (req() nu = échec invisible, SP15).
+        if (is.null(global_data$bulk_obj)) {
+          showNotification(.tr("❌ Script impossible : aucun jeu bulk chargé — importez d'abord vos données (onglet « Import Données > RNA Bulk »)."), type = "error", duration = 15)
+          validate(.tr("Aucun jeu bulk chargé."))
+          return()
+        }
         ac    <- shared_rv$active_contrast %||% ""
+        if (!nzchar(ac) || is.null(shared_rv$contrasts) || !ac %in% names(shared_rv$contrasts)) {
+          showNotification(.tr("❌ Script impossible : aucun contraste actif — lancez d'abord l'étape 2 « Design & Contrastes » (panneau latéral 2)."), type = "error", duration = 15)
+          validate(.tr("Aucun contraste actif — étape 2 requise."))
+          return()
+        }
+        nid <- showNotification(.tr("⏳ Génération du script reproductible en cours…"), type = "message", duration = NULL, closeButton = FALSE)
+        on.exit(try(removeNotification(nid), silent = TRUE), add = TRUE)
         parts <- strsplit(ac, "_vs_")[[1]]
         target <- if (length(parts) >= 2) paste(parts[-length(parts)], collapse = "_") else "GroupA"
         ref    <- if (length(parts) >= 2) parts[length(parts)] else "GroupB"

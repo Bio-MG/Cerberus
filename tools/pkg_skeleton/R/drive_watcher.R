@@ -3106,6 +3106,20 @@ ts_drive_apply <- function(session, input, scn, effects = NULL, owner_token = NU
     if (!is.null(inj)) {
       applied <- inj(scn$inputs, module)
       warnings <- c(warnings, applied$warnings)
+      # BULK-6 (fix 2026-11-06) : une injection drive RÉUSSIE des inputs
+      # session-dérivés de bulk_de (condition_col/covariates/group_ref/
+      # group_target) est une DÉCLARATION EXPLICITE du contraste — elle
+      # re-valide shared_rv$de_decl_valid (garde au RUN, mod_bulk_de_run.R).
+      # Le marqueur est lu par mod_bulk_de_engine.R ; le canal est volontairement
+      # restreint à la voie drive : le re-pick automatique côté UI ne re-valide
+      # jamais (c'est lui qui produisait le contraste faux BULK-6).
+      if (!is.null(global_data) && identical(module, "bulk_de") &&
+          any(names(scn$inputs) %in%
+              c("bulk-de-condition_col", "bulk-de-covariates",
+                "bulk-de-group_ref", "bulk-de-group_target"))) {
+        global_data$ts_drive_de_declared <-
+          (global_data$ts_drive_de_declared %||% 0L) + 1L
+      }
     }
   }
 
