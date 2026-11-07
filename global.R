@@ -279,7 +279,15 @@ if (I18N_AVAILABLE) {
   for (nm in names(vals)) {
     template <- gsub(paste0("{", nm, "}"), format(vals[[nm]]), template, fixed = TRUE)
   }
-  template
+  # P0-4 (fix 2026-11-08) : les notifications formatées arrivaient au client
+  # avec les accents en NUL (« anterieur b\024 revalidez » — REPORT_BULK
+  # P0-4). Mécanisme mesuré côté N1 : en locale C, le sérialiseur jsonlite
+  # corrompt les octets d'une chaîne dont l'encodage n'est pas DÉCLARé ;
+  # sprintf/gsub sur des morceaux d'origines mixtes laisse la marque
+  # « unknown ». enc2utf8() déclare explicitement l'UTF-8 (octets inchangés
+  # si déjà UTF-8, transcodage fidèle si latin1) -> le JSON part en \uXXXX.
+  # Défense en profondeur : le launcher force déjà fr_FR.UTF-8 (P1-21).
+  enc2utf8(template)
 }
 
 #' Translation-function factory for pure helpers (plot/report builders).

@@ -265,15 +265,18 @@ mod_sc_da_milo_server <- function(id, global_data, shared_rv = NULL) {
     .compo_plot <- function() plot_milo_sample_composition(milo_state$result)
 
     output$milo_embed <- renderPlot({
-      req(milo_state$result); .check_fingerprint()
+      if (!.export_guard(milo_state$result)) return()
+        .check_fingerprint()
       .embed_plot()
     })
     output$milo_dist <- renderPlot({
-      req(milo_state$result); .check_fingerprint()
+      if (!.export_guard(milo_state$result)) return()
+        .check_fingerprint()
       .dist_plot()
     })
     output$milo_compo <- renderPlot({
-      req(milo_state$result); .check_fingerprint()
+      if (!.export_guard(milo_state$result)) return()
+        .check_fingerprint()
       .compo_plot()
     })
 
@@ -307,62 +310,87 @@ mod_sc_da_milo_server <- function(id, global_data, shared_rv = NULL) {
 
     output$dl_milo_embed_png <- downloadHandler(
       filename = function() milo_export_filename(milo_state$result, "milo_embedding", "png"),
-      content = function(file) { req(milo_state$result); .export_figure(.embed_plot, file) }
+      content = function(file) { if (!.export_guard(milo_state$result)) return(); .export_figure(.embed_plot, file) }
     )
     output$dl_milo_embed_pdf <- downloadHandler(
       filename = function() milo_export_filename(milo_state$result, "milo_embedding", "pdf"),
-      content = function(file) { req(milo_state$result); .export_figure(.embed_plot, file) }
+      content = function(file) { if (!.export_guard(milo_state$result)) return(); .export_figure(.embed_plot, file) }
     )
     output$dl_milo_dist_png <- downloadHandler(
       filename = function() milo_export_filename(milo_state$result, "milo_logfc_distribution", "png"),
-      content = function(file) { req(milo_state$result); .export_figure(.dist_plot, file) }
+      content = function(file) { if (!.export_guard(milo_state$result)) return(); .export_figure(.dist_plot, file) }
     )
     output$dl_milo_dist_pdf <- downloadHandler(
       filename = function() milo_export_filename(milo_state$result, "milo_logfc_distribution", "pdf"),
-      content = function(file) { req(milo_state$result); .export_figure(.dist_plot, file) }
+      content = function(file) { if (!.export_guard(milo_state$result)) return(); .export_figure(.dist_plot, file) }
     )
     output$dl_milo_compo_png <- downloadHandler(
       filename = function() milo_export_filename(milo_state$result, "milo_sample_composition", "png"),
-      content = function(file) { req(milo_state$result); .export_figure(.compo_plot, file) }
+      content = function(file) { if (!.export_guard(milo_state$result)) return(); .export_figure(.compo_plot, file) }
     )
     output$dl_milo_compo_pdf <- downloadHandler(
       filename = function() milo_export_filename(milo_state$result, "milo_sample_composition", "pdf"),
-      content = function(file) { req(milo_state$result); .export_figure(.compo_plot, file) }
+      content = function(file) { if (!.export_guard(milo_state$result)) return(); .export_figure(.compo_plot, file) }
     )
+
+    # P0-3 (fix 2026-11-08, règle chantier 5) : refus NOMMÉ au lieu du req()
+    # muet, erreur du builder notifiée (avant : handlers muets, zéro fichier —
+    # REPORT_BULK P0-3). Même discipline que mod_sc_da_sccoda.R.
+    .export_guard <- function(res) {
+      if (is.null(res)) {
+        showNotification(.tr("❌ Export impossible : aucun résultat Milo — lancez d'abord l'analyse (bouton « Lancer Milo »)."),
+                         type = "error", duration = 10)
+        return(FALSE)
+      }
+      TRUE
+    }
+    .csv_guarded <- function(writer) {
+      tryCatch({ writer(); TRUE },
+               error = function(e) {
+                 showNotification(paste0("❌ Export CSV impossible : ", conditionMessage(e)),
+                                  type = "error", duration = 12)
+                 FALSE
+               })
+    }
 
     output$dl_milo_summary <- downloadHandler(
       filename = function() milo_export_filename(milo_state$result, "milo_summary", "csv"),
       content = function(file) {
-        req(milo_state$result); .check_fingerprint()
-        utils::write.csv(build_milo_summary(milo_state$result), file, row.names = FALSE)
+        if (!.export_guard(milo_state$result)) return()
+        .check_fingerprint()
+        .csv_guarded(function() utils::write.csv(build_milo_summary(milo_state$result), file, row.names = FALSE))
       }
     )
     output$dl_milo_da_table <- downloadHandler(
       filename = function() milo_export_filename(milo_state$result, "milo_da_table", "csv"),
       content = function(file) {
-        req(milo_state$result); .check_fingerprint()
-        utils::write.csv(build_milo_da_table_export(milo_state$result), file, row.names = FALSE)
+        if (!.export_guard(milo_state$result)) return()
+        .check_fingerprint()
+        .csv_guarded(function() utils::write.csv(build_milo_da_table_export(milo_state$result), file, row.names = FALSE))
       }
     )
     output$dl_milo_assignment <- downloadHandler(
       filename = function() milo_export_filename(milo_state$result, "milo_cell_assignment", "csv"),
       content = function(file) {
-        req(milo_state$result); .check_fingerprint()
-        utils::write.csv(build_milo_nhood_assignment_export(milo_state$result), file, row.names = FALSE)
+        if (!.export_guard(milo_state$result)) return()
+        .check_fingerprint()
+        .csv_guarded(function() utils::write.csv(build_milo_nhood_assignment_export(milo_state$result), file, row.names = FALSE))
       }
     )
     output$dl_milo_composition <- downloadHandler(
       filename = function() milo_export_filename(milo_state$result, "milo_sample_composition", "csv"),
       content = function(file) {
-        req(milo_state$result); .check_fingerprint()
-        utils::write.csv(build_milo_sample_composition_export(milo_state$result), file, row.names = FALSE)
+        if (!.export_guard(milo_state$result)) return()
+        .check_fingerprint()
+        .csv_guarded(function() utils::write.csv(build_milo_sample_composition_export(milo_state$result), file, row.names = FALSE))
       }
     )
     output$dl_milo_rds <- downloadHandler(
       filename = function() milo_export_filename(milo_state$result, "milo_result", "rds"),
       content = function(file) {
-        req(milo_state$result); .check_fingerprint()
-        saveRDS(milo_state$result, file)
+        if (!.export_guard(milo_state$result)) return()
+        .check_fingerprint()
+        .csv_guarded(function() saveRDS(milo_state$result, file))
       }
     )
 

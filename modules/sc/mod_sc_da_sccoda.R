@@ -274,6 +274,27 @@ mod_sc_da_sccoda_server <- function(id, global_data, shared_rv = NULL) {
       ))
     })
     # ── Exports (traces par analysis_id ; figures = vues pures) ────────────
+    # P0-3 (fix 2026-11-08, règle chantier 5) : un export cliquable sans
+    # résultat = refus NOMMÉ (donnée manquante + bouton fournisseur), jamais
+    # un req() muet ; toute erreur du builder est notifiée (avant : handler
+    # en erreur silencieuse, zéro fichier — REPORT_BULK P0-3).
+    .export_guard <- function(res, what) {
+      if (is.null(res)) {
+        showNotification(.tr("❌ Export impossible : aucun résultat scCODA — lancez d'abord l'analyse (bouton « Lancer scCODA »)."),
+                         type = "error", duration = 10)
+        return(FALSE)
+      }
+      TRUE
+    }
+    .csv_guarded <- function(writer) {
+      tryCatch({ writer(); TRUE },
+               error = function(e) {
+                 showNotification(paste0("❌ Export CSV impossible : ", conditionMessage(e)),
+                                  type = "error", duration = 12)
+                 FALSE
+               })
+    }
+
     .export_figure <- function(plot_fn, file) {
       .check_fingerprint()
       ts_export_plot(file, plot_fn(), width = 8, height = 6.5, dpi = 300)
@@ -281,48 +302,51 @@ mod_sc_da_sccoda_server <- function(id, global_data, shared_rv = NULL) {
 
     output$dl_sccoda_effects_png <- downloadHandler(
       filename = function() sccoda_export_filename(sccoda_state$result, "sccoda_effects", "png"),
-      content = function(file) { req(sccoda_state$result); .export_figure(.effects_plot, file) }
+      content = function(file) { if (!.export_guard(sccoda_state$result)) return(); .export_figure(.effects_plot, file) }
     )
     output$dl_sccoda_effects_pdf <- downloadHandler(
       filename = function() sccoda_export_filename(sccoda_state$result, "sccoda_effects", "pdf"),
-      content = function(file) { req(sccoda_state$result); .export_figure(.effects_plot, file) }
+      content = function(file) { if (!.export_guard(sccoda_state$result)) return(); .export_figure(.effects_plot, file) }
     )
     output$dl_sccoda_compo_png <- downloadHandler(
       filename = function() sccoda_export_filename(sccoda_state$result, "sccoda_composition", "png"),
-      content = function(file) { req(sccoda_state$result); .export_figure(.compo_plot, file) }
+      content = function(file) { if (!.export_guard(sccoda_state$result)) return(); .export_figure(.compo_plot, file) }
     )
     output$dl_sccoda_compo_pdf <- downloadHandler(
       filename = function() sccoda_export_filename(sccoda_state$result, "sccoda_composition", "pdf"),
-      content = function(file) { req(sccoda_state$result); .export_figure(.compo_plot, file) }
+      content = function(file) { if (!.export_guard(sccoda_state$result)) return(); .export_figure(.compo_plot, file) }
     )
     output$dl_sccoda_uncert_png <- downloadHandler(
       filename = function() sccoda_export_filename(sccoda_state$result, "sccoda_uncertainty", "png"),
-      content = function(file) { req(sccoda_state$result); .export_figure(.uncert_plot, file) }
+      content = function(file) { if (!.export_guard(sccoda_state$result)) return(); .export_figure(.uncert_plot, file) }
     )
     output$dl_sccoda_uncert_pdf <- downloadHandler(
       filename = function() sccoda_export_filename(sccoda_state$result, "sccoda_uncertainty", "pdf"),
-      content = function(file) { req(sccoda_state$result); .export_figure(.uncert_plot, file) }
+      content = function(file) { if (!.export_guard(sccoda_state$result)) return(); .export_figure(.uncert_plot, file) }
     )
 
     output$dl_sccoda_summary <- downloadHandler(
       filename = function() sccoda_export_filename(sccoda_state$result, "sccoda_summary", "csv"),
       content = function(file) {
-        req(sccoda_state$result); .check_fingerprint()
-        utils::write.csv(build_sccoda_summary(sccoda_state$result), file, row.names = FALSE)
+        if (!.export_guard(sccoda_state$result)) return()
+        .check_fingerprint()
+        .csv_guarded(function() utils::write.csv(build_sccoda_summary(sccoda_state$result), file, row.names = FALSE))
       }
     )
     output$dl_sccoda_effects <- downloadHandler(
       filename = function() sccoda_export_filename(sccoda_state$result, "sccoda_effects", "csv"),
       content = function(file) {
-        req(sccoda_state$result); .check_fingerprint()
-        utils::write.csv(build_sccoda_effect_table_export(sccoda_state$result), file, row.names = FALSE)
+        if (!.export_guard(sccoda_state$result)) return()
+        .check_fingerprint()
+        .csv_guarded(function() utils::write.csv(build_sccoda_effect_table_export(sccoda_state$result), file, row.names = FALSE))
       }
     )
     output$dl_sccoda_composition <- downloadHandler(
       filename = function() sccoda_export_filename(sccoda_state$result, "sccoda_composition", "csv"),
       content = function(file) {
-        req(sccoda_state$result); .check_fingerprint()
-        utils::write.csv(build_sccoda_composition_export(sccoda_state$result), file, row.names = FALSE)
+        if (!.export_guard(sccoda_state$result)) return()
+        .check_fingerprint()
+        .csv_guarded(function() utils::write.csv(build_sccoda_composition_export(sccoda_state$result), file, row.names = FALSE))
       }
     )
     output$dl_sccoda_rds <- downloadHandler(

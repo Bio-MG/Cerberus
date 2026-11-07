@@ -200,10 +200,27 @@ mod_import_sc_ui <- function(id) {
             div(class = "alert alert-light", style = "font-size:0.8rem;",
                 bsicons::bs_icon("lightbulb"),
                 " ", i18n$t("Option A (dossiers) — formats acceptés : barcodes.tsv(.gz), features.tsv(.gz) ou genes.tsv(.gz), matrix.mtx(.gz). L'Option B (fichiers) accepte .rds, .h5, .h5ad, .loom, .rda/.RData.")),
-            uiOutput(ns("dir_select_ui")),
+            # P0-2 (fix 2026-11-08) : boutons STATIQUES — le renderUI
+            # dépendant de la langue re-créait l'élément APRÈS le binding
+            # shinyFiles -> bouton mort au premier chargement (BUG #2).
+            # Le label porte le span i18n (i18n$t direct) : la traduction
+            # client bascule SANS re-créer l'élément, le binding survit.
+            shinyDirButton(
+              ns("dir_select"),
+              label = i18n$t("📁 Ajouter un Dossier"),
+              title = i18n_plain("Sélectionner dossier contenant matrix.mtx"),
+              class = "btn-secondary w-100",
+              icon  = icon("folder-open")
+            ),
             # Feature 6×10X (audit 2026-09-27, roadmap 3.1) : auto-découverte
             # des triplets 10X — 1 sélection remplace 6×(dossier + nom).
-            uiOutput(ns("dir_scan_ui")),
+            shinyDirButton(
+              ns("dir_scan"),
+              label = i18n$t("⚡ Scanner un dossier parent (auto-découverte des échantillons)"),
+              title = i18n_plain("Sélectionner le dossier parent contenant UN sous-dossier par échantillon (chaque sous-dossier = triplets 10X)"),
+              class = "btn-outline-info w-100",
+              icon  = icon("folder-tree")
+            ),
             textInput(ns("sample_name"), i18n$t("Nom de l'échantillon"), placeholder = "Ex: Patient1"),
             actionButton(ns("btn_add_sample"), i18n$t("➕ Ajouter à la liste"), class = "btn-info w-100 mt-2"),
             hr(),
@@ -463,27 +480,9 @@ mod_import_sc_server <- function(id, global_data) {
     # Feature 6×10X (roadmap 3.1) : deuxième binding pour l'auto-découverte.
     shinyDirChoose(input, "dir_scan", roots = volumes, session = session)
 
-    output$dir_select_ui <- renderUI({
-      global_data$language
-      shinyDirButton(
-        ns("dir_select"),
-        label = .tr("📁 Ajouter un Dossier"),
-        title = .tr("Sélectionner dossier contenant matrix.mtx"),
-        class = "btn-secondary w-100",
-        icon  = icon("folder-open")
-      )
-    })
-
-    output$dir_scan_ui <- renderUI({
-      global_data$language
-      shinyDirButton(
-        ns("dir_scan"),
-        label = .tr("⚡ Scanner un dossier parent (auto-découverte des échantillons)"),
-        title = .tr("Sélectionner le dossier parent contenant UN sous-dossier par échantillon (chaque sous-dossier = triplets 10X)"),
-        class = "btn-outline-info w-100",
-        icon  = icon("folder-tree")
-      )
-    })
+    # P0-2 : les renderUI ci-dessus ont été REMPLACÉS par des boutons
+    # statiques dans mod_import_sc_ui (le binding shinyDirChoose est posé une
+    # fois au boot ci-dessus et survit aux passes i18n).
 
     # Auto-découverte : chaque sous-dossier du dossier parent contenant un
     # triplet 10X (matrix.mtx(.gz)) devient un échantillon nommé basename().
